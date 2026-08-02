@@ -3,6 +3,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { compileRepository } from "../dist/compile.js";
+import { renderArchitectureHtml } from "../dist/viewer.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -749,6 +750,32 @@ if (!workersConsume) {
   fail("expected Fulfillment workers system to consume fulfillment queue");
 } else {
   pass("Fulfillment workers consume fulfillment");
+}
+
+// Inspector: collaboration edges (uses/renders/exposes/…) before raw imports.
+const viewerHtml = renderArchitectureHtml(selfGraph);
+const collaborationHeading = viewerHtml.indexOf("<h3>Collaboration</h3>");
+const importsHeading = viewerHtml.indexOf("Imports &amp; calls");
+const collaborationKindsDecl = viewerHtml.indexOf(
+  'const collaborationKinds = new Set([',
+);
+const usesInKinds = viewerHtml.indexOf('"uses"', collaborationKindsDecl);
+const rendersInKinds = viewerHtml.indexOf('"renders"', collaborationKindsDecl);
+const exposesInKinds = viewerHtml.indexOf('"exposes"', collaborationKindsDecl);
+const importsFilter = viewerHtml.indexOf(
+  "importsAndCalls = connections.filter",
+);
+if (collaborationKindsDecl < 0 || usesInKinds < 0 || rendersInKinds < 0 || exposesInKinds < 0) {
+  fail("viewer missing collaborationKinds set for inspector (uses/renders/exposes)");
+} else if (importsFilter < 0 || importsFilter < collaborationKindsDecl) {
+  fail("viewer inspector should split importsAndCalls after collaborationKinds");
+} else if (collaborationHeading < 0 || importsHeading < 0 || collaborationHeading > importsHeading) {
+  // Headings are template strings inside selectNode; both must appear and Collaboration first.
+  fail(
+    `viewer inspector should render Collaboration before Imports & calls (collab=${collaborationHeading}, imports=${importsHeading})`,
+  );
+} else {
+  pass("viewer inspector surfaces Collaboration before Imports & calls");
 }
 
 if (process.exitCode) {

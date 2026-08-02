@@ -350,6 +350,16 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       });
     }
 
+    // Product-story edges surface before module imports in the inspector.
+    const collaborationKinds = new Set([
+      "uses", "renders", "exposes", "triggers", "configures", "flows-to",
+    ]);
+
+    function connectionButton(edge, id) {
+      const other = byId.get(edge.source === id ? edge.target : edge.source);
+      return '<button class="pill connection" data-id="' + (other?.id || "") + '">' + edge.kind + " · " + (other?.label || "unknown") + "</button>";
+    }
+
     function selectNode(id) {
       state.selected = id;
       const node = byId.get(id);
@@ -357,12 +367,18 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const incomingEdges = incoming.get(id) || [];
       const outgoingEdges = outgoing.get(id) || [];
       const connections = [...incomingEdges, ...outgoingEdges];
+      const collaboration = connections.filter((edge) => collaborationKinds.has(edge.kind));
+      const importsAndCalls = connections.filter((edge) => !collaborationKinds.has(edge.kind));
       const metadataEntries = Object.entries(node.metadata || {}).filter(([key]) => key !== "keyFiles" && key !== "binEntries" && key !== "packageExports" && key !== "extractorRoster");
       const metadata = metadataEntries.map(([key, value]) => '<span class="pill">' + key + ": " + String(value) + "</span>").join("");
-      const links = connections.slice(0, 20).map((edge) => {
-        const other = byId.get(edge.source === id ? edge.target : edge.source);
-        return '<button class="pill connection" data-id="' + (other?.id || "") + '">' + edge.kind + " · " + (other?.label || "unknown") + "</button>";
-      }).join("");
+      const collabLinks = collaboration.slice(0, 16).map((edge) => connectionButton(edge, id)).join("");
+      const otherLinks = importsAndCalls.slice(0, 20).map((edge) => connectionButton(edge, id)).join("");
+      const collaborationHtml = collabLinks
+        ? "<h3>Collaboration</h3>" + collabLinks
+        : "";
+      const otherHtml = otherLinks
+        ? "<h3>" + (collabLinks ? "Imports &amp; calls" : "Connections") + "</h3>" + otherLinks
+        : (collabLinks ? "" : "<h3>Connections</h3><p>None visible</p>");
       const keyFileList = Array.isArray(node.metadata && node.metadata.keyFiles) ? node.metadata.keyFiles : [];
       const keyFiles = keyFileList.length
         ? "<h3>Key files</h3>" + keyFileList.map((file) => {
@@ -383,7 +399,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         const href = "vscode://file/" + graph.project.root.replace(/\\/$/, "") + "/" + item.file + ":" + line;
         return '<div class="evidence"><a href="' + href + '">' + item.file + ":" + line + '</a><div class="certainty ' + item.certainty + '">' + item.certainty + " · " + item.extractor + "</div>" + (item.detail ? "<p>" + item.detail + "</p>" : "") + "</div>";
       }).join("");
-      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + binHtml + rosterHtml + keyFiles + "<h3>Connections</h3>" + (links || '<p>None visible</p>') + "<h3>Source evidence</h3>" + evidence;
+      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + binHtml + rosterHtml + keyFiles + collaborationHtml + otherHtml + "<h3>Source evidence</h3>" + evidence;
       inspector.querySelector("h2").textContent = node.label;
       inspector.querySelectorAll(".connection").forEach((button) => {
         button.onclick = () => selectNode(button.dataset.id);
