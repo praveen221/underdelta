@@ -11,6 +11,7 @@ const ignoredDirectories = new Set([
   ".underdelta",
   ".underdelta-verify",
   ".underdelta-real",
+  ".terraform",
   ".venv",
   "__pycache__",
   "build",

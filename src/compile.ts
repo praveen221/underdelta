@@ -15,6 +15,7 @@ import { openapiExtractor } from "./extractors/openapi.js";
 import { prismaExtractor } from "./extractors/prisma.js";
 import { pythonExtractor } from "./extractors/python.js";
 import { sqlExtractor } from "./extractors/sql.js";
+import { terraformExtractor } from "./extractors/terraform.js";
 import { typescriptExtractor } from "./extractors/typescript.js";
 import {
   parseReadmeHeadingHints,
@@ -122,6 +123,7 @@ export async function compileRepository(
     openapiExtractor,
     graphqlExtractor,
     dockerExtractor,
+    terraformExtractor,
     prismaExtractor,
     sqlExtractor,
   ];

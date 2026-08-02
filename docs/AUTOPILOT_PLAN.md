@@ -193,6 +193,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 7 polish: Compose service story — depends_on / ports / image labels as North-star canvas vocabulary; quiet duplicate Dockerfile App image when Compose `build:` already owns the service
 - [x] Rung 7 polish: dedupe compose overlay twins (`docker-compose.yml` + `docker-compose.images.yml`) into one service node; prefer build+image metadata; golden-lock mini-docker + voting app (exactly 6 Deploy services)
 - [x] Rung 7 polish/lock: quiet thin HTTP API (`GET /` from result/server.js) beside Compose Deploy; North-star overview Deploy-only + flowOrder Deploy-only; golden-lock — **Rung 7 locked**
+- [x] Rung 8 prep: Terraform extractor — `*.tf` `resource`/`module` blocks → Deploy; path-role; README Infrastructure; `verification/mini-terraform` smoke floors + Extractors roster `terraform`; quiet Dockerfile-only Deploy still collapses unless Terraform units exist
 
 ### Real-repo pins (Capability ladder)
 
@@ -210,8 +211,8 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 8 prep: Terraform extractor sketch — `*.tf` `resource`/`module` blocks → Deploy (or Infra) nodes; path-role; `verification/mini-terraform` smoke + Extractors roster `terraform`
-- [ ] Rung 8: pin a small real Terraform OSS repo (SHA + gitignored clone) + golden-lock Deploy/Infra nesting once fixture lands
+- [ ] Rung 8: pin a small real Terraform OSS repo (SHA + gitignored clone) + golden-lock Deploy/Infra nesting (resources/modules under Deploy, overview collapse, flowOrder)
+- [ ] Rung 8 polish: Terraform label/chrome pass on the pinned real repo (provider noise, module source story, DynamoDB/VPC acronyms) then lock
 - [ ] Standing polish: hide remaining compiler chrome pills (`labelSource`, `pathRoleLabel`, `collapsedInOverview`, `overviewHub`) if they still dump in inspector
 - [ ] GraphQL `schema { query: Root }` / non-Query root types (SWAPI-style) if a later pin needs it
 
@@ -228,7 +229,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Rung 7 locked — Deploy-led voting-app overview, thin HTTP API quieted). Now sketch the Terraform extractor + `verification/mini-terraform` smoke so Rung 8 can climb the README roadmap.
+> **Next focus:** This work is done (Rung 8 prep — Terraform extractor + `verification/mini-terraform` Infrastructure smoke). Now pin a small real Terraform OSS repo (SHA + gitignored clone) and golden-lock Deploy/Infra nesting so Rung 8 can climb.
 
 ### Learning log (append every tick)
 
@@ -298,6 +299,7 @@ Append short bullets like:
 - 2026-08-02 06:20 UTC | Done: Rung 7 Compose polish — parse ports/depends_on/build.context; Vote · 8080 canvas labels; needs edges; Container inspector; quiet App image when Compose build owns Dockerfile dir; golden-lock mini-docker + voting app | Next: dedupe compose overlay twins | Learned: multiline `build:` must read `context:` or vote/worker falsely own `.` and miss per-service Dockerfiles; `condition:` under depends_on map is not a service — only accept immediate children of the block key
 - 2026-08-02 06:14 UTC | Done: Rung 7 overlay twin dedupe — merge same `serviceName` across compose files (primary first); gap-fill image onto build services; stableId by name only; composeFiles metadata; mini-docker images overlay + voting-app golden-lock (exactly 6 Deploy services, Vote build+image) | Next: Deploy-led North-star lock (quiet thin HTTP API) | Learned: service identity must drop the compose filename or `docker-compose.images.yml` restates Vote/Result; prefer primary evidence[0] so verify/inspector stay on docker-compose.yml while overlays only fill gaps
 - 2026-08-02 06:16 UTC | Done: Rung 7 locked — quiet thin HTTP API (`GET /` / health probes) when Compose Deploy exists; voting-app overview + flowOrder Deploy-only; golden-lock; promote Terraform as Rung 8 | Next: Rung 8 Terraform extractor + mini-terraform fixture | Learned: Compose-led cold-reads fail when a single result-server `GET /` invents an HTTP API band ahead of Deploy — reuse collapsedInOverview + assignFlowOrder skip (same chrome pattern as empty CLI/Schema) rather than deleting the API system
+- 2026-08-02 06:25 UTC | Done: Rung 8 prep — `src/extractors/terraform.ts` resource/module blocks → Deploy services; path-role `.tf` + README Infrastructure; mini-terraform Notes · S3 bucket / Items · Dynamodb table / API · Lambda / Network; roster `terraform`; keep Dockerfile-only Deploy quiet unless Terraform units exist | Next: pin real Terraform OSS repo + golden-lock | Learned: treat Terraform units as kind:service like Compose so nest/collapse/flowOrder reuse Deploy; strip provider prefixes for North-star labels (`aws_s3_bucket.notes` → Notes · S3 bucket); ignore `.terraform/` in discovery before any real-repo pin
 
 ---
 

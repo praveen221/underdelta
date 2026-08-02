@@ -226,6 +226,13 @@ export function inferSystemKeyFromHeading(heading: string): string | undefined {
       pattern: /\bcontainers?\b|\bdocker-compose\b|\bcompose\s+(?:file|services?)\b/,
       weight: 7,
     },
+    // Terraform / infra — prefer "Infrastructure"; avoid bare "deploy with Terraform" how-tos.
+    {
+      key: "deploy",
+      pattern:
+        /\binfrastructure\b|\binfra\b|\bterraform\s+(?:stack|module|resources?|configuration)\b/,
+      weight: 7,
+    },
   ];
 
   let best: { key: string; weight: number } | undefined;
@@ -713,20 +720,22 @@ function quietNonCompilerProductChrome(
 
   // Dockerfile-only Deploy beside API/UI/Data is packaging chrome, not the
   // product story (RealWorld/Petstore ships a Dockerfile). Keep Deploy visible
-  // when Compose services exist — those are real deployable units.
+  // when Compose services or Terraform resources exist — those are real units.
   const deploy = systems.get("deploy");
-  const hasComposeServices = Boolean(
+  const hasDeployUnits = Boolean(
     deploy &&
       [...nodes.values()].some(
         (node) =>
           node.parentId === deploy.id &&
-          node.metadata?.dockerService === true,
+          (node.metadata?.dockerService === true ||
+            node.metadata?.terraformResource === true ||
+            node.metadata?.terraformModuleBlock === true),
       ),
   );
   if (deploy) {
     const hasProductSurface =
       systems.has("api") || systems.has("ui") || systems.has("data");
-    if (hasProductSurface && !hasComposeServices) {
+    if (hasProductSurface && !hasDeployUnits) {
       deploy.metadata = {
         ...deploy.metadata,
         collapsedInOverview: true,
@@ -738,6 +747,14 @@ function quietNonCompilerProductChrome(
   // Compose-led apps (example-voting-app) often pick up a single root GET /
   // from a result UI server. That thin HTTP API steals the cold-read from
   // Deploy — collapse it so containers lead the overview.
+  const hasComposeServices = Boolean(
+    deploy &&
+      [...nodes.values()].some(
+        (node) =>
+          node.parentId === deploy.id &&
+          node.metadata?.dockerService === true,
+      ),
+  );
   if (api && hasComposeServices) {
     const apiRoutes = [...nodes.values()].filter(
       (node) => node.parentId === api.id && node.kind === "route",
@@ -816,6 +833,11 @@ function isDockerModulePath(file: string): boolean {
   );
 }
 
+/** Terraform `.tf` paths — modules even though they are not JS/TS/Py. */
+function isTerraformModulePath(file: string): boolean {
+  return /\.tf$/i.test(normalizePath(file));
+}
+
 function isFileModule(node: ArchitectureNode): boolean {
   if (node.kind !== "module") return false;
   const file = normalizePath(node.qualifiedName ?? node.label);
@@ -823,7 +845,8 @@ function isFileModule(node: ArchitectureNode): boolean {
     /\.(?:[cm]?[jt]sx?|py)$/i.test(file) ||
     isOpenApiSpecModulePath(file) ||
     isGraphqlSchemaModulePath(file) ||
-    isDockerModulePath(file)
+    isDockerModulePath(file) ||
+    isTerraformModulePath(file)
   );
 }
 
@@ -892,6 +915,10 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
   }
   // Docker / Compose recipes are the deployable runtime surface.
   if (isDockerModulePath(file)) {
+    return { key: "deploy", label: "Deploy", kind: "system" };
+  }
+  // Terraform `.tf` resources/modules are infrastructure deploy surface.
+  if (isTerraformModulePath(file)) {
     return { key: "deploy", label: "Deploy", kind: "system" };
   }
   if (
@@ -1047,6 +1074,12 @@ const PRODUCT_ACRONYMS = new Set([
   "gpu",
   "cpu",
   "io",
+  "vpc",
+  "iam",
+  "ec2",
+  "ecs",
+  "eks",
+  "rds",
 ]);
 
 function formatProductWord(part: string, index: number): string {
@@ -1251,6 +1284,29 @@ export function humanizeNextRouteLabel(method: string, path: string): string {
  */
 export function humanizeServerActionLabel(label: string): string {
   return humanizeIdentifierLabel(label).replace(/\s+action$/i, "");
+}
+
+/**
+ * Terraform resource/module addresses → North-star Deploy labels.
+ * `aws_s3_bucket.notes` → `Notes · S3 bucket`; `module.network` → `Network`.
+ */
+export function humanizeTerraformLabel(
+  kind: "resource" | "module",
+  type: string,
+  name?: string,
+): string {
+  if (kind === "module") {
+    return humanizeIdentifierLabel(type);
+  }
+  const withoutProvider = type.replace(
+    /^(aws|google|azurerm|azuread|digitalocean|helm|kubernetes|random|null|local|tls|archive|time|external|cloudflare|vercel)_/i,
+    "",
+  );
+  const typeLabel = humanizeIdentifierLabel(withoutProvider);
+  const nameLabel = name?.trim()
+    ? humanizeIdentifierLabel(name)
+    : undefined;
+  return nameLabel ? `${nameLabel} · ${typeLabel}` : typeLabel;
 }
 
 function isSqlFamilyTable(node: ArchitectureNode): boolean {
@@ -1765,13 +1821,18 @@ export function projectSemanticArchitecture(
     }
   }
 
-  // Nest Docker Compose / Dockerfile services under Deploy so the overview
-  // tells a containers story instead of a flat service dump.
+  // Nest Docker Compose / Dockerfile / Terraform units under Deploy so the
+  // overview tells a containers/infra story instead of a flat service dump.
   const deploySystem = systems.get("deploy");
   if (deploySystem) {
     for (const node of [...nodes.values()]) {
       if (node.kind !== "service") continue;
-      if (node.metadata?.docker !== true) continue;
+      if (
+        node.metadata?.docker !== true &&
+        node.metadata?.terraform !== true
+      ) {
+        continue;
+      }
       if (node.metadata?.projection === "semantic") continue;
       // Extractor roster children under Extractors are also kind:service — skip.
       if (node.metadata?.role === "extractor") continue;
@@ -1943,10 +2004,11 @@ export function projectSemanticArchitecture(
     if (node.kind === "function" && node.metadata?.serverAction !== true) {
       continue;
     }
-    // Only collapse Docker deployables — Extractor roster children stay as-is.
+    // Only collapse Docker/Terraform deployables — Extractor roster stays.
     if (
       node.kind === "service" &&
       node.metadata?.docker !== true &&
+      node.metadata?.terraform !== true &&
       node.metadata?.role !== "extractor"
     ) {
       continue;
@@ -2090,6 +2152,26 @@ export function projectSemanticArchitecture(
       // Prefer the primary published port; skip debugger twin ports (9229…).
       const storyPort = hostPorts.find((port) => !/^9\d{3}$/.test(port));
       nextLabel = storyPort ? `${base} · ${storyPort}` : base;
+    } else if (
+      node.kind === "service" &&
+      node.metadata?.terraformResource === true &&
+      typeof node.metadata?.resourceType === "string"
+    ) {
+      // aws_s3_bucket.notes → Notes · S3 bucket
+      nextLabel = humanizeTerraformLabel(
+        "resource",
+        node.metadata.resourceType,
+        typeof node.metadata.resourceName === "string"
+          ? node.metadata.resourceName
+          : undefined,
+      );
+    } else if (
+      node.kind === "service" &&
+      node.metadata?.terraformModuleBlock === true &&
+      typeof node.metadata?.moduleName === "string"
+    ) {
+      // module.network → Network
+      nextLabel = humanizeTerraformLabel("module", node.metadata.moduleName);
     }
 
     if (!nextLabel || nextLabel === node.label) continue;

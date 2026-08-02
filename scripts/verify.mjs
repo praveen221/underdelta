@@ -26,6 +26,7 @@ const miniMongoRoot = path.join(repoRoot, "verification", "mini-mongo");
 const miniOpenapiRoot = path.join(repoRoot, "verification", "mini-openapi");
 const miniGraphqlRoot = path.join(repoRoot, "verification", "mini-graphql");
 const miniDockerRoot = path.join(repoRoot, "verification", "mini-docker");
+const miniTerraformRoot = path.join(repoRoot, "verification", "mini-terraform");
 
 function fail(message) {
   console.error(`VERIFY FAIL: ${message}`);
@@ -111,6 +112,7 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file.includes("mini-openapi/") ||
         file.includes("mini-graphql/") ||
         file.includes("mini-docker/") ||
+        file.includes("mini-terraform/") ||
         file === ".underdelta-real" ||
         file.startsWith(".underdelta-real/") ||
         file.includes("/.underdelta-real/")
@@ -509,6 +511,7 @@ const requiredExtractors = [
   "prisma",
   "python",
   "sql",
+  "terraform",
   "typescript",
 ];
 const missingExtractors = requiredExtractors.filter(
@@ -533,6 +536,7 @@ const requiredExtractorFiles = [
   "src/extractors/prisma.ts",
   "src/extractors/python.ts",
   "src/extractors/sql.ts",
+  "src/extractors/terraform.ts",
   "src/extractors/typescript.ts",
 ];
 const missingExtractorFiles = requiredExtractorFiles.filter(
@@ -6112,6 +6116,216 @@ if (dockerRealRoot) {
       pass("docker-real-repo overview systems: Deploy only (Rung 7 locked)");
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Capability ladder rung 8 prep: Terraform extractor + mini-terraform smoke.
+// ---------------------------------------------------------------------------
+const miniTerraformGraph = await compileRepository(miniTerraformRoot);
+const miniTerraformServices = miniTerraformGraph.nodes.filter(
+  (node) => node.kind === "service" && node.metadata?.terraform === true,
+);
+const miniTerraformServiceLabels = miniTerraformServices.map(
+  (node) => node.label,
+);
+console.log(
+  `Mini-terraform graph: ${miniTerraformGraph.nodes.length} nodes, ${miniTerraformGraph.edges.length} edges → services ${[...new Set(miniTerraformServiceLabels)].sort().join(", ")}`,
+);
+
+const miniTerraformProduct = miniTerraformGraph.nodes.find(
+  (node) => node.kind === "product",
+);
+if (!miniTerraformProduct || miniTerraformProduct.label !== "Mini Terraform notes") {
+  fail(
+    `mini-terraform product label expected 'Mini Terraform notes', found '${miniTerraformProduct?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-terraform product labeled Mini Terraform notes");
+}
+
+const miniTerraformExtractors = miniTerraformGraph.extractors.map(
+  (item) => item.id,
+);
+if (!miniTerraformExtractors.includes("terraform")) {
+  fail(
+    `mini-terraform graph.extractors missing terraform; found ${JSON.stringify(miniTerraformExtractors)}`,
+  );
+} else {
+  pass("mini-terraform registers terraform extractor");
+}
+
+const miniTerraformResources = miniTerraformServices.filter(
+  (node) => node.metadata?.terraformResource === true,
+);
+const miniTerraformModules = miniTerraformServices.filter(
+  (node) => node.metadata?.terraformModuleBlock === true,
+);
+const miniTerraformAddresses = new Set(
+  miniTerraformResources.map((node) => node.metadata?.address),
+);
+for (const expected of [
+  "aws_s3_bucket.notes",
+  "aws_dynamodb_table.items",
+  "aws_lambda_function.api",
+]) {
+  if (!miniTerraformAddresses.has(expected)) {
+    fail(
+      `mini-terraform missing resource ${expected}; found ${[...miniTerraformAddresses].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-terraform has resource ${expected}`);
+  }
+}
+
+const miniTerraformModuleNames = new Set(
+  miniTerraformModules.map((node) => node.metadata?.moduleName),
+);
+if (!miniTerraformModuleNames.has("network")) {
+  fail(
+    `mini-terraform missing module network; found ${[...miniTerraformModuleNames].join(", ") || "(none)"}`,
+  );
+} else {
+  pass("mini-terraform has module network");
+}
+
+for (const expected of [
+  "Notes · S3 bucket",
+  "Items · Dynamodb table",
+  "API · Lambda function",
+  "Network",
+]) {
+  if (!miniTerraformServiceLabels.includes(expected)) {
+    fail(
+      `mini-terraform missing humanized service label ${expected}; found ${miniTerraformServiceLabels.join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-terraform service label ${expected}`);
+  }
+}
+
+const miniTerraformSemantic = miniTerraformGraph.nodes.filter(
+  (node) => node.metadata?.projection === "semantic",
+);
+const miniTerraformByKey = new Map(
+  miniTerraformSemantic
+    .filter((node) => typeof node.metadata?.systemKey === "string")
+    .map((node) => [node.metadata.systemKey, node]),
+);
+const miniTerraformDeploy = miniTerraformByKey.get("deploy");
+if (!miniTerraformDeploy || miniTerraformDeploy.label !== "Infrastructure") {
+  fail(
+    `mini-terraform Deploy label expected 'Infrastructure' from README, found '${miniTerraformDeploy?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-terraform Deploy labeled Infrastructure");
+}
+
+const nestedTerraformServices = miniTerraformServices.filter(
+  (node) => node.parentId === miniTerraformDeploy?.id,
+);
+if (nestedTerraformServices.length < 4) {
+  fail(
+    `mini-terraform expected ≥4 terraform units nested under Infrastructure, found ${nestedTerraformServices.length}`,
+  );
+} else {
+  pass(
+    `mini-terraform ${nestedTerraformServices.length} units nested under Infrastructure`,
+  );
+}
+
+const terraformOverviewLeaves = nestedTerraformServices.filter(
+  (node) => node.metadata?.collapsedInOverview !== true,
+);
+if (terraformOverviewLeaves.length > 0) {
+  fail(
+    `mini-terraform overview should collapse resources/modules under Infrastructure, still visible: ${terraformOverviewLeaves
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-terraform overview collapses resources/modules under Infrastructure");
+}
+
+const miniTerraformFlow = miniTerraformSemantic
+  .filter((node) => typeof node.metadata?.flowOrder === "number")
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+if (
+  miniTerraformFlow.length < 1 ||
+  miniTerraformFlow[0]?.metadata?.systemKey !== "deploy"
+) {
+  fail(
+    `mini-terraform flowOrder expected Infrastructure/Deploy, got ${miniTerraformFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `mini-terraform flowOrder: ${miniTerraformFlow.map((node) => node.label).join(" → ")}`,
+  );
+}
+
+const miniTerraformTfModules = miniTerraformGraph.nodes.filter(
+  (node) => node.kind === "module" && node.metadata?.terraformModule === true,
+);
+if (
+  !miniTerraformTfModules.some((node) =>
+    String(node.metadata?.file ?? node.label)
+      .replaceAll("\\", "/")
+      .endsWith("main.tf"),
+  )
+) {
+  fail("mini-terraform missing main.tf module");
+} else {
+  pass("mini-terraform has main.tf module");
+}
+
+const terraformModuleChrome = miniTerraformTfModules.filter(
+  (node) => node.metadata?.collapsedInOverview !== true,
+);
+if (terraformModuleChrome.length > 0) {
+  fail(
+    `mini-terraform overview should collapse .tf modules, still visible: ${terraformModuleChrome
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-terraform overview collapses .tf modules");
+}
+
+const terraformEvidenceGaps = miniTerraformServices.filter((node) => {
+  const detail = node.evidence[0]?.detail ?? "";
+  return !/^(resource:|module:)/.test(detail);
+});
+if (terraformEvidenceGaps.length > 0) {
+  fail(
+    `mini-terraform evidence should cite resource:/module: ${terraformEvidenceGaps
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-terraform evidence details cite resource/module");
+}
+
+const networkModule = miniTerraformModules.find(
+  (node) => node.metadata?.moduleName === "network",
+);
+if (networkModule?.metadata?.moduleSource !== "./modules/network") {
+  fail(
+    `mini-terraform network moduleSource expected ./modules/network, found ${networkModule?.metadata?.moduleSource ?? "(missing)"}`,
+  );
+} else {
+  pass("mini-terraform network module source ./modules/network");
+}
+
+const terraformCommerceNoise = miniTerraformGraph.edges.some((edge) =>
+  /checkout|orders?/i.test(
+    `${edge.label ?? ""} ${JSON.stringify(edge.metadata ?? {})}`,
+  ),
+);
+if (terraformCommerceNoise) {
+  fail(
+    "mini-terraform should not inherit Checkout/orders commerce collaboration copy",
+  );
+} else {
+  pass("mini-terraform has no Checkout/orders commerce collaboration noise");
 }
 
 if (process.exitCode) {
