@@ -113,7 +113,7 @@ Human still turns off automation for a hard stop; Idle protocol stops the **runa
 ### Loop status
 
 ```text
-ACTIVE
+LOOP COMPLETE
 ```
 
 *(Change the line above to `LOOP COMPLETE` only when acceptance gates 1–8 all pass.)*
@@ -141,26 +141,27 @@ Update checkboxes + Next focus every tick (unless Idle protocol).
 - [x] Persist last tier/focus in `sessionStorage` (`persistWalkState` / `restoreWalkState`, key per project root); stale ids fall back to Beginner; verify floor  
 - [x] Mini-stack + self-map pin spot-check recorded in Learning log (`npm run verify` floors as evidence)  
 - [x] Docs: short “How to read the map” blurb in README (tiers + search enters cluster + reload keeps walk)  
+- [x] Final LOOP COMPLETE gate pass (gates 1–8 re-checked in one tick; Loop status set)  
 
 ### In progress / next
 
 Keep **at least 3 unchecked items** here until LOOP COMPLETE (refill from Seed backlog).  
 These remaining items are the **mandatory** walkable slice — finishing them (with gates 1–8) is what completes the loop:
 
-- [ ] Final LOOP COMPLETE gate pass (re-check gates 1–8 in one tick; set Loop status)  
-- [ ] *(slot — completion tick only; do not invent polish)*  
-- [ ] *(slot — completion tick only; do not invent polish)*  
+- [x] Final LOOP COMPLETE gate pass (re-check gates 1–8 in one tick; set Loop status)  
+- [x] *(slot — cancelled: completion tick only; no polish invented — LOOP COMPLETE)*  
+- [x] *(slot — cancelled: completion tick only; no polish invented — LOOP COMPLETE)*  
 
 ### Seed backlog (optional — not required for LOOP COMPLETE)
 
 Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder freely.  
 **Do not** use this list to delay LOOP COMPLETE after gates 1–8 pass.
 
-- *(empty — do not invent polish; next tick is LOOP COMPLETE gate pass only)*  
+- *(empty — LOOP COMPLETE; do not invent polish)*  
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (README “How to read the map” blurb). Now Final LOOP COMPLETE gate pass (re-check gates 1–8; set Loop status) so the idle protocol can stop push→wake loops.
+> **Next focus:** LOOP COMPLETE — idle. Do not invent work. Human should disable push-automation when convenient.
 
 ### Learning log (append every tick)
 
@@ -182,6 +183,7 @@ Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder fr
 - 2026-08-02 14:28 UTC | Done: sessionStorage persistWalkState/restoreWalkState (tier+focus+history+selected; key per project root; stale ids → Beginner); verify floor | Next: mini-stack + real-repo pin spot-check in Learning log | Learned: restore must keep manual Advanced-without-focus (don’t always syncTierToFocus on hydrate) or reload fights the View cycle; validate every id against byId  
 - 2026-08-02 14:30 UTC | Done: spot-check — `npm run build` + `npm run verify` green; mini-stack Beginner 6 flow (Storefront→…→Catalog; no Order/Payment/queue leak); Checkout Intermediate 9 nodes (routes+collab, no tables); self-map Beginner 8 (CLI→…→index.html); Extractors Intermediate 16 / Advanced 13 modules (no function dump); typescript module Advanced 20 functions; search createCheckout→src/server.ts | Next: README “How to read the map” | Learned: verify walkable floors already pin both demo surfaces; a separate manual browser pass would only restate the same Beginner/focus/Advanced assertions  
 - 2026-08-02 14:35 UTC | Done: README “How to read the map” — Beginner/Intermediate/Advanced walk, Find→cluster, Back/Esc/Overview, reload keeps tab-session walk | Next: LOOP COMPLETE gate pass | Learned: keep the blurb under Try it so scan users hit tiers before the schema dump; mirror viewer chrome words (View / Find / Back / Esc) so docs and UI stay one vocabulary  
+- 2026-08-02 14:40 UTC | Done: LOOP COMPLETE gate pass — gates 1–8 true (`npm run build` + `npm run verify` green; Beginner/focus/Advanced/nav floors hold; filler In-progress slots cancelled) | Next: IDLE — no invent, no push | Learned: declare complete only after a fresh verify in the same tick; leftover ≥3 filler slots are cancel-with-reason, not polish bait; next woken tick must Idle protocol (no push)  
 
 ---
 
