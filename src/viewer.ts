@@ -46,7 +46,13 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     .edge { stroke: #46505d; stroke-width: 1.2; fill: none; opacity: .48; }
     .edge.derived { stroke-dasharray: 5 4; stroke: var(--derived); }
     .edge.inferred { stroke-dasharray: 2 5; stroke: var(--inferred); }
+    /* Product collaboration (uses/renders/…) — distinct from import/call hairlines */
+    .edge.collab { stroke: #6e8fe0; stroke-width: 1.55; opacity: .64; }
+    .edge.collab.derived { stroke-dasharray: 8 5; stroke: #6e8fe0; }
+    .edge.collab.inferred { stroke-dasharray: 3 4; stroke: #6e8fe0; }
+    .edge.collab.flows-to { stroke: #8aa6f0; stroke-width: 1.75; opacity: .72; }
     .edge.active { stroke: var(--accent); stroke-width: 2.3; opacity: .95; }
+    .edge.collab.active { stroke: var(--accent); stroke-width: 2.45; opacity: .96; }
     #nodes { position: absolute; inset: 0; }
     .lane-label { position: absolute; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
     .node { --kind-color: #77808d; position: absolute; width: 190px; min-height: 58px; background: var(--panel); border: 1px solid var(--kind-color); border-radius: 9px; padding: 9px 10px; cursor: pointer; user-select: none; transition: opacity .12s, border-color .12s, background .12s; }
@@ -97,6 +103,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     #legend span::before { content: ""; display: inline-block; width: 14px; border-top: 2px solid var(--observed); margin-right: 5px; vertical-align: middle; }
     #legend .derived::before { border-color: var(--derived); border-top-style: dashed; }
     #legend .inferred::before { border-color: var(--inferred); border-top-style: dotted; }
+    #legend .collab::before { border-color: #6e8fe0; border-top-width: 2.5px; }
     @media (max-width: 760px) {
       #workspace { grid-template-columns: 1fr; }
       aside { display: none; }
@@ -120,7 +127,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           <svg id="edges"></svg>
           <div id="nodes"></div>
         </div>
-        <div id="legend"><span>observed</span><span class="derived">derived</span><span class="inferred">inferred</span></div>
+        <div id="legend"><span>observed</span><span class="derived">derived</span><span class="inferred">inferred</span><span class="collab">collaboration</span></div>
       </main>
       <aside id="inspector"><div class="empty">Select a component to inspect its connections and source evidence.</div></aside>
     </div>
@@ -147,6 +154,10 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     ];
     // Default view prefers product systems over raw modules/functions/steps.
     const hiddenByDefault = new Set(["function", "column", "module", "pipeline-step"]);
+    // Product-story edges — canvas + inspector treat these apart from imports/calls.
+    const collaborationKinds = new Set([
+      "uses", "renders", "exposes", "triggers", "configures", "flows-to",
+    ]);
     const state = { scale: 1, x: 36, y: 40, dragging: false, startX: 0, startY: 0, focus: null, selected: null, implementation: false, history: [] };
     const viewport = document.getElementById("viewport");
     const world = document.getElementById("world");
@@ -337,7 +348,14 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         const ty = target.y + 29;
         const bend = Math.max(35, Math.abs(tx - sx) * .45);
         path.setAttribute("d", "M " + sx + " " + sy + " C " + (sx + bend) + " " + sy + ", " + (tx - bend) + " " + ty + ", " + tx + " " + ty);
-        path.setAttribute("class", "edge " + certaintyOf(edge) + ((state.selected === edge.source || state.selected === edge.target) ? " active" : ""));
+        const classes = ["edge", certaintyOf(edge)];
+        if (collaborationKinds.has(edge.kind)) {
+          classes.push("collab");
+          if (edge.kind === "flows-to") classes.push("flows-to");
+        }
+        if (state.selected === edge.source || state.selected === edge.target) classes.push("active");
+        path.setAttribute("class", classes.join(" "));
+        path.setAttribute("data-kind", edge.kind);
         edgesLayer.appendChild(path);
       }
       highlightNeighborhood();
@@ -355,10 +373,6 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       });
     }
 
-    // Product-story edges surface before module imports in the inspector.
-    const collaborationKinds = new Set([
-      "uses", "renders", "exposes", "triggers", "configures", "flows-to",
-    ]);
     // Structured inspector sections own these keys (avoid raw pill dump).
     const structuredMetaKeys = new Set([
       "keyFiles", "binEntries", "binCommands", "packageExports", "extractorRoster",

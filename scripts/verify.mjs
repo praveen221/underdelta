@@ -880,6 +880,32 @@ if (collaborationKindsDecl < 0 || usesInKinds < 0 || rendersInKinds < 0 || expos
   pass("viewer inspector surfaces Collaboration detail text before Imports & calls");
 }
 
+// Canvas: collaboration edges styled apart from import/call hairlines.
+const collabEdgeCss = viewerHtml.indexOf(".edge.collab");
+const collabFlowsToCss = viewerHtml.indexOf(".edge.collab.flows-to");
+const collabLegend = viewerHtml.indexOf('class="collab">collaboration');
+const collabClassPush = viewerHtml.indexOf('classes.push("collab")');
+const collabDataKind = viewerHtml.indexOf('path.setAttribute("data-kind", edge.kind)');
+const collabKindsBeforeRender =
+  viewerHtml.indexOf("const collaborationKinds = new Set([") <
+    viewerHtml.indexOf("edgesLayer.innerHTML = \"\"") &&
+  viewerHtml.indexOf("collaborationKinds.has(edge.kind)") >
+    viewerHtml.indexOf("edgesLayer.innerHTML = \"\"");
+if (
+  collabEdgeCss < 0 ||
+  collabFlowsToCss < 0 ||
+  collabLegend < 0 ||
+  collabClassPush < 0 ||
+  collabDataKind < 0 ||
+  !collabKindsBeforeRender
+) {
+  fail(
+    "viewer canvas should style collaboration edges (.edge.collab / flows-to) distinctly from imports/calls",
+  );
+} else {
+  pass("viewer canvas styles collaboration edges differently from imports/calls");
+}
+
 // Inspector: unified tables surface prismaName/sqlName + migration lineage.
 const fixtureViewerHtml = renderArchitectureHtml(fixtureGraph);
 const tableSourcesFn = fixtureViewerHtml.indexOf("function tableSourcesHtml");
