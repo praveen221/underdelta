@@ -6,6 +6,7 @@ import { compileRepository } from "../dist/compile.js";
 import { renderArchitectureHtml } from "../dist/viewer.js";
 import {
   ensureRealRepo,
+  NEXTJS_SAAS_STARTER,
   REALWORLD_EXPRESS,
 } from "./ensure-real-repo.mjs";
 
@@ -1851,6 +1852,289 @@ if (realRepoRoot) {
       );
     } else {
       pass("real-repo join tables carry no depends-on edges (favorites/follows on models)");
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Capability ladder rung 2: real Next.js App Router repo (pinned SHA, gitignored).
+// Golden-lock a legible SaaS map: UI + HTTP API, pages/routes nested + collapsed,
+// UI→API flow/uses, server actions + client components, clean product title.
+// ---------------------------------------------------------------------------
+let nextRealRoot;
+try {
+  nextRealRoot = await ensureRealRepo(NEXTJS_SAAS_STARTER);
+  pass(
+    `next real repo ${NEXTJS_SAAS_STARTER.name} ready @ ${NEXTJS_SAAS_STARTER.sha.slice(0, 12)}`,
+  );
+} catch (error) {
+  fail(
+    `could not ensure next real repo ${NEXTJS_SAAS_STARTER.name}@${NEXTJS_SAAS_STARTER.sha}: ${error instanceof Error ? error.message : error}`,
+  );
+}
+
+if (nextRealRoot) {
+  let nextRealGraph;
+  try {
+    nextRealGraph = await compileRepository(nextRealRoot);
+    pass(
+      `next-real-repo scan completed: ${nextRealGraph.nodes.length} nodes, ${nextRealGraph.edges.length} edges`,
+    );
+  } catch (error) {
+    fail(
+      `next-real-repo scan crashed on ${NEXTJS_SAAS_STARTER.name}: ${error instanceof Error ? error.message : error}`,
+    );
+  }
+
+  if (nextRealGraph) {
+    const nextPages = nextRealGraph.nodes.filter((node) => node.kind === "page");
+    const nextRoutes = nextRealGraph.nodes.filter((node) => node.kind === "route");
+    const nextTables = nextRealGraph.nodes.filter((node) => node.kind === "table");
+    const nextSemantic = nextRealGraph.nodes.filter(
+      (node) => node.metadata?.projection === "semantic",
+    );
+    const nextProduct = nextRealGraph.nodes.find((node) => node.kind === "product");
+    const nextUi = nextSemantic.find((node) => node.metadata?.systemKey === "ui");
+    const nextApi = nextSemantic.find((node) => node.metadata?.systemKey === "api");
+    const nextServerActions = nextRealGraph.nodes.filter(
+      (node) => node.metadata?.serverAction === true,
+    );
+    const nextClientComponents = nextRealGraph.nodes.filter(
+      (node) =>
+        node.kind === "component" &&
+        (node.metadata?.runtime === "client" || node.metadata?.useClient === true),
+    );
+    const nextSummary = {
+      pin: `${NEXTJS_SAAS_STARTER.name}@${NEXTJS_SAAS_STARTER.sha}`,
+      product: nextProduct?.label ?? "(missing)",
+      nodes: nextRealGraph.nodes.length,
+      edges: nextRealGraph.edges.length,
+      pages: nextPages.map((node) => node.label),
+      routes: nextRoutes.map((node) => node.label),
+      tables: nextTables.map((node) => node.label),
+      serverActions: nextServerActions.map((node) => node.label),
+      clientComponents: nextClientComponents.length,
+      semantic: nextSemantic.map((node) => node.label),
+    };
+    console.log(`Next-real-repo scan summary: ${JSON.stringify(nextSummary)}`);
+
+    if (nextRealGraph.nodes.length < 40) {
+      fail(
+        `next-real-repo node floor: ${nextRealGraph.nodes.length} < 40 (map looks empty)`,
+      );
+    } else {
+      pass(`next-real-repo nodes: ${nextRealGraph.nodes.length}`);
+    }
+    if (nextProduct?.label !== "Next.js SaaS Starter") {
+      fail(
+        `next-real-repo product label expected README title 'Next.js SaaS Starter', found '${nextProduct?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass(`next-real-repo product label: ${nextProduct.label}`);
+    }
+    if (!nextUi) {
+      fail("next-real-repo missing UI semantic system");
+    } else if (nextUi.label !== "UI") {
+      fail(
+        `next-real-repo UI system label expected 'UI', found '${nextUi.label}'`,
+      );
+    } else {
+      pass("next-real-repo UI system labeled 'UI'");
+    }
+    if (!nextApi) {
+      fail("next-real-repo missing HTTP API semantic system");
+    } else if (nextApi.label !== "HTTP API") {
+      fail(
+        `next-real-repo api system label expected 'HTTP API', found '${nextApi.label}'`,
+      );
+    } else {
+      pass("next-real-repo api system labeled 'HTTP API'");
+    }
+
+    const expectedNextPages = [
+      "Home",
+      "/pricing",
+      "/dashboard",
+      "/dashboard/activity",
+      "/dashboard/general",
+      "/dashboard/security",
+      "/sign-in",
+      "/sign-up",
+    ];
+    const nextPageLabels = new Set(nextPages.map((node) => node.label));
+    const missingNextPages = expectedNextPages.filter(
+      (label) => !nextPageLabels.has(label),
+    );
+    if (missingNextPages.length) {
+      fail(
+        `next-real-repo missing App Router pages: ${missingNextPages.join(", ")}; found ${[...nextPageLabels].join(", ") || "(none)"}`,
+      );
+    } else {
+      pass(
+        `next-real-repo App Router pages: ${expectedNextPages.join(", ")}`,
+      );
+    }
+    if (nextUi) {
+      const orphanPages = nextPages.filter((node) => node.parentId !== nextUi.id);
+      if (orphanPages.length) {
+        fail(
+          `next-real-repo pages not nested under UI: ${orphanPages
+            .map((node) => node.label)
+            .join(", ")}`,
+        );
+      } else if (nextPages.length < 8) {
+        fail(
+          `next-real-repo expected ≥8 pages nested under UI, found ${nextPages.length}`,
+        );
+      } else {
+        pass(`next-real-repo ${nextPages.length} pages nested under UI`);
+      }
+      const uncollapsedPages = nextPages.filter(
+        (node) => node.metadata?.collapsedInOverview !== true,
+      );
+      if (uncollapsedPages.length) {
+        fail(
+          `next-real-repo pages should collapse on overview under UI: ${uncollapsedPages
+            .map((node) => node.label)
+            .join(", ")}`,
+        );
+      } else {
+        pass("next-real-repo pages collapsed on overview (UI tells the story)");
+      }
+    }
+
+    const expectedNextRoutes = [
+      "GET /api/user",
+      "GET /api/team",
+      "GET /api/stripe/checkout",
+      "POST /api/stripe/webhook",
+    ];
+    const nextRouteLabels = new Set(nextRoutes.map((node) => node.label));
+    const missingNextRoutes = expectedNextRoutes.filter(
+      (label) => !nextRouteLabels.has(label),
+    );
+    if (missingNextRoutes.length) {
+      fail(
+        `next-real-repo missing App Router route handlers: ${missingNextRoutes.join(", ")}; found ${[...nextRouteLabels].join(", ") || "(none)"}`,
+      );
+    } else {
+      pass(
+        `next-real-repo route handlers: ${expectedNextRoutes.join(", ")}`,
+      );
+    }
+    if (nextApi) {
+      const orphanRoutes = nextRoutes.filter(
+        (node) => node.parentId !== nextApi.id,
+      );
+      if (orphanRoutes.length) {
+        fail(
+          `next-real-repo routes not nested under HTTP API: ${orphanRoutes
+            .map((node) => node.label)
+            .join(", ")}`,
+        );
+      } else {
+        pass(
+          `next-real-repo ${nextRoutes.length} routes nested under HTTP API`,
+        );
+      }
+      const uncollapsedRoutes = nextRoutes.filter(
+        (node) => node.metadata?.collapsedInOverview !== true,
+      );
+      if (uncollapsedRoutes.length) {
+        fail(
+          `next-real-repo routes should collapse on overview under HTTP API: ${uncollapsedRoutes
+            .map((node) => node.label)
+            .join(", ")}`,
+        );
+      } else {
+        pass(
+          "next-real-repo routes collapsed on overview (API tells the story)",
+        );
+      }
+    }
+
+    const nextFlowOrdered = nextSemantic
+      .filter((node) => typeof node.metadata?.flowOrder === "number")
+      .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+    const nextFlowLabels = nextFlowOrdered.map((node) => node.label);
+    const uiFlowIndex = nextFlowLabels.indexOf("UI");
+    const apiFlowIndex = nextFlowLabels.indexOf("HTTP API");
+    if (uiFlowIndex < 0 || apiFlowIndex < 0 || uiFlowIndex >= apiFlowIndex) {
+      fail(
+        `next-real-repo flowOrder should place UI before HTTP API, got ${nextFlowLabels.join(" → ") || "(none)"}`,
+      );
+    } else {
+      pass(`next-real-repo flowOrder: ${nextFlowLabels.join(" → ")}`);
+    }
+    if (nextUi && nextApi) {
+      const uiFlowsToApi = nextRealGraph.edges.some(
+        (edge) =>
+          edge.kind === "flows-to" &&
+          edge.source === nextUi.id &&
+          edge.target === nextApi.id,
+      );
+      const uiUsesApi = nextRealGraph.edges.some(
+        (edge) =>
+          edge.kind === "uses" &&
+          edge.source === nextUi.id &&
+          edge.target === nextApi.id,
+      );
+      if (!uiFlowsToApi) {
+        fail("next-real-repo missing flows-to edge UI → HTTP API");
+      } else {
+        pass("next-real-repo flows-to: UI → HTTP API");
+      }
+      if (!uiUsesApi) {
+        fail("next-real-repo missing uses edge UI → HTTP API");
+      } else {
+        pass("next-real-repo collaboration: UI -[uses]-> HTTP API");
+      }
+    }
+
+    const nextActionLabels = new Set(
+      nextServerActions.map((node) => node.label),
+    );
+    if (!nextActionLabels.has("signOut")) {
+      fail(
+        `next-real-repo missing server action signOut; found ${[...nextActionLabels].join(", ") || "(none)"}`,
+      );
+    } else {
+      pass("next-real-repo server action: signOut");
+    }
+    if (nextClientComponents.length < 5) {
+      fail(
+        `next-real-repo client component floor: ${nextClientComponents.length} < 5`,
+      );
+    } else {
+      pass(
+        `next-real-repo client components: ${nextClientComponents.length}`,
+      );
+    }
+    if (nextTables.length < 3) {
+      fail(
+        `next-real-repo table floor: ${nextTables.length} < 3 (Drizzle/SQL models missing)`,
+      );
+    } else {
+      pass(`next-real-repo tables: ${nextTables.length}`);
+    }
+
+    const nextCommerceNoise = nextRealGraph.edges.filter(
+      (edge) =>
+        (edge.kind === "reads" ||
+          edge.kind === "uses" ||
+          edge.kind === "triggers") &&
+        /checkout|orders|fulfill|payments/i.test(
+          `${edge.label ?? ""} ${edge.evidence?.map((item) => item.detail).join(" ") ?? ""}`,
+        ),
+    );
+    if (nextCommerceNoise.length) {
+      fail(
+        `next-real-repo leaked commerce collaboration copy: ${nextCommerceNoise
+          .map((edge) => `${edge.kind}:${edge.label}`)
+          .join(", ")}`,
+      );
+    } else {
+      pass("next-real-repo has no Checkout/orders commerce collaboration noise");
     }
   }
 }

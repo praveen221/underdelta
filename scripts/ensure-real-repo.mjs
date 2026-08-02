@@ -24,6 +24,15 @@ export const REALWORLD_EXPRESS = {
   dirname: "node-express-realworld",
 };
 
+/** @type {RealRepoPin} */
+export const NEXTJS_SAAS_STARTER = {
+  name: "nextjs/saas-starter",
+  url: "https://github.com/nextjs/saas-starter.git",
+  // Pinned 2026-08-02 — tip of main at plan rung-2 real-repo kickoff.
+  sha: "6e33e58b1e553a41fe22e6b941a7229a002de361",
+  dirname: "nextjs-saas-starter",
+};
+
 export const REAL_REPO_ROOT = path.join(repoRoot, ".underdelta-real");
 
 function git(args, cwd, opts = {}) {
@@ -89,10 +98,29 @@ export async function ensureRealRepo(pin) {
   return dest;
 }
 
+const PINS_BY_NAME = {
+  [REALWORLD_EXPRESS.dirname]: REALWORLD_EXPRESS,
+  realworld: REALWORLD_EXPRESS,
+  [NEXTJS_SAAS_STARTER.dirname]: NEXTJS_SAAS_STARTER,
+  "saas-starter": NEXTJS_SAAS_STARTER,
+  nextjs: NEXTJS_SAAS_STARTER,
+};
+
 const isMain =
   process.argv[1] &&
   import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 if (isMain) {
-  const dest = await ensureRealRepo(REALWORLD_EXPRESS);
-  console.log(`Real repo ready: ${dest} @ ${REALWORLD_EXPRESS.sha}`);
+  const requested = process.argv[2];
+  const pins = requested
+    ? [PINS_BY_NAME[requested]].filter(Boolean)
+    : [REALWORLD_EXPRESS, NEXTJS_SAAS_STARTER];
+  if (requested && pins.length === 0) {
+    throw new Error(
+      `unknown real-repo pin '${requested}'; known: ${Object.keys(PINS_BY_NAME).join(", ")}`,
+    );
+  }
+  for (const pin of pins) {
+    const dest = await ensureRealRepo(pin);
+    console.log(`Real repo ready: ${dest} @ ${pin.sha}`);
+  }
 }
