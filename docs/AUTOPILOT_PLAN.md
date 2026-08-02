@@ -22,7 +22,21 @@ Cursor’s `/autopilot` skill may talk about conflicts / CI / review comments. T
 **Never idle while the end goal is unmet.**  
 If the checklist looks empty, invent the next useful increment (see Self-renewing backlog). Do not report “nothing to do.”
 
-**Capability over polish.** Once a capability exists and verify locks it, further cosmetic refinement of it is low value. Every tick, prefer the **lowest unfinished rung of the Capability ladder** (below) over another polish pass on diagrams that already work.
+**Capability and polish are twin engines — never let either starve.** The Capability ladder (below) moves the frontier to new stacks and real repos. Visual polish is what makes every map actually land — it is **extremely high value, permanently**. The generated browser IS the product: a technically correct map that reads like a debugger dump has failed. "Cosmetic" is the wrong word for it; legibility, hierarchy, beauty, and calm are core product capability. The only failure mode to avoid is a *stall*: a long streak of polish-only ticks on already-excellent diagrams while a ladder rung sits untouched. Rough cadence: don't run more than two consecutive polish-only ticks while the current rung has an obvious next step, and give every newly mapped stack/repo a dedicated polish pass as soon as it scans — a capability is not done until its map is beautiful.
+
+---
+
+## North star user (why polish is core capability)
+
+Underdelta is for the new wave of builders who ship real products with AI agents but are not career engineers — designers, product managers, founders, complete beginners. They vibe-code something real, then lose the plot of their own codebase. Underdelta's job is to hand them a **mind map of what they actually built**, readable with zero coding vocabulary.
+
+That means the default browser must be:
+
+- **Instantly legible to a non-coder** — product words, not jargon; systems and stories, not symbols
+- **Beautiful and calm** — visual hierarchy, spacing, color, labels, and interaction carry the narrative
+- **Trustworthy** — every visual claim clicks through to evidence
+
+Judge every tick's output through this user's eyes. If a random designer opened the map cold and couldn't retell the product story in a minute, the work is not done — no matter how correct the extraction is.
 
 ---
 
@@ -50,6 +64,7 @@ The end goal is **not** met if any of these are true:
 - Evidence is missing or misleading for major nodes
 - `npm run verify` is missing coverage for a capability we just added
 - A founder scanning Underdelta or the mini-stack would still ask “what did I actually build?”
+- The default browser would confuse or repel the North star non-coder (visual noise, jargon labels, weak hierarchy)
 - **Any Capability ladder rung below remains un-locked** (no golden verify lock for it)
 
 Until those are false, **keep shipping ticks**.
@@ -58,7 +73,7 @@ Until those are false, **keep shipping ticks**.
 
 ## Capability ladder (human directive — 2026-08-02, overrides seed backlog)
 
-Underdelta must map the stacks people actually build products with — Node.js/Express, React, Next.js, and Python servers — on **real repositories it did not write**. Diagram polish on the self-map and mini-stack is no longer the frontier. Every tick, work the **lowest unfinished rung**. A rung counts as done only when `npm run verify` golden-locks it.
+Underdelta must map the stacks people actually build products with — Node.js/Express, React, Next.js, and Python servers — on **real repositories it did not write**. The ladder exists to keep the frontier moving; it does not devalue polish (see Mission — twin engines). Work the **lowest unfinished rung**. A rung counts as done only when `npm run verify` golden-locks it **and its map is polished enough for the North star user**.
 
 1. **Real-repo generalization (Node/Express/React).** Prove the compiler on a real open-source repository this loop did not author. Pick a well-known small/medium Express + React (or similar Node) app, pin an exact commit SHA in this file, and wire it into verification as an isolated scan target: shallow-clone at the pinned SHA into a gitignored path (e.g. `.underdelta-real/<name>`), cache it between runs, and never let it enter the product diagram. The scan must complete without crashing and produce a legible product-systems map. Every place the real repo breaks extractors or projection **is the actual work** — fix those, then golden-lock a summary (floors, required systems/labels) in verify.
 2. **Next.js semantics.** App-router pages/layouts/route handlers, server actions, API routes, client vs server component split. Add a small `verification/mini-next` fixture plus a pinned real Next.js repo as scan targets. Golden-lock both.
@@ -70,7 +85,12 @@ Rules:
 - Rungs are sequential by default. Skip ahead only if genuinely blocked, and record why in the Learning log.
 - Real-repo targets are pinned by commit SHA and cloned into gitignored paths — **do not vendor third-party code into this repo**.
 - If cloning fails in the loop environment, fall back to enriching the local fixture for that rung and note it in the Learning log — but try the real repo first.
-- Viewer/inspector polish is allowed only when it directly unblocks understanding of the current rung’s output.
+- Polish is **always in scope** — improving the default browser’s legibility and beauty is core capability, not a distraction. The ladder only forbids stalling: don’t string together polish-only ticks while the current rung has an obvious next step.
+- Every rung ends with a polish pass on its new output: a freshly mapped stack/repo must look as good as the self-map before the rung is called locked.
+
+### Standing guarantee: flawless on itself
+
+Whatever else the loop builds, `node dist/cli.js scan .` on Underdelta itself — and the mini-stack — must **always** produce a stunning, accurate, demo-ready map. That is what the human opens first every morning to judge the whole project. Golden locks in verify protect correctness; regular polish attention protects beauty. Never let the self-map or mini-stack rot while chasing new stacks — if a capability change degrades them visually, fixing that is immediately the highest-priority work.
 
 ---
 
@@ -187,6 +207,7 @@ Append short bullets like:
 - 2026-08-02 03:56 UTC | Human directive: Capability ladder added (real Node/React repo → Next.js → Python servers → self-renewal); polish deprioritized below capability rungs; tick-start health check added because push-triggered reruns cancel in-flight ticks | Next: rung 1 — pin a real Node/Express/React repo and wire it into verify | Learned: the loop had locally optimized its two self-authored targets; the frontier is generalization to repos it did not write
 - 2026-08-02 03:59 UTC | Done: rung 1 pin+wire — `gothinkster/node-express-realworld-example-app` @ `30b68e1e8814` cloned to `.underdelta-real/`, ignored by product discovery, `npm run verify` smoke-scans it (20 routes / 8 tables / core RealWorld paths) | Next: fix README markdown-image product label + join-table aliases; legible API+Data map; golden-lock | Learned: foreign Express+Prisma already extracts routes/tables; first real-repo breakage is projection (README `![…](img)` becomes the product title; implicit M2M join tables double-count)
 - 2026-08-02 04:10 UTC | Done: sanitize README image titles → product label; H2/H3-only system hints; skip how-to headings; collapse `_ArticleToTag`/`ArticleTags`/favorites/follows join tables; verify locks clean labels + 4 Prisma models | Next: nest RealWorld routes/tables + flowOrder; golden-lock | Learned: scoped package names (`@api/source`) need README H1; bare `\bprisma\b`/`\bdatabase\b` in how-to headings will rename Data access unless imperatives are filtered; length-based README refine is unsafe
+- 2026-08-02 04:12 UTC | Human directive #2: polish restored as first-class twin engine (North star user = non-coder vibe-builders; the browser IS the product); ladder now only forbids polish-only stalls, and each rung ends with a polish pass; standing guarantee added — self-map + mini-stack always demo-ready | Next: continue rung 1 (README image label + join-table aliases) | Learned: steering must not swing the pendulum — deprioritizing polish would rot the exact surface the product is judged on
 
 ---
 
@@ -202,7 +223,7 @@ At the **start** of every tick, after reading this file:
 
 When inventing work, ask only:
 
-> What single change moves the **lowest unfinished Capability ladder rung** forward — i.e. makes Underdelta answer “what did I actually build?” for a repo it did not write?
+> What single change most helps the North star non-coder finally understand what they built — moving the **lowest unfinished Capability ladder rung** forward, or making an existing map meaningfully clearer and more beautiful? (If the last two ticks were polish-only and the rung has an obvious next step, pick the rung.)
 
 ---
 
@@ -240,11 +261,11 @@ When inventing work, ask only:
 ## Priority order
 
 1. Keep verification green and isolated (`verification/`, `npm run verify`, gitignored real-repo clones)
-2. **Capability ladder rungs** (real-repo generalization → Next.js → Python servers → self-renewal)
-3. Semantic projection + product systems/flows (as needed by the current rung)
-4. Extractor improvements as needed for the current rung’s completeness/correctness
-5. Diagram quality for self-map / mini-stack only when it blocks understanding
-6. Viewer improvements only when they improve product understanding
+2. **Standing guarantee** — self-map + mini-stack always demo-ready; fix any visual/correctness regression there immediately
+3. **Capability ladder rungs** (real-repo generalization → Next.js → Python servers → self-renewal)
+4. **Visual quality of the default browser** — legibility, hierarchy, beauty for the North star non-coder (equal partner to rungs; just don’t stall a rung with polish-only streaks)
+5. Semantic projection + product systems/flows (as needed by the current rung)
+6. Extractor improvements as needed for the current rung’s completeness/correctness
 7. README only when commands/behavior changed
 8. Merge conflicts / CI failures caused by our changes (hygiene only)
 
@@ -257,8 +278,8 @@ When inventing work, ask only:
 - New PRs
 - Graphify fork
 - Sales funnels / marketing pages
-- Random refactors or cosmetic redesign churn
-- Cosmetic polish ticks while a Capability ladder rung is unfinished (unless the polish directly unblocks that rung)
+- Random refactors or redesign churn with no legibility gain
+- Polish-only **streaks** (3+ consecutive ticks) while the current ladder rung has an obvious next step — polish itself is high value; alternate, don’t stall
 - Vendoring third-party repo code into this repository (clones stay gitignored)
 - Putting tests/fixtures into the default visualization
 - Stopping because the PR is draft/mergeable/no CI/no comments
@@ -292,7 +313,7 @@ HARD LOCKS (never violate):
 9) Keep ≥ 3 items in “In progress / next” at all times.
 
 PRODUCT GOAL:
-Climb the Capability ladder in the plan file: (1) prove the compiler on a REAL Node/Express/React repo the loop did not write (pinned SHA, gitignored clone, golden-locked in verify), (2) Next.js app-router semantics, (3) Python servers (FastAPI/Django/SQLAlchemy/Celery), (4) self-renew from the README roadmap. Evidence-backed, semantically projected, flow-readable. Capability over polish.
+Climb the Capability ladder in the plan file: (1) prove the compiler on a REAL Node/Express/React repo the loop did not write (pinned SHA, gitignored clone, golden-locked in verify), (2) Next.js app-router semantics, (3) Python servers (FastAPI/Django/SQLAlchemy/Celery), (4) self-renew from the README roadmap. Evidence-backed, semantically projected, flow-readable. Capability and polish are TWIN ENGINES: the browser is the product and must stay beautiful and legible for non-coders; the ladder only forbids polish-only stalls. The Underdelta self-map and mini-stack must ALWAYS stay demo-ready.
 
 EACH 15-MINUTE TICK (one chunk):
 A) Concurrency check. If busy, skip.
@@ -311,12 +332,13 @@ H) Stop that tick only (not the mission). Wait for next Autopilot ping.
 
 PRIORITY ORDER:
 1) Keep verification green/isolated
-2) Capability ladder rungs (real repo → Next.js → Python → self-renew)
-3) Semantic systems/flows as needed by the current rung
-4) Extractors as needed by the current rung
-5) Viewer only for understanding
-6) README only for behavior changes
-7) Merge/CI hygiene only if blocking
+2) Standing guarantee: self-map + mini-stack always demo-ready
+3) Capability ladder rungs (real repo → Next.js → Python → self-renew)
+4) Visual quality/legibility of the default browser (equal partner to rungs; no polish-only stalls)
+5) Semantic systems/flows as needed by the current rung
+6) Extractors as needed by the current rung
+7) README only for behavior changes
+8) Merge/CI hygiene only if blocking
 
 VERIFICATION:
 - `npm run build` must pass
@@ -335,6 +357,7 @@ DONE LOOKS LIKE (morning):
 - verify green
 - Underdelta produces a legible, golden-locked map of at least one REAL repo it did not write
 - Ladder rungs visibly climbed (Next.js / Python progress underway)
+- Self-map + mini-stack still stunning when the human opens them first thing
 ```
 
 ---
