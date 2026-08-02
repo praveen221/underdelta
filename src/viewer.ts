@@ -427,9 +427,12 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         };
       }
 
-      function appendEdgeBadge(mx, my, label) {
+      function appendEdgeBadge(mx, my, label, selectionOnly) {
         const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
-        group.setAttribute("class", "edge-badge-group");
+        group.setAttribute(
+          "class",
+          selectionOnly ? "edge-badge-group selection" : "edge-badge-group",
+        );
         const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
         text.setAttribute("class", "edge-badge");
         text.setAttribute("x", String(mx));
@@ -450,6 +453,17 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         group.appendChild(bg);
         group.appendChild(text);
         edgesLayer.appendChild(group);
+      }
+
+      // On selection: label collab + table relations. Skip flows-to (Product flow band).
+      function selectionEdgeBadgeLabel(edge) {
+        if (edge.kind === "flows-to") return null;
+        if (collaborationKinds.has(edge.kind)) {
+          if (edge.label && edge.label !== edge.kind) return edge.label;
+          return edge.kind;
+        }
+        if (isTableRelationEdge(edge)) return relationLabelText(edge);
+        return null;
       }
 
       for (const [key, edges] of narrativeGroups) {
@@ -501,10 +515,20 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           classes.push("collab");
           if (edge.kind === "flows-to") classes.push("flows-to");
         }
-        if (state.selected === edge.source || state.selected === edge.target) classes.push("active");
+        const selected =
+          state.selected === edge.source || state.selected === edge.target;
+        if (selected) classes.push("active");
         path.setAttribute("class", classes.join(" "));
         path.setAttribute("data-kind", edge.kind);
         edgesLayer.appendChild(path);
+        // Selection reveals what blue collab lines / table links mean on-canvas.
+        if (selected) {
+          const badge = selectionEdgeBadgeLabel(edge);
+          if (badge) {
+            path.setAttribute("data-selection-label", "true");
+            appendEdgeBadge(geom.mx, geom.my, badge, true);
+          }
+        }
       }
       highlightNeighborhood();
       document.getElementById("counts").textContent = visible.length + " components · " + graph.edges.length + " relationships";

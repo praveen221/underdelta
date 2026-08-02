@@ -1009,6 +1009,44 @@ if (
   );
 }
 
+// Canvas: on selection, badge collaboration + table↔table relation labels
+// (flows-to stays unlabeled — Product flow band already tells that story).
+const selectionBadgeFn = viewerHtml.indexOf("function selectionEdgeBadgeLabel");
+const selectionBadgeSkipFlowsTo =
+  viewerHtml.includes('if (edge.kind === "flows-to") return null') &&
+  selectionBadgeFn >= 0;
+const selectionBadgeUsesCollab =
+  viewerHtml.includes("collaborationKinds.has(edge.kind)") &&
+  viewerHtml.includes("selectionEdgeBadgeLabel(edge)");
+const selectionBadgeTableRelation =
+  viewerHtml.includes("isTableRelationEdge(edge)") &&
+  viewerHtml.includes("relationLabelText(edge)") &&
+  selectionBadgeFn >= 0;
+const selectionLabelAttr = viewerHtml.indexOf('data-selection-label", "true"');
+const selectionBadgeGroupClass = viewerHtml.indexOf(
+  'selectionOnly ? "edge-badge-group selection" : "edge-badge-group"',
+);
+const selectionBadgeOnlyWhenSelected =
+  viewerHtml.includes("if (selected) {") &&
+  viewerHtml.includes("const badge = selectionEdgeBadgeLabel(edge)");
+if (
+  selectionBadgeFn < 0 ||
+  !selectionBadgeSkipFlowsTo ||
+  !selectionBadgeUsesCollab ||
+  !selectionBadgeTableRelation ||
+  selectionLabelAttr < 0 ||
+  selectionBadgeGroupClass < 0 ||
+  !selectionBadgeOnlyWhenSelected
+) {
+  fail(
+    "viewer canvas should label collaboration + table relation edges on selection (not always-on, skip flows-to)",
+  );
+} else {
+  pass(
+    "viewer canvas shows collaboration/relation edge labels on selection so founders read meaning without the inspector",
+  );
+}
+
 if (process.exitCode) {
   console.error("Verification suite failed.");
   process.exit(process.exitCode);
