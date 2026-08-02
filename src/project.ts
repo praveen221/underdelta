@@ -520,11 +520,15 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
     return { key: "graph", label: "Graph assembly", kind: "system" };
   }
   // Next.js App Router: route handlers + server actions are the API surface.
+  // Include route-group files (app/(login)/actions.ts) and lib/**/actions.ts
+  // payment helpers — not only the app/actions/ convention folder.
   if (
     file.includes("/app/api/") ||
     /(?:^|\/)(?:src\/)?app\/api\//.test(file) ||
     /(?:^|\/)(?:src\/)?app\/.*\/route\.[cm]?[jt]sx?$/.test(file) ||
-    /(?:^|\/)(?:src\/)?app\/actions?\//.test(file)
+    /(?:^|\/)(?:src\/)?app\/actions?\//.test(file) ||
+    /(?:^|\/)(?:src\/)?app\/.*\/actions\.[cm]?[jt]sx?$/.test(file) ||
+    /(^|\/)actions\.[cm]?[jt]sx?$/.test(file)
   ) {
     return { key: "api", label: "HTTP API", kind: "api" };
   }
@@ -1044,6 +1048,19 @@ export function projectSemanticArchitecture(
   if (apiSystem) {
     for (const node of [...nodes.values()]) {
       if (node.kind !== "route") continue;
+      if (node.metadata?.projection === "semantic") continue;
+      attachToSystem(
+        node.id,
+        apiSystem.id,
+        node.evidence[0] ?? projectionEvidence("."),
+      );
+    }
+    // Same for server actions: saas-starter keeps them in app/(login)/actions.ts
+    // and lib/payments/actions.ts, so path-role owningSystem often misses them.
+    for (const node of [...nodes.values()]) {
+      if (node.kind !== "function" || node.metadata?.serverAction !== true) {
+        continue;
+      }
       if (node.metadata?.projection === "semantic") continue;
       attachToSystem(
         node.id,

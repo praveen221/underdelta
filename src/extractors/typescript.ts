@@ -189,6 +189,25 @@ function isExportedFunctionLike(
   return Boolean(modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword));
 }
 
+/** True when a CallExpression wraps a function (HOF server-action factories). */
+function callWrapsFunction(expression: ts.CallExpression): boolean {
+  return expression.arguments.some(
+    (argument) =>
+      ts.isArrowFunction(argument) ||
+      ts.isFunctionExpression(argument) ||
+      (ts.isCallExpression(argument) && callWrapsFunction(argument)),
+  );
+}
+
+/** Exported const initializers that should surface as Next.js server actions. */
+function isServerActionInitializer(initializer: ts.Expression): boolean {
+  if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) {
+    return true;
+  }
+  // saas-starter: validatedAction(schema, async …) / withTeam(async …)
+  return ts.isCallExpression(initializer) && callWrapsFunction(initializer);
+}
+
 function propertyChain(node: ts.Expression): string[] {
   if (ts.isIdentifier(node)) return [node.text];
   if (ts.isPropertyAccessExpression(node)) {
@@ -754,39 +773,59 @@ export const typescriptExtractor: ArchitectureExtractor = {
       }
 
       if (directive === "server" || /(?:^|\/)app\/actions?\//i.test(file.relative.replaceAll("\\", "/"))) {
+        const markServerAction = (
+          name: string,
+          at: ts.Node,
+        ): void => {
+          let id = localDeclarations.get(name);
+          let node = id ? nodes.find((item) => item.id === id) : undefined;
+          // HOF-wrapped exports (validatedAction/withTeam) were never declared as
+          // callables — create the function node so auth/billing mutations appear.
+          if (!node) {
+            id = stableId("function", file.relative, name);
+            node = {
+              id,
+              kind: "function",
+              label: name,
+              qualifiedName: `${file.relative}#${name}`,
+              parentId: file.moduleId,
+              metadata: {},
+              evidence: [evidenceFor(file, at)],
+            };
+            nodes.push(node);
+            localDeclarations.set(name, id);
+            const byName = declarationsByName.get(name) ?? [];
+            byName.push(id);
+            declarationsByName.set(name, byName);
+            edges.push(
+              edgeFrom("contains", file.moduleId, id, evidenceFor(file, at)),
+            );
+          }
+          node.metadata = {
+            ...node.metadata,
+            serverAction: true,
+            runtime: node.metadata?.runtime ?? "server",
+          };
+          if (!node.technology) node.technology = "next-server-action";
+        };
+
         for (const statement of file.source.statements) {
           if (ts.isFunctionDeclaration(statement) && statement.name) {
             if (!isExportedFunctionLike(statement)) continue;
-            const id = localDeclarations.get(statement.name.text);
-            const node = id ? nodes.find((item) => item.id === id) : undefined;
-            if (!node) continue;
-            node.metadata = {
-              ...node.metadata,
-              serverAction: true,
-              runtime: node.metadata?.runtime ?? "server",
-            };
-            if (!node.technology) node.technology = "next-server-action";
-          } else if (ts.isVariableStatement(statement) && isExportedFunctionLike(statement)) {
+            markServerAction(statement.name.text, statement);
+          } else if (
+            ts.isVariableStatement(statement) &&
+            isExportedFunctionLike(statement)
+          ) {
             for (const declaration of statement.declarationList.declarations) {
               if (!ts.isIdentifier(declaration.name)) continue;
               if (
                 !declaration.initializer ||
-                !(
-                  ts.isArrowFunction(declaration.initializer) ||
-                  ts.isFunctionExpression(declaration.initializer)
-                )
+                !isServerActionInitializer(declaration.initializer)
               ) {
                 continue;
               }
-              const id = localDeclarations.get(declaration.name.text);
-              const node = id ? nodes.find((item) => item.id === id) : undefined;
-              if (!node) continue;
-              node.metadata = {
-                ...node.metadata,
-                serverAction: true,
-                runtime: node.metadata?.runtime ?? "server",
-              };
-              if (!node.technology) node.technology = "next-server-action";
+              markServerAction(declaration.name.text, declaration);
             }
           }
         }

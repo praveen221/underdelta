@@ -158,6 +158,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 2 polish: saas-starter Data access — `/db/` path-role before Schema contract; strip `public.` table aliases; humanize SQL labels (Team member / Activity log); nest 5 tables; flowOrder UI→API→Data + uses:query; golden-lock
 - [x] Rung 2 polish: mini-next journal story — humanize pages/layouts/client/server-actions (Home/Dashboard, App layout, Post list/form, Create/Delete post); nest clients under UI + actions under API; keep page children under convention nodes; top-level `components/` path-role
 - [x] Rung 2 polish: saas-starter page/auth labels — App Router paths → Home/Pricing/Dashboard · …/Sign in/Sign up; `signOut` → Sign out (shared humanize helpers)
+- [x] Rung 2: extract HOF-wrapped `'use server'` exports (`validatedAction` / `withTeam`) from saas-starter — Sign in/up/out, password/account/team mutations, Checkout/Customer portal; nest all under HTTP API; golden-lock
 
 ### Real-repo pins (Capability ladder)
 
@@ -170,10 +171,10 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 2: extract remaining `'use server'` actions from saas-starter `actions.ts` (not only `Sign out`) so auth/billing mutations appear on the map
-- [ ] Rung 2 polish: saas-starter billing/API chrome — humanize Stripe checkout/webhook route labels + noisy client PascalCase once actions are richer
+- [ ] Rung 2 polish: saas-starter billing/API chrome — humanize Stripe checkout/webhook route labels + drop trailing `Action` on Checkout/Customer portal; tame noisy client PascalCase
+- [ ] Rung 2 polish pass: default saas-starter browser story (auth + billing actions readable beside UI→API→Data) then mark Rung 2 locked
 - [ ] Standing polish: inspector metadata hygiene (hide projection/systemKey/flowOrder pills) on self-map + RealWorld
-- [ ] Rung 3 prep: sketch Python extractor surface (FastAPI/Django route shapes) once Rung 2 server-action completeness is locked
+- [ ] Rung 3 prep: sketch Python extractor surface (FastAPI/Django route shapes) once Rung 2 polish locks
 
 ### Seed backlog (pull from here when In progress < 3)
 
@@ -187,7 +188,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (mini-next + saas-starter Next labels humanized: Dashboard/Sign in/Create post/Post list, clients under UI, actions under API). Now extract remaining `'use server'` exports from saas-starter `actions.ts` (beyond Sign out) so auth/billing mutations show up on the Rung 2 map.
+> **Next focus:** This work is done (HOF-wrapped saas-starter server actions extracted + nested under HTTP API + golden-locked: Sign in/up/out, account/team mutations, Checkout/Customer portal). Now polish saas-starter billing/API chrome (Stripe route labels + drop trailing Action) so the Rung 2 map reads as a clean auth+billing story.
 
 ### Learning log (append every tick)
 
@@ -224,6 +225,7 @@ Append short bullets like:
 - 2026-08-02 04:45 UTC | Done: Rung 2 pin+golden — `nextjs/saas-starter` @ `6e33e58b1e55` cloned to `.underdelta-real/nextjs-saas-starter`; verify locks product title, 8 pages under UI, 4 API routes, UI→API flow/uses, signOut, ≥5 client components, table floor, no commerce collab noise | Next: saas-starter Data nesting + label polish | Learned: sunset `vercel/nextjs-subscription-payments` still scans but official replacement `nextjs/saas-starter` is the right pin; Drizzle tables extract but sit outside Data access (`Schema contract` appears in flowOrder); only `signOut` gets `serverAction` while sibling exports in `'use server'` files are missed
 - 2026-08-02 04:26 UTC | Done: saas-starter Data polish — `/db/` before Schema contract; SQL `public.` strip + snake_case humanize; 5 tables under Data; UI→API→Data + uses:query; join-table `_` preserved through label polish; verify golden | Next: mini-next label humanize | Learned: bare `schema.ts` → Schema contract hijacks Drizzle `lib/db/schema.ts`; FK targets `"public"."users"` create duplicate table ids until schema qualifiers are stripped at extract + normalizeTableKey; titleCaseSingular must not erase `_Join` chrome before join-collapse
 - 2026-08-02 04:45 UTC | Done: Next label humanize — App path + identifier helpers; mini-next journal labels; saas-starter pages/Sign out; top-level `components/`→UI; preserve page children; nest server actions under API; verify golden | Next: extract remaining saas-starter `'use server'` actions | Learned: lift-to-system was flattening HomePage beside Home; convention-child skip + path-aware layout humanize keep the story nested; `components/PostForm.tsx` never matched `"/components/"` without a leading-slash-tolerant role regex
+- 2026-08-02 04:55 UTC | Done: HOF-wrapped `'use server'` exports — create function nodes for `validatedAction`/`withTeam` CallExpression exports; path-role `actions.ts` + blanket nest serverActions under API; golden-lock 10 auth/billing actions | Next: saas-starter Stripe/billing label polish | Learned: declaration visit only saw arrow/fn initializers so HOF factories never became nodes; `app/actions/` path-role misses `app/(login)/actions.ts` and `lib/payments/actions.ts` — metadata-driven API attach is required
 
 ---
 

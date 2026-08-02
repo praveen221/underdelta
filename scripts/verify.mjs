@@ -2140,12 +2140,47 @@ if (nextRealRoot) {
     const nextActionLabels = new Set(
       nextServerActions.map((node) => node.label),
     );
-    if (!nextActionLabels.has("Sign out")) {
+    // Auth + team + billing mutations from 'use server' files — including
+    // HOF-wrapped exports (validatedAction / withTeam), not only bare fns.
+    const expectedNextActions = [
+      "Sign in",
+      "Sign up",
+      "Sign out",
+      "Update password",
+      "Delete account",
+      "Update account",
+      "Remove team member",
+      "Invite team member",
+      "Checkout action",
+      "Customer portal action",
+    ];
+    const missingNextActions = expectedNextActions.filter(
+      (label) => !nextActionLabels.has(label),
+    );
+    if (missingNextActions.length) {
       fail(
-        `next-real-repo missing humanized server action Sign out; found ${[...nextActionLabels].join(", ") || "(none)"}`,
+        `next-real-repo missing humanized server actions: ${missingNextActions.join(", ")}; found ${[...nextActionLabels].join(", ") || "(none)"}`,
       );
     } else {
-      pass("next-real-repo server action: Sign out");
+      pass(
+        `next-real-repo server actions: ${expectedNextActions.join(", ")}`,
+      );
+    }
+    if (nextApi) {
+      const orphanActions = nextServerActions.filter(
+        (node) => node.parentId !== nextApi.id,
+      );
+      if (orphanActions.length) {
+        fail(
+          `next-real-repo server actions not nested under HTTP API: ${orphanActions
+            .map((node) => node.label)
+            .join(", ")}`,
+        );
+      } else {
+        pass(
+          `next-real-repo ${nextServerActions.length} server actions nested under HTTP API`,
+        );
+      }
     }
     if (nextClientComponents.length < 5) {
       fail(
