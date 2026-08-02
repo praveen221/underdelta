@@ -160,6 +160,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 2 polish: saas-starter page/auth labels — App Router paths → Home/Pricing/Dashboard · …/Sign in/Sign up; `signOut` → Sign out (shared humanize helpers)
 - [x] Rung 2: extract HOF-wrapped `'use server'` exports (`validatedAction` / `withTeam`) from saas-starter — Sign in/up/out, password/account/team mutations, Checkout/Customer portal; nest all under HTTP API; golden-lock
 - [x] Rung 2 polish: saas-starter billing/API chrome — humanize Stripe/User/Team route labels (`GET Stripe checkout`), drop trailing `Action` on Checkout/Customer portal, tame remaining PascalCase components
+- [x] Rung 2 polish pass: saas-starter default browser — auth/billing `overviewHub` actions (Sign in/up/out, Checkout, Customer portal) visible beside UI→API→Data; collapse all UI component chrome on overview; viewer lets overviewHub bypass function hide — **Rung 2 locked**
 
 ### Real-repo pins (Capability ladder)
 
@@ -172,24 +173,24 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 2 polish pass: default saas-starter browser story (auth + billing readable beside UI→API→Data; hide UI-kit/module chrome on overview) then mark Rung 2 locked
-- [ ] Standing polish: inspector metadata hygiene (hide projection/systemKey/flowOrder pills) on self-map + RealWorld
-- [ ] Rung 3 prep: sketch Python extractor surface (FastAPI/Django route shapes) once Rung 2 polish locks
+- [ ] Rung 3 prep: sketch Python extractor surface (FastAPI/Django route shapes) — `@app.get`, APIRouter, `urlpatterns`, path()/re_path()
 - [ ] Rung 3: `verification/mini-python` fixture + FastAPI/Django route extractor family
+- [ ] Rung 3: pin a real Python OSS repo (FastAPI or Django) + golden-lock product map
+- [ ] Standing polish: inspector metadata hygiene (hide projection/systemKey/flowOrder pills) on self-map + RealWorld
 
 ### Seed backlog (pull from here when In progress < 3)
 
 Not a full roadmap — a menu the agent may reorder. Pick what most improves the **Capability ladder** now.
 
-- Rung 3: Python extractor family (FastAPI/Django routes, SQLAlchemy models, Celery tasks) + `verification/mini-python`
-- Rung 3: pinned real Python OSS repo as scan target + golden lock
+- Rung 3: SQLAlchemy models + Celery tasks/schedules once routes land
+- Rung 3 polish: mini-python + real Python map for the North star non-coder
 - Rung 4+: promote next README-roadmap capability (Mongo, GraphQL, OpenAPI, Docker/monorepos, …)
 - Performance pass only if scanning a real repo becomes painfully slow
 - Docs only when CLI/behavior changed
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (saas-starter billing/API chrome: Stripe/User/Team routes humanized, Checkout/Customer portal without trailing Action, PascalCase components tamed). Now do the Rung 2 polish pass on the default saas-starter browser (auth + billing story beside UI→API→Data; quiet UI-kit/module chrome) so we can mark Rung 2 locked.
+> **Next focus:** This work is done (Rung 2 locked: saas-starter overview shows auth/billing hubs beside UI→API→Data with UI chrome collapsed). Now sketch the Python extractor surface (FastAPI/Django route shapes) so we can start Rung 3 with `verification/mini-python`.
 
 ### Learning log (append every tick)
 
@@ -228,6 +229,7 @@ Append short bullets like:
 - 2026-08-02 04:45 UTC | Done: Next label humanize — App path + identifier helpers; mini-next journal labels; saas-starter pages/Sign out; top-level `components/`→UI; preserve page children; nest server actions under API; verify golden | Next: extract remaining saas-starter `'use server'` actions | Learned: lift-to-system was flattening HomePage beside Home; convention-child skip + path-aware layout humanize keep the story nested; `components/PostForm.tsx` never matched `"/components/"` without a leading-slash-tolerant role regex
 - 2026-08-02 04:55 UTC | Done: HOF-wrapped `'use server'` exports — create function nodes for `validatedAction`/`withTeam` CallExpression exports; path-role `actions.ts` + blanket nest serverActions under API; golden-lock 10 auth/billing actions | Next: saas-starter Stripe/billing label polish | Learned: declaration visit only saw arrow/fn initializers so HOF factories never became nodes; `app/actions/` path-role misses `app/(login)/actions.ts` and `lib/payments/actions.ts` — metadata-driven API attach is required
 - 2026-08-02 05:00 UTC | Done: saas-starter billing/API chrome — `humanizeNextRouteLabel` (strip `/api`, sentence-case path), `humanizeServerActionLabel` drops trailing Action, humanize all components (not only client); golden-lock GET Stripe checkout / Checkout / Customer portal | Next: Rung 2 final polish pass then lock | Learned: per-segment Title Case yields shouty `Stripe Checkout`; sentence-case after the first path segment; Action suffix is factory chrome (`checkoutAction`) not product vocabulary
+- 2026-08-02 04:41 UTC | Done: Rung 2 locked — collapse all component chrome on overview; auth/billing server actions as `overviewHub` (Sign in/up/out, Checkout, Customer portal) stay visible; viewer bypasses function hide for overviewHub; golden-lock | Next: Rung 3 Python extractor sketch | Learned: page children sit under convention pages not semantic UI so leaf-collapse never quieted them; server actions are `function` kind so collapsedInOverview=false is not enough without a viewer overviewHub exception
 
 ---
 

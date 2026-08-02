@@ -1269,6 +1269,19 @@ export function projectSemanticArchitecture(
     }
   }
 
+  // Quiet App Router / UI-kit chrome on overview: page children (Home page,
+  // skeletons), layout widgets, and shadcn leaves restated the UI system.
+  // Collapse every component leaf — the UI system (+ focus/Details) tells the story.
+  for (const node of nodes.values()) {
+    if (node.kind !== "component") continue;
+    if (node.metadata?.projection === "semantic") continue;
+    node.metadata = {
+      ...node.metadata,
+      collapsedInOverview: true,
+    };
+    nodes.set(node.id, node);
+  }
+
   // Humanize Next.js App Router chrome so the default browser reads as a
   // product story (Dashboard, Sign in, Create post) instead of paths/camelCase.
   for (const node of nodes.values()) {
@@ -1312,6 +1325,26 @@ export function projectSemanticArchitecture(
       technicalLabel: node.label,
     };
     node.label = nextLabel;
+    nodes.set(node.id, node);
+  }
+
+  // Auth + billing mutations are the SaaS product story beside UI→API→Data.
+  // Keep them visible on overview like messaging/cron hubs (not buried in Details).
+  const authBillingOverviewHubs = new Set([
+    "Sign in",
+    "Sign up",
+    "Sign out",
+    "Checkout",
+    "Customer portal",
+  ]);
+  for (const node of nodes.values()) {
+    if (node.metadata?.serverAction !== true) continue;
+    if (!authBillingOverviewHubs.has(node.label)) continue;
+    node.metadata = {
+      ...node.metadata,
+      overviewHub: true,
+      collapsedInOverview: false,
+    };
     nodes.set(node.id, node);
   }
 

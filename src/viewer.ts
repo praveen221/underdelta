@@ -224,7 +224,15 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         ) {
           return false;
         }
-        if (!state.implementation && hiddenByDefault.has(node.kind)) return false;
+        // overviewHub (auth/billing server actions) bypasses the function hide —
+        // those hubs carry the SaaS story beside UI→API→Data on the default map.
+        if (
+          !state.implementation &&
+          hiddenByDefault.has(node.kind) &&
+          !(node.metadata && node.metadata.overviewHub)
+        ) {
+          return false;
+        }
         if (
           !state.implementation &&
           !state.focus &&

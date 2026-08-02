@@ -2182,6 +2182,69 @@ if (nextRealRoot) {
         );
       }
     }
+
+    // Auth + billing hubs stay visible on overview beside UI→API→Data.
+    const expectedAuthBillingHubs = [
+      "Sign in",
+      "Sign up",
+      "Sign out",
+      "Checkout",
+      "Customer portal",
+    ];
+    const nextActionByLabel = new Map(
+      nextServerActions.map((node) => [node.label, node]),
+    );
+    const missingAuthBillingHubs = expectedAuthBillingHubs.filter((label) => {
+      const node = nextActionByLabel.get(label);
+      return (
+        !node ||
+        node.parentId !== nextApi?.id ||
+        node.metadata?.collapsedInOverview === true ||
+        node.metadata?.overviewHub !== true
+      );
+    });
+    if (missingAuthBillingHubs.length) {
+      fail(
+        `next-real-repo auth/billing overview hubs missing or collapsed: ${missingAuthBillingHubs.join(", ")}`,
+      );
+    } else {
+      pass(
+        `next-real-repo auth/billing overview hubs: ${expectedAuthBillingHubs.join(", ")}`,
+      );
+    }
+    const buriedTeamActions = nextServerActions.filter(
+      (node) =>
+        ["Update password", "Invite team member", "Remove team member"].includes(
+          node.label,
+        ) && node.metadata?.collapsedInOverview !== true,
+    );
+    if (buriedTeamActions.length) {
+      fail(
+        `next-real-repo secondary server actions should stay collapsed on overview: ${buriedTeamActions
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass("next-real-repo secondary server actions collapsed on overview");
+    }
+
+    // Page children / skeletons / shadcn leaves must not clutter the default map.
+    const nextUncollapsedComponents = nextRealGraph.nodes.filter(
+      (node) =>
+        node.kind === "component" &&
+        node.metadata?.projection !== "semantic" &&
+        node.metadata?.collapsedInOverview !== true,
+    );
+    if (nextUncollapsedComponents.length) {
+      fail(
+        `next-real-repo UI component chrome should collapse on overview: ${nextUncollapsedComponents
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass("next-real-repo UI component chrome collapsed on overview");
+    }
+
     if (nextClientComponents.length < 5) {
       fail(
         `next-real-repo client component floor: ${nextClientComponents.length} < 5`,
