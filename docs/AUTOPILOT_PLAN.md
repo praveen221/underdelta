@@ -22,6 +22,8 @@ Cursor’s `/autopilot` skill may talk about conflicts / CI / review comments. T
 **Never idle while the end goal is unmet.**  
 If the checklist looks empty, invent the next useful increment (see Self-renewing backlog). Do not report “nothing to do.”
 
+**Capability over polish.** Once a capability exists and verify locks it, further cosmetic refinement of it is low value. Every tick, prefer the **lowest unfinished rung of the Capability ladder** (below) over another polish pass on diagrams that already work.
+
 ---
 
 ## End goal
@@ -48,8 +50,27 @@ The end goal is **not** met if any of these are true:
 - Evidence is missing or misleading for major nodes
 - `npm run verify` is missing coverage for a capability we just added
 - A founder scanning Underdelta or the mini-stack would still ask “what did I actually build?”
+- **Any Capability ladder rung below remains un-locked** (no golden verify lock for it)
 
 Until those are false, **keep shipping ticks**.
+
+---
+
+## Capability ladder (human directive — 2026-08-02, overrides seed backlog)
+
+Underdelta must map the stacks people actually build products with — Node.js/Express, React, Next.js, and Python servers — on **real repositories it did not write**. Diagram polish on the self-map and mini-stack is no longer the frontier. Every tick, work the **lowest unfinished rung**. A rung counts as done only when `npm run verify` golden-locks it.
+
+1. **Real-repo generalization (Node/Express/React).** Prove the compiler on a real open-source repository this loop did not author. Pick a well-known small/medium Express + React (or similar Node) app, pin an exact commit SHA in this file, and wire it into verification as an isolated scan target: shallow-clone at the pinned SHA into a gitignored path (e.g. `.underdelta-real/<name>`), cache it between runs, and never let it enter the product diagram. The scan must complete without crashing and produce a legible product-systems map. Every place the real repo breaks extractors or projection **is the actual work** — fix those, then golden-lock a summary (floors, required systems/labels) in verify.
+2. **Next.js semantics.** App-router pages/layouts/route handlers, server actions, API routes, client vs server component split. Add a small `verification/mini-next` fixture plus a pinned real Next.js repo as scan targets. Golden-lock both.
+3. **Python servers.** New extractor family: FastAPI and Django routes, SQLAlchemy models, Celery tasks/schedules. Add `verification/mini-python` plus a pinned real Python repo. Golden-lock both.
+4. **Self-renewal — the ladder must never be empty.** When rungs 1–3 are locked, promote the next most popular capability from the README roadmap (MongoDB collections, GraphQL, OpenAPI, Docker/monorepo layouts, …) to rung 4, 5, … and keep climbing. There is always a next stack; never conclude the mission is complete.
+
+Rules:
+
+- Rungs are sequential by default. Skip ahead only if genuinely blocked, and record why in the Learning log.
+- Real-repo targets are pinned by commit SHA and cloned into gitignored paths — **do not vendor third-party code into this repo**.
+- If cloning fails in the loop environment, fall back to enriching the local fixture for that rung and note it in the Learning log — but try the real repo first.
+- Viewer/inspector polish is allowed only when it directly unblocks understanding of the current rung’s output.
 
 ---
 
@@ -110,25 +131,26 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Mini-stack: collaboration edges (uses/triggers/reads) between product systems, not only flows-to
-- [ ] Overview: collapse database/schema leaves under Catalog data when tables already tell the story
-- [ ] Inspector: surface queue publisher/consumer lists on messaging hubs
-- [ ] Multi-file route frameworks / Next-style app router hints (only if it helps the chosen stack)
+- [ ] Rung 1: choose + pin (commit SHA in this file) a real Node/Express/React OSS repo; wire it into `npm run verify` as an isolated gitignored scan target
+- [ ] Rung 1: fix every extractor/projection breakage the real repo exposes until its default map is legible
+- [ ] Rung 1: golden-lock the real repo summary in verify (floors + required systems)
+- [ ] Rung 2 prep: multi-file route frameworks / Next-style app router hints
 
 ### Seed backlog (pull from here when In progress < 3)
 
-Not a full roadmap — a menu the agent may reorder. Pick what most improves the end goal now.
+Not a full roadmap — a menu the agent may reorder. Pick what most improves the **Capability ladder** now.
 
-- Mini-stack: collaboration edges (uses/triggers/reads) between product systems, not only flows-to
-- Overview: collapse database/schema leaves under Catalog data when tables already tell the story
-- Inspector: surface queue publisher/consumer lists on messaging hubs
-- Multi-file route frameworks / Next-style app router hints (only if it helps the chosen stack)
-- Performance pass only if scan becomes painful on mini-stack / self repo
+- Rung 2: `verification/mini-next` fixture (app router, server actions, API routes, client/server components)
+- Rung 2: pinned real Next.js OSS repo as scan target + golden lock
+- Rung 3: Python extractor family (FastAPI/Django routes, SQLAlchemy models, Celery tasks) + `verification/mini-python`
+- Rung 3: pinned real Python OSS repo as scan target + golden lock
+- Rung 4+: promote next README-roadmap capability (Mongo, GraphQL, OpenAPI, Docker/monorepos, …)
+- Performance pass only if scanning a real repo becomes painfully slow
 - Docs only when CLI/behavior changed
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (false-positive Map.get routes removed from the self-map). Now add mini-stack collaboration edges between product systems so the commerce slice reads like Underdelta’s uses/triggers story, not only left-to-right flows-to.
+> **Next focus:** Human directive landed — climb the Capability ladder before more polish. Rung 1: pick a well-known real Node/Express/React repository this loop did not write, pin its commit SHA in this file, wire it into `npm run verify` as an isolated gitignored scan target, and make `scan` complete on it end-to-end. Then fix whatever breaks until the default map is legible, and golden-lock it.
 
 ### Learning log (append every tick)
 
@@ -154,6 +176,7 @@ Append short bullets like:
 - 2026-08-02 03:45 UTC | Done: reconciled Prisma/SQL inspector on Status board; collapse relation-only Prisma fields (order/payments) with relationOnly + viewer hide; keep Payment↔Order edges + verify | Next: inspector collaboration edge detail text | Learned: ORM navigation fields restate table↔table edges as fake columns once Details is on; collapse them at projection time and hide unless searched so Data access stays schema-true
 - 2026-08-02 03:50 UTC | Done: reconciled collaboration inspector detail on Status board; canvas `.edge.collab` / `.flows-to` styling + legend + verify | Next: inspector table↔table relation labels | Learned: prior tick can land inspector detail without plan update—reconcile first; collaboration edges were inferred-purple like noise until given a dedicated canvas class apart from import/call hairlines
 - 2026-08-02 03:48 UTC | Done: reconciled table-relation inspector + narrative publish/consume/migrate badges + selection collab/relation labels + cron scheduleHub on Status board; reject Map.get-style false HTTP routes (path must look like `/…` + handler arg) + tighten narrative badge verify | Next: mini-stack system collaboration edges | Learned: `systems.get("cli")` was polluting Application with GET cli/data/…; Express extraction needs HTTP-shaped paths, and string-presence verifies must match setAttribute output not imagined static HTML
+- 2026-08-02 03:56 UTC | Human directive: Capability ladder added (real Node/React repo → Next.js → Python servers → self-renewal); polish deprioritized below capability rungs; tick-start health check added because push-triggered reruns cancel in-flight ticks | Next: rung 1 — pin a real Node/Express/React repo and wire it into verify | Learned: the loop had locally optimized its two self-authored targets; the frontier is generalization to repos it did not write
 
 ---
 
@@ -169,7 +192,7 @@ At the **start** of every tick, after reading this file:
 
 When inventing work, ask only:
 
-> What single change would make the default diagram more accurately answer “what did I actually build?” for Underdelta or the mini-stack?
+> What single change moves the **lowest unfinished Capability ladder rung** forward — i.e. makes Underdelta answer “what did I actually build?” for a repo it did not write?
 
 ---
 
@@ -178,35 +201,39 @@ When inventing work, ask only:
 1. **Concurrency check (mandatory)**  
    If a previous Autopilot tick / agent turn is still executing (build, verify, commit, push, or long edit in flight), **do not disturb it**. Skip this tick entirely. Try again on the next 15-minute iteration.
 
-2. Read this file. Refill backlog if needed. Take **exactly one** next increment from Next focus.
+2. **Health check (mandatory — reruns can cancel in-flight ticks)**  
+   A push on this branch restarts the loop, so the previous tick may have been cancelled mid-work (e.g. code pushed but plan not updated, or work half-landed). Before taking new work: working tree must be clean and synced with origin, `npm run build` and `npm run verify` must pass, and the Status board must match what actually landed on the branch. Reconcile and fix any of that **first**, as its own small step.
 
-3. Implement that increment only (product progress > merge hygiene).
+3. Read this file. Refill backlog if needed. Take **exactly one** next increment from Next focus.
 
-4. Run verification:
+4. Implement that increment only (product progress > merge hygiene).
+
+5. Run verification:
    - `npm run build` (must pass)
    - `npm run verify` (must pass)
-   - confirm default product diagram still excludes verification/tests/fixtures
+   - confirm default product diagram still excludes verification/tests/fixtures and gitignored real-repo clones
 
-5. Update this markdown:
+6. Update this markdown:
    - check off completed work
    - ensure **In progress / next** still has ≥ 3 items
    - rewrite **Next focus**
    - append one **Learning log** line
 
-6. Commit + push on `cursor/visual-system-browser-7649` only; update the existing draft PR.
+7. Commit + push on `cursor/visual-system-browser-7649` only; update the existing draft PR.  
+   Prefer **one commit** containing both the feature and this plan update, so a cancellation cannot split them.
 
-7. Stop the tick. Do not start a second major feature in the same tick.  
+8. Stop the tick. Do not start a second major feature in the same tick.  
    (Stopping the tick ≠ being done with the product. The next Autopilot ping should continue.)
 
 ---
 
 ## Priority order
 
-1. Keep verification green and isolated (`verification/`, `npm run verify`)
-2. Semantic projection + product systems/flows
-3. Full self-visualization of Underdelta (CLI → compile → extractors → graph → artifact → viewer)
-4. Full diagram quality for the mini-stack stack slice
-5. Extractor improvements only as needed for diagram completeness/correctness
+1. Keep verification green and isolated (`verification/`, `npm run verify`, gitignored real-repo clones)
+2. **Capability ladder rungs** (real-repo generalization → Next.js → Python servers → self-renewal)
+3. Semantic projection + product systems/flows (as needed by the current rung)
+4. Extractor improvements as needed for the current rung’s completeness/correctness
+5. Diagram quality for self-map / mini-stack only when it blocks understanding
 6. Viewer improvements only when they improve product understanding
 7. README only when commands/behavior changed
 8. Merge conflicts / CI failures caused by our changes (hygiene only)
@@ -221,9 +248,12 @@ When inventing work, ask only:
 - Graphify fork
 - Sales funnels / marketing pages
 - Random refactors or cosmetic redesign churn
+- Cosmetic polish ticks while a Capability ladder rung is unfinished (unless the polish directly unblocks that rung)
+- Vendoring third-party repo code into this repository (clones stay gitignored)
 - Putting tests/fixtures into the default visualization
 - Stopping because the PR is draft/mergeable/no CI/no comments
 - Waiting for the human to write a fuller roadmap
+- Declaring the mission complete — the ladder self-renews (rung 4+)
 
 ---
 
@@ -252,11 +282,12 @@ HARD LOCKS (never violate):
 9) Keep ≥ 3 items in “In progress / next” at all times.
 
 PRODUCT GOAL:
-FULL, readable product-architecture diagram for a concrete stack (Underdelta self-map first, then TS/JS mini-stack): UI, APIs, DB/tables, jobs/cron/queues/pipelines — evidence-backed, semantically projected, flow-readable in the default browser.
+Climb the Capability ladder in the plan file: (1) prove the compiler on a REAL Node/Express/React repo the loop did not write (pinned SHA, gitignored clone, golden-locked in verify), (2) Next.js app-router semantics, (3) Python servers (FastAPI/Django/SQLAlchemy/Celery), (4) self-renew from the README roadmap. Evidence-backed, semantically projected, flow-readable. Capability over polish.
 
 EACH 15-MINUTE TICK (one chunk):
 A) Concurrency check. If busy, skip.
-B) Read `docs/AUTOPILOT_PLAN.md`. Refill backlog if < 3 open items. Pick ONE Next focus increment.
+A2) Health check: a push-triggered rerun may have cancelled the previous tick mid-work. Ensure clean synced tree, green build+verify, and plan matches what landed. Reconcile first.
+B) Read `docs/AUTOPILOT_PLAN.md`. Refill backlog if < 3 open items. Pick ONE Next focus increment (lowest unfinished ladder rung).
 C) Implement it (product progress first).
 D) Run VERIFICATION.
 E) If verification fails: fix before moving on.
@@ -270,9 +301,9 @@ H) Stop that tick only (not the mission). Wait for next Autopilot ping.
 
 PRIORITY ORDER:
 1) Keep verification green/isolated
-2) Semantic systems/flows + self-map completeness
-3) Diagram quality / layout / evidence for Underdelta + mini-stack
-4) Extractors only as needed
+2) Capability ladder rungs (real repo → Next.js → Python → self-renew)
+3) Semantic systems/flows as needed by the current rung
+4) Extractors as needed by the current rung
 5) Viewer only for understanding
 6) README only for behavior changes
 7) Merge/CI hygiene only if blocking
@@ -292,7 +323,8 @@ DONE LOOKS LIKE (morning):
 - Many commits on `cursor/visual-system-browser-7649`
 - Plan file shows a long Done / Next / Learning trail (backlog never starved)
 - verify green
-- Default diagrams for Underdelta + mini-stack clearly answer “what did I build?”
+- Underdelta produces a legible, golden-locked map of at least one REAL repo it did not write
+- Ladder rungs visibly climbed (Next.js / Python progress underway)
 ```
 
 ---
