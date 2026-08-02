@@ -224,12 +224,24 @@ export function parseKubernetesResources(
     const kind = kindMatch[1] ?? "";
     if (!PRODUCT_KINDS.has(kind)) continue;
 
-    // metadata.name — prefer the first name under a metadata: block.
-    const metaBlock = /\bmetadata\s*:\s*\n([\s\S]{0,800})/.exec(part.text);
+    // metadata.name — stay inside the metadata: block (stop at spec:/data:),
+    // so port/container `name:` keys never steal the resource identity.
+    // Helm templates may put quotes inside `{{ include "chart.fullname" . }}`,
+    // so do not cut the value at the first `"` / `'`.
+    const metaBlock =
+      /\bmetadata\s*:\s*\n([\s\S]*?)(?=^(?:spec|data|stringData|type|status)\s*:|^---\s*$)/m.exec(
+        part.text,
+      ) || /\bmetadata\s*:\s*\n([\s\S]{0,800})/.exec(part.text);
     const metaWindow = metaBlock?.[1] ?? part.text.slice(0, 600);
-    const nameMatch =
-      /^\s*name\s*:\s*["']?([^"'#\n]+?)["']?\s*$/m.exec(metaWindow);
-    const name = nameMatch?.[1]?.trim();
+    const nameMatch = /^\s*name\s*:\s*(.+?)\s*$/m.exec(metaWindow);
+    let name = nameMatch?.[1]?.trim();
+    if (
+      name &&
+      ((name.startsWith('"') && name.endsWith('"')) ||
+        (name.startsWith("'") && name.endsWith("'")))
+    ) {
+      name = name.slice(1, -1);
+    }
     if (!name) continue;
     const nsMatch =
       /^\s*namespace\s*:\s*["']?([^"'#\n]+?)["']?\s*$/m.exec(metaWindow);

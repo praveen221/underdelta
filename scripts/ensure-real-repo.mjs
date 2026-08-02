@@ -96,6 +96,15 @@ export const MICROSERVICES_DEMO = {
   dirname: "microservices-demo",
 };
 
+/** @type {RealRepoPin} */
+export const HELM_EXAMPLES = {
+  name: "helm/examples",
+  url: "https://github.com/helm/examples.git",
+  // Pinned 2026-08-02 — tip of main at plan rung-10 Helm real-repo kickoff.
+  sha: "4888ba8fb8180dd0c36d1e84c1fcafc6efd81532",
+  dirname: "helm-examples",
+};
+
 export const REAL_REPO_ROOT = path.join(repoRoot, ".underdelta-real");
 
 function git(args, cwd, opts = {}) {
@@ -197,6 +206,10 @@ const PINS_BY_NAME = {
   "online-boutique": MICROSERVICES_DEMO,
   kubernetes: MICROSERVICES_DEMO,
   k8s: MICROSERVICES_DEMO,
+  [HELM_EXAMPLES.dirname]: HELM_EXAMPLES,
+  "helm-examples": HELM_EXAMPLES,
+  helm: HELM_EXAMPLES,
+  "hello-world": HELM_EXAMPLES,
 };
 
 const isMain =
@@ -216,6 +229,7 @@ if (isMain) {
         EXAMPLE_VOTING_APP,
         TERRAFORM_AWS_VPC,
         MICROSERVICES_DEMO,
+        HELM_EXAMPLES,
       ];
   if (requested && pins.length === 0) {
     throw new Error(

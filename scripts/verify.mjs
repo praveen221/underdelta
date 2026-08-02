@@ -12,6 +12,7 @@ import {
   FASTAPI_REALWORLD,
   GRAPHQL_CLIENT_EXAMPLE_SERVER,
   HACKATHON_STARTER,
+  HELM_EXAMPLES,
   MICROSERVICES_DEMO,
   NEXTJS_SAAS_STARTER,
   REALWORLD_EXPRESS,
@@ -7341,7 +7342,8 @@ if (k8sRealRoot) {
     }
 
     // Helm extractor must stay honest on Boutique: Chart.yaml is real product
-    // surface, but Go-templated template names must never become Deploy units.
+    // surface, but `{{ .Values… }}` names must never become Deploy units
+    // (fullname helpers may resolve on other charts — Values stay skipped).
     const boutiqueHelmResources = k8sRealGraph.nodes.filter(
       (node) => node.metadata?.helmResource === true,
     );
@@ -7352,13 +7354,15 @@ if (k8sRealRoot) {
     );
     if (boutiqueHelmTemplateChrome.length > 0) {
       fail(
-        `kubernetes-real-repo helm extractor should skip {{ template names; found ${boutiqueHelmTemplateChrome
+        `kubernetes-real-repo helm extractor should skip {{ .Values }} names; found ${boutiqueHelmTemplateChrome
           .map((node) => node.label)
           .slice(0, 8)
           .join(", ")}`,
       );
     } else {
-      pass("kubernetes-real-repo helm extractor skips {{ template resource names");
+      pass(
+        "kubernetes-real-repo helm extractor skips {{ .Values }} template resource names",
+      );
     }
     if (boutiqueHelmResources.length > 0) {
       fail(
@@ -7607,6 +7611,259 @@ if (helmCommerceNoise) {
   );
 } else {
   pass("mini-helm has no Checkout/orders commerce collaboration noise");
+}
+
+// ---------------------------------------------------------------------------
+// Capability ladder rung 10: real Helm-chart repo (pinned SHA, gitignored).
+// Golden-lock helm/examples hello-world Deploy story (fullname-resolved names).
+// ---------------------------------------------------------------------------
+let helmRealRoot;
+try {
+  helmRealRoot = await ensureRealRepo(HELM_EXAMPLES);
+  pass(
+    `helm real repo ${HELM_EXAMPLES.name} ready @ ${HELM_EXAMPLES.sha.slice(0, 12)}`,
+  );
+} catch (error) {
+  fail(
+    `could not ensure helm real repo ${HELM_EXAMPLES.name}@${HELM_EXAMPLES.sha}: ${error instanceof Error ? error.message : error}`,
+  );
+}
+
+if (helmRealRoot) {
+  let helmRealGraph;
+  try {
+    helmRealGraph = await compileRepository(helmRealRoot);
+    pass(
+      `helm-real-repo scan completed: ${helmRealGraph.nodes.length} nodes, ${helmRealGraph.edges.length} edges`,
+    );
+  } catch (error) {
+    fail(
+      `helm-real-repo scan crashed on ${HELM_EXAMPLES.name}: ${error instanceof Error ? error.message : error}`,
+    );
+  }
+
+  if (helmRealGraph) {
+    const helmRealServices = helmRealGraph.nodes.filter(
+      (node) => node.kind === "service" && node.metadata?.helm === true,
+    );
+    const helmRealResources = helmRealServices.filter(
+      (node) => node.metadata?.helmResource === true,
+    );
+    const helmRealSemantic = helmRealGraph.nodes.filter(
+      (node) => node.metadata?.projection === "semantic",
+    );
+    const helmRealProduct = helmRealGraph.nodes.find(
+      (node) => node.kind === "product",
+    );
+    const helmRealByKey = new Map(
+      helmRealSemantic
+        .filter((node) => typeof node.metadata?.systemKey === "string")
+        .map((node) => [node.metadata.systemKey, node]),
+    );
+    const helmRealDeploy = helmRealByKey.get("deploy");
+    const helmRealAddresses = new Set(
+      helmRealResources.map((node) => node.metadata?.address),
+    );
+    const helmRealLabels = new Set(helmRealServices.map((node) => node.label));
+
+    const helmRealSummary = {
+      pin: `${HELM_EXAMPLES.name}@${HELM_EXAMPLES.sha}`,
+      product: helmRealProduct?.label ?? null,
+      nodes: helmRealGraph.nodes.length,
+      edges: helmRealGraph.edges.length,
+      resources: helmRealResources.length,
+      semantic: helmRealSemantic.map((node) => node.label),
+      serviceLabels: [...helmRealLabels].sort(),
+    };
+    console.log(
+      `Helm-real-repo scan summary: ${JSON.stringify(helmRealSummary)}`,
+    );
+
+    if (
+      !helmRealProduct ||
+      helmRealProduct.label !== "Helm Example Repository"
+    ) {
+      fail(
+        `helm-real-repo product label expected 'Helm Example Repository', found '${helmRealProduct?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass(`helm-real-repo product label: ${helmRealProduct.label}`);
+    }
+
+    if (!helmRealDeploy || helmRealDeploy.label !== "Deploy") {
+      fail(
+        `helm-real-repo deploy system label expected 'Deploy', found '${helmRealDeploy?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass("helm-real-repo deploy system labeled 'Deploy'");
+    }
+
+    if (!helmRealGraph.extractors.some((item) => item.id === "helm")) {
+      fail("helm-real-repo graph.extractors missing helm");
+    } else {
+      pass("helm-real-repo registers helm extractor");
+    }
+
+    const helmRealChart = helmRealServices.find(
+      (node) =>
+        node.metadata?.helmChart === true &&
+        node.metadata?.chartName === "hello-world",
+    );
+    if (!helmRealChart || helmRealChart.label !== "Hello world · Chart") {
+      fail(
+        `helm-real-repo expected Hello world · Chart; found chartName=${helmRealChart?.metadata?.chartName ?? "(missing)"} label=${helmRealChart?.label ?? "(missing)"}`,
+      );
+    } else {
+      pass("helm-real-repo has Hello world · Chart from Chart.yaml");
+    }
+
+    if (helmRealResources.length < 2) {
+      fail(
+        `helm-real-repo expected ≥2 fullname-resolved helm resources, found ${helmRealResources.length}`,
+      );
+    } else {
+      pass(
+        `helm-real-repo ${helmRealResources.length} fullname-resolved helm resources`,
+      );
+    }
+
+    for (const expected of ["Deployment/hello-world", "Service/hello-world"]) {
+      if (!helmRealAddresses.has(expected)) {
+        fail(
+          `helm-real-repo missing resource ${expected}; found ${[...helmRealAddresses].join(", ") || "(none)"}`,
+        );
+      } else {
+        pass(`helm-real-repo has resource ${expected}`);
+      }
+    }
+
+    for (const expected of [
+      "Hello world · Deployment",
+      "Hello world · Service",
+    ]) {
+      if (!helmRealLabels.has(expected)) {
+        fail(
+          `helm-real-repo missing humanized service label ${expected}; found ${[...helmRealLabels].join(", ") || "(none)"}`,
+        );
+      } else {
+        pass(`helm-real-repo service label ${expected}`);
+      }
+    }
+
+    const valuesChrome = helmRealServices.filter((node) =>
+      /\{\{|Values\b/.test(
+        `${node.label ?? ""} ${node.metadata?.resourceName ?? ""} ${node.metadata?.address ?? ""}`,
+      ),
+    );
+    if (valuesChrome.length > 0) {
+      fail(
+        `helm-real-repo should not surface {{ .Values }} chrome; found ${valuesChrome
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass("helm-real-repo has no {{ .Values }} chrome");
+    }
+
+    const nestedHelmUnits = helmRealServices.filter(
+      (node) => node.parentId === helmRealDeploy?.id,
+    );
+    if (nestedHelmUnits.length < 3) {
+      fail(
+        `helm-real-repo expected ≥3 helm units (chart + deployment + service) nested under Deploy, found ${nestedHelmUnits.length}`,
+      );
+    } else {
+      pass(
+        `helm-real-repo ${nestedHelmUnits.length} units nested under Deploy`,
+      );
+    }
+
+    const helmOverviewLeaves = nestedHelmUnits.filter(
+      (node) => node.metadata?.collapsedInOverview !== true,
+    );
+    if (helmOverviewLeaves.length > 0) {
+      fail(
+        `helm-real-repo overview should collapse Chart/Deployment/Service under Deploy, still visible: ${helmOverviewLeaves
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass("helm-real-repo overview collapses resources under Deploy");
+    }
+
+    if (helmRealDeploy?.metadata?.collapsedInOverview === true) {
+      fail("helm-real-repo Deploy should stay visible on overview");
+    } else {
+      pass("helm-real-repo Deploy stays visible on overview");
+    }
+
+    const helmRealFlow = helmRealSemantic
+      .filter(
+        (node) =>
+          typeof node.metadata?.flowOrder === "number" &&
+          node.metadata?.collapsedInOverview !== true,
+      )
+      .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+    if (
+      helmRealFlow.length !== 1 ||
+      helmRealFlow[0]?.metadata?.systemKey !== "deploy"
+    ) {
+      fail(
+        `helm-real-repo flowOrder expected Deploy-only, got ${helmRealFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+      );
+    } else {
+      pass(
+        `helm-real-repo flowOrder: ${helmRealFlow.map((node) => node.label).join(" → ")}`,
+      );
+    }
+
+    const helmRealChartModule = helmRealGraph.nodes.find(
+      (node) =>
+        node.kind === "module" &&
+        node.metadata?.helmModule === true &&
+        node.metadata?.file === "charts/hello-world/Chart.yaml",
+    );
+    if (
+      !helmRealChartModule ||
+      helmRealChartModule.parentId !== helmRealDeploy?.id ||
+      helmRealChartModule.metadata?.collapsedInOverview !== true
+    ) {
+      fail(
+        `helm-real-repo charts/hello-world/Chart.yaml should nest+collapse under Deploy, found parent=${helmRealChartModule?.parentId ?? "(missing)"} collapsed=${helmRealChartModule?.metadata?.collapsedInOverview}`,
+      );
+    } else {
+      pass(
+        "helm-real-repo charts/hello-world/Chart.yaml nested+collapsed under Deploy",
+      );
+    }
+
+    const helmRealEvidenceGaps = helmRealResources.filter((node) => {
+      const detail = node.evidence?.[0]?.detail ?? "";
+      return !/kind:\s*Deployment|kind:\s*Service/.test(detail);
+    });
+    if (helmRealEvidenceGaps.length > 0) {
+      fail(
+        `helm-real-repo evidence should cite kind: ${helmRealEvidenceGaps
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass("helm-real-repo evidence details cite kind:");
+    }
+
+    const helmRealCommerceNoise = helmRealGraph.edges.some((edge) =>
+      /checkout|orders?/i.test(
+        `${edge.label ?? ""} ${JSON.stringify(edge.metadata ?? {})}`,
+      ),
+    );
+    if (helmRealCommerceNoise) {
+      fail(
+        "helm-real-repo should not inherit Checkout/orders commerce collaboration copy",
+      );
+    } else {
+      pass("helm-real-repo has no Checkout/orders commerce collaboration noise");
+    }
+  }
 }
 
 if (process.exitCode) {

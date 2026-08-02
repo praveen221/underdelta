@@ -133,16 +133,72 @@ function labelsMatch(
 }
 
 /**
- * Concrete (non-templated) Kubernetes resources from a Helm template file.
- * Keeps Online Boutique `{{ .Values… }}` names out of the product map.
+ * Resolve common Helm name helpers into a concrete resource name without
+ * rendering the chart.
+ *
+ * - Already-concrete names pass through.
+ * - `{{ include "chart.fullname" . }}` / `{{ template "chart.fullname" . }}` → chartName
+ * - `{{ .Chart.Name }}` / `{{ .Release.Name }}` / `{{ $fullName }}` → chartName
+ * - Suffixes after a helper stay (`…fullname" . }}-redis` → `chartName-redis`)
+ *
+ * Boutique-style `{{ .Values.*.name }}` and control-flow names stay unresolved
+ * so they never become Deploy units.
+ */
+export function resolveHelmResourceName(
+  rawName: string,
+  chartName: string,
+): string | undefined {
+  const trimmed = rawName.trim();
+  if (!trimmed) return undefined;
+  if (!/\{\{/.test(trimmed)) {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(trimmed)) return undefined;
+    return trimmed;
+  }
+  // Values-driven names are runtime chrome until rendered — skip honestly.
+  if (/\.Values\b/.test(trimmed)) return undefined;
+  if (/\{\{\s*-?\s*(if|range|with|else|end)\b/.test(trimmed)) return undefined;
+
+  let resolved = trimmed;
+  // Standard scaffold helpers: chart.fullname / chart.name / fullnameOverride.
+  resolved = resolved.replace(
+    /\{\{\s*-?\s*(?:include|template)\s+["'][^"']+\.(?:fullname|fullnameOverride|name)["']\s+\.\s*-?\s*\}\}/g,
+    chartName,
+  );
+  resolved = resolved.replace(
+    /\{\{\s*-?\s*\.Chart\.Name(?:\s*\|[^}]*)?\s*-?\s*\}\}/g,
+    chartName,
+  );
+  resolved = resolved.replace(
+    /\{\{\s*-?\s*\.Release\.Name(?:\s*\|[^}]*)?\s*-?\s*\}\}/g,
+    chartName,
+  );
+  resolved = resolved.replace(/\{\{\s*-?\s*\$fullName\s*-?\s*\}\}/g, chartName);
+  resolved = resolved.replace(/\{\{\s*-?\s*\$name\s*-?\s*\}\}/g, chartName);
+
+  if (/\{\{/.test(resolved)) return undefined;
+  resolved = resolved.trim();
+  if (!resolved || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(resolved)) {
+    return undefined;
+  }
+  return resolved;
+}
+
+/**
+ * Kubernetes resources from a Helm template file with concrete (or
+ * fullname-resolved) names. Keeps Online Boutique `{{ .Values… }}` out.
  */
 export function parseHelmTemplateResources(
   source: string,
+  chartName: string,
 ): ParsedKubernetesResource[] {
   if (!looksLikeKubernetesManifest(source)) return [];
-  return parseKubernetesResources(source).filter(
-    (resource) => !/\{\{/.test(resource.name),
-  );
+  const resources: ParsedKubernetesResource[] = [];
+  for (const resource of parseKubernetesResources(source)) {
+    const name = resolveHelmResourceName(resource.name, chartName);
+    if (!name) continue;
+    resources.push({ ...resource, name });
+  }
+  return resources;
 }
 
 export const helmExtractor: ArchitectureExtractor = {
@@ -272,7 +328,7 @@ export const helmExtractor: ArchitectureExtractor = {
         continue;
       }
 
-      const resources = parseHelmTemplateResources(source);
+      const resources = parseHelmTemplateResources(source, owning.chart.name);
       if (resources.length === 0) continue;
 
       const moduleId = stableId("module", "helm", file);
