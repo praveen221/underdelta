@@ -10,6 +10,7 @@ import {
   HACKATHON_STARTER,
   NEXTJS_SAAS_STARTER,
   REALWORLD_EXPRESS,
+  SWAGGER_PETSTORE,
 } from "./ensure-real-repo.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -4207,6 +4208,294 @@ if (openapiCommerceNoise) {
   );
 } else {
   pass("mini-openapi has no Checkout/orders commerce collaboration noise");
+}
+
+// ---------------------------------------------------------------------------
+// Capability ladder rung 5: real OpenAPI-bearing repo (pinned SHA, gitignored).
+// Golden-lock swagger-api/swagger-petstore ops under HTTP API + summary labels.
+// ---------------------------------------------------------------------------
+let openapiRealRoot;
+try {
+  openapiRealRoot = await ensureRealRepo(SWAGGER_PETSTORE);
+  pass(
+    `openapi real repo ${SWAGGER_PETSTORE.name} ready @ ${SWAGGER_PETSTORE.sha.slice(0, 12)}`,
+  );
+} catch (error) {
+  fail(
+    `could not ensure openapi real repo ${SWAGGER_PETSTORE.name}@${SWAGGER_PETSTORE.sha}: ${error instanceof Error ? error.message : error}`,
+  );
+}
+
+if (openapiRealRoot) {
+  let openapiRealGraph;
+  try {
+    openapiRealGraph = await compileRepository(openapiRealRoot);
+    pass(
+      `openapi-real-repo scan completed: ${openapiRealGraph.nodes.length} nodes, ${openapiRealGraph.edges.length} edges`,
+    );
+  } catch (error) {
+    fail(
+      `openapi-real-repo scan crashed on ${SWAGGER_PETSTORE.name}: ${error instanceof Error ? error.message : error}`,
+    );
+  }
+
+  if (openapiRealGraph) {
+    const openapiRealRoutes = openapiRealGraph.nodes.filter(
+      (node) => node.kind === "route" && node.metadata?.openapi === true,
+    );
+    const openapiRealSemantic = openapiRealGraph.nodes.filter(
+      (node) => node.metadata?.projection === "semantic",
+    );
+    const openapiRealProduct = openapiRealGraph.nodes.find(
+      (node) => node.kind === "product",
+    );
+    const openapiRealByKey = new Map(
+      openapiRealSemantic
+        .filter((node) => typeof node.metadata?.systemKey === "string")
+        .map((node) => [node.metadata.systemKey, node]),
+    );
+    const openapiRealApi = openapiRealByKey.get("api");
+    const openapiRealOps = new Set(
+      openapiRealRoutes.map(
+        (node) =>
+          `${node.metadata?.method ?? "?"} ${node.metadata?.path ?? "?"}`,
+      ),
+    );
+    const openapiRealOpIds = new Set(
+      openapiRealRoutes
+        .map((node) => node.metadata?.operationId)
+        .filter(Boolean),
+    );
+    const openapiRealLabels = new Set(
+      openapiRealRoutes.map((node) => node.label),
+    );
+
+    const openapiRealSummary = {
+      pin: `${SWAGGER_PETSTORE.name}@${SWAGGER_PETSTORE.sha}`,
+      product: openapiRealProduct?.label ?? null,
+      nodes: openapiRealGraph.nodes.length,
+      edges: openapiRealGraph.edges.length,
+      routes: openapiRealRoutes.length,
+      semantic: openapiRealSemantic.map((node) => node.label),
+    };
+    console.log(
+      `OpenAPI-real-repo scan summary: ${JSON.stringify(openapiRealSummary)}`,
+    );
+
+    if (!openapiRealProduct || openapiRealProduct.label !== "Swagger Petstore Sample") {
+      fail(
+        `openapi-real-repo product label expected 'Swagger Petstore Sample' from README, found '${openapiRealProduct?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass(`openapi-real-repo product label: ${openapiRealProduct.label}`);
+    }
+
+    if (!openapiRealApi || openapiRealApi.label !== "HTTP API") {
+      fail(
+        `openapi-real-repo api system label expected 'HTTP API', found '${openapiRealApi?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass("openapi-real-repo api system labeled 'HTTP API'");
+    }
+
+    if (!openapiRealGraph.extractors.some((item) => item.id === "openapi")) {
+      fail("openapi-real-repo graph.extractors missing openapi");
+    } else {
+      pass("openapi-real-repo registers openapi extractor");
+    }
+
+    if (openapiRealRoutes.length < 19) {
+      fail(
+        `openapi-real-repo expected ≥19 openapi routes from petstore.yaml, found ${openapiRealRoutes.length}`,
+      );
+    } else {
+      pass(`openapi-real-repo ${openapiRealRoutes.length} OpenAPI routes`);
+    }
+
+    for (const expected of [
+      "POST /pet",
+      "PUT /pet",
+      "GET /pet/{petId}",
+      "DELETE /pet/{petId}",
+      "GET /pet/findByStatus",
+      "GET /store/inventory",
+      "POST /store/order",
+      "GET /store/order/{orderId}",
+      "POST /user",
+      "GET /user/login",
+      "GET /user/logout",
+      "GET /user/{username}",
+    ]) {
+      if (!openapiRealOps.has(expected)) {
+        fail(
+          `openapi-real-repo missing operation ${expected}; found ${[...openapiRealOps].sort().join(", ") || "(none)"}`,
+        );
+      } else {
+        pass(`openapi-real-repo has operation ${expected}`);
+      }
+    }
+
+    for (const expected of [
+      "addPet",
+      "updatePet",
+      "getPetById",
+      "deletePet",
+      "findPetsByStatus",
+      "getInventory",
+      "placeOrder",
+      "getOrderById",
+      "createUser",
+      "loginUser",
+      "logoutUser",
+      "getUserByName",
+    ]) {
+      if (!openapiRealOpIds.has(expected)) {
+        fail(
+          `openapi-real-repo missing operationId ${expected}; found ${[...openapiRealOpIds].sort().join(", ") || "(none)"}`,
+        );
+      } else {
+        pass(`openapi-real-repo operationId ${expected}`);
+      }
+    }
+
+    for (const expected of [
+      "Add a new pet to the store.",
+      "Update an existing pet.",
+      "Find pet by ID.",
+      "Deletes a pet.",
+      "Finds Pets by status.",
+      "Returns pet inventories by status.",
+      "Place an order for a pet.",
+      "Find purchase order by ID.",
+      "Create user.",
+      "Logs user into the system.",
+      "Logs out current logged in user session.",
+      "Get user by user name.",
+    ]) {
+      if (!openapiRealLabels.has(expected)) {
+        fail(
+          `openapi-real-repo missing summary label ${JSON.stringify(expected)}; found ${[...openapiRealLabels].sort().join(" | ") || "(none)"}`,
+        );
+      } else {
+        pass(`openapi-real-repo summary label ${expected}`);
+      }
+    }
+
+    const nestedPetstoreRoutes = openapiRealRoutes.filter(
+      (node) => node.parentId === openapiRealApi?.id,
+    );
+    if (nestedPetstoreRoutes.length < 19) {
+      fail(
+        `openapi-real-repo expected ≥19 routes nested under HTTP API, found ${nestedPetstoreRoutes.length}`,
+      );
+    } else {
+      pass(
+        `openapi-real-repo ${nestedPetstoreRoutes.length} routes nested under HTTP API`,
+      );
+    }
+
+    const petstoreOverviewLeaves = nestedPetstoreRoutes.filter(
+      (node) => node.metadata?.collapsedInOverview !== true,
+    );
+    if (petstoreOverviewLeaves.length > 0) {
+      fail(
+        `openapi-real-repo overview should collapse routes under HTTP API, still visible: ${petstoreOverviewLeaves
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass("openapi-real-repo routes collapsed on overview (API tells the story)");
+    }
+
+    const openapiRealFlow = openapiRealSemantic
+      .filter((node) => typeof node.metadata?.flowOrder === "number")
+      .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+    if (
+      openapiRealFlow.length < 1 ||
+      openapiRealFlow[0]?.label !== "HTTP API" ||
+      openapiRealFlow[0]?.metadata?.systemKey !== "api"
+    ) {
+      fail(
+        `openapi-real-repo flowOrder expected HTTP API, got ${openapiRealFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+      );
+    } else {
+      pass(
+        `openapi-real-repo flowOrder: ${openapiRealFlow.map((node) => node.label).join(" → ")}`,
+      );
+    }
+
+    const petstoreSpecModules = openapiRealGraph.nodes.filter(
+      (node) => node.kind === "module" && node.metadata?.openapiSpec === true,
+    );
+    if (
+      !petstoreSpecModules.some((node) =>
+        String(node.metadata?.file ?? node.label).endsWith("openapi.yaml"),
+      )
+    ) {
+      fail("openapi-real-repo missing openapi.yaml spec module");
+    } else {
+      pass("openapi-real-repo has openapi.yaml spec module");
+    }
+    const petstoreSpecChrome = petstoreSpecModules.filter(
+      (node) =>
+        node.parentId !== openapiRealApi?.id ||
+        node.metadata?.collapsedInOverview !== true,
+    );
+    if (petstoreSpecChrome.length > 0) {
+      fail(
+        `openapi-real-repo overview should nest+collapse openapi.yaml under HTTP API, still chrome: ${petstoreSpecChrome
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass("openapi-real-repo overview collapses openapi.yaml under HTTP API");
+    }
+
+    const petstoreEvidenceGaps = openapiRealRoutes.filter((node) => {
+      const detail = node.evidence?.[0]?.detail ?? "";
+      const opId = node.metadata?.operationId;
+      return !opId || !detail.includes(String(opId));
+    });
+    if (petstoreEvidenceGaps.length > 0) {
+      fail(
+        `openapi-real-repo evidence should cite operationId: ${petstoreEvidenceGaps
+          .map((node) => node.metadata?.operationId ?? node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass("openapi-real-repo evidence details cite operationId");
+    }
+
+    const petstoreCommerceNoise = openapiRealGraph.edges.some((edge) =>
+      /checkout|orders?/i.test(
+        `${edge.label ?? ""} ${edge.metadata?.detail ?? ""}`,
+      ),
+    );
+    if (petstoreCommerceNoise) {
+      fail(
+        "openapi-real-repo should not inherit Checkout/orders commerce collaboration copy",
+      );
+    } else {
+      pass(
+        "openapi-real-repo has no Checkout/orders commerce collaboration noise",
+      );
+    }
+
+    const petstoreModuleChrome = openapiRealGraph.nodes.filter(
+      (node) =>
+        node.kind === "module" &&
+        node.metadata?.collapsedInOverview !== true,
+    );
+    if (petstoreModuleChrome.length > 0) {
+      fail(
+        `openapi-real-repo overview should collapse module chrome, still visible: ${petstoreModuleChrome
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass("openapi-real-repo module chrome collapsed on overview");
+    }
+  }
 }
 
 if (process.exitCode) {

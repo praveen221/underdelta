@@ -51,6 +51,15 @@ export const HACKATHON_STARTER = {
   dirname: "hackathon-starter",
 };
 
+/** @type {RealRepoPin} */
+export const SWAGGER_PETSTORE = {
+  name: "swagger-api/swagger-petstore",
+  url: "https://github.com/swagger-api/swagger-petstore.git",
+  // Pinned 2026-08-02 — tip of master at plan rung-5 OpenAPI real-repo kickoff.
+  sha: "8f0dd286987880b4af7bce552aca3813166f3049",
+  dirname: "swagger-petstore",
+};
+
 export const REAL_REPO_ROOT = path.join(repoRoot, ".underdelta-real");
 
 function git(args, cwd, opts = {}) {
@@ -129,6 +138,10 @@ const PINS_BY_NAME = {
   hackathon: HACKATHON_STARTER,
   "hackathon-starter": HACKATHON_STARTER,
   mongo: HACKATHON_STARTER,
+  [SWAGGER_PETSTORE.dirname]: SWAGGER_PETSTORE,
+  petstore: SWAGGER_PETSTORE,
+  "swagger-petstore": SWAGGER_PETSTORE,
+  openapi: SWAGGER_PETSTORE,
 };
 
 const isMain =
@@ -143,6 +156,7 @@ if (isMain) {
         NEXTJS_SAAS_STARTER,
         FASTAPI_REALWORLD,
         HACKATHON_STARTER,
+        SWAGGER_PETSTORE,
       ];
   if (requested && pins.length === 0) {
     throw new Error(
