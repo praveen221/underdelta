@@ -1244,8 +1244,8 @@ if (messagingRolesFn < 0 || messagingHeading < 0) {
 
 // ---------------------------------------------------------------------------
 // Capability ladder rung 1: real Node/Express repo (pinned SHA, gitignored).
-// This tick locks "scan completes + basic product map shape". Fuller golden
-// floors / required systems land in a follow-up tick after projection fixes.
+// Golden-lock a legible product map: API + Data systems, routes/tables nested,
+// flowOrder left-to-right, join tables collapsed, clean product title.
 // ---------------------------------------------------------------------------
 let realRepoRoot;
 try {
@@ -1380,9 +1380,21 @@ if (realRepoRoot) {
     } else {
       pass("real-repo semantic system labels are clean");
     }
+    const apiSystem = realSemantic.find(
+      (node) => node.metadata?.systemKey === "api",
+    );
     const dataSystem = realSemantic.find(
       (node) => node.metadata?.systemKey === "data",
     );
+    if (!apiSystem) {
+      fail("real-repo missing HTTP API semantic system");
+    } else if (apiSystem.label !== "HTTP API") {
+      fail(
+        `real-repo api system label expected 'HTTP API', found '${apiSystem.label}'`,
+      );
+    } else {
+      pass("real-repo api system labeled 'HTTP API'");
+    }
     if (!dataSystem) {
       fail("real-repo missing Data access semantic system");
     } else if (dataSystem.label !== "Data access") {
@@ -1392,6 +1404,96 @@ if (realRepoRoot) {
     } else {
       pass("real-repo data system keeps path-role label 'Data access'");
     }
+
+    // Nesting: every route under API; product tables under Data; overview collapses routes.
+    if (apiSystem) {
+      const orphanRoutes = realRoutes.filter(
+        (node) => node.parentId !== apiSystem.id,
+      );
+      if (orphanRoutes.length) {
+        fail(
+          `real-repo routes not nested under HTTP API: ${orphanRoutes
+            .map((node) => node.label)
+            .join(", ")}`,
+        );
+      } else if (realRoutes.length < 20) {
+        fail(
+          `real-repo expected ≥20 routes nested under HTTP API, found ${realRoutes.length}`,
+        );
+      } else {
+        pass(
+          `real-repo ${realRoutes.length} routes nested under HTTP API`,
+        );
+      }
+      const uncollapsedRoutes = realRoutes.filter(
+        (node) => node.metadata?.collapsedInOverview !== true,
+      );
+      if (uncollapsedRoutes.length) {
+        fail(
+          `real-repo routes should collapse on overview under HTTP API: ${uncollapsedRoutes
+            .map((node) => node.label)
+            .join(", ")}`,
+        );
+      } else {
+        pass("real-repo routes collapsed on overview (API tells the story)");
+      }
+    }
+    if (dataSystem) {
+      const orphanTables = realProductTables.filter(
+        (node) => node.parentId !== dataSystem.id,
+      );
+      if (orphanTables.length) {
+        fail(
+          `real-repo product tables not nested under Data access: ${orphanTables
+            .map((node) => node.label)
+            .join(", ")}`,
+        );
+      } else {
+        pass(
+          `real-repo ${realProductTables.length} product tables nested under Data access`,
+        );
+      }
+      const collapsedProductTables = realProductTables.filter(
+        (node) => node.metadata?.collapsedInOverview === true,
+      );
+      if (collapsedProductTables.length) {
+        fail(
+          `real-repo product tables should stay visible under Data access: ${collapsedProductTables
+            .map((node) => node.label)
+            .join(", ")}`,
+        );
+      } else {
+        pass("real-repo product tables visible under Data access on overview");
+      }
+    }
+
+    // flowOrder + flows-to: API → Data left-to-right without Details.
+    const realFlowOrdered = realSemantic
+      .filter((node) => typeof node.metadata?.flowOrder === "number")
+      .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+    const realFlowLabels = realFlowOrdered.map((node) => node.label);
+    const expectedRealFlow = ["HTTP API", "Data access"];
+    if (realFlowLabels.join(" → ") !== expectedRealFlow.join(" → ")) {
+      fail(
+        `real-repo flowOrder expected ${expectedRealFlow.join(" → ")}, got ${realFlowLabels.join(" → ") || "(none)"}`,
+      );
+    } else {
+      pass(`real-repo flowOrder: ${realFlowLabels.join(" → ")}`);
+    }
+    if (apiSystem && dataSystem) {
+      const apiFlowsToData = realGraph.edges.some(
+        (edge) =>
+          edge.kind === "flows-to" &&
+          edge.source === apiSystem.id &&
+          edge.target === dataSystem.id,
+      );
+      if (!apiFlowsToData) {
+        fail("real-repo missing flows-to edge HTTP API → Data access");
+      } else {
+        pass("real-repo flows-to: HTTP API → Data access");
+      }
+    }
+
     const expectedJoinNoise = [
       "_articletotag",
       "_userfavorite",

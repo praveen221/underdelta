@@ -856,6 +856,22 @@ export function projectSemanticArchitecture(
     }
   }
 
+  // When an HTTP API system exists, nest every route under it — entrypoint
+  // health checks (e.g. GET / in main.ts) sit outside /routes/ and would
+  // otherwise leak onto the overview beside the product story.
+  const apiSystem = systems.get("api");
+  if (apiSystem) {
+    for (const node of [...nodes.values()]) {
+      if (node.kind !== "route") continue;
+      if (node.metadata?.projection === "semantic") continue;
+      attachToSystem(
+        node.id,
+        apiSystem.id,
+        node.evidence[0] ?? projectionEvidence("."),
+      );
+    }
+  }
+
   // Nest extracted pipelines under the semantic Pipelines system.
   const pipelinesSystem = systems.get("pipelines");
   if (pipelinesSystem) {
