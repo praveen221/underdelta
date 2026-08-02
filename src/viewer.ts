@@ -36,6 +36,13 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     header { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); padding: 0 14px; background: var(--panel); }
     header strong { font-size: 15px; }
     header .meta { color: var(--muted); }
+    #focus-crumb { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; max-width: min(420px, 36vw); color: var(--muted); }
+    #focus-crumb[hidden] { display: none; }
+    #focus-crumb .crumb { background: transparent; border: none; padding: 2px 4px; color: var(--accent); border-radius: 4px; }
+    #focus-crumb .crumb:hover { border-color: transparent; background: color-mix(in srgb, var(--accent) 12%, transparent); }
+    #focus-crumb .crumb.current { color: var(--text); cursor: default; font-weight: 650; }
+    #focus-crumb .crumb.current:hover { background: transparent; }
+    #focus-crumb .crumb-sep { color: var(--muted); user-select: none; }
     #search { width: min(340px, 30vw); margin-left: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; outline: none; }
     #search:focus { border-color: var(--accent); }
     #workspace { display: grid; grid-template-columns: 1fr 320px; min-height: 0; }
@@ -139,10 +146,10 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     <header>
       <strong>${title}</strong>
       <span class="meta" id="counts"></span>
-      <button id="back" hidden>Back</button>
-      <button id="overview">Overview</button>
+      <button id="back" hidden title="Back one step (Intermediate, then Beginner)">Back</button>
+      <button id="overview" title="Return to Beginner overview">Overview</button>
       <button id="tier" title="Beginner: product story · Intermediate: enter a system’s neighborhood · Advanced: code in focus (modules; functions inside a module/api)">View: Beginner</button>
-      <span class="meta" id="focus-crumb" hidden></span>
+      <nav class="meta" id="focus-crumb" hidden aria-label="Focus path"></nav>
       <input id="search" type="search" placeholder="Find a route, table, job, component…" />
     </header>
     <div id="workspace">
@@ -260,6 +267,65 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       button.textContent = tierButtonLabel();
       button.dataset.tier = state.tier;
       button.dataset.codeInFocus = state.tier === "advanced" && state.focus ? "true" : "false";
+    }
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+    // Focus walk stack (nulls filtered — first enter used to push null).
+    function focusStack() {
+      const stack = state.history.filter(Boolean);
+      if (state.focus) stack.push(state.focus);
+      return stack;
+    }
+    // Keep the View: label honest as the user walks Back / Overview / crumbs.
+    // Overview → Beginner; system/hub focus → Intermediate; code container → Advanced.
+    function syncTierToFocus() {
+      if (!state.focus) {
+        state.tier = "beginner";
+      } else {
+        const focused = byId.get(state.focus);
+        if (focused && advancedKinds.has(focused.kind)) {
+          state.tier = "advanced";
+        } else {
+          state.tier = "intermediate";
+        }
+      }
+      syncTierButton();
+    }
+    function resetCamera() {
+      state.x = 36;
+      state.y = 40;
+      state.scale = 1;
+    }
+    function goOverview() {
+      state.focus = null;
+      state.history = [];
+      state.selected = null;
+      syncTierToFocus();
+      resetCamera();
+      inspector.innerHTML = '<div class="empty">Select a component to inspect its connections and source evidence. Double-click a system for its Intermediate neighborhood; Advanced shows code in that focus.</div>';
+      render();
+      applyTransform();
+    }
+    // Breadcrumb / Back: jump to stack index (-1 = Beginner overview).
+    function navigateFocusStack(index) {
+      const stack = focusStack();
+      if (index < 0) {
+        goOverview();
+        return;
+      }
+      if (index >= stack.length) return;
+      state.focus = stack[index];
+      state.history = stack.slice(0, index);
+      state.selected = state.focus;
+      syncTierToFocus();
+      resetCamera();
+      render();
+      applyTransform();
     }
     const viewport = document.getElementById("viewport");
     const world = document.getElementById("world");
@@ -761,14 +827,44 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const focused = state.focus ? byId.get(state.focus) : null;
       const crumb = document.getElementById("focus-crumb");
       if (crumb) {
-        if (focused) {
-          crumb.hidden = false;
-          crumb.textContent = isAdvancedTier()
-            ? "Focus: " + focused.label + " · code in focus"
-            : "Focus: " + focused.label;
-        } else {
+        const stack = focusStack();
+        if (stack.length === 0) {
           crumb.hidden = true;
-          crumb.textContent = "";
+          crumb.innerHTML = "";
+        } else {
+          crumb.hidden = false;
+          const parts = [];
+          parts.push('<button type="button" class="crumb" data-stack="-1" title="Back to Beginner overview">Overview</button>');
+          stack.forEach((id, index) => {
+            const node = byId.get(id);
+            const label = escapeHtml(node ? node.label : id);
+            const isCurrent = index === stack.length - 1;
+            const title = isCurrent
+              ? (isAdvancedTier() ? "Code in focus" : "Current focus")
+              : "Back to this focus";
+            parts.push('<span class="crumb-sep" aria-hidden="true">›</span>');
+            if (isCurrent) {
+              parts.push(
+                '<span class="crumb current" title="' + title + '">' +
+                label +
+                (isAdvancedTier() ? " · code" : "") +
+                "</span>",
+              );
+            } else {
+              parts.push(
+                '<button type="button" class="crumb" data-stack="' + index + '" title="' + title + '">' +
+                label +
+                "</button>",
+              );
+            }
+          });
+          crumb.innerHTML = parts.join("");
+          crumb.querySelectorAll("button.crumb[data-stack]").forEach((button) => {
+            button.onclick = (event) => {
+              event.stopPropagation();
+              navigateFocusStack(Number(button.dataset.stack));
+            };
+          });
         }
       }
       document.getElementById("counts").textContent = focused
@@ -1195,47 +1291,22 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     }
 
     function focusNode(id) {
-      state.history.push(state.focus);
+      // Only push real foci — avoids null placeholders that confuse breadcrumbs.
+      if (state.focus) state.history.push(state.focus);
       state.focus = id;
       state.selected = id;
-      const focused = byId.get(id);
-      // Entering a system is the Intermediate walk — bump out of Beginner so the
-      // tier label matches the neighborhood the user just opened.
-      if (state.tier === "beginner") {
-        state.tier = "intermediate";
-      }
-      // Drilling into a module/function is the Advanced walk — reveal code in focus.
-      if (focused && advancedKinds.has(focused.kind) && state.tier !== "advanced") {
-        state.tier = "advanced";
-      }
-      syncTierButton();
-      state.x = 36;
-      state.y = 40;
-      state.scale = 1;
+      // Tier follows the walk: system → Intermediate, module/api code → Advanced.
+      syncTierToFocus();
+      resetCamera();
       render();
       applyTransform();
     }
 
-    document.getElementById("overview").onclick = () => {
-      state.focus = null;
-      state.history = [];
-      state.selected = null;
-      state.tier = "beginner";
-      state.x = 36; state.y = 40; state.scale = 1;
-      syncTierButton();
-      inspector.innerHTML = '<div class="empty">Select a component to inspect its connections and source evidence. Double-click a system for its Intermediate neighborhood; Advanced shows code in that focus.</div>';
-      render(); applyTransform();
-    };
+    document.getElementById("overview").onclick = () => goOverview();
     document.getElementById("back").onclick = () => {
-      state.focus = state.history.pop() || null;
-      state.selected = state.focus;
-      if (!state.focus && state.tier !== "beginner") {
-        // Leaving the last focus returns to calm overview; keep Intermediate/
-        // Advanced labels honest by resetting to Beginner.
-        state.tier = "beginner";
-        syncTierButton();
-      }
-      render();
+      // One step back: nested Advanced → Intermediate parent, then Beginner.
+      const stack = focusStack();
+      navigateFocusStack(stack.length - 2);
     };
     document.getElementById("tier").onclick = () => {
       const index = tierOrder.indexOf(state.tier);

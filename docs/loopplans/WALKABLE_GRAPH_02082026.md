@@ -133,13 +133,13 @@ Update checkboxes + Next focus every tick (unless Idle protocol).
 - [x] Beginner cold open polish: `intermediateKinds` + Product Flow gate; mini-stack/self-map stay flow-led; verify golden floor  
 - [x] Focus / enter a system: Intermediate neighborhood via `focusNeighborhood` (contains + story neighbors); calmOverview so Intermediate/Advanced without focus do not global-uncollapse; Focus crumb + auto-tier; verify floors  
 - [x] Advanced inside focus: `showsAdvancedKind` — modules/columns at Advanced+focus; functions after drilling into a code container (module/api/…); “code in focus” tier/crumb copy; verify floors (Extractors modules, Checkout functions, typescript module functions)  
+- [x] Navigation: `Overview › …` breadcrumb + Back via `navigateFocusStack` / `goOverview`; `syncTierToFocus` keeps View label on Intermediate then Beginner; verify floors  
 
 ### In progress / next
 
 Keep **at least 3 unchecked items** here until LOOP COMPLETE (refill from Seed backlog).  
 These remaining items are the **mandatory** walkable slice — finishing them (with gates 1–8) is what completes the loop:
 
-- [ ] Navigation: breadcrumb + back to Beginner (and Intermediate if nested); tier label stays in sync when Overview resets  
 - [ ] Polish pass: legend/inspector/empty-state copy matches tiers; standing guarantee self-map cold-read  
 - [ ] Collapse or restyle derived edge fans so Intermediate isn’t yellow spaghetti  
 - [ ] Keyboard: Esc = back one tier (from Seed — navigation completeness)  
@@ -156,7 +156,7 @@ Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder fr
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Advanced-in-focus via showsAdvancedKind + “code in focus” copy; verify floors for Extractors modules / Checkout + typescript-module functions). Now harden Navigation: breadcrumb + Back to Intermediate then Beginner, with tier label staying in sync when Overview resets.
+> **Next focus:** This work is done (Overview › breadcrumb + Back/Overview via navigateFocusStack/goOverview + syncTierToFocus). Now polish legend/inspector/empty-state copy for tiers and confirm self-map Beginner cold-read still demo-ready.
 
 ### Learning log (append every tick)
 
@@ -170,6 +170,7 @@ Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder fr
 - 2026-08-02 | Done: Beginner hides intermediateKinds + non-flowOrder when Product Flow exists; verify cold-open floors for self-map + mini-stack | Next: Focus → Intermediate neighborhood (not global uncollapse) | Learned: IR “visible on overview” for cron/queue hubs meant Intermediate availability; viewer Beginner must denylist those kinds or mini-stack stays a parts bin  
 - 2026-08-02 13:55 UTC | Done: focusNeighborhood (contains + story neighbors); calmOverview stops Intermediate global dump; focus auto-tiers + Focus crumb; verify Extractors/Checkout floors | Next: Advanced-in-focus modules/functions + “code in focus” copy | Learned: many Product Flow systems only contain modules — without collab/story neighbor expansion Intermediate focus would be empty; Intermediate-without-focus must stay calm or the parts-bin returns under a new label 
 - 2026-08-02 13:58 UTC | Done: showsAdvancedKind (modules at system Advanced; functions inside module/api focus); “code in focus” tier/crumb; verify Extractors/Checkout/typescript-module floors | Next: Navigation breadcrumb + Back tier sync | Learned: Extractors contains 140 functions — Advanced on a system must reveal modules first or cluster-scope still feels like a phonebook; drill into a module for functions  
+- 2026-08-02 14:01 UTC | Done: Overview › breadcrumb + navigateFocusStack/goOverview; syncTierToFocus demotes Advanced→Intermediate→Beginner on Back; verify nav floors | Next: Polish legend/inspector/empty-state copy + self-map cold-read | Learned: history used to push null on first focus — filter/stack helpers keep crumbs honest; Back must sync tier on every step, not only when focus becomes null  
 
 ---
 

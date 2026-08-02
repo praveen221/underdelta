@@ -1132,14 +1132,33 @@ if (
     "viewer Intermediate focus must use focusNeighborhood (contains + story neighbors), not whole-repo uncollapse",
   );
 } else if (
-  !viewerHtml.includes('state.tier = "intermediate"') ||
+  !viewerHtml.includes("syncTierToFocus()") ||
   !viewerHtml.includes('id="focus-crumb"')
 ) {
   fail(
-    "viewer focus should enter Intermediate and show a Focus crumb",
+    "viewer focus should sync tier via syncTierToFocus and show a Focus crumb",
+  );
+} else if (
+  !viewerHtml.includes("function focusStack()") ||
+  !viewerHtml.includes("function navigateFocusStack(index)") ||
+  !viewerHtml.includes("function goOverview()") ||
+  !viewerHtml.includes('data-stack="-1"') ||
+  !viewerHtml.includes("Back to Beginner overview") ||
+  !viewerHtml.includes("crumb-sep")
+) {
+  fail(
+    "viewer navigation must expose Overview › focus breadcrumb + navigateFocusStack (Back → Intermediate then Beginner)",
+  );
+} else if (
+  !viewerHtml.includes("navigateFocusStack(stack.length - 2)") ||
+  !viewerHtml.includes("document.getElementById(\"overview\").onclick = () => goOverview()")
+) {
+  fail(
+    "viewer Back/Overview must use navigateFocusStack / goOverview so tier stays in sync",
   );
 } else {
   pass("viewer Walkable tiers: Beginner / Intermediate / Advanced (cluster-scoped Advanced)");
+  pass("viewer navigation: breadcrumb + Back/Overview tier sync");
 }
 
 // Beginner cold-open floor: Product Flow + top systems; no advanced or intermediate leaf kinds.
