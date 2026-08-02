@@ -64,6 +64,8 @@ requireEdge(fixtureGraph.edges, "routes-to", 1);
 requireEdge(fixtureGraph.edges, "flows-to", 2);
 requireEdge(fixtureGraph.edges, "reads", 1);
 requireEdge(fixtureGraph.edges, "writes", 1);
+requireEdge(fixtureGraph.edges, "publishes", 1);
+requireEdge(fixtureGraph.edges, "consumes", 1);
 
 const routeLabels = new Set(
   fixtureGraph.nodes.filter((node) => node.kind === "route").map((node) => node.label),
@@ -289,6 +291,55 @@ if (checkout && checkout.metadata?.collapsedInOverview !== true) {
   fail("expected checkout pipeline collapsed in overview under Pipelines");
 } else {
   pass("checkout pipeline collapsed in overview");
+}
+
+const fulfillmentQueue = fixtureGraph.nodes.find(
+  (node) => node.kind === "queue" && node.label === "fulfillment",
+);
+if (!fulfillmentQueue || fulfillmentQueue.metadata?.messagingHub !== true) {
+  fail(
+    `expected fulfillment queue messagingHub=true, found ${JSON.stringify(
+      fulfillmentQueue?.metadata ?? null,
+    )}`,
+  );
+} else {
+  pass("fulfillment queue marked as messaging hub");
+}
+
+if (fulfillmentQueue?.metadata?.collapsedInOverview === true) {
+  fail("messaging hub queue should stay visible on overview");
+} else {
+  pass("fulfillment queue visible on overview");
+}
+
+const workers = fixtureSystems.find((node) => node.label === "Queue workers");
+const apiPublishes =
+  api &&
+  fulfillmentQueue &&
+  fixtureGraph.edges.some(
+    (edge) =>
+      edge.kind === "publishes" &&
+      edge.source === api.id &&
+      edge.target === fulfillmentQueue.id,
+  );
+const workersConsume =
+  workers &&
+  fulfillmentQueue &&
+  fixtureGraph.edges.some(
+    (edge) =>
+      edge.kind === "consumes" &&
+      edge.source === workers.id &&
+      edge.target === fulfillmentQueue.id,
+  );
+if (!apiPublishes) {
+  fail("expected HTTP API system to publish to fulfillment queue");
+} else {
+  pass("HTTP API publishes to fulfillment");
+}
+if (!workersConsume) {
+  fail("expected Queue workers system to consume fulfillment queue");
+} else {
+  pass("Queue workers consume fulfillment");
 }
 
 if (process.exitCode) {

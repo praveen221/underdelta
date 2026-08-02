@@ -87,22 +87,22 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Overview collapses system leaves (routes/components/cron/queue/…) until focus/Details
 - [x] package.json `bin`/exports projection (CLI binCommands, product exposes CLI)
 - [x] Inspector shows Key files (+ Package bin) for systems before raw evidence
+- [x] Queue publish/consume clarity on the default map (messaging hubs stay visible)
 
 ### In progress / next
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Queue publish/consume clarity on the default map
 - [ ] Generated browser artifact node (`index.html`) beside architecture.json
 - [ ] Capture a “scan Underdelta” golden summary in verify (counts + required labels)
 - [ ] Richer Underdelta self-map edges (compile uses extractors, viewer renders graph, etc.)
+- [ ] SQL + Prisma table unification polish (names, relations, migrations edge)
 
 ### Seed backlog (pull from here when In progress < 3)
 
 Not a full roadmap — a menu the agent may reorder. Pick what most improves the end goal now.
 
 - Richer Underdelta self-map edges (compile uses extractors, viewer renders graph, etc.)
-- Queue publish/consume clarity on the default map
 - Generated browser artifact node (`index.html`) beside architecture.json
 - Multi-file route frameworks / Next-style app router hints (only if it helps the chosen stack)
 - SQL + Prisma table unification polish (names, relations, migrations edge)
@@ -113,7 +113,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (package.json bin projection + inspector key files). Now clarify queue publish/consume on the default map and add a generated browser `index.html` artifact beside `architecture.json` so scan outputs are both visible in the product flow.
+> **Next focus:** This work is done (queue publish/consume hubs on the default map). Now add a generated browser `index.html` artifact beside `architecture.json` so both scan outputs appear in the Underdelta product flow.
 
 ### Learning log (append every tick)
 
@@ -131,6 +131,7 @@ Append short bullets like:
 - 2026-08-02 02:55 UTC | Done: flowOrder Product flow band + architecture.json artifact + verify | Next: cron labels, nest checkout pipeline, collapse duplicate leaves | Learned: left-to-right product story needs a dedicated flow band above lanes; artifact should sit between compile/graph and viewer
 - 2026-08-02 03:00 UTC | Done: humanized cron labels, nest checkout under Pipelines, collapse overview leaves | Next: package.json projection + inspector key files | Learned: parent semantic systems should own the overview; leaves stay available on focus/Details so the map stops restating itself
 - 2026-08-02 03:05 UTC | Done: package.json bin→CLI projection + keyFiles in inspector | Next: queue publish/consume clarity + index.html artifact | Learned: bin entries are strong CLI evidence and should map dist entrypoints back to src modules for keyFiles
+- 2026-08-02 03:15 UTC | Done: queue `.add`→publishes + Worker→consumes, system-lifted pub/sub, messaging hubs stay on overview | Next: index.html artifact beside architecture.json | Learned: collapsing every queue hides the product story; hubs with both publishers and consumers must stay visible and edges must lift onto API/workers systems
 
 ---
 

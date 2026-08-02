@@ -417,7 +417,100 @@ export function projectSemanticArchitecture(
     }
   }
 
+  // Lift publishes/consumes onto owning systems and keep messaging hubs visible.
+  const queueRoles = new Map<
+    string,
+    { publishers: Set<string>; consumers: Set<string> }
+  >();
+
+  function recordQueueRole(
+    queueId: string,
+    role: "publishers" | "consumers",
+    systemId: string,
+  ): void {
+    const entry = queueRoles.get(queueId) ?? {
+      publishers: new Set<string>(),
+      consumers: new Set<string>(),
+    };
+    entry[role].add(systemId);
+    queueRoles.set(queueId, entry);
+  }
+
+  for (const edge of [...edges.values()]) {
+    if (edge.kind !== "publishes" && edge.kind !== "consumes") continue;
+    const queue = nodes.get(edge.target);
+    if (!queue || queue.kind !== "queue") continue;
+    const systemId = owningSystem(edge.source);
+    if (!systemId) continue;
+    const role = edge.kind === "publishes" ? "publishers" : "consumers";
+    recordQueueRole(queue.id, role, systemId);
+    const lifted = edgeFrom(
+      edge.kind,
+      systemId,
+      queue.id,
+      {
+        ...edge.evidence[0]!,
+        extractor: "projection",
+        certainty: "derived",
+        detail: `Lifted ${edge.kind} onto product system`,
+      },
+      edge.label,
+    );
+    if (!edges.has(lifted.id)) edges.set(lifted.id, lifted);
+  }
+
+  // If API (or another system) calls a publisher, treat the caller as a publisher too.
+  for (const edge of graph.edges) {
+    if (edge.kind !== "calls" && edge.kind !== "imports") continue;
+    const callerSystem = owningSystem(edge.source);
+    if (!callerSystem) continue;
+    for (const pub of edges.values()) {
+      if (pub.kind !== "publishes" || pub.source !== edge.target) continue;
+      const queue = nodes.get(pub.target);
+      if (!queue || queue.kind !== "queue") continue;
+      recordQueueRole(queue.id, "publishers", callerSystem);
+      const lifted = edgeFrom(
+        "publishes",
+        callerSystem,
+        queue.id,
+        {
+          ...pub.evidence[0]!,
+          extractor: "projection",
+          certainty: "inferred",
+          detail: `Caller system publishes via ${edge.kind}`,
+        },
+      );
+      if (!edges.has(lifted.id)) edges.set(lifted.id, lifted);
+    }
+  }
+
+  for (const [queueId, roles] of queueRoles) {
+    const queue = nodes.get(queueId);
+    if (!queue) continue;
+    queue.metadata = {
+      ...queue.metadata,
+      publishers: [...roles.publishers]
+        .map((id) => nodes.get(id)?.label)
+        .filter(Boolean),
+      consumers: [...roles.consumers]
+        .map((id) => nodes.get(id)?.label)
+        .filter(Boolean),
+      messagingHub: roles.publishers.size > 0 && roles.consumers.size > 0,
+    };
+    // Shared queues sit under workers when present, else stay with their owner.
+    const workersSystem = systems.get("workers");
+    if (workersSystem && roles.consumers.has(workersSystem.id)) {
+      attachToSystem(
+        queueId,
+        workersSystem.id,
+        queue.evidence[0] ?? projectionEvidence("."),
+      );
+    }
+    nodes.set(queueId, queue);
+  }
+
   // Hide leaves that only restate their parent semantic system on the overview.
+  // Messaging hubs stay visible so publish/consume is readable without Details.
   const collapsibleKinds = new Set([
     "route",
     "component",
@@ -432,6 +525,7 @@ export function projectSemanticArchitecture(
   for (const node of nodes.values()) {
     if (node.metadata?.projection === "semantic") continue;
     if (!collapsibleKinds.has(node.kind)) continue;
+    if (node.kind === "queue" && node.metadata?.messagingHub) continue;
     const parent = node.parentId ? nodes.get(node.parentId) : undefined;
     if (parent?.metadata?.projection === "semantic") {
       node.metadata = {

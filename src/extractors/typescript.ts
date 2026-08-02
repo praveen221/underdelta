@@ -259,9 +259,28 @@ export const typescriptExtractor: ArchitectureExtractor = {
       return candidates?.length === 1 ? candidates[0] : undefined;
     };
 
+    const publishMethods = new Set(["add", "enqueue", "publish", "send", "push"]);
+
     for (const file of parsed) {
       const localDeclarations =
         declarationsByFile.get(file.relative) ?? new Map<string, string>();
+      const queueBindings = new Map<string, string>();
+
+      const ensureQueue = (
+        queueName: string,
+        at: ts.Node,
+      ): string => {
+        const queueId = stableId("queue", queueName);
+        nodes.push({
+          id: queueId,
+          kind: "queue",
+          label: queueName,
+          technology: "queue",
+          metadata: {},
+          evidence: [evidenceFor(file, at, "derived")],
+        });
+        return queueId;
+      };
 
       const visit = (node: ts.Node, ownerId = file.moduleId): void => {
         let nextOwner = ownerId;
@@ -278,6 +297,20 @@ export const typescriptExtractor: ArchitectureExtractor = {
         } else if (ts.isMethodDeclaration(node) && node.name) {
           nextOwner =
             localDeclarations.get(node.name.getText(file.source)) ?? ownerId;
+        }
+
+        if (
+          ts.isVariableDeclaration(node) &&
+          ts.isIdentifier(node.name) &&
+          node.initializer &&
+          ts.isNewExpression(node.initializer) &&
+          ts.isIdentifier(node.initializer.expression) &&
+          node.initializer.expression.text === "Queue"
+        ) {
+          const queueName = stringValue(node.initializer.arguments?.[0]);
+          if (queueName) {
+            queueBindings.set(node.name.text, ensureQueue(queueName, node));
+          }
         }
 
         if (
@@ -440,6 +473,31 @@ export const typescriptExtractor: ArchitectureExtractor = {
             }
           }
 
+          if (
+            method &&
+            publishMethods.has(method) &&
+            ts.isPropertyAccessExpression(node.expression) &&
+            ts.isIdentifier(node.expression.expression)
+          ) {
+            const binding = node.expression.expression.text;
+            const queueId = queueBindings.get(binding);
+            if (queueId) {
+              edges.push(
+                edgeFrom(
+                  "publishes",
+                  ownerId,
+                  queueId,
+                  evidenceFor(
+                    file,
+                    node,
+                    "derived",
+                    `${binding}.${method} publishes to queue`,
+                  ),
+                ),
+              );
+            }
+          }
+
           if (ts.isIdentifier(node.expression)) {
             const target =
               localDeclarations.get(node.expression.text) ??
@@ -459,23 +517,42 @@ export const typescriptExtractor: ArchitectureExtractor = {
         ) {
           const queueName = stringValue(node.arguments?.[0]);
           if (queueName) {
-            const queueId = stableId("queue", queueName);
-            nodes.push({
-              id: queueId,
-              kind: "queue",
-              label: queueName,
-              technology: "queue",
-              metadata: {},
-              evidence: [evidenceFor(file, node, "derived")],
-            });
-            edges.push(
-              edgeFrom(
-                node.expression.text === "Worker" ? "consumes" : "uses",
-                ownerId,
-                queueId,
-                evidenceFor(file, node, "derived"),
-              ),
-            );
+            const queueId = ensureQueue(queueName, node);
+            if (node.expression.text === "Worker") {
+              edges.push(
+                edgeFrom(
+                  "consumes",
+                  ownerId,
+                  queueId,
+                  evidenceFor(
+                    file,
+                    node,
+                    "derived",
+                    `Worker consumes queue ${queueName}`,
+                  ),
+                ),
+              );
+            } else if (
+              !(
+                ts.isVariableDeclaration(node.parent) &&
+                ts.isIdentifier(node.parent.name)
+              )
+            ) {
+              // Unbound Queue construction still records a publish capability.
+              edges.push(
+                edgeFrom(
+                  "publishes",
+                  ownerId,
+                  queueId,
+                  evidenceFor(
+                    file,
+                    node,
+                    "derived",
+                    `Queue ${queueName} constructed for publishing`,
+                  ),
+                ),
+              );
+            }
           }
         }
 
