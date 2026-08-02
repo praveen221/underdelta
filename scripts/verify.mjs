@@ -778,6 +778,27 @@ if (collaborationKindsDecl < 0 || usesInKinds < 0 || rendersInKinds < 0 || expos
   pass("viewer inspector surfaces Collaboration before Imports & calls");
 }
 
+// Inspector: unified tables surface prismaName/sqlName + migration lineage.
+const fixtureViewerHtml = renderArchitectureHtml(fixtureGraph);
+const tableSourcesFn = fixtureViewerHtml.indexOf("function tableSourcesHtml");
+const prismaSqlHeading = fixtureViewerHtml.indexOf("<h3>Prisma / SQL</h3>");
+const prismaNamePill = fixtureViewerHtml.indexOf("prismaName:");
+const sqlNamePill = fixtureViewerHtml.indexOf("sqlName:");
+const tableMigrationsClass = fixtureViewerHtml.indexOf('class="table-migrations"');
+const migratesOwnedByTable =
+  fixtureViewerHtml.includes('node.kind === "table" && edge.kind === "migrates"');
+if (tableSourcesFn < 0 || prismaSqlHeading < 0) {
+  fail("viewer inspector missing Prisma / SQL section for unified tables");
+} else if (prismaNamePill < 0 || sqlNamePill < 0) {
+  fail("viewer inspector should render prismaName/sqlName pills for tables");
+} else if (tableMigrationsClass < 0 || !migratesOwnedByTable) {
+  fail(
+    "viewer inspector should surface migration links under Prisma / SQL (not Imports & calls)",
+  );
+} else {
+  pass("viewer inspector surfaces migration + sqlName/prismaName on unified tables");
+}
+
 if (process.exitCode) {
   console.error("Verification suite failed.");
   process.exit(process.exitCode);

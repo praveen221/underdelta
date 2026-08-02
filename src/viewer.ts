@@ -354,10 +354,40 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     const collaborationKinds = new Set([
       "uses", "renders", "exposes", "triggers", "configures", "flows-to",
     ]);
+    // Structured inspector sections own these keys (avoid raw pill dump).
+    const structuredMetaKeys = new Set([
+      "keyFiles", "binEntries", "binCommands", "packageExports", "extractorRoster",
+      "prismaName", "sqlName", "sources", "aliases", "normalizedTable",
+    ]);
 
     function connectionButton(edge, id) {
       const other = byId.get(edge.source === id ? edge.target : edge.source);
       return '<button class="pill connection" data-id="' + (other?.id || "") + '">' + edge.kind + " · " + (other?.label || "unknown") + "</button>";
+    }
+
+    // Unified tables: explain Prisma/SQL dual identity + migration lineage.
+    function tableSourcesHtml(node, incomingEdges) {
+      if (node.kind !== "table") return "";
+      const meta = node.metadata || {};
+      const pills = [];
+      if (meta.prismaName) pills.push('<span class="pill">prismaName: ' + String(meta.prismaName) + "</span>");
+      if (meta.sqlName) pills.push('<span class="pill">sqlName: ' + String(meta.sqlName) + "</span>");
+      if (Array.isArray(meta.sources)) {
+        for (const source of meta.sources) {
+          pills.push('<span class="pill">source: ' + String(source) + "</span>");
+        }
+      }
+      if (Array.isArray(meta.aliases) && meta.aliases.length) {
+        pills.push('<span class="pill">aliases: ' + meta.aliases.join(", ") + "</span>");
+      }
+      const migrates = incomingEdges.filter((edge) => edge.kind === "migrates");
+      const migrationLinks = migrates.slice(0, 8).map((edge) => {
+        const migration = byId.get(edge.source);
+        const action = edge.label || "migrates";
+        return '<button class="pill connection" data-id="' + (migration?.id || "") + '">' + action + " · " + (migration?.label || "migration") + "</button>";
+      }).join("");
+      if (!pills.length && !migrationLinks) return "";
+      return "<h3>Prisma / SQL</h3>" + pills.join("") + (migrationLinks ? '<p class="table-migrations">' + migrationLinks + "</p>" : "");
     }
 
     function selectNode(id) {
@@ -368,9 +398,15 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const outgoingEdges = outgoing.get(id) || [];
       const connections = [...incomingEdges, ...outgoingEdges];
       const collaboration = connections.filter((edge) => collaborationKinds.has(edge.kind));
-      const importsAndCalls = connections.filter((edge) => !collaborationKinds.has(edge.kind));
-      const metadataEntries = Object.entries(node.metadata || {}).filter(([key]) => key !== "keyFiles" && key !== "binEntries" && key !== "packageExports" && key !== "extractorRoster");
+      // Table migration lineage is owned by the Prisma / SQL section.
+      const importsAndCalls = connections.filter((edge) => {
+        if (collaborationKinds.has(edge.kind)) return false;
+        if (node.kind === "table" && edge.kind === "migrates") return false;
+        return true;
+      });
+      const metadataEntries = Object.entries(node.metadata || {}).filter(([key]) => !structuredMetaKeys.has(key));
       const metadata = metadataEntries.map(([key, value]) => '<span class="pill">' + key + ": " + String(value) + "</span>").join("");
+      const tableSources = tableSourcesHtml(node, incomingEdges);
       const collabLinks = collaboration.slice(0, 16).map((edge) => connectionButton(edge, id)).join("");
       const otherLinks = importsAndCalls.slice(0, 20).map((edge) => connectionButton(edge, id)).join("");
       const collaborationHtml = collabLinks
@@ -378,7 +414,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         : "";
       const otherHtml = otherLinks
         ? "<h3>" + (collabLinks ? "Imports &amp; calls" : "Connections") + "</h3>" + otherLinks
-        : (collabLinks ? "" : "<h3>Connections</h3><p>None visible</p>");
+        : (collabLinks || tableSources ? "" : "<h3>Connections</h3><p>None visible</p>");
       const keyFileList = Array.isArray(node.metadata && node.metadata.keyFiles) ? node.metadata.keyFiles : [];
       const keyFiles = keyFileList.length
         ? "<h3>Key files</h3>" + keyFileList.map((file) => {
@@ -399,7 +435,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         const href = "vscode://file/" + graph.project.root.replace(/\\/$/, "") + "/" + item.file + ":" + line;
         return '<div class="evidence"><a href="' + href + '">' + item.file + ":" + line + '</a><div class="certainty ' + item.certainty + '">' + item.certainty + " · " + item.extractor + "</div>" + (item.detail ? "<p>" + item.detail + "</p>" : "") + "</div>";
       }).join("");
-      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + binHtml + rosterHtml + keyFiles + collaborationHtml + otherHtml + "<h3>Source evidence</h3>" + evidence;
+      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + tableSources + binHtml + rosterHtml + keyFiles + collaborationHtml + otherHtml + "<h3>Source evidence</h3>" + evidence;
       inspector.querySelector("h2").textContent = node.label;
       inspector.querySelectorAll(".connection").forEach((button) => {
         button.onclick = () => selectNode(button.dataset.id);
