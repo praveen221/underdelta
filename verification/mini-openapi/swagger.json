@@ -1,0 +1,31 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Notes API",
+    "version": "1.0.0",
+    "description": "Swagger 2.0 JSON twin for dual-format OpenAPI verification."
+  },
+  "basePath": "/api",
+  "paths": {
+    "/tags": {
+      "get": {
+        "summary": "List tags",
+        "operationId": "listTags",
+        "responses": {
+          "200": {
+            "description": "A list of tags"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create tag",
+        "operationId": "createTag",
+        "responses": {
+          "201": {
+            "description": "Tag created"
+          }
+        }
+      }
+    }
+  }
+}
