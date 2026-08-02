@@ -141,7 +141,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       <span class="meta" id="counts"></span>
       <button id="back" hidden>Back</button>
       <button id="overview">Overview</button>
-      <button id="tier" title="Beginner: product story · Intermediate: enter a system’s neighborhood · Advanced: code inside current focus">View: Beginner</button>
+      <button id="tier" title="Beginner: product story · Intermediate: enter a system’s neighborhood · Advanced: code in focus (modules; functions inside a module/api)">View: Beginner</button>
       <span class="meta" id="focus-crumb" hidden></span>
       <input id="search" type="search" placeholder="Find a route, table, job, component…" />
     </header>
@@ -195,6 +195,13 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     // Code-level kinds — Beginner/Intermediate hide these; Advanced shows them
     // only inside the current focus (never a whole-repo dump).
     const advancedKinds = new Set(["function", "column", "module", "pipeline-step"]);
+    // Broad Product Flow containers: Advanced reveals modules/columns first;
+    // functions wait until the user focuses a code container (module/api/…).
+    const broadFocusKinds = new Set(["system", "pipeline"]);
+    const functionFocusKinds = new Set([
+      "module", "api", "service", "function", "route",
+      "ui", "page", "component", "hook",
+    ]);
     // Hub / leaf kinds that belong on Intermediate (and Advanced-in-focus), not
     // Beginner cold open. Beginner stays Product Flow + top systems only.
     const intermediateKinds = new Set([
@@ -215,11 +222,6 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     ]);
     // Beginner = product flow · Intermediate = focused neighborhood · Advanced = code in focus
     const tierOrder = ["beginner", "intermediate", "advanced"];
-    const tierLabels = {
-      beginner: "View: Beginner",
-      intermediate: "View: Intermediate",
-      advanced: "View: Advanced",
-    };
     const state = {
       scale: 1,
       x: 36,
@@ -235,11 +237,29 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     function isAdvancedTier() {
       return state.tier === "advanced";
     }
+    // Advanced code kinds only inside the focused cluster — never whole-repo.
+    // Modules/columns/pipeline-steps appear at Advanced+focus; functions appear
+    // when the focus is a code container (not a broad system/pipeline hub).
+    function showsAdvancedKind(node) {
+      if (!isAdvancedTier() || !state.focus) return false;
+      if (node.kind !== "function") return true;
+      const focused = byId.get(state.focus);
+      if (!focused) return false;
+      if (broadFocusKinds.has(focused.kind)) return false;
+      return functionFocusKinds.has(focused.kind);
+    }
+    function tierButtonLabel() {
+      if (state.tier === "beginner") return "View: Beginner";
+      if (state.tier === "intermediate") return "View: Intermediate";
+      if (state.focus) return "View: Advanced · code in focus";
+      return "View: Advanced";
+    }
     function syncTierButton() {
       const button = document.getElementById("tier");
       if (!button) return;
-      button.textContent = tierLabels[state.tier] || tierLabels.beginner;
+      button.textContent = tierButtonLabel();
       button.dataset.tier = state.tier;
+      button.dataset.codeInFocus = state.tier === "advanced" && state.focus ? "true" : "false";
     }
     const viewport = document.getElementById("viewport");
     const world = document.getElementById("world");
@@ -329,9 +349,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         // user focuses a system (Intermediate neighborhood / Advanced-in-focus).
         const isOverviewHub = node.metadata && node.metadata.overviewHub;
         if (advancedKinds.has(node.kind) && !isOverviewHub) {
-          // Advanced code kinds only when Advanced + a focused cluster.
-          // Without focus, Advanced must not dump every function in the repo.
-          if (!isAdvancedTier() || !state.focus) return false;
+          // Cluster-scoped Advanced only — never a whole-repo function dump.
+          if (!showsAdvancedKind(node)) return false;
         }
         // Calm overview: Product Flow + top systems only. Tables, queues,
         // crons, routes, etc. wait for a focused Intermediate neighborhood.
@@ -744,14 +763,18 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       if (crumb) {
         if (focused) {
           crumb.hidden = false;
-          crumb.textContent = "Focus: " + focused.label;
+          crumb.textContent = isAdvancedTier()
+            ? "Focus: " + focused.label + " · code in focus"
+            : "Focus: " + focused.label;
         } else {
           crumb.hidden = true;
           crumb.textContent = "";
         }
       }
       document.getElementById("counts").textContent = focused
-        ? visible.length + " in neighborhood · " + graph.edges.length + " relationships"
+        ? (isAdvancedTier()
+            ? visible.length + " in focus (code) · " + graph.edges.length + " relationships"
+            : visible.length + " in neighborhood · " + graph.edges.length + " relationships")
         : visible.length + " components · " + graph.edges.length + " relationships";
       document.getElementById("back").hidden = !state.focus && state.history.length === 0;
     }
@@ -1175,12 +1198,17 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       state.history.push(state.focus);
       state.focus = id;
       state.selected = id;
+      const focused = byId.get(id);
       // Entering a system is the Intermediate walk — bump out of Beginner so the
       // tier label matches the neighborhood the user just opened.
       if (state.tier === "beginner") {
         state.tier = "intermediate";
-        syncTierButton();
       }
+      // Drilling into a module/function is the Advanced walk — reveal code in focus.
+      if (focused && advancedKinds.has(focused.kind) && state.tier !== "advanced") {
+        state.tier = "advanced";
+      }
+      syncTierButton();
       state.x = 36;
       state.y = 40;
       state.scale = 1;
@@ -1195,7 +1223,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       state.tier = "beginner";
       state.x = 36; state.y = 40; state.scale = 1;
       syncTierButton();
-      inspector.innerHTML = '<div class="empty">Select a component to inspect its connections and source evidence. Double-click a system to enter its neighborhood.</div>';
+      inspector.innerHTML = '<div class="empty">Select a component to inspect its connections and source evidence. Double-click a system for its Intermediate neighborhood; Advanced shows code in that focus.</div>';
       render(); applyTransform();
     };
     document.getElementById("back").onclick = () => {
@@ -1214,15 +1242,21 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       state.tier = tierOrder[(index + 1) % tierOrder.length];
       // Without a focused system, Intermediate/Advanced stay Product Flow–calm
       // (no global hub dump). Double-click a system to enter its neighborhood;
-      // Advanced code kinds still require Advanced + focus. Search reveals matches.
+      // Advanced reveals modules in that focus; functions after drilling into a
+      // module/api. Search reveals matches without dumping the whole repo.
       syncTierButton();
+      if (state.tier === "advanced" && !state.focus) {
+        inspector.innerHTML = '<div class="empty">Advanced shows code in focus — double-click a system (then a module/api) to open its cluster. No whole-repo function dump.</div>';
+      }
       render();
     };
     syncTierButton();
     search.oninput = render;
     viewport.onclick = () => {
       state.selected = null;
-      inspector.innerHTML = '<div class="empty">Select a component to inspect its connections and source evidence.</div>';
+      inspector.innerHTML = state.tier === "advanced" && !state.focus
+        ? '<div class="empty">Advanced shows code in focus — double-click a system to enter its neighborhood first.</div>'
+        : '<div class="empty">Select a component to inspect its connections and source evidence.</div>';
       render();
     };
     viewport.onwheel = (event) => {

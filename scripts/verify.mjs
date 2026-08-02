@@ -1101,10 +1101,18 @@ if (
   );
 } else if (
   !viewerHtml.includes("isAdvancedTier()") ||
-  !viewerHtml.includes("!isAdvancedTier() || !state.focus")
+  !viewerHtml.includes("function showsAdvancedKind(node)") ||
+  !viewerHtml.includes("!showsAdvancedKind(node)")
 ) {
   fail(
-    "viewer Advanced tier must require focus so whole-repo function dumps stay impossible",
+    "viewer Advanced tier must use showsAdvancedKind (focus-scoped; no whole-repo dump)",
+  );
+} else if (
+  !viewerHtml.includes("code in focus") ||
+  !viewerHtml.includes("View: Advanced · code in focus")
+) {
+  fail(
+    "viewer Advanced-in-focus must surface clear 'code in focus' tier/crumb copy",
   );
 } else if (
   !viewerHtml.includes("const intermediateKinds = new Set([") ||
@@ -1407,6 +1415,129 @@ if (!focusExtractorsSystem) {
 } else {
   pass(
     `Intermediate focus neighborhoods: Extractors ${selfExtractorsFocus.length} nodes, Checkout API ${fixtureCheckoutFocus.length} nodes (children + collab, no advanced dump)`,
+  );
+}
+
+// Advanced-in-focus floor: modules (and api functions) inside the cluster only.
+const broadFocusKinds = new Set(["system", "pipeline"]);
+const functionFocusKinds = new Set([
+  "module",
+  "api",
+  "service",
+  "function",
+  "route",
+  "ui",
+  "page",
+  "component",
+  "hook",
+]);
+function advancedFocusNodes(graph, rootId) {
+  const allowed = focusNeighborhoodIds(graph, rootId);
+  const focused = graph.nodes.find((node) => node.id === rootId);
+  return graph.nodes.filter((node) => {
+    if (!allowed.has(node.id)) return false;
+    if (node.kind === "product") return false;
+    if (
+      node.metadata?.relationOnly ||
+      node.metadata?.joinTable ||
+      node.metadata?.exampleChrome
+    ) {
+      return false;
+    }
+    const isOverviewHub = node.metadata?.overviewHub === true;
+    if (beginnerAdvancedKinds.has(node.kind) && !isOverviewHub) {
+      // Mirror viewer showsAdvancedKind: modules/columns at Advanced+focus;
+      // functions only inside a code-container focus (not broad system/pipeline).
+      if (node.kind === "function") {
+        if (!focused) return false;
+        if (broadFocusKinds.has(focused.kind)) return false;
+        return functionFocusKinds.has(focused.kind);
+      }
+      return true;
+    }
+    return true;
+  });
+}
+const selfExtractorsAdvanced = focusExtractorsSystem
+  ? advancedFocusNodes(selfGraph, focusExtractorsSystem.id)
+  : [];
+const fixtureCheckoutAdvanced = focusCheckoutApi
+  ? advancedFocusNodes(fixtureGraph, focusCheckoutApi.id)
+  : [];
+const selfExtractorsAdvancedModules = selfExtractorsAdvanced.filter(
+  (node) => node.kind === "module",
+);
+const selfExtractorsAdvancedFunctions = selfExtractorsAdvanced.filter(
+  (node) => node.kind === "function",
+);
+const fixtureCheckoutAdvancedFunctions = fixtureCheckoutAdvanced.filter(
+  (node) => node.kind === "function",
+);
+const selfAdvancedLeakedModules = selfExtractorsAdvanced.filter(
+  (node) =>
+    node.kind === "module" &&
+    ["src/viewer.ts", "src/cli.ts", "src/compile.ts"].includes(String(node.label)),
+);
+const typescriptModule = selfGraph.nodes.find(
+  (node) => node.kind === "module" && node.label === "src/extractors/typescript.ts",
+);
+const selfTypescriptModuleAdvanced = typescriptModule
+  ? advancedFocusNodes(selfGraph, typescriptModule.id)
+  : [];
+const selfTypescriptModuleFunctions = selfTypescriptModuleAdvanced.filter(
+  (node) => node.kind === "function",
+);
+if (!focusExtractorsSystem || !focusCheckoutApi) {
+  fail("Advanced-in-focus floors need Extractors + Checkout API roots");
+} else if (selfExtractorsAdvancedModules.length < 8) {
+  fail(
+    `Extractors Advanced-in-focus should reveal extractor modules, found ${selfExtractorsAdvancedModules.length}`,
+  );
+} else if (selfExtractorsAdvancedFunctions.length > 0) {
+  fail(
+    `Extractors (system) Advanced should show modules first, not ${selfExtractorsAdvancedFunctions.length} functions`,
+  );
+} else if (selfAdvancedLeakedModules.length > 0) {
+  fail(
+    `Extractors Advanced leaked modules outside cluster: ${selfAdvancedLeakedModules
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else if (selfExtractorsAdvanced.length > 80) {
+  fail(
+    `Extractors Advanced-in-focus too large (global dump?): ${selfExtractorsAdvanced.length}`,
+  );
+} else if (
+  !fixtureCheckoutAdvanced.some((node) => node.label === "src/server.ts") ||
+  !fixtureCheckoutAdvancedFunctions.some((node) => node.label === "createCheckout")
+) {
+  fail(
+    "Checkout API Advanced-in-focus should include server module + createCheckout function",
+  );
+} else if (fixtureCheckoutAdvancedFunctions.length < 2) {
+  fail(
+    `Checkout API Advanced-in-focus should keep local functions, found ${fixtureCheckoutAdvancedFunctions.length}`,
+  );
+} else if (
+  fixtureCheckoutAdvancedFunctions.length >=
+  fixtureGraph.nodes.filter((node) => node.kind === "function").length
+) {
+  fail("Checkout API Advanced must not equal whole-repo function dump");
+} else if (!typescriptModule) {
+  fail("self-map should have src/extractors/typescript.ts module for nested Advanced floor");
+} else if (selfTypescriptModuleFunctions.length < 5) {
+  fail(
+    `Module Advanced-in-focus should reveal functions, found ${selfTypescriptModuleFunctions.length}`,
+  );
+} else if (
+  selfTypescriptModuleAdvanced.some(
+    (node) => node.kind === "module" && node.label === "src/viewer.ts",
+  )
+) {
+  fail("typescript module Advanced must not pull unrelated modules like viewer.ts");
+} else {
+  pass(
+    `Advanced-in-focus: Extractors ${selfExtractorsAdvancedModules.length} modules (no function dump), Checkout ${fixtureCheckoutAdvancedFunctions.length} functions, typescript module ${selfTypescriptModuleFunctions.length} functions`,
   );
 }
 
