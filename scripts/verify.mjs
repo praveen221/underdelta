@@ -443,19 +443,33 @@ if (fixtureSystems.length < 3) {
   pass(`fixture semantic systems: ${fixtureSystems.length}`);
 }
 
-const fixtureLabels = new Set(fixtureSystems.map((node) => node.label));
-for (const expected of [
-  "HTTP API",
-  "Scheduled jobs",
-  "Queue workers",
-  "Pipelines",
-  "Data access",
-  "UI",
-]) {
-  if (!fixtureLabels.has(expected)) {
-    fail(`fixture self-map missing semantic node '${expected}'`);
+const fixtureByKey = new Map(
+  fixtureSystems
+    .filter((node) => typeof node.metadata?.systemKey === "string")
+    .map((node) => [node.metadata.systemKey, node]),
+);
+const expectedReadmeLabels = {
+  ui: "Storefront UI",
+  api: "Checkout API",
+  pipelines: "Order pipeline",
+  workers: "Fulfillment workers",
+  jobs: "Reconciliation jobs",
+  data: "Catalog data",
+};
+for (const [key, expected] of Object.entries(expectedReadmeLabels)) {
+  const system = fixtureByKey.get(key);
+  if (!system) {
+    fail(`fixture self-map missing semantic systemKey '${key}'`);
+  } else if (system.label !== expected) {
+    fail(
+      `fixture system '${key}' label expected '${expected}' from README, found '${system.label}'`,
+    );
+  } else if (system.metadata?.labelSource !== "readme") {
+    fail(
+      `fixture system '${key}' should record labelSource=readme, found ${JSON.stringify(system.metadata?.labelSource ?? null)}`,
+    );
   } else {
-    pass(`fixture has '${expected}'`);
+    pass(`fixture has README label '${expected}' (${key})`);
   }
 }
 
@@ -463,31 +477,36 @@ const fixtureFlowOrdered = fixtureSystems
   .filter((node) => typeof node.metadata?.flowOrder === "number")
   .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
 const fixtureFlowLabels = fixtureFlowOrdered.map((node) => node.label);
-const expectedFixtureFlow = [
-  "UI",
-  "HTTP API",
-  "Pipelines",
-  "Queue workers",
-  "Scheduled jobs",
-  "Data access",
+const expectedFixtureFlow = Object.values(expectedReadmeLabels);
+// Product-story order by systemKey (labels may be README-refined).
+const expectedFixtureFlowKeys = [
+  "ui",
+  "api",
+  "pipelines",
+  "workers",
+  "jobs",
+  "data",
 ];
-if (fixtureFlowOrdered.length < expectedFixtureFlow.length) {
+if (fixtureFlowOrdered.length < expectedFixtureFlowKeys.length) {
   fail(
-    `expected fixture Product flow band (>=${expectedFixtureFlow.length}), found ${fixtureFlowOrdered.length}`,
+    `expected fixture Product flow band (>=${expectedFixtureFlowKeys.length}), found ${fixtureFlowOrdered.length}`,
   );
 } else {
   pass(`fixture flowOrdered: ${fixtureFlowOrdered.length}`);
 }
-const missingFixtureFlow = expectedFixtureFlow.filter(
-  (label) => !fixtureFlowLabels.includes(label),
+const fixtureFlowKeys = fixtureFlowOrdered.map(
+  (node) => node.metadata.systemKey,
+);
+const missingFixtureFlow = expectedFixtureFlowKeys.filter(
+  (key) => !fixtureFlowKeys.includes(key),
 );
 if (missingFixtureFlow.length) {
   fail(
-    `fixture flowOrder missing labels: ${missingFixtureFlow.join(", ")} (got ${fixtureFlowLabels.join(" → ")})`,
+    `fixture flowOrder missing keys: ${missingFixtureFlow.join(", ")} (got ${fixtureFlowLabels.join(" → ")})`,
   );
 } else {
-  const positions = expectedFixtureFlow.map((label) =>
-    fixtureFlowLabels.indexOf(label),
+  const positions = expectedFixtureFlowKeys.map((key) =>
+    fixtureFlowKeys.indexOf(key),
   );
   const inOrder = positions.every(
     (pos, index) => index === 0 || pos > positions[index - 1],
@@ -501,19 +520,18 @@ if (missingFixtureFlow.length) {
   }
 }
 
-const apiToJobsFlow = fixtureGraph.edges.some((edge) => {
-  const source = fixtureGraph.nodes.find((node) => node.id === edge.source);
-  const target = fixtureGraph.nodes.find((node) => node.id === edge.target);
-  return (
+const apiSystem = fixtureByKey.get("api");
+const jobsSystem = fixtureByKey.get("jobs");
+const apiToJobsFlow = fixtureGraph.edges.some(
+  (edge) =>
     edge.kind === "flows-to" &&
-    source?.label === "HTTP API" &&
-    target?.label === "Scheduled jobs"
-  );
-});
+    edge.source === apiSystem?.id &&
+    edge.target === jobsSystem?.id,
+);
 if (!apiToJobsFlow) {
-  fail("expected HTTP API → Scheduled jobs flows-to for fixture Product flow");
+  fail("expected Checkout API → Reconciliation jobs flows-to for fixture Product flow");
 } else {
-  pass("HTTP API flows-to Scheduled jobs");
+  pass("Checkout API flows-to Reconciliation jobs");
 }
 
 const fixtureTables = fixtureGraph.nodes.filter((node) => node.kind === "table");
@@ -585,7 +603,7 @@ if (!tableRelation) {
   );
 }
 
-const dataAccess = fixtureSystems.find((node) => node.label === "Data access");
+const dataAccess = fixtureByKey.get("data");
 const tablesUnderProduct = fixtureGraph.edges.filter((edge) => {
   const product = fixtureGraph.nodes.find(
     (node) => node.kind === "product" && node.id === edge.source,
@@ -597,15 +615,15 @@ const tablesUnderProduct = fixtureGraph.edges.filter((edge) => {
   );
 });
 if (!dataAccess) {
-  fail("expected Data access system for fixture tables");
+  fail("expected Catalog data system for fixture tables");
 } else if (tablesUnderProduct.length > 0) {
-  fail("unified tables should not remain contained by product after Data access nesting");
+  fail("unified tables should not remain contained by product after Catalog data nesting");
 } else {
   const nested = fixtureTables.every((table) => table.parentId === dataAccess.id);
   if (!nested) {
-    fail("expected unified tables nested under Data access");
+    fail("expected unified tables nested under Catalog data");
   } else {
-    pass("unified tables nested under Data access (not product)");
+    pass("unified tables nested under Catalog data (not product)");
   }
 }
 
@@ -628,7 +646,7 @@ if (duplicateColumns.length > 0) {
   pass(`fixture columns deduped (${fixtureColumns.length} under unified tables)`);
 }
 
-const api = fixtureSystems.find((node) => node.label === "HTTP API");
+const api = fixtureByKey.get("api");
 const routesUnderApi =
   api &&
   fixtureGraph.edges.filter(
@@ -640,9 +658,9 @@ const routesUnderApi =
       ),
   ).length;
 if (!routesUnderApi) {
-  fail("expected HTTP API system to contain route nodes");
+  fail("expected Checkout API system to contain route nodes");
 } else {
-  pass(`HTTP API contains ${routesUnderApi} route(s)`);
+  pass(`Checkout API contains ${routesUnderApi} route(s)`);
 }
 
 const cron = fixtureGraph.nodes.find((node) => node.kind === "cron");
@@ -654,7 +672,7 @@ if (!cron || !String(cron.label).includes("reconcilePayments")) {
   pass(`cron label humanized: ${cron.label}`);
 }
 
-const pipelines = fixtureSystems.find((node) => node.label === "Pipelines");
+const pipelines = fixtureByKey.get("pipelines");
 const checkout = fixtureGraph.nodes.find(
   (node) =>
     node.kind === "pipeline" &&
@@ -662,9 +680,9 @@ const checkout = fixtureGraph.nodes.find(
     node.metadata?.projection !== "semantic",
 );
 if (!pipelines || !checkout || checkout.parentId !== pipelines.id) {
-  fail("expected extracted checkout pipeline nested under Pipelines system");
+  fail("expected extracted checkout pipeline nested under Order pipeline system");
 } else {
-  pass("checkout pipeline nested under Pipelines");
+  pass("checkout pipeline nested under Order pipeline");
 }
 
 const collapsedRoutes = fixtureGraph.nodes.filter(
@@ -672,14 +690,14 @@ const collapsedRoutes = fixtureGraph.nodes.filter(
 );
 if (collapsedRoutes.length < 2) {
   fail(
-    `expected routes collapsed in overview under HTTP API, found ${collapsedRoutes.length}`,
+    `expected routes collapsed in overview under Checkout API, found ${collapsedRoutes.length}`,
   );
 } else {
   pass(`collapsed overview leaves: ${collapsedRoutes.length} route(s)`);
 }
 
 if (checkout && checkout.metadata?.collapsedInOverview !== true) {
-  fail("expected checkout pipeline collapsed in overview under Pipelines");
+  fail("expected checkout pipeline collapsed in overview under Order pipeline");
 } else {
   pass("checkout pipeline collapsed in overview");
 }
@@ -703,7 +721,7 @@ if (fulfillmentQueue?.metadata?.collapsedInOverview === true) {
   pass("fulfillment queue visible on overview");
 }
 
-const workers = fixtureSystems.find((node) => node.label === "Queue workers");
+const workers = fixtureByKey.get("workers");
 const apiPublishes =
   api &&
   fulfillmentQueue &&
@@ -723,14 +741,14 @@ const workersConsume =
       edge.target === fulfillmentQueue.id,
   );
 if (!apiPublishes) {
-  fail("expected HTTP API system to publish to fulfillment queue");
+  fail("expected Checkout API system to publish to fulfillment queue");
 } else {
-  pass("HTTP API publishes to fulfillment");
+  pass("Checkout API publishes to fulfillment");
 }
 if (!workersConsume) {
-  fail("expected Queue workers system to consume fulfillment queue");
+  fail("expected Fulfillment workers system to consume fulfillment queue");
 } else {
-  pass("Queue workers consume fulfillment");
+  pass("Fulfillment workers consume fulfillment");
 }
 
 if (process.exitCode) {

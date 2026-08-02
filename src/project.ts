@@ -16,14 +16,131 @@ export interface PackageManifestHint {
   main?: string;
 }
 
+/** Weak label hint from a README heading that maps onto a path-role system key. */
+export interface ReadmeHeadingHint {
+  key: string;
+  label: string;
+  heading: string;
+}
+
 export interface ProjectOptions {
   packageManifest?: PackageManifestHint;
+  /** Parsed README ##/### headings used only to humanize existing system labels. */
+  readmeHints?: ReadmeHeadingHint[];
 }
 
 interface SystemRole {
   key: string;
   label: string;
   kind: NodeKind;
+}
+
+/** Path-role defaults that are thin enough for README headings to refine. */
+const thinSystemLabels = new Set([
+  "HTTP API",
+  "UI",
+  "Data access",
+  "Scheduled jobs",
+  "Queue workers",
+  "Pipelines",
+]);
+
+/**
+ * Map a markdown heading onto a known system key. Returns undefined when the
+ * heading is generic docs chrome (Status, License, …) or does not name a role.
+ */
+export function inferSystemKeyFromHeading(heading: string): string | undefined {
+  const text = heading.trim().toLowerCase();
+  if (!text) return undefined;
+
+  // Skip common README scaffolding that should never rename product systems.
+  if (
+    /^(status|license|roadmap|near-term roadmap|try it|getting started|install(?:ation)?|usage|contributing|changelog|design principles|overview|introduction|about|motivation)$/i.test(
+      text,
+    )
+  ) {
+    return undefined;
+  }
+
+  const rules: Array<{ key: string; pattern: RegExp; weight: number }> = [
+    { key: "extractors", pattern: /\bextractors?\b/, weight: 10 },
+    { key: "compile", pattern: /\bcompil(?:e|er|ation|ing)\b/, weight: 10 },
+    { key: "pipelines", pattern: /\bpipelines?\b/, weight: 10 },
+    { key: "workers", pattern: /\bworkers?\b|\bfulfillment\b/, weight: 9 },
+    { key: "jobs", pattern: /\bjobs?\b|\bcron\b|\bscheduled\b/, weight: 9 },
+    { key: "viewer", pattern: /\bviewer\b/, weight: 9 },
+    { key: "schema", pattern: /\bschema\b/, weight: 9 },
+    { key: "graph", pattern: /\bgraph\b|\bassembly\b/, weight: 8 },
+    { key: "cli", pattern: /\bcli\b|\bcommand[- ]line\b/, weight: 8 },
+    { key: "api", pattern: /\bapi\b|\broutes?\b|\bhttp\b|\bendpoints?\b/, weight: 8 },
+    { key: "ui", pattern: /\bui\b|\bfrontend\b|\bstorefront\b|\bcomponents?\b/, weight: 7 },
+    { key: "data", pattern: /\bdata(?:base)?\b|\bprisma\b|\bsql\b|\bcatalog\b/, weight: 7 },
+  ];
+
+  let best: { key: string; weight: number } | undefined;
+  for (const rule of rules) {
+    if (!rule.pattern.test(text)) continue;
+    if (!best || rule.weight > best.weight) {
+      best = { key: rule.key, weight: rule.weight };
+    }
+  }
+  return best?.key;
+}
+
+/** Parse markdown headings into weak system-label hints (first match wins per key). */
+export function parseReadmeHeadingHints(markdown: string): ReadmeHeadingHint[] {
+  const hints: ReadmeHeadingHint[] = [];
+  const seen = new Set<string>();
+  const headingRe = /^(#{1,3})\s+(.+?)\s*$/gm;
+  let match: RegExpExecArray | null;
+  while ((match = headingRe.exec(markdown)) !== null) {
+    const raw = match[2]!.replace(/\s+#+\s*$/, "").replace(/[*_`]/g, "").trim();
+    if (!raw) continue;
+    const key = inferSystemKeyFromHeading(raw);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    hints.push({ key, label: raw, heading: raw });
+  }
+  return hints;
+}
+
+function applyReadmeHeadingHints(
+  systems: Map<string, ArchitectureNode>,
+  hints: ReadmeHeadingHint[] | undefined,
+): void {
+  if (!hints?.length) return;
+  for (const hint of hints) {
+    const system = systems.get(hint.key);
+    if (!system) continue;
+    const current = system.label;
+    const canRefine =
+      thinSystemLabels.has(current) ||
+      current.toLowerCase() === hint.key ||
+      hint.label.length > current.length;
+    if (!canRefine) continue;
+    if (current === hint.label) {
+      system.metadata = {
+        ...system.metadata,
+        labelSource: "readme",
+        readmeHeading: hint.heading,
+      };
+      continue;
+    }
+    system.label = hint.label;
+    system.metadata = {
+      ...system.metadata,
+      labelSource: "readme",
+      readmeHeading: hint.heading,
+      pathRoleLabel: current,
+    };
+    system.evidence = dedupeEvidence([
+      ...system.evidence,
+      projectionEvidence(
+        "README.md",
+        `System label refined from README heading "${hint.heading}"`,
+      ),
+    ]);
+  }
 }
 
 const preferredFlows: Array<[string, string]> = [
@@ -1152,6 +1269,10 @@ export function projectSemanticArchitecture(
       nodes.set(product.id, product);
     }
   }
+
+  // Weak README heading hints: refine thin path-role labels with human names
+  // from docs. Never invent systems from README alone.
+  applyReadmeHeadingHints(systems, options.readmeHints);
 
   assignFlowOrder(systems, preferredFlows);
 

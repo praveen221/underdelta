@@ -12,8 +12,10 @@ import { prismaExtractor } from "./extractors/prisma.js";
 import { sqlExtractor } from "./extractors/sql.js";
 import { typescriptExtractor } from "./extractors/typescript.js";
 import {
+  parseReadmeHeadingHints,
   projectSemanticArchitecture,
   type PackageManifestHint,
+  type ReadmeHeadingHint,
 } from "./project.js";
 import type { ArchitectureGraph, ArchitectureNode } from "./schema.js";
 
@@ -33,6 +35,21 @@ async function readPackageManifest(
   } catch {
     return undefined;
   }
+}
+
+async function readReadmeHints(
+  root: string,
+): Promise<ReadmeHeadingHint[] | undefined> {
+  for (const name of ["README.md", "readme.md", "Readme.md"]) {
+    try {
+      const markdown = await readFile(path.join(root, name), "utf8");
+      const hints = parseReadmeHeadingHints(markdown);
+      return hints.length ? hints : undefined;
+    } catch {
+      // try next conventional README name
+    }
+  }
+  return undefined;
 }
 
 async function projectName(
@@ -72,6 +89,7 @@ export async function compileRepository(
   );
 
   const packageManifest = await readPackageManifest(root);
+  const readmeHints = await readReadmeHints(root);
   const productId = stableId("product", root);
   const productNode: ArchitectureNode = {
     id: productId,
@@ -109,8 +127,8 @@ export async function compileRepository(
     root,
   };
   if (gitRevision !== undefined) project.revision = gitRevision;
-  return projectSemanticArchitecture(
-    builder.build(project),
-    packageManifest ? { packageManifest } : {},
-  );
+  return projectSemanticArchitecture(builder.build(project), {
+    ...(packageManifest ? { packageManifest } : {}),
+    ...(readmeHints ? { readmeHints } : {}),
+  });
 }
