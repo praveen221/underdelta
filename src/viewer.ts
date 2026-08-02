@@ -53,6 +53,11 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     .edge { stroke: #46505d; stroke-width: 1.2; fill: none; opacity: .48; }
     .edge.derived { stroke-dasharray: 5 4; stroke: var(--derived); }
     .edge.inferred { stroke-dasharray: 2 5; stroke: var(--inferred); }
+    /* Ownership/import fans — collapsed off-canvas at Intermediate; quiet when shown */
+    .edge.structural { stroke: #3d4652; stroke-width: 1; opacity: .26; stroke-dasharray: 3 5; }
+    .edge.structural.derived { stroke: #5c5644; opacity: .3; stroke-dasharray: 3 5; }
+    .edge.structural.inferred { stroke: #4a4558; opacity: .28; stroke-dasharray: 2 5; }
+    .edge.structural.active { stroke: var(--accent); stroke-width: 2; opacity: .9; stroke-dasharray: none; }
     /* Product collaboration (uses/renders/…) — distinct from import/call hairlines */
     .edge.collab { stroke: #6e8fe0; stroke-width: 1.55; opacity: .64; }
     .edge.collab.derived { stroke-dasharray: 8 5; stroke: #6e8fe0; }
@@ -232,6 +237,13 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       ...collaborationKinds,
       ...narrativeKinds,
       "writes", "schedules", "routes-to",
+    ]);
+    // Ownership fans (contains × N children) — never painted; layout is the signal.
+    const ownershipEdgeKinds = new Set(["contains"]);
+    // Derived/inferred depends-on / calls / imports — yellow spaghetti at Intermediate
+    // unless selected (or quiet Advanced-in-focus). Table relations stay separate.
+    const structuralHairlineKinds = new Set([
+      "depends-on", "calls", "imports", "exports",
     ]);
     // Beginner = product flow · Intermediate = focused neighborhood · Advanced = code in focus
     const tierOrder = ["beginner", "intermediate", "advanced"];
@@ -519,6 +531,19 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       if (item.evidence.some((entry) => entry.certainty === "inferred")) return "inferred";
       if (item.evidence.some((entry) => entry.certainty === "derived")) return "derived";
       return "observed";
+    }
+
+    // Intermediate calm: collapse ownership fans; gate structural hairlines.
+    // Story edges (collab / narrative / relation / writes…) stay always-on.
+    function showsStructuralEdge(edge) {
+      if (ownershipEdgeKinds.has(edge.kind)) return false;
+      if (!structuralHairlineKinds.has(edge.kind)) return true;
+      if (isTableRelationEdge(edge)) return true;
+      const selected =
+        state.selected === edge.source || state.selected === edge.target;
+      if (selected) return true;
+      // Advanced-in-focus may show quiet hairlines inside the cluster.
+      return isAdvancedTier() && !!state.focus;
     }
 
     function widthForKind(kind) {
@@ -828,16 +853,28 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         appendEdgeBadge(geom.mx, geom.my, labels.join(" · "), false, "relation");
       }
 
+      // Collapse structural hairlines by directed pair (one quiet path, not a fan).
+      const structuralDrawn = new Set();
       for (const edge of graph.edges) {
         if (!visibleIds.has(edge.source) || !visibleIds.has(edge.target)) continue;
         if (narrativeEdgeIds.has(edge.id)) continue;
         if (relationEdgeIds.has(edge.id)) continue;
+        // Ownership fans (contains) + unselected derived depends-on/calls stay off
+        // Intermediate canvas — neighborhood layout already shows children.
+        if (!showsStructuralEdge(edge)) continue;
         // contains under a labeled messaging/migration story just restates ownership.
         if (
           edge.kind === "contains" &&
           narrativePairs.has(edge.source + "|" + edge.target)
         ) {
           continue;
+        }
+        const isStructuralHairline =
+          structuralHairlineKinds.has(edge.kind) && !isTableRelationEdge(edge);
+        if (isStructuralHairline) {
+          const pairKey = edge.kind + "|" + edge.source + "|" + edge.target;
+          if (structuralDrawn.has(pairKey)) continue;
+          structuralDrawn.add(pairKey);
         }
         const source = positions.get(edge.source);
         const target = positions.get(edge.target);
@@ -846,6 +883,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         const geom = edgeGeometry(source, target);
         path.setAttribute("d", geom.d);
         const classes = ["edge", certaintyOf(edge)];
+        if (isStructuralHairline) classes.push("structural");
         if (collaborationKinds.has(edge.kind)) {
           classes.push("collab");
           if (edge.kind === "flows-to") classes.push("flows-to");
@@ -855,6 +893,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         if (selected) classes.push("active");
         path.setAttribute("class", classes.join(" "));
         path.setAttribute("data-kind", edge.kind);
+        if (isStructuralHairline) path.setAttribute("data-structural", "true");
         edgesLayer.appendChild(path);
         // Selection reveals what blue collab lines mean on-canvas.
         if (selected) {

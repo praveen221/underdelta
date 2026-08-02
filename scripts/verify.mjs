@@ -1168,10 +1168,23 @@ if (
   fail(
     "viewer legend/inspector empty-state copy must match tiers (walk-hint + emptyInspectorMessage; Code lane, not Details)",
   );
+} else if (
+  !viewerHtml.includes("function showsStructuralEdge(edge)") ||
+  !viewerHtml.includes("ownershipEdgeKinds") ||
+  !viewerHtml.includes('ownershipEdgeKinds = new Set(["contains"])') ||
+  !viewerHtml.includes("structuralHairlineKinds") ||
+  !viewerHtml.includes('edge.structural') ||
+  !viewerHtml.includes('data-structural') ||
+  !viewerHtml.includes("if (!showsStructuralEdge(edge)) continue")
+) {
+  fail(
+    "viewer Intermediate must collapse ownership contains fans and quiet/gate derived structural hairlines (showsStructuralEdge)",
+  );
 } else {
   pass("viewer Walkable tiers: Beginner / Intermediate / Advanced (cluster-scoped Advanced)");
   pass("viewer navigation: breadcrumb + Back/Overview tier sync");
   pass("viewer tier copy: walk-hint + emptyInspectorMessage + Code lane");
+  pass("viewer Intermediate edge calm: ownership fans collapsed + structural hairlines gated");
 }
 
 // Beginner cold-open floor: Product Flow + top systems; no advanced or intermediate leaf kinds.
@@ -1466,6 +1479,47 @@ if (!focusExtractorsSystem) {
 } else {
   pass(
     `Intermediate focus neighborhoods: Extractors ${selfExtractorsFocus.length} nodes, Checkout API ${fixtureCheckoutFocus.length} nodes (children + collab, no advanced dump)`,
+  );
+}
+
+// Intermediate edge calm: ownership contains fans exist in IR but stay off-canvas.
+const extractorsContainsFan = focusExtractorsSystem
+  ? selfGraph.edges.filter(
+      (edge) =>
+        edge.kind === "contains" &&
+        edge.source === focusExtractorsSystem.id &&
+        selfExtractorsFocus.some((node) => node.id === edge.target),
+    )
+  : [];
+const extractorsDerivedDepends = focusExtractorsSystem
+  ? selfGraph.edges.filter((edge) => {
+      if (edge.kind !== "depends-on") return false;
+      const ids = new Set(selfExtractorsFocus.map((node) => node.id));
+      if (!ids.has(edge.source) || !ids.has(edge.target)) return false;
+      return (edge.evidence || []).some((item) => item.certainty === "derived");
+    })
+  : [];
+if (extractorsContainsFan.length < 8) {
+  fail(
+    `Extractors Intermediate should own a contains fan in IR (≥8 child edges), found ${extractorsContainsFan.length}`,
+  );
+} else if (
+  !viewerHtml.includes("ownershipEdgeKinds.has(edge.kind)") ||
+  !viewerHtml.includes("showsStructuralEdge(edge)")
+) {
+  fail(
+    "viewer must collapse ownership contains fans via ownershipEdgeKinds / showsStructuralEdge",
+  );
+} else if (
+  extractorsDerivedDepends.length > 0 &&
+  !viewerHtml.includes("structuralHairlineKinds")
+) {
+  fail(
+    "viewer must gate derived depends-on hairlines via structuralHairlineKinds",
+  );
+} else {
+  pass(
+    `Intermediate edge calm floor: Extractors ${extractorsContainsFan.length} contains fans collapsed off-canvas; ${extractorsDerivedDepends.length} derived depends-on hairlines selection/Advanced-gated`,
   );
 }
 

@@ -135,28 +135,28 @@ Update checkboxes + Next focus every tick (unless Idle protocol).
 - [x] Advanced inside focus: `showsAdvancedKind` — modules/columns at Advanced+focus; functions after drilling into a code container (module/api/…); “code in focus” tier/crumb copy; verify floors (Extractors modules, Checkout functions, typescript module functions)  
 - [x] Navigation: `Overview › …` breadcrumb + Back via `navigateFocusStack` / `goOverview`; `syncTierToFocus` keeps View label on Intermediate then Beginner; verify floors  
 - [x] Polish pass: `walk-hint` + `emptyInspectorMessage` tier copy; Code lane (not Details); self-map Beginner cold-read floor (CLI→…→Viewer)  
+- [x] Intermediate edge calm: collapse `contains` ownership fans; gate/quiet derived `depends-on`/`calls`/`imports` hairlines (`showsStructuralEdge`); verify floors  
 
 ### In progress / next
 
 Keep **at least 3 unchecked items** here until LOOP COMPLETE (refill from Seed backlog).  
 These remaining items are the **mandatory** walkable slice — finishing them (with gates 1–8) is what completes the loop:
 
-- [ ] Collapse or restyle derived edge fans so Intermediate isn’t yellow spaghetti  
 - [ ] Keyboard: Esc = back one tier (from Seed — navigation completeness)  
 - [ ] Search jumps to a node and **enters its cluster** (not only highlights in a god-graph)  
+- [ ] Persist last tier/focus in `sessionStorage` for reload comfort  
 
 ### Seed backlog (optional — not required for LOOP COMPLETE)
 
 Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder freely.  
 **Do not** use this list to delay LOOP COMPLETE after gates 1–8 pass.
 
-- Persist last tier/focus in `sessionStorage` for reload comfort  
 - Mini-stack + one real-repo pin spot-check in Learning log (manual note OK if verify covers floors)  
 - Docs: short “How to read the map” blurb in README only if behavior changed  
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (walk-hint + emptyInspectorMessage tier copy, Code lane, self-map cold-read floor). Now collapse/restyle derived edge fans so Intermediate focus isn’t yellow spaghetti.
+> **Next focus:** This work is done (collapse ownership contains fans + gate/quiet derived structural hairlines in Intermediate). Now Keyboard Esc = back one tier so navigation is complete without the mouse.
 
 ### Learning log (append every tick)
 
@@ -172,6 +172,7 @@ Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder fr
 - 2026-08-02 13:58 UTC | Done: showsAdvancedKind (modules at system Advanced; functions inside module/api focus); “code in focus” tier/crumb; verify Extractors/Checkout/typescript-module floors | Next: Navigation breadcrumb + Back tier sync | Learned: Extractors contains 140 functions — Advanced on a system must reveal modules first or cluster-scope still feels like a phonebook; drill into a module for functions  
 - 2026-08-02 14:01 UTC | Done: Overview › breadcrumb + navigateFocusStack/goOverview; syncTierToFocus demotes Advanced→Intermediate→Beginner on Back; verify nav floors | Next: Polish legend/inspector/empty-state copy + self-map cold-read | Learned: history used to push null on first focus — filter/stack helpers keep crumbs honest; Back must sync tier on every step, not only when focus becomes null  
 - 2026-08-02 14:05 UTC | Done: walk-hint + emptyInspectorMessage by tier; Code lane; verify self-map Beginner story labels | Next: restyle derived edge fans in Intermediate focus | Learned: static “Select a component…” empty copy still said Details-era dump; tier-aware chrome makes Beginner/Advanced failure modes self-explanatory without new controls  
+- 2026-08-02 14:10 UTC | Done: showsStructuralEdge — contains fans never painted; derived depends-on/calls/imports selection- or Advanced-gated + quiet `.edge.structural` restyle; verify Extractors fan floor | Next: Esc = back one tier | Learned: Extractors Intermediate had 12 yellow contains edges — ownership is already the neighborhood layout, so painting contains is pure spaghetti; keep story edges (flows-to/collab/narrative) always-on  
 
 ---
 
