@@ -1,20 +1,20 @@
-"""FastAPI note routes (absolute paths — include_router prefixes unresolved)."""
+"""FastAPI note routes — relative paths mounted via include_router prefix."""
 
 from fastapi import APIRouter
 
 router = APIRouter()
 
 
-@router.get("/notes")
+@router.get("")
 async def list_notes():
     return []
 
 
-@router.post("/notes")
+@router.post("")
 async def create_note():
     return {"id": 1}
 
 
-@router.get("/notes/{note_id}")
+@router.get("/{note_id}")
 async def get_note(note_id: int):
     return {"id": note_id}

@@ -33,6 +33,15 @@ export const NEXTJS_SAAS_STARTER = {
   dirname: "nextjs-saas-starter",
 };
 
+/** @type {RealRepoPin} */
+export const FASTAPI_REALWORLD = {
+  name: "nsidnev/fastapi-realworld-example-app",
+  url: "https://github.com/nsidnev/fastapi-realworld-example-app.git",
+  // Pinned 2026-08-02 — tip of master at plan rung-3 real-repo kickoff.
+  sha: "029eb7781c60d5f563ee8990a0cbfb79b244538c",
+  dirname: "fastapi-realworld",
+};
+
 export const REAL_REPO_ROOT = path.join(repoRoot, ".underdelta-real");
 
 function git(args, cwd, opts = {}) {
@@ -104,6 +113,9 @@ const PINS_BY_NAME = {
   [NEXTJS_SAAS_STARTER.dirname]: NEXTJS_SAAS_STARTER,
   "saas-starter": NEXTJS_SAAS_STARTER,
   nextjs: NEXTJS_SAAS_STARTER,
+  [FASTAPI_REALWORLD.dirname]: FASTAPI_REALWORLD,
+  fastapi: FASTAPI_REALWORLD,
+  "fastapi-realworld": FASTAPI_REALWORLD,
 };
 
 const isMain =
@@ -113,7 +125,7 @@ if (isMain) {
   const requested = process.argv[2];
   const pins = requested
     ? [PINS_BY_NAME[requested]].filter(Boolean)
-    : [REALWORLD_EXPRESS, NEXTJS_SAAS_STARTER];
+    : [REALWORLD_EXPRESS, NEXTJS_SAAS_STARTER, FASTAPI_REALWORLD];
   if (requested && pins.length === 0) {
     throw new Error(
       `unknown real-repo pin '${requested}'; known: ${Object.keys(PINS_BY_NAME).join(", ")}`,

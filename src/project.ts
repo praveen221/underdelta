@@ -66,8 +66,40 @@ export function parseReadmeTitle(markdown: string): string | undefined {
 }
 
 /**
+ * Turn registry-style package names into founder-friendly product titles.
+ * `fastapi-realworld-example-app` → `FastAPI RealWorld Example App`.
+ */
+export function humanizePackageName(name: string): string {
+  const specials: Record<string, string> = {
+    fastapi: "FastAPI",
+    realworld: "RealWorld",
+    nextjs: "Next.js",
+    typescript: "TypeScript",
+    graphql: "GraphQL",
+    mongodb: "MongoDB",
+    postgresql: "PostgreSQL",
+    mysql: "MySQL",
+    openai: "OpenAI",
+  };
+  return name
+    .replace(/^@[^/]+\//, "")
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((part) => {
+      const lower = part.toLowerCase();
+      if (specials[lower]) return specials[lower];
+      if (/^[a-z]+$/.test(part)) {
+        return part.charAt(0).toUpperCase() + part.slice(1);
+      }
+      return part;
+    })
+    .join(" ");
+}
+
+/**
  * Prefer a human README title when package.json name is scoped or otherwise
  * unlikely to be the product name founders recognize (`@api/source`).
+ * Hyphenated unscoped registry names are humanized for the North star user.
  */
 export function preferProductLabel(
   packageName: string | undefined,
@@ -75,10 +107,13 @@ export function preferProductLabel(
   fallback: string,
 ): string {
   const pkg = packageName?.trim();
-  if (pkg && !pkg.includes("/")) return pkg;
+  if (pkg && !pkg.includes("/")) {
+    return /[-_]/.test(pkg) ? humanizePackageName(pkg) : pkg;
+  }
   if (readmeTitle) return readmeTitle;
-  if (pkg) return pkg;
-  return fallback;
+  if (pkg) return humanizePackageName(pkg);
+  const base = fallback.trim();
+  return /[-_]/.test(base) ? humanizePackageName(base) : base;
 }
 
 interface SystemRole {

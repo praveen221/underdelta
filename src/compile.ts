@@ -36,6 +36,27 @@ async function readPackageManifest(
       await readFile(path.join(root, "package.json"), "utf8"),
     ) as PackageManifestHint;
   } catch {
+    // Fall through to Python packaging.
+  }
+  return readPyprojectManifest(root);
+}
+
+/** Minimal Poetry/PEP 621 name extraction for Python real-repo product labels. */
+async function readPyprojectManifest(
+  root: string,
+): Promise<PackageManifestHint | undefined> {
+  try {
+    const text = await readFile(path.join(root, "pyproject.toml"), "utf8");
+    for (const section of [/^\[project\]/m, /^\[tool\.poetry\]/m]) {
+      const idx = text.search(section);
+      if (idx < 0) continue;
+      const name = /^\s*name\s*=\s*"([^"]+)"/m.exec(
+        text.slice(idx, idx + 800),
+      )?.[1];
+      if (name) return { name };
+    }
+    return undefined;
+  } catch {
     return undefined;
   }
 }

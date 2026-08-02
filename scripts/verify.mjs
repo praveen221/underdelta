@@ -6,6 +6,7 @@ import { compileRepository } from "../dist/compile.js";
 import { renderArchitectureHtml } from "../dist/viewer.js";
 import {
   ensureRealRepo,
+  FASTAPI_REALWORLD,
   NEXTJS_SAAS_STARTER,
   REALWORLD_EXPRESS,
 } from "./ensure-real-repo.mjs";
@@ -2557,6 +2558,214 @@ if (miniPythonCommerceNoise) {
   fail("mini-python should not inherit Checkout/orders commerce collaboration copy");
 } else {
   pass("mini-python has no Checkout/orders commerce collaboration noise");
+}
+
+// ---------------------------------------------------------------------------
+// Capability ladder rung 3: real FastAPI repo (pinned SHA, gitignored).
+// Golden-lock include_router prefixes, empty-path mounts, product title from
+// pyproject, HTTP API + Data nesting/collapse, RealWorld core paths.
+// ---------------------------------------------------------------------------
+let fastapiRealRoot;
+try {
+  fastapiRealRoot = await ensureRealRepo(FASTAPI_REALWORLD);
+  pass(
+    `fastapi real repo ${FASTAPI_REALWORLD.name} ready @ ${FASTAPI_REALWORLD.sha.slice(0, 12)}`,
+  );
+} catch (error) {
+  fail(
+    `could not ensure fastapi real repo ${FASTAPI_REALWORLD.name}@${FASTAPI_REALWORLD.sha}: ${error instanceof Error ? error.message : error}`,
+  );
+}
+
+if (fastapiRealRoot) {
+  let fastapiRealGraph;
+  try {
+    fastapiRealGraph = await compileRepository(fastapiRealRoot);
+    pass(
+      `fastapi-real-repo scan completed: ${fastapiRealGraph.nodes.length} nodes, ${fastapiRealGraph.edges.length} edges`,
+    );
+  } catch (error) {
+    fail(
+      `fastapi-real-repo scan crashed on ${FASTAPI_REALWORLD.name}: ${error instanceof Error ? error.message : error}`,
+    );
+  }
+
+  if (fastapiRealGraph) {
+    const fastapiRoutes = fastapiRealGraph.nodes.filter(
+      (node) => node.kind === "route",
+    );
+    const fastapiSemantic = fastapiRealGraph.nodes.filter(
+      (node) => node.metadata?.projection === "semantic",
+    );
+    const fastapiProduct = fastapiRealGraph.nodes.find(
+      (node) => node.kind === "product",
+    );
+    const fastapiByKey = new Map(
+      fastapiSemantic
+        .filter((node) => typeof node.metadata?.systemKey === "string")
+        .map((node) => [node.metadata.systemKey, node]),
+    );
+    const fastapiApi = fastapiByKey.get("api");
+    const fastapiData = fastapiByKey.get("data");
+    const fastapiLabels = new Set(fastapiRoutes.map((node) => node.label));
+
+    console.log(
+      `FastAPI-real-repo scan summary: ${JSON.stringify({
+        pin: `${FASTAPI_REALWORLD.name}@${FASTAPI_REALWORLD.sha}`,
+        product: fastapiProduct?.label ?? null,
+        nodes: fastapiRealGraph.nodes.length,
+        edges: fastapiRealGraph.edges.length,
+        routes: [...fastapiLabels].sort(),
+        semantic: fastapiSemantic.map((node) => node.label),
+      })}`,
+    );
+
+    if (fastapiRealGraph.nodes.length < 40) {
+      fail(
+        `fastapi-real-repo node floor: ${fastapiRealGraph.nodes.length} < 40 (map looks empty)`,
+      );
+    } else {
+      pass(`fastapi-real-repo nodes: ${fastapiRealGraph.nodes.length}`);
+    }
+
+    if (
+      !fastapiProduct ||
+      fastapiProduct.label !== "FastAPI RealWorld Example App"
+    ) {
+      fail(
+        `fastapi-real-repo product label expected 'FastAPI RealWorld Example App' from pyproject, found '${fastapiProduct?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass(`fastapi-real-repo product label: ${fastapiProduct.label}`);
+    }
+
+    if (!fastapiApi || fastapiApi.label !== "HTTP API") {
+      fail(
+        `fastapi-real-repo api system label expected 'HTTP API', found '${fastapiApi?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass("fastapi-real-repo api system labeled 'HTTP API'");
+    }
+
+    if (!fastapiData || fastapiData.label !== "Data access") {
+      fail(
+        `fastapi-real-repo data system label expected 'Data access', found '${fastapiData?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass("fastapi-real-repo data system labeled 'Data access'");
+    }
+
+    const expectedFastapiRoutes = [
+      "POST /api/users/login",
+      "POST /api/users",
+      "GET /api/user",
+      "PUT /api/user",
+      "GET /api/profiles/{username}",
+      "POST /api/profiles/{username}/follow",
+      "DELETE /api/profiles/{username}/follow",
+      "GET /api/articles",
+      "POST /api/articles",
+      "GET /api/articles/feed",
+      "GET /api/articles/{slug}",
+      "PUT /api/articles/{slug}",
+      "DELETE /api/articles/{slug}",
+      "POST /api/articles/{slug}/favorite",
+      "DELETE /api/articles/{slug}/favorite",
+      "GET /api/articles/{slug}/comments",
+      "POST /api/articles/{slug}/comments",
+      "DELETE /api/articles/{slug}/comments/{comment_id}",
+      "GET /api/tags",
+    ];
+    const missingFastapiRoutes = expectedFastapiRoutes.filter(
+      (label) => !fastapiLabels.has(label),
+    );
+    if (missingFastapiRoutes.length) {
+      fail(
+        `fastapi-real-repo missing include_router-resolved routes: ${missingFastapiRoutes.join(", ")}; found ${[...fastapiLabels].join(", ") || "(none)"}`,
+      );
+    } else {
+      pass(
+        `fastapi-real-repo include_router routes: ${expectedFastapiRoutes.length} RealWorld paths`,
+      );
+    }
+
+    const fastapiRoutesUnderApi = fastapiRoutes.filter(
+      (node) => node.parentId === fastapiApi?.id,
+    );
+    if (fastapiRoutesUnderApi.length < 19) {
+      fail(
+        `fastapi-real-repo expected ≥19 routes nested under HTTP API, found ${fastapiRoutesUnderApi.length}`,
+      );
+    } else {
+      pass(
+        `fastapi-real-repo ${fastapiRoutesUnderApi.length} routes nested under HTTP API`,
+      );
+    }
+
+    const fastapiCollapsed = fastapiRoutesUnderApi.filter(
+      (node) => node.metadata?.collapsedInOverview === true,
+    );
+    if (fastapiCollapsed.length < 19) {
+      fail(
+        `fastapi-real-repo routes should collapse on overview under HTTP API: collapsed=${fastapiCollapsed.length}`,
+      );
+    } else {
+      pass(
+        "fastapi-real-repo routes collapsed on overview (API tells the story)",
+      );
+    }
+
+    const fastapiFlow = fastapiSemantic
+      .filter((node) => typeof node.metadata?.flowOrder === "number")
+      .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+    const fastapiFlowKeys = fastapiFlow.map((node) => node.metadata.systemKey);
+    if (
+      fastapiFlowKeys[0] !== "api" ||
+      fastapiFlowKeys[1] !== "data" ||
+      fastapiFlowKeys.length < 2
+    ) {
+      fail(
+        `fastapi-real-repo flowOrder expected HTTP API → Data access, got ${fastapiFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+      );
+    } else {
+      pass(
+        `fastapi-real-repo flowOrder: ${fastapiFlow.map((node) => node.label).join(" → ")}`,
+      );
+    }
+
+    const fastapiFlowsTo = fastapiRealGraph.edges.some(
+      (edge) =>
+        edge.kind === "flows-to" &&
+        edge.source === fastapiApi?.id &&
+        edge.target === fastapiData?.id,
+    );
+    if (!fastapiFlowsTo) {
+      fail("fastapi-real-repo missing flows-to edge HTTP API → Data access");
+    } else {
+      pass("fastapi-real-repo flows-to: HTTP API → Data access");
+    }
+
+    if (!fastapiRealGraph.extractors.some((item) => item.id === "python")) {
+      fail("fastapi-real-repo graph.extractors missing python");
+    } else {
+      pass("fastapi-real-repo registers python extractor");
+    }
+
+    const fastapiCommerceNoise = fastapiRealGraph.edges.some((edge) =>
+      (edge.evidence || []).some(
+        (item) =>
+          typeof item.detail === "string" &&
+          (item.detail.includes("Checkout") || item.detail.includes("orders")),
+      ),
+    );
+    if (fastapiCommerceNoise) {
+      fail(
+        "fastapi-real-repo leaked commerce collaboration copy",
+      );
+    } else {
+      pass("fastapi-real-repo has no Checkout/orders commerce collaboration noise");
+    }
+  }
 }
 
 if (process.exitCode) {
