@@ -670,6 +670,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       "docker", "dockerService", "dockerfileService", "serviceName",
       "image", "build", "ports", "hostPorts", "dependsOn", "from", "expose",
       "dockerCompose", "dockerfile", "dockerModule", "technicalLabel",
+      "composeFiles",
     ]);
 
     function connectionButton(edge, id) {

@@ -5390,10 +5390,11 @@ if (!miniDockerExtractors.includes("docker")) {
   pass("mini-docker registers docker extractor");
 }
 
+const miniDockerComposeServices = miniDockerServices.filter(
+  (node) => node.metadata?.dockerService === true,
+);
 const miniDockerServiceNames = new Set(
-  miniDockerServices
-    .filter((node) => node.metadata?.dockerService === true)
-    .map((node) => node.metadata?.serviceName),
+  miniDockerComposeServices.map((node) => node.metadata?.serviceName),
 );
 for (const expected of ["api", "web", "db"]) {
   if (!miniDockerServiceNames.has(expected)) {
@@ -5403,6 +5404,15 @@ for (const expected of ["api", "web", "db"]) {
   } else {
     pass(`mini-docker has compose service ${expected}`);
   }
+}
+
+// Overlay twin lock: docker-compose.yml + docker-compose.images.yml → one node each.
+if (miniDockerComposeServices.length !== 3) {
+  fail(
+    `mini-docker expected exactly 3 compose services after overlay dedupe, found ${miniDockerComposeServices.length} (${miniDockerComposeServices.map((node) => node.label).join(", ")})`,
+  );
+} else {
+  pass("mini-docker overlay twins deduped to 3 compose services");
 }
 
 for (const expected of ["API · 3000", "Web · 8080", "DB"]) {
@@ -5424,13 +5434,13 @@ if (miniDockerServiceLabels.includes("App image")) {
   pass("mini-docker quiets Dockerfile App image owned by Compose build");
 }
 
-const miniDockerApi = miniDockerServices.find(
+const miniDockerApi = miniDockerComposeServices.find(
   (node) => node.metadata?.serviceName === "api",
 );
-const miniDockerWeb = miniDockerServices.find(
+const miniDockerWeb = miniDockerComposeServices.find(
   (node) => node.metadata?.serviceName === "web",
 );
-const miniDockerDb = miniDockerServices.find(
+const miniDockerDb = miniDockerComposeServices.find(
   (node) => node.metadata?.serviceName === "db",
 );
 if (
@@ -5452,6 +5462,36 @@ if (
   );
 } else {
   pass("mini-docker web publishes port 8080");
+}
+// Primary has build: . ; images overlay adds notes-api:latest — prefer build+image.
+if (miniDockerApi?.metadata?.build !== ".") {
+  fail(
+    `mini-docker api build expected '.', found ${miniDockerApi?.metadata?.build ?? "(missing)"}`,
+  );
+} else {
+  pass("mini-docker api keeps build . from primary compose");
+}
+if (miniDockerApi?.metadata?.image !== "notes-api:latest") {
+  fail(
+    `mini-docker api image expected notes-api:latest from overlay, found ${miniDockerApi?.metadata?.image ?? "(missing)"}`,
+  );
+} else {
+  pass("mini-docker api merges overlay image notes-api:latest");
+}
+if (
+  !Array.isArray(miniDockerApi?.metadata?.composeFiles) ||
+  !miniDockerApi.metadata.composeFiles.some((file) =>
+    /docker-compose\.yml$/i.test(String(file)),
+  ) ||
+  !miniDockerApi.metadata.composeFiles.some((file) =>
+    /docker-compose\.images\.yml$/i.test(String(file)),
+  )
+) {
+  fail(
+    `mini-docker api composeFiles should cite primary + images overlay, found ${JSON.stringify(miniDockerApi?.metadata?.composeFiles)}`,
+  );
+} else {
+  pass("mini-docker api composeFiles cite primary + images overlay");
 }
 if (miniDockerWeb?.metadata?.image !== "nginx:alpine") {
   fail(
@@ -5762,10 +5802,27 @@ if (dockerRealRoot) {
       pass("docker-real-repo quiets Dockerfile App images owned by Compose build");
     }
 
+    // Overlay twin lock: one node per serviceName (not docker-compose.yml +
+    // docker-compose.images.yml Vote/Result twins restating Deploy).
+    if (dockerRealServices.length !== dockerRealServiceNames.size) {
+      fail(
+        `docker-real-repo expected overlay-deduped services (count === unique names), found ${dockerRealServices.length} nodes / ${dockerRealServiceNames.size} names (${dockerRealServices.map((node) => node.label).join(", ")})`,
+      );
+    } else {
+      pass(
+        `docker-real-repo overlay twins deduped (${dockerRealServices.length} services)`,
+      );
+    }
+    if (dockerRealServices.length !== 6) {
+      fail(
+        `docker-real-repo expected exactly 6 compose services after overlay dedupe, found ${dockerRealServices.length}`,
+      );
+    } else {
+      pass("docker-real-repo has exactly 6 compose services");
+    }
+
     const dockerRealVote = dockerRealServices.find(
-      (node) =>
-        node.metadata?.serviceName === "vote" &&
-        String(node.evidence?.[0]?.file ?? "").endsWith("docker-compose.yml"),
+      (node) => node.metadata?.serviceName === "vote",
     );
     if (
       !Array.isArray(dockerRealVote?.metadata?.dependsOn) ||
@@ -5783,6 +5840,43 @@ if (dockerRealRoot) {
       );
     } else {
       pass("docker-real-repo vote build.context ./vote");
+    }
+    // images overlay supplies dockersamples/… — keep build + image together.
+    if (
+      dockerRealVote?.metadata?.image !==
+      "dockersamples/examplevotingapp_vote"
+    ) {
+      fail(
+        `docker-real-repo vote image expected dockersamples/examplevotingapp_vote from overlay, found ${dockerRealVote?.metadata?.image ?? "(missing)"}`,
+      );
+    } else {
+      pass("docker-real-repo vote merges overlay image");
+    }
+    if (
+      !Array.isArray(dockerRealVote?.metadata?.composeFiles) ||
+      !dockerRealVote.metadata.composeFiles.some((file) =>
+        /docker-compose\.yml$/i.test(String(file)),
+      ) ||
+      !dockerRealVote.metadata.composeFiles.some((file) =>
+        /docker-compose\.images\.yml$/i.test(String(file)),
+      )
+    ) {
+      fail(
+        `docker-real-repo vote composeFiles should cite primary + images overlay, found ${JSON.stringify(dockerRealVote?.metadata?.composeFiles)}`,
+      );
+    } else {
+      pass("docker-real-repo vote composeFiles cite primary + images overlay");
+    }
+    if (
+      !/(?:^|\/)docker-compose\.yml$/i.test(
+        String(dockerRealVote?.evidence?.[0]?.file ?? "").replaceAll("\\", "/"),
+      )
+    ) {
+      fail(
+        `docker-real-repo vote primary evidence should be docker-compose.yml, found ${dockerRealVote?.evidence?.[0]?.file ?? "(missing)"}`,
+      );
+    } else {
+      pass("docker-real-repo vote primary evidence is docker-compose.yml");
     }
 
     const dockerRealNeedsEdges = dockerRealGraph.edges.filter(
@@ -5816,9 +5910,7 @@ if (dockerRealRoot) {
     }
 
     const dockerRealRedis = dockerRealServices.find(
-      (node) =>
-        node.metadata?.serviceName === "redis" &&
-        String(node.evidence?.[0]?.file ?? "").endsWith("docker-compose.yml"),
+      (node) => node.metadata?.serviceName === "redis",
     );
     if (dockerRealRedis?.metadata?.image !== "redis:alpine") {
       fail(
@@ -5831,13 +5923,13 @@ if (dockerRealRoot) {
     const nestedDockerRealServices = dockerRealServices.filter(
       (node) => node.parentId === dockerRealDeploy?.id,
     );
-    if (nestedDockerRealServices.length < 6) {
+    if (nestedDockerRealServices.length !== 6) {
       fail(
-        `docker-real-repo expected ≥6 services nested under Deploy, found ${nestedDockerRealServices.length}`,
+        `docker-real-repo expected exactly 6 services nested under Deploy after overlay dedupe, found ${nestedDockerRealServices.length}`,
       );
     } else {
       pass(
-        `docker-real-repo ${nestedDockerRealServices.length} services nested under Deploy`,
+        `docker-real-repo ${nestedDockerRealServices.length} services nested under Deploy (no overlay twins)`,
       );
     }
 
@@ -5907,15 +5999,15 @@ if (dockerRealRoot) {
       pass("docker-real-repo evidence details cite service:");
     }
 
-    // Primary compose file must carry vote/result/worker/redis/db/seed (images
-    // overlay may duplicate names — uniqueness is on serviceName set above).
-    const primaryComposeServices = dockerRealServices.filter((node) =>
-      /(?:^|\/)docker-compose\.yml$/i.test(
-        String(node.evidence?.[0]?.file ?? "").replaceAll("\\", "/"),
-      ),
-    );
+    // After overlay dedupe, every core service keeps primary compose evidence.
     const primaryNames = new Set(
-      primaryComposeServices.map((node) => node.metadata?.serviceName),
+      dockerRealServices
+        .filter((node) =>
+          /(?:^|\/)docker-compose\.yml$/i.test(
+            String(node.evidence?.[0]?.file ?? "").replaceAll("\\", "/"),
+          ),
+        )
+        .map((node) => node.metadata?.serviceName),
     );
     for (const expected of [
       "vote",

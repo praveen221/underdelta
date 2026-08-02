@@ -121,6 +121,35 @@ export function composeBuildDirectory(
 }
 
 /**
+ * Prefer primary compose files (`docker-compose.yml` / `compose.yml`) over
+ * overlays (`docker-compose.images.yml`) when merging same-named services.
+ */
+export function composeFileRank(file: string): number {
+  const base = path.basename(file.replaceAll("\\", "/")).toLowerCase();
+  if (
+    base === "docker-compose.yml" ||
+    base === "docker-compose.yaml" ||
+    base === "compose.yml" ||
+    base === "compose.yaml"
+  ) {
+    return 0;
+  }
+  return 1;
+}
+
+interface MergedComposeService {
+  name: string;
+  image?: string;
+  build?: string;
+  ports: string[];
+  dependsOn: string[];
+  /** Compose module that owns the merged node (primary file preferred). */
+  parentModuleId: string;
+  /** Evidence from every compose file that defined this service (primary first). */
+  evidence: Evidence[];
+}
+
+/**
  * Dependency-free Compose services walker for typical 2-space YAML.
  * Captures image / build(+context) / ports / depends_on for the Deploy story.
  */
@@ -351,6 +380,13 @@ export const dockerExtractor: ArchitectureExtractor = {
       }
     }
 
+    // Primary compose files first so overlay twins merge into them.
+    pendingCompose.sort((a, b) => {
+      const rank = composeFileRank(a.file) - composeFileRank(b.file);
+      if (rank !== 0) return rank;
+      return a.file.localeCompare(b.file);
+    });
+
     // Directories whose Compose `build:` already owns the image story —
     // quiet duplicate Dockerfile "App image" nodes for those paths.
     const composeOwnedDirs = new Set<string>();
@@ -360,6 +396,8 @@ export const dockerExtractor: ArchitectureExtractor = {
         composeOwnedDirs.add(composeBuildDirectory(compose.file, svc.build));
       }
     }
+
+    const mergedServices = new Map<string, MergedComposeService>();
 
     for (const compose of pendingCompose) {
       const { file, source, services } = compose;
@@ -386,14 +424,7 @@ export const dockerExtractor: ArchitectureExtractor = {
         });
       }
 
-      const serviceIds = new Map<string, string>();
-
       for (const svc of services) {
-        const serviceId = stableId("service", "docker", file, svc.name);
-        if (seen.has(serviceId)) continue;
-        seen.add(serviceId);
-        serviceIds.set(svc.name, serviceId);
-
         const hostPorts = svc.ports
           .map(hostPortFromMapping)
           .filter((port): port is string => Boolean(port));
@@ -409,44 +440,115 @@ export const dockerExtractor: ArchitectureExtractor = {
           .filter(Boolean)
           .join(" ");
         const serviceEvidence = evidence(file, source, svc.offset, detail);
-        nodes.push({
-          id: serviceId,
-          kind: "service",
-          label: svc.name,
-          technology: "docker-compose",
-          parentId: moduleId,
-          metadata: {
-            docker: true,
-            dockerService: true,
-            serviceName: svc.name,
-            ...(svc.image ? { image: shortImageLabel(svc.image) } : {}),
+        const existing = mergedServices.get(svc.name);
+        if (!existing) {
+          mergedServices.set(svc.name, {
+            name: svc.name,
+            ...(svc.image ? { image: svc.image } : {}),
             ...(svc.build ? { build: svc.build } : {}),
-            ...(svc.ports.length ? { ports: svc.ports } : {}),
-            ...(hostPorts.length ? { hostPorts } : {}),
-            ...(svc.dependsOn.length ? { dependsOn: svc.dependsOn } : {}),
-          },
-          evidence: [serviceEvidence],
-        });
-        edges.push(edgeFrom("exposes", moduleId, serviceId, serviceEvidence));
-      }
-
-      // Compose depends_on → service↔service edges (Deploy runtime story).
-      for (const svc of services) {
-        const sourceId = serviceIds.get(svc.name);
-        if (!sourceId) continue;
-        for (const dep of svc.dependsOn) {
-          const targetId = serviceIds.get(dep);
-          if (!targetId) continue;
-          const depEvidence = evidence(
-            file,
-            source,
-            svc.offset,
-            `needs ${dep}`,
-          );
-          edges.push(
-            edgeFrom("depends-on", sourceId, targetId, depEvidence, "needs"),
-          );
+            ports: [...svc.ports],
+            dependsOn: [...svc.dependsOn],
+            parentModuleId: moduleId,
+            evidence: [serviceEvidence],
+          });
+          continue;
         }
+
+        // Gap-fill from overlays: keep primary build/ports/depends, add image
+        // (or missing build) so Deploy tells one Vote story with build+image.
+        if (svc.image && !existing.image) existing.image = svc.image;
+        if (svc.build && !existing.build) existing.build = svc.build;
+        for (const port of svc.ports) {
+          if (!existing.ports.includes(port)) existing.ports.push(port);
+        }
+        for (const dep of svc.dependsOn) {
+          if (!existing.dependsOn.includes(dep)) existing.dependsOn.push(dep);
+        }
+        existing.evidence.push(serviceEvidence);
+      }
+    }
+
+    const serviceIds = new Map<string, string>();
+
+    for (const svc of mergedServices.values()) {
+      // Identity is service name only — overlays must not twin Vote/Result.
+      const serviceId = stableId("service", "docker", svc.name);
+      if (seen.has(serviceId)) continue;
+      seen.add(serviceId);
+      serviceIds.set(svc.name, serviceId);
+
+      const hostPorts = svc.ports
+        .map(hostPortFromMapping)
+        .filter((port): port is string => Boolean(port));
+      const detail = [
+        `service:${svc.name}`,
+        svc.image ? `image:${shortImageLabel(svc.image)}` : undefined,
+        svc.build ? `build:${svc.build}` : undefined,
+        hostPorts.length ? `ports:${hostPorts.join(",")}` : undefined,
+        svc.dependsOn.length
+          ? `depends_on:${svc.dependsOn.join(",")}`
+          : undefined,
+      ]
+        .filter(Boolean)
+        .join(" ");
+      // Refresh primary evidence detail so inspector/verify see merged build+image.
+      const primaryEvidence = {
+        ...svc.evidence[0]!,
+        detail,
+      };
+      const evidenceList = [primaryEvidence, ...svc.evidence.slice(1)];
+      const composeFiles = [
+        ...new Set(
+          evidenceList
+            .map((item) => item.file)
+            .filter((item): item is string => Boolean(item)),
+        ),
+      ];
+
+      nodes.push({
+        id: serviceId,
+        kind: "service",
+        label: svc.name,
+        technology: "docker-compose",
+        parentId: svc.parentModuleId,
+        metadata: {
+          docker: true,
+          dockerService: true,
+          serviceName: svc.name,
+          ...(svc.image ? { image: shortImageLabel(svc.image) } : {}),
+          ...(svc.build ? { build: svc.build } : {}),
+          ...(svc.ports.length ? { ports: svc.ports } : {}),
+          ...(hostPorts.length ? { hostPorts } : {}),
+          ...(svc.dependsOn.length ? { dependsOn: svc.dependsOn } : {}),
+          ...(composeFiles.length > 1 ? { composeFiles } : {}),
+        },
+        evidence: evidenceList,
+      });
+      edges.push(
+        edgeFrom("exposes", svc.parentModuleId, serviceId, primaryEvidence),
+      );
+    }
+
+    // Compose depends_on → service↔service edges (Deploy runtime story).
+    for (const svc of mergedServices.values()) {
+      const sourceId = serviceIds.get(svc.name);
+      if (!sourceId) continue;
+      for (const dep of svc.dependsOn) {
+        const targetId = serviceIds.get(dep);
+        if (!targetId) continue;
+        const depEvidence = svc.evidence[0]!;
+        edges.push(
+          edgeFrom(
+            "depends-on",
+            sourceId,
+            targetId,
+            {
+              ...depEvidence,
+              detail: `needs ${dep}`,
+            },
+            "needs",
+          ),
+        );
       }
     }
 
