@@ -13,6 +13,8 @@ import { sqlExtractor } from "./extractors/sql.js";
 import { typescriptExtractor } from "./extractors/typescript.js";
 import {
   parseReadmeHeadingHints,
+  parseReadmeTitle,
+  preferProductLabel,
   projectSemanticArchitecture,
   type PackageManifestHint,
   type ReadmeHeadingHint,
@@ -37,27 +39,35 @@ async function readPackageManifest(
   }
 }
 
-async function readReadmeHints(
+async function readReadmeProjection(
   root: string,
-): Promise<ReadmeHeadingHint[] | undefined> {
+): Promise<{ hints?: ReadmeHeadingHint[]; title?: string }> {
   for (const name of ["README.md", "readme.md", "Readme.md"]) {
     try {
       const markdown = await readFile(path.join(root, name), "utf8");
       const hints = parseReadmeHeadingHints(markdown);
-      return hints.length ? hints : undefined;
+      const title = parseReadmeTitle(markdown);
+      return {
+        ...(hints.length ? { hints } : {}),
+        ...(title ? { title } : {}),
+      };
     } catch {
       // try next conventional README name
     }
   }
-  return undefined;
+  return {};
 }
 
 async function projectName(
   root: string,
   manifest?: PackageManifestHint,
+  readmeTitle?: string,
 ): Promise<string> {
-  if (manifest?.name) return manifest.name;
-  return path.basename(root);
+  return preferProductLabel(
+    manifest?.name,
+    readmeTitle,
+    path.basename(root),
+  );
 }
 
 async function revision(root: string): Promise<string | undefined> {
@@ -89,14 +99,25 @@ export async function compileRepository(
   );
 
   const packageManifest = await readPackageManifest(root);
-  const readmeHints = await readReadmeHints(root);
+  const readme = await readReadmeProjection(root);
   const productId = stableId("product", root);
+  const productLabel = await projectName(
+    root,
+    packageManifest,
+    readme.title,
+  );
   const productNode: ArchitectureNode = {
     id: productId,
     kind: "product",
-    label: await projectName(root, packageManifest),
+    label: productLabel,
     metadata: {
       fileCount: files.length,
+      ...(packageManifest?.name && packageManifest.name !== productLabel
+        ? { packageName: packageManifest.name }
+        : {}),
+      ...(readme.title && readme.title === productLabel
+        ? { labelSource: "readme", readmeTitle: readme.title }
+        : {}),
     },
     evidence: [
       {
@@ -104,6 +125,16 @@ export async function compileRepository(
         extractor: "repository",
         certainty: "observed",
       },
+      ...(readme.title && readme.title === productLabel
+        ? [
+            {
+              file: "README.md",
+              extractor: "repository" as const,
+              certainty: "derived" as const,
+              detail: `Product label from README title "${readme.title}"`,
+            },
+          ]
+        : []),
     ],
   };
 
@@ -129,6 +160,7 @@ export async function compileRepository(
   if (gitRevision !== undefined) project.revision = gitRevision;
   return projectSemanticArchitecture(builder.build(project), {
     ...(packageManifest ? { packageManifest } : {}),
-    ...(readmeHints ? { readmeHints } : {}),
+    ...(readme.hints ? { readmeHints: readme.hints } : {}),
+    ...(readme.title ? { readmeTitle: readme.title } : {}),
   });
 }

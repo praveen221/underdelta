@@ -27,6 +27,58 @@ export interface ProjectOptions {
   packageManifest?: PackageManifestHint;
   /** Parsed README ##/### headings used only to humanize existing system labels. */
   readmeHints?: ReadmeHeadingHint[];
+  /**
+   * Cleaned README H1 title. Used as the product label when package.json name
+   * is scoped/non-descriptive (e.g. `@api/source`).
+   */
+  readmeTitle?: string;
+}
+
+/**
+ * Strip markdown image/link chrome from a heading so alt/link text can be used
+ * as a human label. `![Alt](img.png)` → `Alt`.
+ */
+export function sanitizeMarkdownHeadingText(raw: string): string {
+  let text = raw.trim();
+  // Images: prefer alt text; drop empty-alt images entirely.
+  text = text.replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1");
+  // Links: keep visible text.
+  text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+  // Leftover emphasis / code markers.
+  text = text.replace(/[*_`~]/g, "").trim();
+  // Collapse whitespace after removals.
+  text = text.replace(/\s+/g, " ").trim();
+  return text;
+}
+
+/** First H1 in a README, sanitized — product-title territory, not system hints. */
+export function parseReadmeTitle(markdown: string): string | undefined {
+  const match = /^#\s+(.+?)\s*$/m.exec(markdown);
+  if (!match?.[1]) return undefined;
+  const title = sanitizeMarkdownHeadingText(
+    match[1].replace(/\s+#+\s*$/, ""),
+  );
+  if (!title) return undefined;
+  // Badges / bare URLs are not product names.
+  if (/^https?:\/\//i.test(title)) return undefined;
+  if (title.length > 80) return undefined;
+  return title;
+}
+
+/**
+ * Prefer a human README title when package.json name is scoped or otherwise
+ * unlikely to be the product name founders recognize (`@api/source`).
+ */
+export function preferProductLabel(
+  packageName: string | undefined,
+  readmeTitle: string | undefined,
+  fallback: string,
+): string {
+  const pkg = packageName?.trim();
+  if (pkg && !pkg.includes("/")) return pkg;
+  if (readmeTitle) return readmeTitle;
+  if (pkg) return pkg;
+  return fallback;
 }
 
 interface SystemRole {
@@ -55,7 +107,16 @@ export function inferSystemKeyFromHeading(heading: string): string | undefined {
 
   // Skip common README scaffolding that should never rename product systems.
   if (
-    /^(status|license|roadmap|near-term roadmap|try it|getting started|install(?:ation)?|usage|contributing|changelog|design principles|overview|introduction|about|motivation)$/i.test(
+    /^(status|license|roadmap|near-term roadmap|try it|getting started|prerequisites?|environment variables?|install(?:ation)?|usage|contributing|changelog|design principles|overview|introduction|about|motivation)$/i.test(
+      text,
+    )
+  ) {
+    return undefined;
+  }
+
+  // Skip imperative how-to headings ("Generate your Prisma client", "Seed the database").
+  if (
+    /^(generate|install|run|create|configure|deploy|build|test|clone|download|add|update|set\s*up|make|enable|start|seed|apply|migrate|push|pull|open|visit|follow|copy|paste|replace|remove|delete|drop|reset)\b/.test(
       text,
     )
   ) {
@@ -74,7 +135,13 @@ export function inferSystemKeyFromHeading(heading: string): string | undefined {
     { key: "cli", pattern: /\bcli\b|\bcommand[- ]line\b/, weight: 8 },
     { key: "api", pattern: /\bapi\b|\broutes?\b|\bhttp\b|\bendpoints?\b/, weight: 8 },
     { key: "ui", pattern: /\bui\b|\bfrontend\b|\bstorefront\b|\bcomponents?\b/, weight: 7 },
-    { key: "data", pattern: /\bdata(?:base)?\b|\bprisma\b|\bsql\b|\bcatalog\b/, weight: 7 },
+    // "prisma"/"sql" alone match how-to noise; require data-ish phrasing.
+    {
+      key: "data",
+      pattern:
+        /\bdata(?:base)?\b|\bcatalog\b|\b(?:prisma|sql)\s+(?:models?|schema|data|layer|access)\b|\b(?:models?|schema)\s+(?:and|&|\/)\s+(?:migrations?|sql|prisma)\b/,
+      weight: 7,
+    },
   ];
 
   let best: { key: string; weight: number } | undefined;
@@ -87,15 +154,23 @@ export function inferSystemKeyFromHeading(heading: string): string | undefined {
   return best?.key;
 }
 
-/** Parse markdown headings into weak system-label hints (first match wins per key). */
+/**
+ * Parse markdown ##/### headings into weak system-label hints (first match wins
+ * per key). H1 is reserved for the product title — using it as a system label
+ * lets logo lines like `![Node/Express/Prisma…](logo.png)` hijack Data access.
+ */
 export function parseReadmeHeadingHints(markdown: string): ReadmeHeadingHint[] {
   const hints: ReadmeHeadingHint[] = [];
   const seen = new Set<string>();
-  const headingRe = /^(#{1,3})\s+(.+?)\s*$/gm;
+  const headingRe = /^(#{2,3})\s+(.+?)\s*$/gm;
   let match: RegExpExecArray | null;
   while ((match = headingRe.exec(markdown)) !== null) {
-    const raw = match[2]!.replace(/\s+#+\s*$/, "").replace(/[*_`]/g, "").trim();
+    const raw = sanitizeMarkdownHeadingText(
+      match[2]!.replace(/\s+#+\s*$/, ""),
+    );
     if (!raw) continue;
+    // Skip headings that are still image/badge chrome after sanitization.
+    if (/^!\[/.test(raw) || /\]\([^)]+\)$/.test(raw)) continue;
     const key = inferSystemKeyFromHeading(raw);
     if (!key || seen.has(key)) continue;
     seen.add(key);
@@ -113,10 +188,10 @@ function applyReadmeHeadingHints(
     const system = systems.get(hint.key);
     if (!system) continue;
     const current = system.label;
+    // Only refine thin path-role defaults — never let a longer how-to heading
+    // win just because it mentions Prisma/SQL/API.
     const canRefine =
-      thinSystemLabels.has(current) ||
-      current.toLowerCase() === hint.key ||
-      hint.label.length > current.length;
+      thinSystemLabels.has(current) || current.toLowerCase() === hint.key;
     if (!canRefine) continue;
     if (current === hint.label) {
       system.metadata = {
@@ -547,6 +622,42 @@ function tableRank(node: ArchitectureNode): number {
   return 0;
 }
 
+/**
+ * Prisma M2M join tables (`_ArticleToTag`, `_UserFavorites`) and dropped
+ * explicit join aliases (`ArticleTags` → articletag) that only restate two
+ * already-known Prisma models.
+ */
+function isJoinTableNoise(
+  node: ArchitectureNode,
+  prismaTableKeys: Set<string>,
+): boolean {
+  const label = node.label.trim();
+  const sqlName = String(node.metadata?.sqlName ?? "");
+  if (label.startsWith("_") || sqlName.startsWith("_")) return true;
+
+  const sources = Array.isArray(node.metadata?.sources)
+    ? (node.metadata.sources as string[])
+    : node.technology
+      ? [node.technology]
+      : [];
+  const sqlOnly =
+    sources.length > 0 && sources.every((source) => source === "sql");
+  if (!sqlOnly || prismaTableKeys.size < 2) return false;
+
+  const key = normalizeTableKey(label);
+  // Skip if this already is (or unified with) a Prisma model.
+  if (prismaTableKeys.has(key)) return false;
+
+  const keys = [...prismaTableKeys];
+  for (let i = 0; i < keys.length; i++) {
+    for (let j = 0; j < keys.length; j++) {
+      if (i === j) continue;
+      if (key === `${keys[i]}${keys[j]}`) return true;
+    }
+  }
+  return false;
+}
+
 function columnRank(node: ArchitectureNode): number {
   if (node.technology === "prisma" && node.metadata?.relation) return 4;
   if (node.technology === "prisma") return 3;
@@ -572,6 +683,32 @@ export function projectSemanticArchitecture(
 
   const product = [...nodes.values()].find((node) => node.kind === "product");
   if (!product) return graph;
+
+  // Prefer a cleaned README H1 when package.json name is scoped/non-descriptive.
+  if (options.readmeTitle) {
+    const preferred = preferProductLabel(
+      options.packageManifest?.name,
+      options.readmeTitle,
+      product.label,
+    );
+    if (preferred !== product.label) {
+      product.metadata = {
+        ...product.metadata,
+        packageName: product.label,
+        labelSource: "readme",
+        readmeTitle: options.readmeTitle,
+      };
+      product.label = preferred;
+      product.evidence = dedupeEvidence([
+        ...product.evidence,
+        projectionEvidence(
+          "README.md",
+          `Product label from README title "${options.readmeTitle}"`,
+        ),
+      ]);
+      nodes.set(product.id, product);
+    }
+  }
 
   const systems = new Map<string, ArchitectureNode>();
   const moduleToSystem = new Map<string, string>();
@@ -1111,6 +1248,40 @@ export function projectSemanticArchitecture(
     nodes.set(node.id, node);
   }
 
+  // Prisma implicit M2M join tables (`_ArticleToTag`) and obsolete SQL join
+  // aliases (`ArticleTags`) restate many-to-many edges. Collapse them on the
+  // default map; real models (Article/Tag/User) carry the data story.
+  const prismaTableKeys = new Set(
+    [...nodes.values()]
+      .filter(
+        (node) =>
+          node.kind === "table" &&
+          (node.technology === "prisma" ||
+            (Array.isArray(node.metadata?.sources) &&
+              (node.metadata.sources as string[]).includes("prisma"))),
+      )
+      .map((node) => normalizeTableKey(String(node.metadata?.prismaName ?? node.label))),
+  );
+  for (const node of [...nodes.values()]) {
+    if (node.kind !== "table") continue;
+    if (!isJoinTableNoise(node, prismaTableKeys)) continue;
+    node.metadata = {
+      ...node.metadata,
+      joinTable: true,
+      collapsedInOverview: true,
+    };
+    nodes.set(node.id, node);
+    for (const child of nodes.values()) {
+      if (child.parentId !== node.id || child.kind !== "column") continue;
+      child.metadata = {
+        ...child.metadata,
+        joinTable: true,
+        collapsedInOverview: true,
+      };
+      nodes.set(child.id, child);
+    }
+  }
+
   // Lift cross-system imports/calls into system dependencies.
   for (const edge of graph.edges) {
     if (edge.kind !== "imports" && edge.kind !== "calls") continue;
@@ -1477,6 +1648,10 @@ export function projectSemanticArchitecture(
 
   const projected: ArchitectureGraph = {
     ...graph,
+    project: {
+      ...graph.project,
+      name: product.label,
+    },
     nodes: [...nodes.values()].sort((a, b) => a.id.localeCompare(b.id)),
     edges: [...edges.values()].sort((a, b) => a.id.localeCompare(b.id)),
     diagnostics: [

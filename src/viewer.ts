@@ -209,8 +209,15 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const query = search.value.trim().toLowerCase();
       return graph.nodes.filter((node) => {
         if (!allowed.has(node.id)) return false;
-        // ORM relation fields stay collapsed; table↔table edges carry the story.
-        if (!query && node.metadata && node.metadata.relationOnly) return false;
+        // ORM relation fields + M2M join-table aliases stay collapsed;
+        // table↔table edges / real models carry the story.
+        if (
+          !query &&
+          node.metadata &&
+          (node.metadata.relationOnly || node.metadata.joinTable)
+        ) {
+          return false;
+        }
         if (!state.implementation && hiddenByDefault.has(node.kind)) return false;
         if (
           !state.implementation &&

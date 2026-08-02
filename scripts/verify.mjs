@@ -1276,15 +1276,25 @@ if (realRepoRoot) {
     const realCounts = countByKind(realGraph.nodes);
     const realRoutes = realGraph.nodes.filter((node) => node.kind === "route");
     const realTables = realGraph.nodes.filter((node) => node.kind === "table");
+    const realJoinTables = realTables.filter(
+      (node) => node.metadata?.joinTable === true,
+    );
+    const realProductTables = realTables.filter(
+      (node) => node.metadata?.joinTable !== true,
+    );
     const realSemantic = realGraph.nodes.filter(
       (node) => node.metadata?.projection === "semantic",
     );
+    const realProduct = realGraph.nodes.find((node) => node.kind === "product");
     const realSummary = {
       pin: `${REALWORLD_EXPRESS.name}@${REALWORLD_EXPRESS.sha}`,
+      product: realProduct?.label ?? "(missing)",
       nodes: realGraph.nodes.length,
       edges: realGraph.edges.length,
       routes: realRoutes.length,
       tables: realTables.length,
+      productTables: realProductTables.map((node) => node.label),
+      joinTables: realJoinTables.map((node) => node.label),
       semantic: realSemantic.map((node) => node.label),
       kinds: Object.fromEntries(
         [...realCounts.entries()].sort((a, b) => a[0].localeCompare(b[0])),
@@ -1307,12 +1317,12 @@ if (realRepoRoot) {
     } else {
       pass(`real-repo routes: ${realRoutes.length}`);
     }
-    if (realTables.length < 3) {
+    if (realProductTables.length < 3) {
       fail(
-        `real-repo table floor: ${realTables.length} < 3 (Prisma models missing)`,
+        `real-repo product table floor: ${realProductTables.length} < 3 (Prisma models missing)`,
       );
     } else {
-      pass(`real-repo tables: ${realTables.length}`);
+      pass(`real-repo product tables: ${realProductTables.length}`);
     }
     const expectedRouteSnippets = [
       "POST /users/login",
@@ -1336,6 +1346,96 @@ if (realRepoRoot) {
       fail("real-repo produced no semantic projection nodes");
     } else {
       pass(`real-repo semantic nodes: ${realSemantic.length}`);
+    }
+
+    // Projection fixes: no markdown-image labels; join tables collapsed.
+    const markdownImageLabels = realGraph.nodes
+      .filter((node) => /!\[/.test(node.label))
+      .map((node) => `${node.kind}:${node.label}`);
+    if (markdownImageLabels.length) {
+      fail(
+        `real-repo labels still contain markdown images: ${markdownImageLabels.join("; ")}`,
+      );
+    } else {
+      pass("real-repo labels have no markdown-image chrome");
+    }
+    if (realProduct?.label !== "Node/Express/Prisma Example App") {
+      fail(
+        `real-repo product label expected cleaned README title, found '${realProduct?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass(
+        `real-repo product label from README: ${realProduct.label}`,
+      );
+    }
+    const pollutedSystems = realSemantic.filter(
+      (node) =>
+        /!\[|project-logo\.png/i.test(node.label) ||
+        /^generate\b/i.test(node.label),
+    );
+    if (pollutedSystems.length) {
+      fail(
+        `real-repo semantic labels still polluted: ${pollutedSystems.map((n) => n.label).join("; ")}`,
+      );
+    } else {
+      pass("real-repo semantic system labels are clean");
+    }
+    const dataSystem = realSemantic.find(
+      (node) => node.metadata?.systemKey === "data",
+    );
+    if (!dataSystem) {
+      fail("real-repo missing Data access semantic system");
+    } else if (dataSystem.label !== "Data access") {
+      fail(
+        `real-repo data system label expected 'Data access', found '${dataSystem.label}'`,
+      );
+    } else {
+      pass("real-repo data system keeps path-role label 'Data access'");
+    }
+    const expectedJoinNoise = [
+      "_articletotag",
+      "_userfavorite",
+      "_userfollow",
+      "Articletag",
+    ];
+    const joinLabels = new Set(
+      realJoinTables.map((node) => node.label.toLowerCase()),
+    );
+    // Accept either preferred label casing; match case-insensitively.
+    const missingJoinCollapse = expectedJoinNoise.filter(
+      (label) =>
+        !realJoinTables.some(
+          (node) => node.label.toLowerCase() === label.toLowerCase(),
+        ) &&
+        realTables.some(
+          (node) => node.label.toLowerCase() === label.toLowerCase(),
+        ),
+    );
+    if (missingJoinCollapse.length) {
+      fail(
+        `real-repo join tables not marked joinTable: ${missingJoinCollapse.join(", ")}`,
+      );
+    } else if (realJoinTables.length < 3) {
+      fail(
+        `real-repo expected ≥3 collapsed join tables, found ${realJoinTables.length} (${[...joinLabels].join(", ")})`,
+      );
+    } else {
+      pass(
+        `real-repo join tables collapsed: ${realJoinTables.map((n) => n.label).join(", ")}`,
+      );
+    }
+    const expectedModels = ["Article", "Comment", "Tag", "User"];
+    const missingModels = expectedModels.filter(
+      (label) => !realProductTables.some((node) => node.label === label),
+    );
+    if (missingModels.length) {
+      fail(
+        `real-repo missing core Prisma models on default map: ${missingModels.join(", ")}`,
+      );
+    } else {
+      pass(
+        `real-repo core Prisma models visible: ${expectedModels.join(", ")}`,
+      );
     }
   }
 }
