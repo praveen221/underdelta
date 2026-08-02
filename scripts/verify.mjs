@@ -1182,6 +1182,19 @@ if (
     "viewer Search must enter a match’s cluster (clusterRootFor/enterSearchMatch) without query dumping the god-graph",
   );
 } else if (
+  !viewerHtml.includes("sessionStorage") ||
+  !viewerHtml.includes("walkStorageKey") ||
+  !viewerHtml.includes("function persistWalkState()") ||
+  !viewerHtml.includes("function restoreWalkState()") ||
+  !viewerHtml.includes('sessionStorage.setItem(walkStorageKey') ||
+  !viewerHtml.includes("sessionStorage.getItem(walkStorageKey)") ||
+  !viewerHtml.includes("restoreWalkState()") ||
+  !viewerHtml.includes("persistWalkState()")
+) {
+  fail(
+    "viewer must persist last tier/focus in sessionStorage (persistWalkState/restoreWalkState) for reload comfort",
+  );
+} else if (
   !viewerHtml.includes("function emptyInspectorMessage()") ||
   !viewerHtml.includes("function walkHintText()") ||
   !viewerHtml.includes('id="walk-hint"') ||
@@ -1209,6 +1222,7 @@ if (
   pass("viewer Walkable tiers: Beginner / Intermediate / Advanced (cluster-scoped Advanced)");
   pass("viewer navigation: breadcrumb + Back/Overview + Esc tier sync");
   pass("viewer Search Enter/click enters cluster (no query god-graph dump)");
+  pass("viewer sessionStorage persists last tier/focus for reload comfort");
   pass("viewer tier copy: walk-hint + emptyInspectorMessage + Code lane");
   pass("viewer Intermediate edge calm: ownership fans collapsed + structural hairlines gated");
 }

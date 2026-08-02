@@ -282,6 +282,50 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       tier: "beginner",
       history: [],
     };
+    // Reload comfort: remember last walk (tier + focus stack) for this project root.
+    const walkStorageKey = "underdelta:walk:" + (graph.project.root || graph.project.name || "default");
+    function persistWalkState() {
+      try {
+        sessionStorage.setItem(walkStorageKey, JSON.stringify({
+          tier: state.tier,
+          focus: state.focus,
+          history: state.history.filter(Boolean),
+          selected: state.selected,
+        }));
+      } catch (_err) {
+        /* private mode / quota — walk still works without persistence */
+      }
+    }
+    function restoreWalkState() {
+      try {
+        const raw = sessionStorage.getItem(walkStorageKey);
+        if (!raw) return false;
+        const saved = JSON.parse(raw);
+        if (!saved || typeof saved !== "object") return false;
+        const focus = typeof saved.focus === "string" && byId.has(saved.focus) ? saved.focus : null;
+        const history = Array.isArray(saved.history)
+          ? saved.history.filter((id) => typeof id === "string" && byId.has(id))
+          : [];
+        state.focus = focus;
+        state.history = focus ? history : [];
+        const selected = typeof saved.selected === "string" && byId.has(saved.selected)
+          ? saved.selected
+          : focus;
+        state.selected = selected;
+        // Keep a manually chosen Advanced-without-focus; otherwise fall back safely.
+        if (typeof saved.tier === "string" && tierOrder.includes(saved.tier)) {
+          state.tier = saved.tier;
+        } else if (focus) {
+          const focused = byId.get(focus);
+          state.tier = focused && advancedKinds.has(focused.kind) ? "advanced" : "intermediate";
+        } else {
+          state.tier = "beginner";
+        }
+        return true;
+      } catch (_err) {
+        return false;
+      }
+    }
     function isAdvancedTier() {
       return state.tier === "advanced";
     }
@@ -387,6 +431,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       inspector.innerHTML = emptyInspectorHtml();
       render();
       applyTransform();
+      persistWalkState();
     }
     // Breadcrumb / Back / Esc: jump to stack index (-1 = Beginner overview).
     function navigateFocusStack(index) {
@@ -403,6 +448,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       resetCamera();
       render();
       applyTransform();
+      persistWalkState();
     }
     // One step back: nested Advanced → Intermediate parent, then Beginner.
     function goBack() {
@@ -1582,6 +1628,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       resetCamera();
       render();
       applyTransform();
+      persistWalkState();
     }
 
     document.getElementById("overview").onclick = () => goOverview();
@@ -1599,8 +1646,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       syncTierButton();
       if (!state.selected) inspector.innerHTML = emptyInspectorHtml();
       render();
+      persistWalkState();
     };
-    syncTierButton();
     search.oninput = () => {
       renderSearchResults();
     };
@@ -1610,6 +1657,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       state.selected = null;
       inspector.innerHTML = emptyInspectorHtml();
       render();
+      persistWalkState();
     };
     viewport.onwheel = (event) => {
       event.preventDefault();
@@ -1641,8 +1689,15 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       viewport.classList.remove("dragging");
     };
 
-    inspector.innerHTML = emptyInspectorHtml();
-    render();
+    // Hydrate last walk before first paint (stale ids → Beginner overview).
+    restoreWalkState();
+    syncTierButton();
+    if (state.selected && byId.has(state.selected)) {
+      selectNode(state.selected);
+    } else {
+      inspector.innerHTML = emptyInspectorHtml();
+      render();
+    }
     applyTransform();
   </script>
 </body>
