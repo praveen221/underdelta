@@ -126,6 +126,63 @@ export const sqlExtractor: ArchitectureExtractor = {
           edgeFrom("migrates", migrationId, tableId, alterEvidence, "alters"),
         );
       }
+
+      // Column-level and table-level FOREIGN KEY → table relations.
+      const fkPattern =
+        /\b(?:FOREIGN\s+KEY\s*\([^)]+\)\s*)?REFERENCES\s+([A-Za-z0-9_."`[\]]+)\s*(?:\([^)]*\))?/gi;
+      const createTableHeaders =
+        /\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([A-Za-z0-9_."`[\]]+)\s*\(/gi;
+      const tableStarts: Array<{ table: string; index: number }> = [];
+      for (const match of source.matchAll(createTableHeaders)) {
+        if (!match[1] || match.index === undefined) continue;
+        tableStarts.push({
+          table: cleanIdentifier(match[1]),
+          index: match.index,
+        });
+      }
+      for (const match of source.matchAll(fkPattern)) {
+        const rawTarget = match[1];
+        if (!rawTarget || match.index === undefined) continue;
+        const targetTable = cleanIdentifier(rawTarget);
+        let sourceTable: string | undefined;
+        for (const start of tableStarts) {
+          if (start.index <= match.index) sourceTable = start.table;
+          else break;
+        }
+        if (!sourceTable || sourceTable === targetTable) continue;
+        const fkEvidence = evidence(file, source, match.index);
+        const sourceId = stableId("table", "sql", sourceTable);
+        const targetId = stableId("table", "sql", targetTable);
+        if (!nodes.some((node) => node.id === sourceId)) {
+          nodes.push({
+            id: sourceId,
+            kind: "table",
+            label: sourceTable,
+            technology: "sql",
+            metadata: {},
+            evidence: [fkEvidence],
+          });
+        }
+        if (!nodes.some((node) => node.id === targetId)) {
+          nodes.push({
+            id: targetId,
+            kind: "table",
+            label: targetTable,
+            technology: "sql",
+            metadata: {},
+            evidence: [fkEvidence],
+          });
+        }
+        edges.push(
+          edgeFrom(
+            "depends-on",
+            sourceId,
+            targetId,
+            { ...fkEvidence, detail: `FOREIGN KEY references ${targetTable}` },
+            "references",
+          ),
+        );
+      }
     }
 
     return {

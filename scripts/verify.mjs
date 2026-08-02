@@ -518,14 +518,114 @@ if (!apiToJobsFlow) {
 
 const fixtureTables = fixtureGraph.nodes.filter((node) => node.kind === "table");
 // After projection, Order/order/orders and Payment/payment/payments collapse.
-if (fixtureTables.length > 4) {
+if (fixtureTables.length !== 2) {
   fail(
-    `expected deduped tables (<=4), found ${fixtureTables.length}: ${fixtureTables
+    `expected exactly 2 unified tables, found ${fixtureTables.length}: ${fixtureTables
       .map((node) => node.label)
       .join(", ")}`,
   );
 } else {
-  pass(`fixture tables deduped to ${fixtureTables.length}`);
+  pass(`fixture tables unified to ${fixtureTables.length}`);
+}
+
+const tableLabels = new Set(fixtureTables.map((node) => node.label));
+if (!tableLabels.has("Order") || !tableLabels.has("Payment")) {
+  fail(
+    `expected Prisma-facing table labels Order + Payment, found ${[...tableLabels].join(", ")}`,
+  );
+} else {
+  pass("table labels prefer Prisma names (Order, Payment)");
+}
+
+for (const table of fixtureTables) {
+  const sqlName = table.metadata?.sqlName;
+  const sources = table.metadata?.sources;
+  if (!sqlName || !Array.isArray(sources) || !sources.includes("prisma") || !sources.includes("sql")) {
+    fail(
+      `expected table ${table.label} to record prisma+sql sources and sqlName, got sqlName=${sqlName} sources=${JSON.stringify(sources)}`,
+    );
+  }
+}
+pass("unified tables record prismaName/sqlName sources");
+
+const migration = fixtureGraph.nodes.find(
+  (node) => node.kind === "schema" && String(node.label).includes("migrations/"),
+);
+const migratesToTables = fixtureGraph.edges.filter((edge) => {
+  if (edge.kind !== "migrates" || edge.source !== migration?.id) return false;
+  return fixtureTables.some((table) => table.id === edge.target);
+});
+const migratedLabels = new Set(
+  migratesToTables.map(
+    (edge) => fixtureTables.find((table) => table.id === edge.target)?.label,
+  ),
+);
+if (!migratedLabels.has("Order") || !migratedLabels.has("Payment")) {
+  fail(
+    `expected migrates edges from SQL migration to Order + Payment, found ${[...migratedLabels].join(", ") || "(none)"}`,
+  );
+} else {
+  pass("SQL migration migrates → unified Order + Payment tables");
+}
+
+const tableRelation = fixtureGraph.edges.find((edge) => {
+  if (edge.kind !== "depends-on") return false;
+  const source = fixtureTables.find((table) => table.id === edge.source);
+  const target = fixtureTables.find((table) => table.id === edge.target);
+  return (
+    (source?.label === "Payment" && target?.label === "Order") ||
+    (source?.label === "Order" && target?.label === "Payment")
+  );
+});
+if (!tableRelation) {
+  fail("expected table relation edge between Payment and Order");
+} else {
+  pass(
+    `table relation: ${fixtureTables.find((t) => t.id === tableRelation.source)?.label} → ${fixtureTables.find((t) => t.id === tableRelation.target)?.label}`,
+  );
+}
+
+const dataAccess = fixtureSystems.find((node) => node.label === "Data access");
+const tablesUnderProduct = fixtureGraph.edges.filter((edge) => {
+  const product = fixtureGraph.nodes.find(
+    (node) => node.kind === "product" && node.id === edge.source,
+  );
+  return (
+    edge.kind === "contains" &&
+    product &&
+    fixtureTables.some((table) => table.id === edge.target)
+  );
+});
+if (!dataAccess) {
+  fail("expected Data access system for fixture tables");
+} else if (tablesUnderProduct.length > 0) {
+  fail("unified tables should not remain contained by product after Data access nesting");
+} else {
+  const nested = fixtureTables.every((table) => table.parentId === dataAccess.id);
+  if (!nested) {
+    fail("expected unified tables nested under Data access");
+  } else {
+    pass("unified tables nested under Data access (not product)");
+  }
+}
+
+const fixtureColumns = fixtureGraph.nodes.filter((node) => node.kind === "column");
+const columnsByTableKey = new Map();
+for (const column of fixtureColumns) {
+  const key = `${column.parentId}:${String(column.label).replaceAll("_", "").toLowerCase()}`;
+  columnsByTableKey.set(key, (columnsByTableKey.get(key) ?? 0) + 1);
+}
+const duplicateColumns = [...columnsByTableKey.entries()].filter(
+  ([, count]) => count > 1,
+);
+if (duplicateColumns.length > 0) {
+  fail(
+    `expected deduped columns after SQL+Prisma unify, found duplicates: ${duplicateColumns
+      .map(([key]) => key)
+      .join(", ")}`,
+  );
+} else {
+  pass(`fixture columns deduped (${fixtureColumns.length} under unified tables)`);
 }
 
 const api = fixtureSystems.find((node) => node.label === "HTTP API");

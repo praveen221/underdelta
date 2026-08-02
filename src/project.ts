@@ -1,6 +1,7 @@
 import { edgeFrom, stableId } from "./graph.js";
 import {
   architectureGraphSchema,
+  type ArchitectureEdge,
   type ArchitectureGraph,
   type ArchitectureNode,
   type EdgeKind,
@@ -360,12 +361,43 @@ function normalizeTableKey(label: string): string {
   return value;
 }
 
+function normalizeColumnKey(label: string): string {
+  return label.trim().replaceAll("_", "").toLowerCase();
+}
+
+function titleCaseSingular(label: string): string {
+  const key = normalizeTableKey(label);
+  if (!key) return label;
+  return `${key.charAt(0).toUpperCase()}${key.slice(1)}`;
+}
+
+function preferredTableLabel(bucket: ArchitectureNode[]): string {
+  const ranked = [...bucket].sort((a, b) => {
+    const rankDiff = tableRank(b) - tableRank(a);
+    if (rankDiff !== 0) return rankDiff;
+    return a.id.localeCompare(b.id);
+  });
+  const best = ranked[0]!;
+  if (best.technology === "prisma" && !best.metadata?.discoveredFromUsage) {
+    return best.label;
+  }
+  if (best.technology === "sql") return titleCaseSingular(best.label);
+  return best.label;
+}
+
 function tableRank(node: ArchitectureNode): number {
   if (node.technology === "prisma" && !node.metadata?.discoveredFromUsage) {
     return 3;
   }
   if (node.technology === "sql") return 2;
   if (node.metadata?.discoveredFromUsage) return 1;
+  return 0;
+}
+
+function columnRank(node: ArchitectureNode): number {
+  if (node.technology === "prisma" && node.metadata?.relation) return 4;
+  if (node.technology === "prisma") return 3;
+  if (node.technology === "sql") return 2;
   return 0;
 }
 
@@ -695,7 +727,7 @@ export function projectSemanticArchitecture(
     }
   }
 
-  // Collapse duplicate table nodes (Order / order / orders).
+  // Collapse duplicate table nodes (Order / order / orders) and polish names.
   const tablesByKey = new Map<string, ArchitectureNode[]>();
   for (const node of nodes.values()) {
     if (node.kind !== "table") continue;
@@ -707,17 +739,39 @@ export function projectSemanticArchitecture(
 
   const redirect = new Map<string, string>();
   for (const [key, bucket] of tablesByKey) {
-    if (bucket.length < 2) continue;
     const ranked = [...bucket].sort((a, b) => {
       const rankDiff = tableRank(b) - tableRank(a);
       if (rankDiff !== 0) return rankDiff;
       return a.id.localeCompare(b.id);
     });
     const canonical = ranked[0]!;
+    const aliases = [
+      ...new Set(
+        ranked
+          .map((node) => node.label)
+          .filter((label) => label !== preferredTableLabel(ranked)),
+      ),
+    ];
+    const prismaName = ranked.find(
+      (node) =>
+        node.technology === "prisma" && !node.metadata?.discoveredFromUsage,
+    )?.label;
+    const sqlName = ranked.find((node) => node.technology === "sql")?.label;
+    const sources = [
+      ...new Set(
+        ranked
+          .map((node) => node.technology)
+          .filter((tech): tech is string => Boolean(tech)),
+      ),
+    ];
+    canonical.label = preferredTableLabel(ranked);
     canonical.metadata = {
       ...canonical.metadata,
-      aliases: ranked.slice(1).map((node) => node.label),
+      aliases,
       normalizedTable: key,
+      ...(prismaName ? { prismaName } : {}),
+      ...(sqlName ? { sqlName } : {}),
+      sources,
     };
     for (const duplicate of ranked.slice(1)) {
       for (const child of nodes.values()) {
@@ -731,16 +785,11 @@ export function projectSemanticArchitecture(
       nodes.delete(duplicate.id);
     }
     canonical.evidence = dedupeEvidence(canonical.evidence);
-    if (dataSystem) {
-      attachToSystem(
-        canonical.id,
-        dataSystem.id,
-        canonical.evidence[0] ?? projectionEvidence("."),
-      );
-    }
     nodes.set(canonical.id, canonical);
   }
 
+  // Retarget edges before re-parenting so SQL→Prisma redirects do not
+  // resurrect stale product/database contains links.
   for (const [edgeId, edge] of [...edges.entries()]) {
     const source = redirect.get(edge.source) ?? edge.source;
     const target = redirect.get(edge.target) ?? edge.target;
@@ -759,6 +808,109 @@ export function projectSemanticArchitecture(
       edge.label,
     );
     edges.set(retargeted.id, retargeted);
+  }
+
+  // Nest unified tables under Data access and keep migration edges intact.
+  if (dataSystem) {
+    for (const node of [...nodes.values()]) {
+      if (node.kind !== "table") continue;
+      attachToSystem(
+        node.id,
+        dataSystem.id,
+        node.evidence[0] ?? projectionEvidence("."),
+      );
+    }
+  }
+
+  // Collapse duplicate columns (created_at / createdAt, order_id / orderId).
+  const columnsByTable = new Map<string, ArchitectureNode[]>();
+  for (const node of nodes.values()) {
+    if (node.kind !== "column" || !node.parentId) continue;
+    const bucket = columnsByTable.get(node.parentId) ?? [];
+    bucket.push(node);
+    columnsByTable.set(node.parentId, bucket);
+  }
+  const columnRedirect = new Map<string, string>();
+  for (const [tableId, columns] of columnsByTable) {
+    const byKey = new Map<string, ArchitectureNode[]>();
+    for (const column of columns) {
+      const key = normalizeColumnKey(column.label);
+      const bucket = byKey.get(key) ?? [];
+      bucket.push(column);
+      byKey.set(key, bucket);
+    }
+    for (const [key, bucket] of byKey) {
+      if (bucket.length < 2) continue;
+      const ranked = [...bucket].sort((a, b) => {
+        const rankDiff = columnRank(b) - columnRank(a);
+        if (rankDiff !== 0) return rankDiff;
+        // Prefer camelCase Prisma-style labels over snake_case.
+        const camelDiff =
+          Number(b.label.includes("_") ? 0 : 1) -
+          Number(a.label.includes("_") ? 0 : 1);
+        if (camelDiff !== 0) return camelDiff;
+        return a.id.localeCompare(b.id);
+      });
+      const canonical = ranked[0]!;
+      canonical.metadata = {
+        ...canonical.metadata,
+        aliases: ranked.slice(1).map((node) => node.label),
+        normalizedColumn: key,
+      };
+      for (const duplicate of ranked.slice(1)) {
+        columnRedirect.set(duplicate.id, canonical.id);
+        canonical.evidence.push(...duplicate.evidence);
+        nodes.delete(duplicate.id);
+      }
+      canonical.evidence = dedupeEvidence(canonical.evidence);
+      canonical.parentId = tableId;
+      nodes.set(canonical.id, canonical);
+    }
+  }
+
+  for (const [edgeId, edge] of [...edges.entries()]) {
+    const source = columnRedirect.get(edge.source) ?? edge.source;
+    const target = columnRedirect.get(edge.target) ?? edge.target;
+    if (!nodes.has(source) || !nodes.has(target)) {
+      edges.delete(edgeId);
+      continue;
+    }
+    if (source === edge.source && target === edge.target) continue;
+    edges.delete(edgeId);
+    if (source === target) continue;
+    const retargeted = edgeFrom(
+      edge.kind,
+      source,
+      target,
+      edge.evidence[0]!,
+      edge.label,
+    );
+    edges.set(retargeted.id, retargeted);
+  }
+
+  // Keep one table↔table relation edge per pair; prefer named Prisma relations.
+  const tableIds = new Set(
+    [...nodes.values()].filter((node) => node.kind === "table").map((n) => n.id),
+  );
+  const relationBest = new Map<string, ArchitectureEdge>();
+  for (const [edgeId, edge] of [...edges.entries()]) {
+    if (edge.kind !== "depends-on") continue;
+    if (!tableIds.has(edge.source) || !tableIds.has(edge.target)) continue;
+    const pairKey = `${edge.source}->${edge.target}`;
+    const existing = relationBest.get(pairKey);
+    const score =
+      (edge.label && edge.label !== "references" ? 2 : 0) +
+      (edge.evidence.some((item) => item.extractor === "prisma") ? 1 : 0);
+    const existingScore = existing
+      ? (existing.label && existing.label !== "references" ? 2 : 0) +
+        (existing.evidence.some((item) => item.extractor === "prisma") ? 1 : 0)
+      : -1;
+    if (!existing || score > existingScore) {
+      if (existing) edges.delete(existing.id);
+      relationBest.set(pairKey, edge);
+    } else {
+      edges.delete(edgeId);
+    }
   }
 
   // Lift cross-system imports/calls into system dependencies.
