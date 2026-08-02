@@ -154,6 +154,48 @@ if (!artifactFlow) {
   pass("architecture.json participates in product flow");
 }
 
+const cli = selfGraph.nodes.find(
+  (node) => node.label === "CLI" && node.metadata?.projection === "semantic",
+);
+const binCommands = Array.isArray(cli?.metadata?.binCommands)
+  ? cli.metadata.binCommands
+  : [];
+if (!cli || !binCommands.includes("underdelta")) {
+  fail(
+    `expected CLI binCommands to include underdelta, found ${JSON.stringify(binCommands)}`,
+  );
+} else {
+  pass(`CLI binCommands: ${binCommands.join(", ")}`);
+}
+
+const cliKeyFiles = Array.isArray(cli?.metadata?.keyFiles)
+  ? cli.metadata.keyFiles
+  : [];
+if (
+  !cliKeyFiles.includes("src/cli.ts") ||
+  !cliKeyFiles.includes("package.json")
+) {
+  fail(
+    `expected CLI keyFiles to include src/cli.ts and package.json, found ${JSON.stringify(cliKeyFiles)}`,
+  );
+} else {
+  pass(`CLI keyFiles: ${cliKeyFiles.join(", ")}`);
+}
+
+const systemsWithKeyFiles = selfGraph.nodes.filter(
+  (node) =>
+    node.metadata?.projection === "semantic" &&
+    Array.isArray(node.metadata.keyFiles) &&
+    node.metadata.keyFiles.length > 0,
+);
+if (systemsWithKeyFiles.length < 5) {
+  fail(
+    `expected keyFiles on semantic systems, found ${systemsWithKeyFiles.length}`,
+  );
+} else {
+  pass(`semantic systems with keyFiles: ${systemsWithKeyFiles.length}`);
+}
+
 const fixtureSystems = fixtureGraph.nodes.filter(
   (node) => node.metadata?.projection === "semantic",
 );

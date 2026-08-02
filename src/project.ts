@@ -7,6 +7,17 @@ import {
   type NodeKind,
 } from "./schema.js";
 
+export interface PackageManifestHint {
+  name?: string;
+  bin?: string | Record<string, string>;
+  exports?: unknown;
+  main?: string;
+}
+
+export interface ProjectOptions {
+  packageManifest?: PackageManifestHint;
+}
+
 interface SystemRole {
   key: string;
   label: string;
@@ -146,13 +157,39 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
   return undefined;
 }
 
-function projectionEvidence(file: string): Evidence {
-  return {
+function projectionEvidence(file: string, detail?: string): Evidence {
+  const evidence: Evidence = {
     file,
     extractor: "projection",
     certainty: "derived",
-    detail: "Semantic system inferred from module path and naming conventions",
   };
+  if (detail !== undefined) {
+    evidence.detail = detail;
+  } else {
+    evidence.detail =
+      "Semantic system inferred from module path and naming conventions";
+  }
+  return evidence;
+}
+
+function normalizeBinEntries(
+  bin: PackageManifestHint["bin"],
+): Array<{ name: string; path: string }> {
+  if (!bin) return [];
+  if (typeof bin === "string") {
+    return [{ name: "cli", path: normalizePath(bin) }];
+  }
+  return Object.entries(bin).map(([name, entryPath]) => ({
+    name,
+    path: normalizePath(entryPath),
+  }));
+}
+
+function guessSourceFromDist(entryPath: string): string {
+  return normalizePath(entryPath)
+    .replace(/^\.\//, "")
+    .replace(/^dist\//, "src/")
+    .replace(/\.js$/i, ".ts");
 }
 
 function dedupeEvidence(evidence: Evidence[]): Evidence[] {
@@ -193,6 +230,7 @@ function tableRank(node: ArchitectureNode): number {
  */
 export function projectSemanticArchitecture(
   graph: ArchitectureGraph,
+  options: ProjectOptions = {},
 ): ArchitectureGraph {
   const nodes = new Map(
     graph.nodes.map((node) => [node.id, { ...node, evidence: [...node.evidence] }]),
@@ -563,8 +601,129 @@ export function projectSemanticArchitecture(
     if (!edges.has(flow.id)) edges.set(flow.id, flow);
   }
 
+  // Project package.json bin / exports into the product map.
+  const manifest = options.packageManifest;
+  if (manifest) {
+    const binEntries = normalizeBinEntries(manifest.bin);
+    if (binEntries.length > 0) {
+      let cli = systems.get("cli");
+      if (!cli) {
+        cli = {
+          id: stableId("system", "cli"),
+          kind: "system",
+          label: "CLI",
+          technology: "semantic",
+          metadata: {
+            projection: "semantic",
+            systemKey: "cli",
+          },
+          evidence: [],
+        };
+        systems.set("cli", cli);
+        nodes.set(cli.id, cli);
+        const productEdge = edgeFrom(
+          "contains",
+          product.id,
+          cli.id,
+          projectionEvidence(
+            "package.json",
+            "CLI inferred from package.json bin",
+          ),
+        );
+        edges.set(productEdge.id, productEdge);
+      }
+
+      cli.metadata = {
+        ...cli.metadata,
+        binCommands: binEntries.map((entry) => entry.name),
+        binEntries: Object.fromEntries(
+          binEntries.map((entry) => [entry.name, entry.path]),
+        ),
+      };
+
+      for (const entry of binEntries) {
+        cli.evidence.push(
+          projectionEvidence(
+            "package.json",
+            `bin.${entry.name} → ${entry.path}`,
+          ),
+        );
+        const sourceGuess = guessSourceFromDist(entry.path);
+        for (const node of nodes.values()) {
+          if (!isFileModule(node)) continue;
+          const file = modulePath(node);
+          if (file !== sourceGuess && file !== normalizePath(entry.path)) {
+            continue;
+          }
+          moduleToSystem.set(node.id, cli.id);
+          node.parentId = cli.id;
+          node.metadata = {
+            ...node.metadata,
+            projectedSystem: "cli",
+            packageBin: entry.name,
+          };
+          nodes.set(node.id, node);
+          const contains = edgeFrom(
+            "contains",
+            cli.id,
+            node.id,
+            projectionEvidence(
+              "package.json",
+              `package bin ${entry.name} maps to ${file}`,
+            ),
+          );
+          edges.set(contains.id, contains);
+        }
+        const exposes = edgeFrom(
+          "exposes",
+          product.id,
+          cli.id,
+          projectionEvidence(
+            "package.json",
+            `package exposes CLI command ${entry.name}`,
+          ),
+          entry.name,
+        );
+        edges.set(exposes.id, exposes);
+      }
+      nodes.set(cli.id, cli);
+    }
+
+    if (manifest.exports !== undefined || manifest.main !== undefined) {
+      product.metadata = {
+        ...product.metadata,
+        packageExports: manifest.exports ?? null,
+        packageMain: manifest.main ?? null,
+      };
+      product.evidence = dedupeEvidence([
+        ...product.evidence,
+        projectionEvidence(
+          "package.json",
+          "Package entrypoints declared in package.json",
+        ),
+      ]);
+      nodes.set(product.id, product);
+    }
+  }
+
   assignFlowOrder(systems, preferredFlows);
+
+  // Surface key source files on every semantic system for the inspector.
   for (const system of systems.values()) {
+    const keyFiles: string[] = [];
+    for (const item of system.evidence) {
+      if (item.file && item.file !== ".") keyFiles.push(normalizePath(item.file));
+    }
+    for (const [moduleId, systemId] of moduleToSystem) {
+      if (systemId !== system.id) continue;
+      const moduleNode = nodes.get(moduleId);
+      if (moduleNode) keyFiles.push(modulePath(moduleNode));
+    }
+    system.metadata = {
+      ...system.metadata,
+      keyFiles: [...new Set(keyFiles)].slice(0, 12),
+    };
+    system.evidence = dedupeEvidence(system.evidence);
     nodes.set(system.id, system);
   }
 

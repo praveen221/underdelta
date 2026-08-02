@@ -11,7 +11,10 @@ import { GraphBuilder, edgeFrom, stableId } from "./graph.js";
 import { prismaExtractor } from "./extractors/prisma.js";
 import { sqlExtractor } from "./extractors/sql.js";
 import { typescriptExtractor } from "./extractors/typescript.js";
-import { projectSemanticArchitecture } from "./project.js";
+import {
+  projectSemanticArchitecture,
+  type PackageManifestHint,
+} from "./project.js";
 import type { ArchitectureGraph, ArchitectureNode } from "./schema.js";
 
 const execFileAsync = promisify(execFile);
@@ -20,15 +23,23 @@ export interface CompileOptions {
   extractors?: ArchitectureExtractor[];
 }
 
-async function projectName(root: string): Promise<string> {
+async function readPackageManifest(
+  root: string,
+): Promise<PackageManifestHint | undefined> {
   try {
-    const manifest = JSON.parse(
+    return JSON.parse(
       await readFile(path.join(root, "package.json"), "utf8"),
-    ) as { name?: string };
-    if (manifest.name) return manifest.name;
+    ) as PackageManifestHint;
   } catch {
-    // A package manifest is optional.
+    return undefined;
   }
+}
+
+async function projectName(
+  root: string,
+  manifest?: PackageManifestHint,
+): Promise<string> {
+  if (manifest?.name) return manifest.name;
   return path.basename(root);
 }
 
@@ -60,11 +71,12 @@ export async function compileRepository(
     extractors.map((extractor) => runExtractor(extractor, root, files)),
   );
 
+  const packageManifest = await readPackageManifest(root);
   const productId = stableId("product", root);
   const productNode: ArchitectureNode = {
     id: productId,
     kind: "product",
-    label: await projectName(root),
+    label: await projectName(root, packageManifest),
     metadata: {
       fileCount: files.length,
     },
@@ -97,5 +109,8 @@ export async function compileRepository(
     root,
   };
   if (gitRevision !== undefined) project.revision = gitRevision;
-  return projectSemanticArchitecture(builder.build(project));
+  return projectSemanticArchitecture(
+    builder.build(project),
+    packageManifest ? { packageManifest } : {},
+  );
 }

@@ -357,17 +357,29 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const incomingEdges = incoming.get(id) || [];
       const outgoingEdges = outgoing.get(id) || [];
       const connections = [...incomingEdges, ...outgoingEdges];
-      const metadata = Object.entries(node.metadata || {}).map(([key, value]) => '<span class="pill">' + key + ": " + String(value) + "</span>").join("");
+      const metadataEntries = Object.entries(node.metadata || {}).filter(([key]) => key !== "keyFiles" && key !== "binEntries" && key !== "packageExports");
+      const metadata = metadataEntries.map(([key, value]) => '<span class="pill">' + key + ": " + String(value) + "</span>").join("");
       const links = connections.slice(0, 20).map((edge) => {
         const other = byId.get(edge.source === id ? edge.target : edge.source);
         return '<button class="pill connection" data-id="' + (other?.id || "") + '">' + edge.kind + " · " + (other?.label || "unknown") + "</button>";
       }).join("");
+      const keyFileList = Array.isArray(node.metadata && node.metadata.keyFiles) ? node.metadata.keyFiles : [];
+      const keyFiles = keyFileList.length
+        ? "<h3>Key files</h3>" + keyFileList.map((file) => {
+            const href = "vscode://file/" + graph.project.root.replace(/\\/$/, "") + "/" + file;
+            return '<div class="evidence"><a href="' + href + '">' + file + "</a></div>";
+          }).join("")
+        : "";
+      const binCommands = Array.isArray(node.metadata && node.metadata.binCommands) ? node.metadata.binCommands : [];
+      const binHtml = binCommands.length
+        ? "<h3>Package bin</h3><p>" + binCommands.map((command) => '<span class="pill">' + command + "</span>").join("") + "</p>"
+        : "";
       const evidence = node.evidence.map((item) => {
         const line = item.range?.startLine || 1;
         const href = "vscode://file/" + graph.project.root.replace(/\\/$/, "") + "/" + item.file + ":" + line;
         return '<div class="evidence"><a href="' + href + '">' + item.file + ":" + line + '</a><div class="certainty ' + item.certainty + '">' + item.certainty + " · " + item.extractor + "</div>" + (item.detail ? "<p>" + item.detail + "</p>" : "") + "</div>";
       }).join("");
-      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + "<h3>Connections</h3>" + (links || '<p>None visible</p>') + "<h3>Source evidence</h3>" + evidence;
+      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + binHtml + keyFiles + "<h3>Connections</h3>" + (links || '<p>None visible</p>') + "<h3>Source evidence</h3>" + evidence;
       inspector.querySelector("h2").textContent = node.label;
       inspector.querySelectorAll(".connection").forEach((button) => {
         button.onclick = () => selectNode(button.dataset.id);
