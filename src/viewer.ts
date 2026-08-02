@@ -683,10 +683,10 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       "helm", "helmChart", "helmResource", "helmModule", "helmChartYaml",
       "helmTemplate", "chartName", "chartVersion", "chartRoot", "appVersion",
       "helmChartOnlyChrome", "helmModuleTwinChrome", "helmBesideOverlayChrome",
-      // Kustomize overlays — Overlay/namespace owned by Overlay inspector section.
+      // Kustomize overlays — Base/Overlay/namespace owned by Overlay inspector section.
       "kustomize", "kustomization", "kustomizeModule", "kustomizationYaml",
       "overlayName", "overlayRoot", "namePrefix", "nameSuffix", "resources",
-      "kustomizeModuleTwinChrome",
+      "kustomizeRole", "kustomizeModuleTwinChrome",
       "exampleChrome", "labelSource", "pathRoleLabel", "collapsedInOverview",
       "overviewHub",
     ]);
@@ -846,13 +846,14 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       return "<h3>Chart</h3>" + pills.join("") + (dependLinks ? '<p class="table-migrations">' + dependLinks + "</p>" : "");
     }
 
-    // Kustomize overlays: kustomization.yaml identity as product words.
+    // Kustomize bases/overlays: kustomization.yaml identity as product words.
     function overlayStoryHtml(node) {
       if (node.kind !== "service" || !(node.metadata && node.metadata.kustomization)) {
         return "";
       }
       const meta = node.metadata || {};
-      const pills = ['<span class="pill">Overlay</span>'];
+      const role = meta.kustomizeRole === "base" ? "Base" : "Overlay";
+      const pills = ['<span class="pill">' + role + "</span>"];
       if (typeof meta.namespace === "string" && meta.namespace) {
         pills.push('<span class="pill">Namespace: ' + meta.namespace + "</span>");
       }
@@ -862,7 +863,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       if (Array.isArray(meta.resources) && meta.resources.length) {
         pills.push('<span class="pill">Resources: ' + meta.resources.length + "</span>");
       }
-      return "<h3>Overlay</h3>" + pills.join("");
+      return "<h3>" + role + "</h3>" + pills.join("");
     }
 
     // Unified tables: explain Prisma/SQL dual identity + migration lineage.

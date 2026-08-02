@@ -2918,8 +2918,10 @@ export function projectSemanticArchitecture(
       node.metadata?.kustomization === true &&
       typeof node.metadata?.overlayName === "string"
     ) {
-      // Overlay/notes → Notes · Overlay
-      nextLabel = `${humanizeIdentifierLabel(node.metadata.overlayName)} · Overlay`;
+      // Base/backend → Backend · Base; Overlay/notes → Notes · Overlay
+      const roleLabel =
+        node.metadata?.kustomizeRole === "base" ? "Base" : "Overlay";
+      nextLabel = `${humanizeIdentifierLabel(node.metadata.overlayName)} · ${roleLabel}`;
     }
 
     if (!nextLabel || nextLabel === node.label) continue;

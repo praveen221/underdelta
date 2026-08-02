@@ -208,6 +208,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 11 prep: Kustomize product overlays — `kustomization.yaml` → Overlay Deploy hubs; path-role `kustomize/`/`overlays/`/`bases/`; README Overlays; `verification/mini-kustomize` smoke floors + Extractors roster `kustomize`; Boutique `kustomize/` + manifests-index Overlay quiet beside kubernetes-manifests
 - [x] Rung 11: pin `stefanprodan/podinfo` @ `eec06d1ea459af4cb4e10e806f8be7c7bd58b361`; clone into gitignored `.underdelta-real/podinfo`; humanize lowercase README brand (`podinfo` → Podinfo); golden-lock 7 Overlay hubs (Backend/Cache/Database/Frontend + Dev/Staging/Production) nested under Deploy + quiet `kustomize/` chrome + namespaces + flowOrder includes Deploy
 - [x] Rung 11 polish: North-star podinfo cold-read — quiet Helm chart hubs + OpenAPI HTTP API when Deploy/Overlays are the product story (Deploy-led flowOrder)
+- [x] Rung 11 polish: label `deploy/bases/*` as · Base (not · Overlay); wire overlay→base needs from `resources:`; mini-kustomize bases+overlays fixture golden-lock
 
 ### Real-repo pins (Capability ladder)
 
@@ -229,7 +230,7 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 11 polish: label `deploy/bases/*` as · Base (not · Overlay); wire overlay→base needs / nest resources under Overlay hubs
+- [ ] Rung 11 polish: nest kubernetes resources under owning Base/Overlay hubs when path-linked (Backend · Base owns its Deployment/Service)
 - [ ] Rung 11 lock: legacy `bases:` key + namePrefix story on Overlay hubs; then golden-lock + promote next ladder rung
 - [ ] GraphQL `schema { query: Root }` / non-Query root types (SWAPI-style) if a later pin needs it
 - [ ] Standing polish: Underdelta self-map cold-read pass — leftover jargon labels or weak hierarchy
@@ -238,7 +239,6 @@ Keep **at least 3 unchecked items** here at all times (refill from Self-renewing
 
 Not a full roadmap — a menu the agent may reorder. Pick what most improves the **Capability ladder** now.
 
-- Rung 11+: nest kubernetes resources under owning Overlay hubs when path-linked
 - GraphQL `extend type Query` / schema stitching if a real-repo pin needs it
 - OAS3 `servers` / `$ref` path-item resolution if a later OpenAPI pin needs it
 - Performance pass only if scanning a real repo becomes painfully slow
@@ -246,7 +246,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Rung 11 Deploy-led podinfo polish — Helm + OpenAPI quieted). Now label `deploy/bases/*` as · Base and wire overlay→base needs so the Overlay story reads as bases + env overlays.
+> **Next focus:** This work is done (Rung 11 Base labels + overlay→base needs). Now nest kubernetes resources under owning Base/Overlay hubs so Backend · Base owns its Deployment/Service on the cold-read.
 
 ### Learning log (append every tick)
 
@@ -334,6 +334,8 @@ Append short bullets like:
 - 2026-08-02 06:57 UTC | Done: Rung 10 locked — Helm Chart/resources as `overviewHub` beside Deploy (Hello world cold-read); quiet Chart.yaml + template modules as `helmModuleTwinChrome`; same-chart same-name Service→Deployment needs when selectors are `include "chart.selectorLabels"`; golden-lock mini-helm + helm/examples; promote Kustomize as Rung 11 | Next: Rung 11 prep — Kustomize product overlays fixture + extractor surface | Learned: collapsing every chart unit left helm/examples as a bare Deploy box — North-star chart-led maps need hubs like mongo aggregates; Chart.yaml modules twin the Chart service and must go `exampleChrome` or Details restates packaging; scaffold charts rarely ship concrete selector maps so fullname equality is the honest needs fallback
 
 - 2026-08-02 07:10 UTC | Done: Rung 11 pin+golden — `stefanprodan/podinfo` @ `eec06d1ea459` gitignored; README `podinfo` → Podinfo; 7 Overlay hubs (Backend/Cache/Database/Frontend + Dev/Staging/Production namespaces) nested under Deploy; quiet root `kustomize/` chrome; golden-lock | Next: podinfo North-star polish (quiet Helm+OpenAPI vs Overlays; · Base labels) | Learned: well-known Kustomize apps often ship Helm charts + OpenAPI beside `deploy/bases`+`overlays` — pin locks the overlay story first, then chrome-quiet for Deploy-led cold-read; legacy `bases:`-only kustomizations (no kind/resources) still skip until a later tick
+
+- 2026-08-02 07:20 UTC | Done: Rung 11 Base labels + overlay→base needs — `kustomizeRole` from `bases?/` vs `overlays?/`; Backend/Cache/Database/Frontend · Base; Dev/Staging/Production → four bases `needs`; mini-kustomize restructured to bases/api+web + overlays/notes; golden-lock | Next: nest k8s resources under owning Base/Overlay hubs | Learned: directory basename alone cannot tell Base from Overlay — path segment `bases/` is the product vocabulary; resolve `resources:` relative roots onto hub `overlayRoot` for needs (skip plain yaml leaves)
 
 ---
 

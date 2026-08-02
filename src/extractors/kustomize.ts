@@ -55,6 +55,15 @@ export function isKustomizePath(file: string): boolean {
   return isKustomizationYaml(file) || isKustomizeTreePath(file);
 }
 
+/** Base vs Overlay from path — `deploy/bases/backend` → base. */
+export function kustomizeRoleFromPath(
+  fileOrRoot: string,
+): "base" | "overlay" {
+  const normalized = fileOrRoot.replaceAll("\\", "/").toLowerCase();
+  if (/(^|\/)bases?\//.test(normalized)) return "base";
+  return "overlay";
+}
+
 export interface ParsedKustomization {
   /** Directory basename — product overlay/base identity. */
   name: string;
@@ -123,6 +132,19 @@ export function parseKustomizationYaml(
   };
 }
 
+/** Resolve a resources: entry to a directory root that may host a hub. */
+function resolveResourceRoot(overlayRoot: string, resource: string): string {
+  let resolved = path.posix.normalize(
+    path.posix.join(overlayRoot, resource.replaceAll("\\", "/")),
+  );
+  if (resolved.startsWith("./")) resolved = resolved.slice(2);
+  const base = path.posix.basename(resolved).toLowerCase();
+  if (base === "kustomization.yaml" || base === "kustomization.yml") {
+    resolved = path.posix.dirname(resolved);
+  }
+  return resolved;
+}
+
 export const kustomizeExtractor: ArchitectureExtractor = {
   id: "kustomize",
   version: "0.1.0",
@@ -133,6 +155,16 @@ export const kustomizeExtractor: ArchitectureExtractor = {
     const nodes: ArchitectureNode[] = [];
     const edges: ArchitectureEdge[] = [];
     const seen = new Set<string>();
+    const hubs: Array<{
+      id: string;
+      overlayRoot: string;
+      resources: string[];
+      file: string;
+      source: string;
+      offset: number;
+      name: string;
+      role: "base" | "overlay";
+    }> = [];
 
     for (const absolute of context.files) {
       const file = relativeFile(context.root, absolute);
@@ -155,6 +187,7 @@ export const kustomizeExtractor: ArchitectureExtractor = {
       const kustomization = parseKustomizationYaml(source, overlayName);
       if (!kustomization) continue;
 
+      const role = kustomizeRoleFromPath(normalized);
       const moduleId = stableId("module", "kustomize", file);
       const moduleEvidence = evidence(
         file,
@@ -177,23 +210,25 @@ export const kustomizeExtractor: ArchitectureExtractor = {
             file,
             overlayName: kustomization.name,
             overlayRoot,
+            kustomizeRole: role,
           },
           evidence: [moduleEvidence],
         });
       }
 
-      const address = `Overlay/${kustomization.name}`;
+      const rolePrefix = role === "base" ? "Base" : "Overlay";
+      const address = `${rolePrefix}/${kustomization.name}`;
       const overlayId = stableId(
         "service",
         "kustomize",
-        "overlay",
+        role,
         overlayRoot,
         kustomization.name,
       );
       if (seen.has(overlayId)) continue;
       seen.add(overlayId);
 
-      const detailParts = [`overlay:${kustomization.name}`];
+      const detailParts = [`${role}:${kustomization.name}`];
       if (kustomization.namespace) {
         detailParts.push(`namespace:${kustomization.namespace}`);
       }
@@ -220,6 +255,7 @@ export const kustomizeExtractor: ArchitectureExtractor = {
           overlayName: kustomization.name,
           address,
           overlayRoot,
+          kustomizeRole: role,
           ...(kustomization.namespace
             ? { namespace: kustomization.namespace }
             : {}),
@@ -241,6 +277,45 @@ export const kustomizeExtractor: ArchitectureExtractor = {
         evidence: [overlayEvidence],
       });
       edges.push(edgeFrom("exposes", moduleId, overlayId, overlayEvidence));
+      hubs.push({
+        id: overlayId,
+        overlayRoot,
+        resources: kustomization.resources,
+        file,
+        source,
+        offset: kustomization.offset,
+        name: kustomization.name,
+        role,
+      });
+    }
+
+    // Overlay → Base needs from resources: ../../bases/backend entries.
+    const hubsByRoot = new Map<string, (typeof hubs)[number]>();
+    for (const hub of hubs) {
+      hubsByRoot.set(hub.overlayRoot, hub);
+    }
+    for (const hub of hubs) {
+      for (const resource of hub.resources) {
+        const resolved = resolveResourceRoot(hub.overlayRoot, resource);
+        if (resolved === hub.overlayRoot) continue;
+        const target = hubsByRoot.get(resolved);
+        if (!target) continue;
+        const depEvidence = evidence(
+          hub.file,
+          hub.source,
+          hub.offset,
+          `needs ${target.role}:${target.name}`,
+        );
+        edges.push(
+          edgeFrom(
+            "depends-on",
+            hub.id,
+            target.id,
+            depEvidence,
+            "needs",
+          ),
+        );
+      }
     }
 
     return {

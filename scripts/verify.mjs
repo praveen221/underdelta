@@ -8122,12 +8122,21 @@ if (!miniKustomizeExtractors.includes("kustomize")) {
   pass("mini-kustomize registers kustomize extractor");
 }
 
-const miniKustomizeOverlay = miniKustomizeOverlayServices.find(
+const miniKustomizeHubs = miniKustomizeOverlayServices.filter(
   (node) => node.metadata?.kustomization === true,
+);
+const miniKustomizeOverlay = miniKustomizeHubs.find(
+  (node) =>
+    node.metadata?.overlayName === "notes" &&
+    node.metadata?.kustomizeRole === "overlay",
+);
+const miniKustomizeBaseLabels = new Set(
+  miniKustomizeHubs
+    .filter((node) => node.metadata?.kustomizeRole === "base")
+    .map((node) => node.label),
 );
 if (
   !miniKustomizeOverlay ||
-  miniKustomizeOverlay.metadata?.overlayName !== "notes" ||
   miniKustomizeOverlay.label !== "Notes · Overlay"
 ) {
   fail(
@@ -8142,6 +8151,15 @@ if (
   );
 } else {
   pass("mini-kustomize has Notes · Overlay hub from kustomization.yaml");
+}
+for (const expected of ["API · Base", "Web · Base"]) {
+  if (!miniKustomizeBaseLabels.has(expected)) {
+    fail(
+      `mini-kustomize missing base hub ${expected}; found ${[...miniKustomizeBaseLabels].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-kustomize base hub ${expected}`);
+  }
 }
 
 const miniKustomizeResources = miniKustomizeK8sServices.filter(
@@ -8230,9 +8248,9 @@ const nestedKustomizeUnits = [
   ...miniKustomizeOverlayServices,
   ...miniKustomizeResources,
 ].filter((node) => node.parentId === miniKustomizeDeploy?.id);
-if (nestedKustomizeUnits.length < 5) {
+if (nestedKustomizeUnits.length < 7) {
   fail(
-    `mini-kustomize expected ≥5 units (overlay + 4 resources) nested under Overlays, found ${nestedKustomizeUnits.length}`,
+    `mini-kustomize expected ≥7 units (2 bases + overlay + 4 resources) nested under Overlays, found ${nestedKustomizeUnits.length}`,
   );
 } else {
   pass(
@@ -8247,20 +8265,50 @@ const miniKustomizeOverviewHubs = nestedKustomizeUnits.filter(
     node.metadata?.exampleChrome !== true,
 );
 if (
-  miniKustomizeOverviewHubs.length < 1 ||
+  miniKustomizeOverviewHubs.length < 3 ||
   !miniKustomizeOverviewHubs.some(
-    (node) => node.metadata?.kustomization === true,
-  )
+    (node) => node.label === "Notes · Overlay",
+  ) ||
+  !miniKustomizeOverviewHubs.some((node) => node.label === "API · Base") ||
+  !miniKustomizeOverviewHubs.some((node) => node.label === "Web · Base")
 ) {
   fail(
-    `mini-kustomize overview should keep Notes · Overlay as a hub beside Overlays, found ${miniKustomizeOverviewHubs
+    `mini-kustomize overview should keep Notes · Overlay + API/Web · Base hubs beside Overlays, found ${miniKustomizeOverviewHubs
       .map((node) => node.label)
       .join(", ") || "(none)"}`,
   );
 } else {
   pass(
-    `mini-kustomize ${miniKustomizeOverviewHubs.length} Overlay hub(s) visible beside Overlays`,
+    `mini-kustomize ${miniKustomizeOverviewHubs.length} Base/Overlay hub(s) visible beside Overlays`,
   );
+}
+
+// Env overlay → base needs from resources: ../../bases/api entries.
+const miniKustomizeHubNeeds = miniKustomizeGraph.edges.filter(
+  (edge) =>
+    edge.kind === "depends-on" &&
+    edge.label === "needs" &&
+    miniKustomizeHubs.some((node) => node.id === edge.source) &&
+    miniKustomizeHubs.some((node) => node.id === edge.target),
+);
+const miniKustomizeHubNeedsPairs = new Set(
+  miniKustomizeHubNeeds.map((edge) => {
+    const from = miniKustomizeHubs.find((node) => node.id === edge.source);
+    const to = miniKustomizeHubs.find((node) => node.id === edge.target);
+    return `${from?.label}→${to?.label}`;
+  }),
+);
+for (const expected of [
+  "Notes · Overlay→API · Base",
+  "Notes · Overlay→Web · Base",
+]) {
+  if (!miniKustomizeHubNeedsPairs.has(expected)) {
+    fail(
+      `mini-kustomize missing overlay→base needs ${expected}; found ${[...miniKustomizeHubNeedsPairs].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-kustomize overlay→base needs ${expected}`);
+  }
 }
 
 const miniKustomizeOverviewLeaves = nestedKustomizeUnits.filter(
@@ -8299,7 +8347,7 @@ const miniKustomizeModules = miniKustomizeGraph.nodes.filter(
   (node) => node.kind === "module" && node.metadata?.kustomizeModule === true,
 );
 const miniKustomizeOverlayModule = miniKustomizeModules.find((node) =>
-  /(?:^|\/)kustomize\/notes\/kustomization\.ya?ml$/i.test(
+  /(?:^|\/)kustomize\/overlays\/notes\/kustomization\.ya?ml$/i.test(
     String(node.metadata?.file ?? node.label).replaceAll("\\", "/"),
   ),
 );
@@ -8310,26 +8358,29 @@ if (
   miniKustomizeOverlayModule.metadata?.kustomizeModuleTwinChrome !== true
 ) {
   fail(
-    `mini-kustomize kustomize/notes/kustomization.yaml should nest under Overlays as Overlay twin chrome; found parent=${miniKustomizeOverlayModule?.parentId ?? "(missing)"} exampleChrome=${miniKustomizeOverlayModule?.metadata?.exampleChrome} twin=${miniKustomizeOverlayModule?.metadata?.kustomizeModuleTwinChrome}`,
+    `mini-kustomize kustomize/overlays/notes/kustomization.yaml should nest under Overlays as Overlay twin chrome; found parent=${miniKustomizeOverlayModule?.parentId ?? "(missing)"} exampleChrome=${miniKustomizeOverlayModule?.metadata?.exampleChrome} twin=${miniKustomizeOverlayModule?.metadata?.kustomizeModuleTwinChrome}`,
   );
 } else {
   pass(
-    "mini-kustomize kustomize/notes/kustomization.yaml quieted as Overlay twin chrome",
+    "mini-kustomize kustomize/overlays/notes/kustomization.yaml quieted as Overlay twin chrome",
   );
 }
 
-const kustomizeEvidenceGaps = miniKustomizeOverlayServices.filter((node) => {
+const kustomizeEvidenceGaps = miniKustomizeHubs.filter((node) => {
   const detail = node.evidence?.[0]?.detail ?? "";
+  if (node.metadata?.kustomizeRole === "base") {
+    return !/^base:/.test(detail);
+  }
   return !/^overlay:/.test(detail);
 });
 if (kustomizeEvidenceGaps.length > 0) {
   fail(
-    `mini-kustomize overlay evidence should cite overlay: ${kustomizeEvidenceGaps
+    `mini-kustomize hub evidence should cite base:/overlay: ${kustomizeEvidenceGaps
       .map((node) => node.label)
       .join(", ")}`,
   );
 } else {
-  pass("mini-kustomize overlay evidence details cite overlay:");
+  pass("mini-kustomize hub evidence details cite base:/overlay:");
 }
 
 const kustomizeCommerceNoise = miniKustomizeGraph.edges.some((edge) =>
@@ -8433,10 +8484,10 @@ if (kustomizeRealRoot) {
     }
 
     const expectedOverlayLabels = [
-      "Backend · Overlay",
-      "Cache · Overlay",
-      "Database · Overlay",
-      "Frontend · Overlay",
+      "Backend · Base",
+      "Cache · Base",
+      "Database · Base",
+      "Frontend · Base",
       "Dev · Overlay",
       "Production · Overlay",
       "Staging · Overlay",
@@ -8444,10 +8495,10 @@ if (kustomizeRealRoot) {
     for (const expected of expectedOverlayLabels) {
       if (!kustomizeRealLabels.has(expected)) {
         fail(
-          `kustomize-real-repo missing overlay hub ${expected}; found ${[...kustomizeRealLabels].join(", ") || "(none)"}`,
+          `kustomize-real-repo missing base/overlay hub ${expected}; found ${[...kustomizeRealLabels].join(", ") || "(none)"}`,
         );
       } else {
-        pass(`kustomize-real-repo overlay hub ${expected}`);
+        pass(`kustomize-real-repo hub ${expected}`);
       }
     }
 
@@ -8458,11 +8509,11 @@ if (kustomizeRealRoot) {
     );
     if (productOverlays.length !== expectedOverlayLabels.length) {
       fail(
-        `kustomize-real-repo expected ${expectedOverlayLabels.length} non-chrome product overlays, found ${productOverlays.length}`,
+        `kustomize-real-repo expected ${expectedOverlayLabels.length} non-chrome product base/overlay hubs, found ${productOverlays.length}`,
       );
     } else {
       pass(
-        `kustomize-real-repo ${productOverlays.length} product overlays stay non-chrome`,
+        `kustomize-real-repo ${productOverlays.length} product base/overlay hubs stay non-chrome`,
       );
     }
 
@@ -8474,14 +8525,47 @@ if (kustomizeRealRoot) {
     );
     if (nestedOverlayHubs.length !== expectedOverlayLabels.length) {
       fail(
-        `kustomize-real-repo expected ${expectedOverlayLabels.length} overview Overlay hubs nested under Deploy, found ${nestedOverlayHubs.length}: ${nestedOverlayHubs
+        `kustomize-real-repo expected ${expectedOverlayLabels.length} overview Base/Overlay hubs nested under Deploy, found ${nestedOverlayHubs.length}: ${nestedOverlayHubs
           .map((node) => node.label)
           .join(", ")}`,
       );
     } else {
       pass(
-        `kustomize-real-repo ${nestedOverlayHubs.length} Overlay hubs nested under Deploy as overview hubs`,
+        `kustomize-real-repo ${nestedOverlayHubs.length} Base/Overlay hubs nested under Deploy as overview hubs`,
       );
+    }
+
+    // Env overlays need the shared bases (resources: ../../bases/backend …).
+    const kustomizeHubNeeds = kustomizeRealGraph.edges.filter(
+      (edge) =>
+        edge.kind === "depends-on" &&
+        edge.label === "needs" &&
+        productOverlays.some((node) => node.id === edge.source) &&
+        productOverlays.some((node) => node.id === edge.target),
+    );
+    const kustomizeHubNeedsPairs = new Set(
+      kustomizeHubNeeds.map((edge) => {
+        const from = productOverlays.find((node) => node.id === edge.source);
+        const to = productOverlays.find((node) => node.id === edge.target);
+        return `${from?.label}→${to?.label}`;
+      }),
+    );
+    for (const env of ["Dev · Overlay", "Staging · Overlay", "Production · Overlay"]) {
+      for (const base of [
+        "Backend · Base",
+        "Frontend · Base",
+        "Cache · Base",
+        "Database · Base",
+      ]) {
+        const expected = `${env}→${base}`;
+        if (!kustomizeHubNeedsPairs.has(expected)) {
+          fail(
+            `kustomize-real-repo missing overlay→base needs ${expected}; found ${[...kustomizeHubNeedsPairs].join(", ") || "(none)"}`,
+          );
+        } else {
+          pass(`kustomize-real-repo overlay→base needs ${expected}`);
+        }
+      }
     }
 
     // Env overlays should keep namespace metadata from kustomization.yaml.
@@ -8611,16 +8695,19 @@ if (kustomizeRealRoot) {
 
     const overlayEvidenceGaps = productOverlays.filter((node) => {
       const detail = node.evidence?.[0]?.detail ?? "";
+      if (node.metadata?.kustomizeRole === "base") {
+        return !/^base:/.test(detail);
+      }
       return !/^overlay:/.test(detail);
     });
     if (overlayEvidenceGaps.length > 0) {
       fail(
-        `kustomize-real-repo overlay evidence should cite overlay: ${overlayEvidenceGaps
+        `kustomize-real-repo hub evidence should cite base:/overlay: ${overlayEvidenceGaps
           .map((node) => node.label)
           .join(", ")}`,
       );
     } else {
-      pass("kustomize-real-repo overlay evidence details cite overlay:");
+      pass("kustomize-real-repo hub evidence details cite base:/overlay:");
     }
 
     const kustomizeRealCommerce = kustomizeRealGraph.edges.some((edge) =>
