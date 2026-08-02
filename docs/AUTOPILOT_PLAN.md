@@ -205,6 +205,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 10: pin `helm/examples` @ `4888ba8fb8180dd0c36d1e84c1fcafc6efd81532`; resolve `include|template "chart.fullname"` (+ `.Chart.Name`/`.Release.Name`/`$fullName`) → chart name; fix metadata.name quote-cut + `spec:` window so ports/`name: http` cannot steal identity; keep Boutique `{{ .Values }}` skipped; golden-lock Hello world Chart/Deployment/Service under Deploy
 - [x] Rung 10 polish: quiet Chart-only chrome beside kubernetes-manifests when every template name is `{{ .Values }}` (Boutique Chart/onlineboutique + Chart.yaml module → `helmChartOnlyChrome`/`exampleChrome`; concrete mini-helm + helm/examples Charts stay)
 - [x] Rung 10 polish/lock: helm/examples North-star — Hello world Chart/Deployment/Service `overviewHub` beside Deploy; quiet Chart.yaml + template module twins as `helmModuleTwinChrome`; same-name Service→Deployment needs when selectors are `include "chart.selectorLabels"`; golden-lock unique hubs — **Rung 10 locked**
+- [x] Rung 11 prep: Kustomize product overlays — `kustomization.yaml` → Overlay Deploy hubs; path-role `kustomize/`/`overlays/`/`bases/`; README Overlays; `verification/mini-kustomize` smoke floors + Extractors roster `kustomize`; Boutique `kustomize/` + manifests-index Overlay quiet beside kubernetes-manifests
 
 ### Real-repo pins (Capability ladder)
 
@@ -225,8 +226,8 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 11 prep: Kustomize product overlays as first-class Deploy story (not only `exampleChrome` quiet) — fixture + path-role; keep Boutique overlays quiet unless they carry concrete product units
 - [ ] Rung 11: pin a real Kustomize-led OSS repo (or promote next popular stack if blocked) + golden-lock Deploy story
+- [ ] Rung 11 polish: overlay→base wiring / resource nesting under Overlay hubs once a pin lands
 - [ ] GraphQL `schema { query: Root }` / non-Query root types (SWAPI-style) if a later pin needs it
 - [ ] Standing polish: Underdelta self-map cold-read pass — leftover jargon labels or weak hierarchy
 
@@ -234,7 +235,7 @@ Keep **at least 3 unchecked items** here at all times (refill from Self-renewing
 
 Not a full roadmap — a menu the agent may reorder. Pick what most improves the **Capability ladder** now.
 
-- Rung 11+: richer Kustomize product overlays / overlay→base wiring after fixture+pin
+- Rung 11+: richer Kustomize product overlays / namePrefix story after pin
 - GraphQL `extend type Query` / schema stitching if a real-repo pin needs it
 - OAS3 `servers` / `$ref` path-item resolution if a later OpenAPI pin needs it
 - Performance pass only if scanning a real repo becomes painfully slow
@@ -242,7 +243,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Rung 10 locked — helm/examples Hello world hubs + Chart twin chrome quiet). Now Rung 11 prep: Kustomize product overlays as a real Deploy story (fixture + extractor surface) so overlay-led apps map beyond chrome-quiet.
+> **Next focus:** This work is done (Rung 11 prep — mini-kustomize Notes · Overlay hub + Boutique chrome quiet). Now pin a real Kustomize-led OSS repo at an exact SHA and golden-lock its Deploy/Overlays story.
 
 ### Learning log (append every tick)
 

@@ -12,6 +12,7 @@ import { dockerExtractor } from "./extractors/docker.js";
 import { graphqlExtractor } from "./extractors/graphql.js";
 import { helmExtractor } from "./extractors/helm.js";
 import { kubernetesExtractor } from "./extractors/kubernetes.js";
+import { kustomizeExtractor } from "./extractors/kustomize.js";
 import { mongoExtractor } from "./extractors/mongo.js";
 import { openapiExtractor } from "./extractors/openapi.js";
 import { prismaExtractor } from "./extractors/prisma.js";
@@ -127,6 +128,7 @@ export async function compileRepository(
     dockerExtractor,
     terraformExtractor,
     kubernetesExtractor,
+    kustomizeExtractor,
     helmExtractor,
     prismaExtractor,
     sqlExtractor,

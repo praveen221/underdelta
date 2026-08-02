@@ -32,6 +32,7 @@ const miniDockerRoot = path.join(repoRoot, "verification", "mini-docker");
 const miniTerraformRoot = path.join(repoRoot, "verification", "mini-terraform");
 const miniK8sRoot = path.join(repoRoot, "verification", "mini-k8s");
 const miniHelmRoot = path.join(repoRoot, "verification", "mini-helm");
+const miniKustomizeRoot = path.join(repoRoot, "verification", "mini-kustomize");
 
 function fail(message) {
   console.error(`VERIFY FAIL: ${message}`);
@@ -120,6 +121,7 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file.includes("mini-terraform/") ||
         file.includes("mini-k8s/") ||
         file.includes("mini-helm/") ||
+        file.includes("mini-kustomize/") ||
         file === ".underdelta-real" ||
         file.startsWith(".underdelta-real/") ||
         file.includes("/.underdelta-real/")
@@ -515,6 +517,7 @@ const requiredExtractors = [
   "graphql",
   "helm",
   "kubernetes",
+  "kustomize",
   "mongo",
   "openapi",
   "prisma",
@@ -542,6 +545,7 @@ const requiredExtractorFiles = [
   "src/extractors/graphql.ts",
   "src/extractors/helm.ts",
   "src/extractors/kubernetes.ts",
+  "src/extractors/kustomize.ts",
   "src/extractors/mongo.ts",
   "src/extractors/openapi.ts",
   "src/extractors/prisma.ts",
@@ -7216,7 +7220,9 @@ if (k8sRealRoot) {
       );
     } else if (
       k8sKustomizeChrome.some(
-        (node) => node.metadata?.collapsedInOverview !== true,
+        (node) =>
+          node.metadata?.collapsedInOverview !== true ||
+          node.metadata?.exampleChrome !== true,
       )
     ) {
       fail(
@@ -7228,6 +7234,40 @@ if (k8sRealRoot) {
     } else {
       pass(
         `kubernetes-real-repo ${k8sKustomizeChrome.length} kustomize overlay units quieted as chrome`,
+      );
+    }
+
+    // Overlay hubs from kustomization.yaml must also stay quiet beside
+    // kubernetes-manifests (Rung 11 prep — product overlays only when kustomize-led).
+    const k8sOverlayHubs = k8sRealGraph.nodes.filter(
+      (node) =>
+        node.kind === "service" && node.metadata?.kustomization === true,
+    );
+    if (k8sOverlayHubs.length === 0) {
+      fail(
+        "kubernetes-real-repo expected Overlay hubs from kustomize/**/kustomization.yaml",
+      );
+    } else if (
+      k8sOverlayHubs.some(
+        (node) =>
+          node.metadata?.exampleChrome !== true ||
+          node.metadata?.collapsedInOverview !== true ||
+          node.metadata?.overviewHub === true,
+      )
+    ) {
+      fail(
+        `kubernetes-real-repo Overlay hubs should quiet beside kubernetes-manifests; found ${k8sOverlayHubs
+          .filter(
+            (node) =>
+              node.metadata?.exampleChrome !== true ||
+              node.metadata?.overviewHub === true,
+          )
+          .map((node) => node.label)
+          .join(", ") || "(none visible)"}`,
+      );
+    } else {
+      pass(
+        `kubernetes-real-repo ${k8sOverlayHubs.length} Overlay hubs quieted beside kubernetes-manifests`,
       );
     }
 
@@ -8036,6 +8076,272 @@ if (helmRealRoot) {
       pass("helm-real-repo North-star overview has unique Hello world labels");
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Capability ladder rung 11 prep: Kustomize overlays extractor + mini-kustomize.
+// ---------------------------------------------------------------------------
+const miniKustomizeGraph = await compileRepository(miniKustomizeRoot);
+const miniKustomizeOverlayServices = miniKustomizeGraph.nodes.filter(
+  (node) => node.kind === "service" && node.metadata?.kustomize === true,
+);
+const miniKustomizeK8sServices = miniKustomizeGraph.nodes.filter(
+  (node) => node.kind === "service" && node.metadata?.kubernetes === true,
+);
+const miniKustomizeServiceLabels = [
+  ...miniKustomizeOverlayServices,
+  ...miniKustomizeK8sServices,
+].map((node) => node.label);
+console.log(
+  `Mini-kustomize graph: ${miniKustomizeGraph.nodes.length} nodes, ${miniKustomizeGraph.edges.length} edges → services ${[...new Set(miniKustomizeServiceLabels)].sort().join(", ")}`,
+);
+
+const miniKustomizeProduct = miniKustomizeGraph.nodes.find(
+  (node) => node.kind === "product",
+);
+if (
+  !miniKustomizeProduct ||
+  miniKustomizeProduct.label !== "Mini Kustomize notes"
+) {
+  fail(
+    `mini-kustomize product label expected 'Mini Kustomize notes', found '${miniKustomizeProduct?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-kustomize product labeled Mini Kustomize notes");
+}
+
+const miniKustomizeExtractors = miniKustomizeGraph.extractors.map(
+  (item) => item.id,
+);
+if (!miniKustomizeExtractors.includes("kustomize")) {
+  fail(
+    `mini-kustomize graph.extractors missing kustomize; found ${JSON.stringify(miniKustomizeExtractors)}`,
+  );
+} else {
+  pass("mini-kustomize registers kustomize extractor");
+}
+
+const miniKustomizeOverlay = miniKustomizeOverlayServices.find(
+  (node) => node.metadata?.kustomization === true,
+);
+if (
+  !miniKustomizeOverlay ||
+  miniKustomizeOverlay.metadata?.overlayName !== "notes" ||
+  miniKustomizeOverlay.label !== "Notes · Overlay"
+) {
+  fail(
+    `mini-kustomize missing Notes · Overlay; found overlayName=${miniKustomizeOverlay?.metadata?.overlayName ?? "(missing)"} label=${miniKustomizeOverlay?.label ?? "(missing)"}`,
+  );
+} else if (
+  miniKustomizeOverlay.metadata?.exampleChrome === true ||
+  miniKustomizeOverlay.metadata?.overviewHub !== true
+) {
+  fail(
+    `mini-kustomize Notes · Overlay should be an overview hub (not chrome); found exampleChrome=${miniKustomizeOverlay.metadata?.exampleChrome} overviewHub=${miniKustomizeOverlay.metadata?.overviewHub}`,
+  );
+} else {
+  pass("mini-kustomize has Notes · Overlay hub from kustomization.yaml");
+}
+
+const miniKustomizeResources = miniKustomizeK8sServices.filter(
+  (node) => node.metadata?.kubernetesResource === true,
+);
+const miniKustomizeAddresses = new Set(
+  miniKustomizeResources.map((node) => node.metadata?.address),
+);
+for (const expected of [
+  "Deployment/api",
+  "Service/api",
+  "Deployment/web",
+  "Ingress/notes",
+]) {
+  if (!miniKustomizeAddresses.has(expected)) {
+    fail(
+      `mini-kustomize missing resource ${expected}; found ${[...miniKustomizeAddresses].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-kustomize has resource ${expected}`);
+  }
+}
+
+for (const expected of [
+  "API · Deployment",
+  "API · Service",
+  "Web · Deployment",
+  "Notes · notes.example.com",
+]) {
+  if (!miniKustomizeServiceLabels.includes(expected)) {
+    fail(
+      `mini-kustomize missing humanized service label ${expected}; found ${miniKustomizeServiceLabels.join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-kustomize service label ${expected}`);
+  }
+}
+
+const miniKustomizeNeedsEdges = miniKustomizeGraph.edges.filter(
+  (edge) =>
+    edge.kind === "depends-on" &&
+    edge.label === "needs" &&
+    miniKustomizeK8sServices.some((node) => node.id === edge.source) &&
+    miniKustomizeK8sServices.some((node) => node.id === edge.target),
+);
+const miniKustomizeNeedsPairs = new Set(
+  miniKustomizeNeedsEdges.map((edge) => {
+    const from = miniKustomizeK8sServices.find(
+      (node) => node.id === edge.source,
+    );
+    const to = miniKustomizeK8sServices.find((node) => node.id === edge.target);
+    return `${from?.metadata?.k8sKind}/${from?.metadata?.resourceName}→${to?.metadata?.k8sKind}/${to?.metadata?.resourceName}`;
+  }),
+);
+for (const expected of [
+  "Service/api→Deployment/api",
+  "Ingress/notes→Service/api",
+]) {
+  if (!miniKustomizeNeedsPairs.has(expected)) {
+    fail(
+      `mini-kustomize missing selector/backend needs edge ${expected}; found ${[...miniKustomizeNeedsPairs].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-kustomize needs ${expected}`);
+  }
+}
+
+const miniKustomizeSemantic = miniKustomizeGraph.nodes.filter(
+  (node) => node.metadata?.projection === "semantic",
+);
+const miniKustomizeByKey = new Map(
+  miniKustomizeSemantic
+    .filter((node) => typeof node.metadata?.systemKey === "string")
+    .map((node) => [node.metadata.systemKey, node]),
+);
+const miniKustomizeDeploy = miniKustomizeByKey.get("deploy");
+if (!miniKustomizeDeploy || miniKustomizeDeploy.label !== "Overlays") {
+  fail(
+    `mini-kustomize Deploy label expected 'Overlays' from README, found '${miniKustomizeDeploy?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-kustomize Deploy labeled Overlays");
+}
+
+const nestedKustomizeUnits = [
+  ...miniKustomizeOverlayServices,
+  ...miniKustomizeResources,
+].filter((node) => node.parentId === miniKustomizeDeploy?.id);
+if (nestedKustomizeUnits.length < 5) {
+  fail(
+    `mini-kustomize expected ≥5 units (overlay + 4 resources) nested under Overlays, found ${nestedKustomizeUnits.length}`,
+  );
+} else {
+  pass(
+    `mini-kustomize ${nestedKustomizeUnits.length} units nested under Overlays`,
+  );
+}
+
+const miniKustomizeOverviewHubs = nestedKustomizeUnits.filter(
+  (node) =>
+    node.metadata?.overviewHub === true &&
+    node.metadata?.collapsedInOverview !== true &&
+    node.metadata?.exampleChrome !== true,
+);
+if (
+  miniKustomizeOverviewHubs.length < 1 ||
+  !miniKustomizeOverviewHubs.some(
+    (node) => node.metadata?.kustomization === true,
+  )
+) {
+  fail(
+    `mini-kustomize overview should keep Notes · Overlay as a hub beside Overlays, found ${miniKustomizeOverviewHubs
+      .map((node) => node.label)
+      .join(", ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `mini-kustomize ${miniKustomizeOverviewHubs.length} Overlay hub(s) visible beside Overlays`,
+  );
+}
+
+const miniKustomizeOverviewLeaves = nestedKustomizeUnits.filter(
+  (node) =>
+    node.metadata?.kustomization !== true &&
+    node.metadata?.collapsedInOverview !== true &&
+    node.metadata?.exampleChrome !== true,
+);
+if (miniKustomizeOverviewLeaves.length > 0) {
+  fail(
+    `mini-kustomize overview should collapse Deployments/Services/Ingress under Overlays, still visible: ${miniKustomizeOverviewLeaves
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-kustomize overview collapses resources under Overlays");
+}
+
+const miniKustomizeFlow = miniKustomizeSemantic
+  .filter((node) => typeof node.metadata?.flowOrder === "number")
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+if (
+  miniKustomizeFlow.length !== 1 ||
+  miniKustomizeFlow[0]?.metadata?.systemKey !== "deploy"
+) {
+  fail(
+    `mini-kustomize flowOrder expected Overlays/Deploy, got ${miniKustomizeFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `mini-kustomize flowOrder: ${miniKustomizeFlow.map((node) => node.label).join(" → ")}`,
+  );
+}
+
+const miniKustomizeModules = miniKustomizeGraph.nodes.filter(
+  (node) => node.kind === "module" && node.metadata?.kustomizeModule === true,
+);
+const miniKustomizeOverlayModule = miniKustomizeModules.find((node) =>
+  /(?:^|\/)kustomize\/notes\/kustomization\.ya?ml$/i.test(
+    String(node.metadata?.file ?? node.label).replaceAll("\\", "/"),
+  ),
+);
+if (
+  !miniKustomizeOverlayModule ||
+  miniKustomizeOverlayModule.parentId !== miniKustomizeDeploy?.id ||
+  miniKustomizeOverlayModule.metadata?.exampleChrome !== true ||
+  miniKustomizeOverlayModule.metadata?.kustomizeModuleTwinChrome !== true
+) {
+  fail(
+    `mini-kustomize kustomize/notes/kustomization.yaml should nest under Overlays as Overlay twin chrome; found parent=${miniKustomizeOverlayModule?.parentId ?? "(missing)"} exampleChrome=${miniKustomizeOverlayModule?.metadata?.exampleChrome} twin=${miniKustomizeOverlayModule?.metadata?.kustomizeModuleTwinChrome}`,
+  );
+} else {
+  pass(
+    "mini-kustomize kustomize/notes/kustomization.yaml quieted as Overlay twin chrome",
+  );
+}
+
+const kustomizeEvidenceGaps = miniKustomizeOverlayServices.filter((node) => {
+  const detail = node.evidence?.[0]?.detail ?? "";
+  return !/^overlay:/.test(detail);
+});
+if (kustomizeEvidenceGaps.length > 0) {
+  fail(
+    `mini-kustomize overlay evidence should cite overlay: ${kustomizeEvidenceGaps
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-kustomize overlay evidence details cite overlay:");
+}
+
+const kustomizeCommerceNoise = miniKustomizeGraph.edges.some((edge) =>
+  /checkout|orders?/i.test(
+    `${edge.label ?? ""} ${JSON.stringify(edge.metadata ?? {})}`,
+  ),
+);
+if (kustomizeCommerceNoise) {
+  fail(
+    "mini-kustomize should not inherit Checkout/orders commerce collaboration copy",
+  );
+} else {
+  pass("mini-kustomize has no Checkout/orders commerce collaboration noise");
 }
 
 if (process.exitCode) {

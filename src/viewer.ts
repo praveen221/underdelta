@@ -683,6 +683,10 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       "helm", "helmChart", "helmResource", "helmModule", "helmChartYaml",
       "helmTemplate", "chartName", "chartVersion", "chartRoot", "appVersion",
       "helmChartOnlyChrome", "helmModuleTwinChrome",
+      // Kustomize overlays — Overlay/namespace owned by Overlay inspector section.
+      "kustomize", "kustomization", "kustomizeModule", "kustomizationYaml",
+      "overlayName", "overlayRoot", "namePrefix", "nameSuffix", "resources",
+      "kustomizeModuleTwinChrome",
       "exampleChrome", "labelSource", "pathRoleLabel", "collapsedInOverview",
       "overviewHub",
     ]);
@@ -842,6 +846,25 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       return "<h3>Chart</h3>" + pills.join("") + (dependLinks ? '<p class="table-migrations">' + dependLinks + "</p>" : "");
     }
 
+    // Kustomize overlays: kustomization.yaml identity as product words.
+    function overlayStoryHtml(node) {
+      if (node.kind !== "service" || !(node.metadata && node.metadata.kustomization)) {
+        return "";
+      }
+      const meta = node.metadata || {};
+      const pills = ['<span class="pill">Overlay</span>'];
+      if (typeof meta.namespace === "string" && meta.namespace) {
+        pills.push('<span class="pill">Namespace: ' + meta.namespace + "</span>");
+      }
+      if (typeof meta.namePrefix === "string" && meta.namePrefix) {
+        pills.push('<span class="pill">Prefix: ' + meta.namePrefix + "</span>");
+      }
+      if (Array.isArray(meta.resources) && meta.resources.length) {
+        pills.push('<span class="pill">Resources: ' + meta.resources.length + "</span>");
+      }
+      return "<h3>Overlay</h3>" + pills.join("");
+    }
+
     // Unified tables: explain Prisma/SQL dual identity + migration lineage.
     function tableSourcesHtml(node, incomingEdges) {
       if (node.kind !== "table") return "";
@@ -973,6 +996,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const containerStory = containerStoryHtml(node, connections);
       const workloadStory = workloadStoryHtml(node, connections);
       const chartStory = chartStoryHtml(node, connections);
+      const overlayStory = overlayStoryHtml(node);
       const tableSources = tableSourcesHtml(node, incomingEdges);
       const tableRelations = tableRelationsHtml(node, connections);
       const collabLinks = collaboration.slice(0, 16).map((edge) => collaborationItem(edge, id)).join("");
@@ -1010,7 +1034,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const collaborationHtml = collabLinks
         ? "<h3>Collaboration</h3>" + collabLinks
         : "";
-      const structuredSections = containerStory || workloadStory || chartStory || tableSources || tableRelations || messaging || collabLinks;
+      const structuredSections = containerStory || workloadStory || chartStory || overlayStory || tableSources || tableRelations || messaging || collabLinks;
       const otherHtml = otherLinks
         ? "<h3>" + (collabLinks ? "Imports &amp; calls" : "Connections") + "</h3>" + otherLinks
         : (structuredSections ? "" : "<h3>Connections</h3><p>None visible</p>");
@@ -1034,7 +1058,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         const href = "vscode://file/" + graph.project.root.replace(/\\/$/, "") + "/" + item.file + ":" + line;
         return '<div class="evidence"><a href="' + href + '">' + item.file + ":" + line + '</a><div class="certainty ' + item.certainty + '">' + item.certainty + " · " + item.extractor + "</div>" + (item.detail ? "<p>" + item.detail + "</p>" : "") + "</div>";
       }).join("");
-      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + containerStory + workloadStory + chartStory + tableSources + tableRelations + messaging + binHtml + rosterHtml + keyFiles + collaborationHtml + otherHtml + "<h3>Source evidence</h3>" + evidence;
+      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + containerStory + workloadStory + chartStory + overlayStory + tableSources + tableRelations + messaging + binHtml + rosterHtml + keyFiles + collaborationHtml + otherHtml + "<h3>Source evidence</h3>" + evidence;
       inspector.querySelector("h2").textContent = node.label;
       inspector.querySelectorAll(".connection").forEach((button) => {
         button.onclick = () => selectNode(button.dataset.id);

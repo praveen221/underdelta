@@ -265,6 +265,12 @@ export function inferSystemKeyFromHeading(heading: string): string | undefined {
       pattern: /\bhelm\s+charts?\b|\bcharts?\b/,
       weight: 7,
     },
+    // Kustomize overlays — prefer "Overlays"; avoid bare "kustomize build" how-tos.
+    {
+      key: "deploy",
+      pattern: /\boverlays?\b|\bkustomize\b|\bkustomization\b/,
+      weight: 7,
+    },
   ];
 
   let best: { key: string; weight: number } | undefined;
@@ -752,7 +758,7 @@ function quietNonCompilerProductChrome(
 
   // Dockerfile-only Deploy beside API/UI/Data is packaging chrome, not the
   // product story (RealWorld/Petstore ships a Dockerfile). Keep Deploy visible
-  // when Compose / Terraform / Kubernetes / Helm units exist — those are real.
+  // when Compose / Terraform / Kubernetes / Helm / Kustomize units exist.
   const deploy = systems.get("deploy");
   const hasDeployUnits = Boolean(
     deploy &&
@@ -764,7 +770,8 @@ function quietNonCompilerProductChrome(
             node.metadata?.terraformModuleBlock === true ||
             node.metadata?.kubernetesResource === true ||
             node.metadata?.helmChart === true ||
-            node.metadata?.helmResource === true),
+            node.metadata?.helmResource === true ||
+            node.metadata?.kustomization === true),
       ),
   );
   if (deploy) {
@@ -808,7 +815,22 @@ function quietNonCompilerProductChrome(
             node.metadata?.helmResource === true),
       ),
   );
-  if (api && (hasComposeServices || hasKubernetesUnits || hasHelmUnits)) {
+  const hasKustomizeUnits = Boolean(
+    deploy &&
+      [...nodes.values()].some(
+        (node) =>
+          node.parentId === deploy.id &&
+          node.metadata?.kustomization === true &&
+          node.metadata?.exampleChrome !== true,
+      ),
+  );
+  if (
+    api &&
+    (hasComposeServices ||
+      hasKubernetesUnits ||
+      hasHelmUnits ||
+      hasKustomizeUnits)
+  ) {
     const apiRoutes = [...nodes.values()].filter(
       (node) => node.parentId === api.id && node.kind === "route",
     );
@@ -933,6 +955,23 @@ function isHelmModulePath(file: string): boolean {
   return false;
 }
 
+/** Kustomize kustomization.yaml + overlay trees. */
+function isKustomizeModulePath(file: string): boolean {
+  const normalized = normalizePath(file).toLowerCase();
+  const base = normalized.split("/").pop() ?? "";
+  if (base === "kustomization.yaml" || base === "kustomization.yml") {
+    return true;
+  }
+  if (
+    /(^|\/)kustomize\//.test(normalized) ||
+    /(^|\/)overlays?\//.test(normalized) ||
+    /(^|\/)bases?\//.test(normalized)
+  ) {
+    return /\.ya?ml$/.test(normalized);
+  }
+  return false;
+}
+
 function isFileModule(node: ArchitectureNode): boolean {
   if (node.kind !== "module") return false;
   const file = normalizePath(node.qualifiedName ?? node.label);
@@ -944,10 +983,13 @@ function isFileModule(node: ArchitectureNode): boolean {
     isTerraformModulePath(file) ||
     isKubernetesModulePath(file) ||
     isHelmModulePath(file) ||
+    isKustomizeModulePath(file) ||
     // Manifest modules emitted by the kubernetes extractor (scattered yaml).
     (node.metadata?.kubernetesModule === true && /\.ya?ml$/i.test(file)) ||
     // Chart/template modules emitted by the helm extractor.
-    (node.metadata?.helmModule === true && /\.ya?ml$/i.test(file))
+    (node.metadata?.helmModule === true && /\.ya?ml$/i.test(file)) ||
+    // kustomization.yaml modules emitted by the kustomize extractor.
+    (node.metadata?.kustomizeModule === true && /\.ya?ml$/i.test(file))
   );
 }
 
@@ -1032,6 +1074,10 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
   }
   // Helm charts / templates are packaged workload deploy surface.
   if (isHelmModulePath(file)) {
+    return { key: "deploy", label: "Deploy", kind: "system" };
+  }
+  // Kustomize overlays / bases are product deploy surface.
+  if (isKustomizeModulePath(file)) {
     return { key: "deploy", label: "Deploy", kind: "system" };
   }
   if (
@@ -1549,11 +1595,35 @@ function isKustomizeChromePath(file: string): boolean {
 
 /**
  * Hide kustomize/ overlay workloads from the default browser (Details still
- * searchable) so Deploy reads as the primary kubernetes-manifests product.
+ * searchable) when a primary kubernetes-manifests (or other non-kustomize)
+ * Deploy story already exists. Kustomize-led apps (only overlay trees) keep
+ * Overlay hubs + resources as the product Deploy story.
  */
 function quietKustomizeChrome(nodes: Map<string, ArchitectureNode>): void {
+  const hasPrimaryKubernetesUnits = [...nodes.values()].some((node) => {
+    if (node.metadata?.kubernetesResource !== true) return false;
+    const file = normalizePath(
+      String(
+        node.evidence?.[0]?.file ??
+          node.metadata?.file ??
+          node.label ??
+          "",
+      ),
+    );
+    return (
+      node.metadata?.kustomizeChrome !== true && !isKustomizeChromePath(file)
+    );
+  });
+  // Without a primary manifests story, kustomize/ IS the Deploy surface.
+  if (!hasPrimaryKubernetesUnits) return;
+
   for (const node of nodes.values()) {
-    if (node.metadata?.kubernetes !== true) continue;
+    if (
+      node.metadata?.kubernetes !== true &&
+      node.metadata?.kustomize !== true
+    ) {
+      continue;
+    }
     const file = normalizePath(
       String(
         node.evidence?.[0]?.file ??
@@ -1573,6 +1643,110 @@ function quietKustomizeChrome(nodes: Map<string, ArchitectureNode>): void {
       kustomizeChrome: true,
       exampleChrome: true,
       collapsedInOverview: true,
+    };
+    nodes.set(node.id, node);
+  }
+}
+
+/**
+ * kustomization.yaml modules restate Overlay service nodes. Mark them
+ * exampleChrome so the North-star cold-read shows Notes · Overlay, not the
+ * packaging file path.
+ */
+function quietKustomizeModuleTwinChrome(
+  nodes: Map<string, ArchitectureNode>,
+): void {
+  const overlayNames = new Set<string>();
+  for (const node of nodes.values()) {
+    if (node.kind !== "service" || node.metadata?.kustomize !== true) continue;
+    if (node.metadata?.exampleChrome === true) continue;
+    const overlayName = node.metadata?.overlayName;
+    if (node.metadata?.kustomization === true && typeof overlayName === "string") {
+      overlayNames.add(overlayName);
+    }
+  }
+  if (overlayNames.size === 0) return;
+
+  for (const node of nodes.values()) {
+    if (node.kind !== "module" || node.metadata?.kustomize !== true) continue;
+    if (node.metadata?.exampleChrome === true) continue;
+    const overlayName = node.metadata?.overlayName;
+    if (typeof overlayName !== "string" || !overlayNames.has(overlayName)) {
+      continue;
+    }
+    node.metadata = {
+      ...node.metadata,
+      kustomizeModuleTwinChrome: true,
+      exampleChrome: true,
+      collapsedInOverview: true,
+    };
+    nodes.set(node.id, node);
+  }
+}
+
+/**
+ * kustomization.yaml sitting inside kubernetes-manifests/k8s/manifests is an
+ * index twin of the concrete Deployments/Services already on the map (Online
+ * Boutique). Quiet those Overlay hubs so workloads own the cold-read; pure
+ * overlay-led trees (mini-kustomize) keep their Overlay hubs.
+ */
+function quietManifestIndexOverlayChrome(
+  nodes: Map<string, ArchitectureNode>,
+): void {
+  const hasConcreteWorkloads = [...nodes.values()].some(
+    (node) =>
+      node.metadata?.kubernetesResource === true &&
+      node.metadata?.kustomizeChrome !== true,
+  );
+  if (!hasConcreteWorkloads) return;
+
+  for (const node of nodes.values()) {
+    if (node.metadata?.kustomization !== true && node.metadata?.kustomizeModule !== true) {
+      continue;
+    }
+    if (node.metadata?.exampleChrome === true) continue;
+    const file = normalizePath(
+      String(
+        node.evidence?.[0]?.file ??
+          node.metadata?.file ??
+          node.label ??
+          "",
+      ),
+    );
+    // Only quiet indexes inside primary manifest trees — not kustomize/ overlays.
+    if (isKustomizeChromePath(file)) continue;
+    if (
+      !/(^|\/)(k8s|kubernetes)(-?manifests?)?(\/|$)/i.test(file) &&
+      !/(^|\/)manifests?(\/|$)/i.test(file)
+    ) {
+      continue;
+    }
+    node.metadata = {
+      ...node.metadata,
+      kustomizeModuleTwinChrome: true,
+      exampleChrome: true,
+      collapsedInOverview: true,
+    };
+    nodes.set(node.id, node);
+  }
+}
+
+/**
+ * Concrete Kustomize Overlay hubs are the Deploy story for overlay-led repos.
+ * Keep them as overview hubs beside Deploy — Boutique kustomize/components
+ * beside kubernetes-manifests stay quiet via exampleChrome.
+ */
+function promoteKustomizeOverviewHubs(
+  nodes: Map<string, ArchitectureNode>,
+): void {
+  for (const node of nodes.values()) {
+    if (node.kind !== "service" || node.metadata?.kustomize !== true) continue;
+    if (node.metadata?.exampleChrome === true) continue;
+    if (node.metadata?.kustomization !== true) continue;
+    node.metadata = {
+      ...node.metadata,
+      overviewHub: true,
+      collapsedInOverview: false,
     };
     nodes.set(node.id, node);
   }
@@ -2286,8 +2460,8 @@ export function projectSemanticArchitecture(
     }
   }
 
-  // Nest Docker / Terraform / Kubernetes / Helm units under Deploy so the
-  // overview tells a containers/infra/workloads/charts story.
+  // Nest Docker / Terraform / Kubernetes / Helm / Kustomize units under Deploy
+  // so the overview tells a containers/infra/workloads/charts/overlays story.
   const deploySystem = systems.get("deploy");
   if (deploySystem) {
     for (const node of [...nodes.values()]) {
@@ -2296,7 +2470,8 @@ export function projectSemanticArchitecture(
         node.metadata?.docker !== true &&
         node.metadata?.terraform !== true &&
         node.metadata?.kubernetes !== true &&
-        node.metadata?.helm !== true
+        node.metadata?.helm !== true &&
+        node.metadata?.kustomize !== true
       ) {
         continue;
       }
@@ -2471,13 +2646,15 @@ export function projectSemanticArchitecture(
     if (node.kind === "function" && node.metadata?.serverAction !== true) {
       continue;
     }
-    // Only collapse Docker/Terraform/Kubernetes/Helm deployables — Extractor roster stays.
+    // Only collapse Docker/Terraform/Kubernetes/Helm/Kustomize deployables —
+    // Extractor roster stays.
     if (
       node.kind === "service" &&
       node.metadata?.docker !== true &&
       node.metadata?.terraform !== true &&
       node.metadata?.kubernetes !== true &&
       node.metadata?.helm !== true &&
+      node.metadata?.kustomize !== true &&
       node.metadata?.role !== "extractor"
     ) {
       continue;
@@ -2682,6 +2859,13 @@ export function projectSemanticArchitecture(
         node.metadata.resourceName,
         hosts,
       );
+    } else if (
+      node.kind === "service" &&
+      node.metadata?.kustomization === true &&
+      typeof node.metadata?.overlayName === "string"
+    ) {
+      // Overlay/notes → Notes · Overlay
+      nextLabel = `${humanizeIdentifierLabel(node.metadata.overlayName)} · Overlay`;
     }
 
     if (!nextLabel || nextLabel === node.label) continue;
@@ -3747,9 +3931,9 @@ export function projectSemanticArchitecture(
   }
 
   // Quiet empty CLI / Schema-contract / table-less Data chrome, Dockerfile-only
-  // Deploy, and thin/empty HTTP API beside Compose/Kubernetes/Helm Deploy so
-  // product overviews stay story-led (API for GraphQL/OpenAPI; Deploy for
-  // containers/k8s/charts).
+  // Deploy, and thin/empty HTTP API beside Compose/Kubernetes/Helm/Kustomize
+  // Deploy so product overviews stay story-led (API for GraphQL/OpenAPI;
+  // Deploy for containers/k8s/charts/overlays).
   quietNonCompilerProductChrome(
     systems,
     nodes,
@@ -3764,7 +3948,12 @@ export function projectSemanticArchitecture(
 
   // Kustomize overlay components (otel / shopping-assistant) sit beside the
   // primary kubernetes-manifests story — quiet like Terraform examples.
+  // Kustomize-led apps (no primary manifests) keep Overlay hubs visible.
   quietKustomizeChrome(nodes);
+
+  // kustomization.yaml inside kubernetes-manifests/ is an index twin of the
+  // concrete workloads — quiet so Deployments/Services own the cold-read.
+  quietManifestIndexOverlayChrome(nodes);
 
   // Chart.yaml-only Helm (every template name is `{{ .Values }}`) beside
   // kubernetes-manifests is packaging chrome — quiet like kustomize overlays.
@@ -3774,9 +3963,17 @@ export function projectSemanticArchitecture(
   // product nodes — quiet so Hello world labels own the cold-read.
   quietHelmModuleTwinChrome(nodes);
 
+  // kustomization.yaml modules twin Overlay service nodes — quiet so
+  // Notes · Overlay owns the cold-read.
+  quietKustomizeModuleTwinChrome(nodes);
+
   // Concrete Helm Chart + resources stay visible beside Deploy (chart-led
   // North-star story). Skips exampleChrome Chart-only Boutique packaging.
   promoteHelmOverviewHubs(nodes);
+
+  // Concrete Kustomize Overlay hubs stay visible beside Deploy (overlay-led
+  // North-star story). Skips exampleChrome Boutique kustomize/components.
+  promoteKustomizeOverviewHubs(nodes);
 
   assignFlowOrder(systems, preferredFlows);
 
