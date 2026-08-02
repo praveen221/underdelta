@@ -2560,6 +2560,68 @@ if (miniPythonCommerceNoise) {
   pass("mini-python has no Checkout/orders commerce collaboration noise");
 }
 
+// Alembic op.create_table + SQLAlchemy __tablename__ → Data access tables.
+const miniPythonData = miniPythonByKey.get("data");
+const miniPythonTables = miniPythonGraph.nodes.filter(
+  (node) => node.kind === "table",
+);
+const miniPythonProductTables = miniPythonTables.filter(
+  (node) => node.metadata?.joinTable !== true,
+);
+const miniPythonJoinTables = miniPythonTables.filter(
+  (node) => node.metadata?.joinTable === true,
+);
+const miniPythonTableLabels = new Set(
+  miniPythonProductTables.map((node) => node.label),
+);
+if (!miniPythonData || miniPythonData.label !== "Data access") {
+  fail(
+    `mini-python data system label expected 'Data access' from db/, found '${miniPythonData?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-python data system labeled Data access");
+}
+for (const expected of ["Note", "User", "Tag"]) {
+  if (!miniPythonTableLabels.has(expected)) {
+    fail(
+      `mini-python missing Alembic/SQLAlchemy table ${expected}; found ${[...miniPythonTableLabels].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-python has table ${expected}`);
+  }
+}
+if (miniPythonJoinTables.length < 1) {
+  fail("mini-python expected notes_to_tags join table collapsed");
+} else {
+  pass(
+    `mini-python join tables collapsed: ${miniPythonJoinTables.map((n) => n.label).join(", ")}`,
+  );
+}
+const miniPythonTablesUnderData = miniPythonProductTables.filter(
+  (node) => node.parentId === miniPythonData?.id,
+);
+if (miniPythonTablesUnderData.length < 3) {
+  fail(
+    `mini-python expected ≥3 product tables nested under Data access, found ${miniPythonTablesUnderData.length}`,
+  );
+} else {
+  pass(
+    `mini-python ${miniPythonTablesUnderData.length} product tables nested under Data access`,
+  );
+}
+if (
+  !miniPythonFlowKeys.includes("api") ||
+  !miniPythonFlowKeys.includes("data")
+) {
+  fail(
+    `mini-python flowOrder expected Notes API → Data access, got ${miniPythonFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `mini-python flowOrder: ${miniPythonFlow.map((node) => node.label).join(" → ")}`,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Capability ladder rung 3: real FastAPI repo (pinned SHA, gitignored).
 // Golden-lock include_router prefixes, empty-path mounts, product title from
@@ -2764,6 +2826,89 @@ if (fastapiRealRoot) {
       );
     } else {
       pass("fastapi-real-repo has no Checkout/orders commerce collaboration noise");
+    }
+
+    // Alembic op.create_table (+ SQLAlchemy/PyPika __table__) → Data access.
+    const fastapiTables = fastapiRealGraph.nodes.filter(
+      (node) => node.kind === "table",
+    );
+    const fastapiJoinTables = fastapiTables.filter(
+      (node) => node.metadata?.joinTable === true,
+    );
+    const fastapiProductTables = fastapiTables.filter(
+      (node) => node.metadata?.joinTable !== true,
+    );
+    const fastapiTableLabels = new Set(
+      fastapiProductTables.map((node) => node.label),
+    );
+    console.log(
+      `FastAPI-real-repo tables: ${JSON.stringify({
+        product: [...fastapiTableLabels].sort(),
+        joins: fastapiJoinTables.map((node) => node.label),
+      })}`,
+    );
+
+    const expectedFastapiTables = ["User", "Article", "Tag", "Commentary"];
+    const missingFastapiTables = expectedFastapiTables.filter(
+      (label) => !fastapiTableLabels.has(label),
+    );
+    if (missingFastapiTables.length) {
+      fail(
+        `fastapi-real-repo missing Alembic tables: ${missingFastapiTables.join(", ")}; found ${[...fastapiTableLabels].join(", ") || "(none)"}`,
+      );
+    } else {
+      pass(
+        `fastapi-real-repo product tables: ${expectedFastapiTables.join(", ")}`,
+      );
+    }
+
+    if (fastapiJoinTables.length < 3) {
+      fail(
+        `fastapi-real-repo expected ≥3 collapsed join tables (favorites / *_to_*), found ${fastapiJoinTables.length}`,
+      );
+    } else {
+      pass(
+        `fastapi-real-repo join tables collapsed: ${fastapiJoinTables.map((n) => n.label).join(", ")}`,
+      );
+    }
+
+    const fastapiTablesUnderData = fastapiProductTables.filter(
+      (node) => node.parentId === fastapiData?.id,
+    );
+    if (fastapiTablesUnderData.length < 4) {
+      fail(
+        `fastapi-real-repo expected ≥4 product tables nested under Data access, found ${fastapiTablesUnderData.length}`,
+      );
+    } else {
+      pass(
+        `fastapi-real-repo ${fastapiTablesUnderData.length} product tables nested under Data access`,
+      );
+    }
+
+    const fastapiCollapsedProductTables = fastapiTablesUnderData.filter(
+      (node) => node.metadata?.collapsedInOverview === true,
+    );
+    if (fastapiCollapsedProductTables.length > 0) {
+      fail(
+        `fastapi-real-repo product tables should stay visible under Data access: ${fastapiCollapsedProductTables.map((n) => n.label).join(", ")}`,
+      );
+    } else {
+      pass("fastapi-real-repo product tables visible under Data access on overview");
+    }
+
+    const fastapiMigrates = fastapiRealGraph.edges.filter(
+      (edge) =>
+        edge.kind === "migrates" &&
+        fastapiProductTables.some((table) => table.id === edge.target),
+    );
+    if (fastapiMigrates.length < 4) {
+      fail(
+        `fastapi-real-repo expected Alembic migrates → product tables, found ${fastapiMigrates.length}`,
+      );
+    } else {
+      pass(
+        `fastapi-real-repo Alembic migrates → ${fastapiMigrates.length} product tables`,
+      );
     }
   }
 }

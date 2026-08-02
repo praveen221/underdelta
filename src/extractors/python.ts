@@ -607,6 +607,258 @@ function extractDjangoRoutes(
   }
 }
 
+/** Find the closing `)` matching the `(` at openIndex (source[openIndex] === '('). */
+function matchingParenEnd(source: string, openIndex: number): number {
+  let depth = 0;
+  let inString: '"' | "'" | null = null;
+  for (let i = openIndex; i < source.length; i++) {
+    const ch = source[i]!;
+    const prev = i > 0 ? source[i - 1]! : "";
+    if (inString) {
+      if (ch === inString && prev !== "\\") inString = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      inString = ch;
+      continue;
+    }
+    if (ch === "(") depth += 1;
+    else if (ch === ")") {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+function cleanSqlIdentifier(identifier: string): string {
+  const stripped = identifier.replaceAll(/["'`[\]]/g, "").trim();
+  if (stripped.includes(".")) {
+    return stripped.slice(stripped.lastIndexOf(".") + 1);
+  }
+  return stripped;
+}
+
+interface AlembicColumn {
+  name: string;
+  type?: string;
+  foreignKeyTable?: string;
+}
+
+/** Parse sa.Column(...) entries inside an op.create_table body. */
+function parseAlembicColumns(body: string): AlembicColumn[] {
+  const columns: AlembicColumn[] = [];
+  const columnStarts = [...body.matchAll(/\b(?:sa\.)?Column\s*\(/gi)];
+  for (const start of columnStarts) {
+    if (start.index === undefined) continue;
+    const open = start.index + start[0]!.lastIndexOf("(");
+    const close = matchingParenEnd(body, open);
+    if (close < 0) continue;
+    const args = body.slice(open + 1, close);
+    const nameMatch = /^\s*(["'][^"']+["'])/.exec(args);
+    if (!nameMatch?.[1]) continue;
+    const name = unquote(nameMatch[1]);
+    if (!name || !/^[A-Za-z_][\w]*$/.test(name)) continue;
+    // First type-ish positional after the name: sa.Integer / sa.Text / Integer
+    const afterName = args.slice(nameMatch[0].length);
+    const typeMatch =
+      /^\s*,\s*(?:sa\.)?([A-Za-z_][\w]*)\b/.exec(afterName) ??
+      /\b(?:sa\.)?([A-Za-z_][\w]*)\s*\(/.exec(afterName);
+    const fkMatch =
+      /\b(?:sa\.)?ForeignKey\s*\(\s*(["'][^"']+["'])/.exec(args);
+    const foreignKeyTable = fkMatch?.[1]
+      ? cleanSqlIdentifier(unquote(fkMatch[1]).split(".")[0] ?? "")
+      : undefined;
+    const column: AlembicColumn = { name };
+    if (typeMatch?.[1]) column.type = typeMatch[1];
+    if (foreignKeyTable) column.foreignKeyTable = foreignKeyTable;
+    columns.push(column);
+  }
+  return columns;
+}
+
+function ensureTableNode(
+  nodes: ArchitectureNode[],
+  table: string,
+  technology: string,
+  evidence: Evidence,
+  metadata: Record<string, unknown> = {},
+): string {
+  const tableId = stableId("table", technology, table);
+  const existing = nodes.find((node) => node.id === tableId);
+  if (existing) {
+    existing.evidence.push(evidence);
+    return tableId;
+  }
+  nodes.push({
+    id: tableId,
+    kind: "table",
+    label: table,
+    technology,
+    metadata,
+    evidence: [evidence],
+  });
+  return tableId;
+}
+
+/**
+ * Alembic migrations: op.create_table("users", sa.Column(...), …)
+ * Plus SQLAlchemy `__tablename__` / PyPika `__table__` model declarations.
+ */
+function extractPythonTables(
+  file: string,
+  source: string,
+  nodes: ArchitectureNode[],
+  edges: ArchitectureEdge[],
+): void {
+  const isAlembicMigration =
+    /(?:^|\/)(?:alembic|migrations)\/(?:versions\/)?[^/]+\.py$/.test(file) ||
+    /\bop\.create_table\s*\(/.test(source);
+
+  let migrationId: string | undefined;
+  if (isAlembicMigration && /\bop\.create_table\s*\(/.test(source)) {
+    migrationId = stableId("schema", "alembic", file);
+    if (!nodes.some((node) => node.id === migrationId)) {
+      nodes.push({
+        id: migrationId,
+        kind: "schema",
+        label: file,
+        technology: "alembic",
+        metadata: { role: "migration" },
+        evidence: [
+          {
+            file,
+            extractor: "python",
+            certainty: "observed",
+            detail: "Alembic migration",
+          },
+        ],
+      });
+    }
+  }
+
+  const createStarts = [...source.matchAll(/\bop\.create_table\s*\(/gi)];
+  for (const start of createStarts) {
+    if (start.index === undefined) continue;
+    const open = start.index + start[0]!.lastIndexOf("(");
+    const close = matchingParenEnd(source, open);
+    if (close < 0) continue;
+    const body = source.slice(open + 1, close);
+    const nameMatch = /^\s*(["'][^"']+["'])/.exec(body);
+    if (!nameMatch?.[1]) continue;
+    const table = cleanSqlIdentifier(unquote(nameMatch[1]));
+    if (!table) continue;
+    const tableEvidence = evidenceAt(
+      file,
+      source,
+      start.index,
+      `Alembic op.create_table(${table})`,
+    );
+    // Share the sql table id namespace so Prisma/SQL unify paths stay coherent.
+    const tableId = ensureTableNode(nodes, table, "sql", tableEvidence, {
+      alembic: true,
+      sqlName: table,
+    });
+    if (migrationId) {
+      edges.push(
+        edgeFrom("migrates", migrationId, tableId, tableEvidence, "creates"),
+      );
+    }
+
+    const columns = parseAlembicColumns(body.slice(nameMatch[0].length));
+    let fkOnly = columns.length > 0;
+    for (const column of columns) {
+      if (!column.foreignKeyTable) fkOnly = false;
+      const columnId = stableId("column", "sql", table, column.name);
+      if (!nodes.some((node) => node.id === columnId)) {
+        nodes.push({
+          id: columnId,
+          kind: "column",
+          label: column.name,
+          parentId: tableId,
+          technology: "sql",
+          metadata: {
+            ...(column.type ? { type: column.type } : {}),
+            ...(column.foreignKeyTable
+              ? { foreignKeyTable: column.foreignKeyTable }
+              : {}),
+          },
+          evidence: [tableEvidence],
+        });
+        edges.push(edgeFrom("contains", tableId, columnId, tableEvidence));
+      }
+      if (column.foreignKeyTable && column.foreignKeyTable !== table) {
+        const targetId = ensureTableNode(
+          nodes,
+          column.foreignKeyTable,
+          "sql",
+          tableEvidence,
+          { alembic: true, sqlName: column.foreignKeyTable },
+        );
+        edges.push(
+          edgeFrom(
+            "depends-on",
+            tableId,
+            targetId,
+            {
+              ...tableEvidence,
+              detail: `FOREIGN KEY ${column.name} → ${column.foreignKeyTable}`,
+            },
+            "references",
+          ),
+        );
+      }
+    }
+    // FK-only junction tables (favorites, articles_to_tags) — mark early so
+    // projection can collapse them without Prisma models present.
+    if (fkOnly || /_to_/i.test(table)) {
+      const node = nodes.find((item) => item.id === tableId);
+      if (node) {
+        node.metadata = {
+          ...node.metadata,
+          joinTableCandidate: true,
+        };
+      }
+    }
+  }
+
+  // SQLAlchemy declarative: __tablename__ = "users"
+  const tableNamePattern = /\b__tablename__\s*=\s*(["'][^"']+["'])/g;
+  for (const match of source.matchAll(tableNamePattern)) {
+    if (!match[1] || match.index === undefined) continue;
+    const table = cleanSqlIdentifier(unquote(match[1]));
+    if (!table) continue;
+    const evidence = evidenceAt(
+      file,
+      source,
+      match.index,
+      `SQLAlchemy __tablename__=${table}`,
+    );
+    ensureTableNode(nodes, table, "sqlalchemy", evidence, {
+      sqlalchemy: true,
+      sqlName: table,
+    });
+  }
+
+  // PyPika / typed query helpers: __table__ = "users"
+  const pypikaPattern = /\b__table__\s*=\s*(["'][^"']+["'])/g;
+  for (const match of source.matchAll(pypikaPattern)) {
+    if (!match[1] || match.index === undefined) continue;
+    const table = cleanSqlIdentifier(unquote(match[1]));
+    if (!table) continue;
+    const evidence = evidenceAt(
+      file,
+      source,
+      match.index,
+      `Query table __table__=${table}`,
+    );
+    ensureTableNode(nodes, table, "sqlalchemy", evidence, {
+      sqlalchemy: true,
+      sqlName: table,
+    });
+  }
+}
+
 export const pythonExtractor: ArchitectureExtractor = {
   id: "python",
   version: "0.1.0",
@@ -666,6 +918,7 @@ export const pythonExtractor: ArchitectureExtractor = {
         prefixes,
       );
       extractDjangoRoutes(model.file, model.source, moduleId, nodes, edges);
+      extractPythonTables(model.file, model.source, nodes, edges);
     }
 
     return {

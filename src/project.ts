@@ -602,10 +602,12 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
   // Drizzle/ORM app schemas live under /db/ (e.g. lib/db/schema.ts). Classify
   // those as Data access BEFORE the bare schema.ts → Schema contract rule, or
   // SaaS starters project a fake "Schema contract" instead of tables under Data.
+  // Also accept repo-root `db/` (Python Alembic fixtures) — not only `/db/`.
   if (
     /(^|\/)(db|database|orders|reconcile)\.[cm]?[jt]sx?$/.test(file) ||
     file.includes("/prisma/") ||
-    file.includes("/db/")
+    /(^|\/)db\//.test(file) ||
+    /(^|\/)database\//.test(file)
   ) {
     return { key: "data", label: "Data access", kind: "system" };
   }
@@ -783,6 +785,14 @@ export function humanizeServerActionLabel(label: string): string {
   return humanizeIdentifierLabel(label).replace(/\s+action$/i, "");
 }
 
+function isSqlFamilyTable(node: ArchitectureNode): boolean {
+  return (
+    node.technology === "sql" ||
+    node.technology === "alembic" ||
+    node.technology === "sqlalchemy"
+  );
+}
+
 function preferredTableLabel(bucket: ArchitectureNode[]): string {
   const ranked = [...bucket].sort((a, b) => {
     const rankDiff = tableRank(b) - tableRank(a);
@@ -793,7 +803,7 @@ function preferredTableLabel(bucket: ArchitectureNode[]): string {
   if (best.technology === "prisma" && !best.metadata?.discoveredFromUsage) {
     return best.label;
   }
-  if (best.technology === "sql") {
+  if (isSqlFamilyTable(best)) {
     const raw = best.label.trim();
     // Keep `_ArticleToTag`-style join chrome so collapse can still see the `_`.
     if (raw.startsWith("_") || /(^|\.)_/.test(raw)) {
@@ -801,6 +811,8 @@ function preferredTableLabel(bucket: ArchitectureNode[]): string {
         ? raw.slice(raw.lastIndexOf(".") + 1)
         : raw;
     }
+    // Keep Alembic junction names (`articles_to_tags`) recognizable for collapse.
+    if (/_to_/i.test(raw)) return raw;
     return titleCaseSingular(best.label);
   }
   return best.label;
@@ -810,7 +822,9 @@ function tableRank(node: ArchitectureNode): number {
   if (node.technology === "prisma" && !node.metadata?.discoveredFromUsage) {
     return 3;
   }
-  if (node.technology === "sql") return 2;
+  // Alembic migrations outrank ORM/query-helper table declarations.
+  if (node.technology === "sql" || node.technology === "alembic") return 2;
+  if (node.technology === "sqlalchemy") return 2;
   if (node.metadata?.discoveredFromUsage) return 1;
   return 0;
 }
@@ -880,14 +894,23 @@ function isJoinTableNoise(
   ) {
     return true;
   }
+  // Alembic/SQL junctions: followers_to_followings, articles_to_tags.
+  if (candidates.some((name) => /_to_/i.test(name.trim()))) {
+    return true;
+  }
+  // Extractor-marked FK-only tables (favorites) without Prisma models.
+  if (node.metadata?.joinTableCandidate === true) {
+    return true;
+  }
 
   const sources = Array.isArray(node.metadata?.sources)
     ? (node.metadata.sources as string[])
     : node.technology
       ? [node.technology]
       : [];
+  const sqlFamily = new Set(["sql", "alembic", "sqlalchemy"]);
   const sqlOnly =
-    sources.length > 0 && sources.every((source) => source === "sql");
+    sources.length > 0 && sources.every((source) => sqlFamily.has(source));
   if (!sqlOnly || prismaTableKeys.size < 2) return false;
 
   const key = normalizeTableKey(label);
@@ -1431,7 +1454,10 @@ export function projectSemanticArchitecture(
       (node) =>
         node.technology === "prisma" && !node.metadata?.discoveredFromUsage,
     )?.label;
-    const sqlName = ranked.find((node) => node.technology === "sql")?.label;
+    const sqlName = ranked.find((node) => isSqlFamilyTable(node))?.label ??
+      (typeof ranked[0]?.metadata?.sqlName === "string"
+        ? ranked[0].metadata.sqlName
+        : undefined);
     const sources = [
       ...new Set(
         ranked
@@ -1440,6 +1466,9 @@ export function projectSemanticArchitecture(
       ),
     ];
     canonical.label = preferredTableLabel(ranked);
+    const joinCandidate = ranked.some(
+      (node) => node.metadata?.joinTableCandidate === true,
+    );
     canonical.metadata = {
       ...canonical.metadata,
       aliases,
@@ -1447,6 +1476,7 @@ export function projectSemanticArchitecture(
       ...(prismaName ? { prismaName } : {}),
       ...(sqlName ? { sqlName } : {}),
       sources,
+      ...(joinCandidate ? { joinTableCandidate: true } : {}),
     };
     for (const duplicate of ranked.slice(1)) {
       for (const child of nodes.values()) {
