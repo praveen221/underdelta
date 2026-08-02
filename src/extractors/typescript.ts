@@ -109,6 +109,11 @@ function stringValue(node: ts.Expression | undefined): string | undefined {
   return undefined;
 }
 
+/** Express/Fastify-style paths start with `/` or `*`; Map.get("cli") does not. */
+function looksLikeHttpRoutePath(value: string): boolean {
+  return value.startsWith("/") || value.startsWith("*");
+}
+
 function propertyChain(node: ts.Expression): string[] {
   if (ts.isIdentifier(node)) return [node.text];
   if (ts.isPropertyAccessExpression(node)) {
@@ -349,7 +354,14 @@ export const typescriptExtractor: ArchitectureExtractor = {
 
           if (method && httpMethods.has(method)) {
             const routePath = stringValue(node.arguments[0]);
-            if (routePath) {
+            // Require an HTTP-shaped path + handler arg so Map.get("x") / Set.delete
+            // never become fake Application routes on product diagrams.
+            const hasHandlerArg = (node.arguments?.length ?? 0) >= 2;
+            if (
+              routePath &&
+              looksLikeHttpRoutePath(routePath) &&
+              hasHandlerArg
+            ) {
               const routeId = stableId(
                 "route",
                 file.relative,

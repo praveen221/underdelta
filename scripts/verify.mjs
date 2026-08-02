@@ -221,6 +221,31 @@ if (missingFlowLabels.length) {
   pass(`golden flowOrder: ${goldenSummary.flowOrder.join(" → ")}`);
 }
 
+// Map.get("cli") / systems.get("data") must not become Application routes.
+const fakeHttpRoutes = selfGraph.nodes.filter(
+  (node) =>
+    node.kind === "route" &&
+    typeof node.metadata?.path === "string" &&
+    !String(node.metadata.path).startsWith("/") &&
+    !String(node.metadata.path).startsWith("*"),
+);
+const mapGetRouteLabels = ["GET cli", "GET data", "GET extractors", "GET pipelines", "GET workers"];
+const leakedMapGetRoutes = selfGraph.nodes.filter(
+  (node) => node.kind === "route" && mapGetRouteLabels.includes(node.label),
+);
+if (fakeHttpRoutes.length || leakedMapGetRoutes.length) {
+  fail(
+    `self-map has false-positive HTTP routes from non-path .get/.post calls: ${[
+      ...new Set([
+        ...fakeHttpRoutes.map((node) => node.label),
+        ...leakedMapGetRoutes.map((node) => node.label),
+      ]),
+    ].join(", ")}`,
+  );
+} else {
+  pass("self-map has no Map.get-style false-positive HTTP routes");
+}
+
 const artifact = selfGraph.nodes.find(
   (node) =>
     node.label === "architecture.json" && node.metadata?.role === "artifact",
@@ -992,12 +1017,18 @@ const narrativeBadgeFn = fixtureViewerHtml.indexOf("function narrativeBadgeLabel
 const narrativeCss = fixtureViewerHtml.indexOf(".edge.narrative");
 const narrativePublishesCss = fixtureViewerHtml.indexOf(".edge.narrative.publishes");
 const narrativeMigratesCss = fixtureViewerHtml.indexOf(".edge.narrative.migrates");
-const edgeBadgeClass = fixtureViewerHtml.indexOf('class="edge-badge"');
+// Badges are created via setAttribute in the viewer script (not static HTML).
+const edgeBadgeClass = fixtureViewerHtml.indexOf(
+  'setAttribute("class", "edge-badge")',
+);
 const narrativeLegend = fixtureViewerHtml.indexOf('class="narrative">publishes / migrates');
 const suppressContainsNearNarrative = fixtureViewerHtml.includes(
   'edge.kind === "contains" &&',
 ) && fixtureViewerHtml.includes("narrativePairs.has");
 const dataNarrativeAttr = fixtureViewerHtml.indexOf('data-narrative", "true"');
+const narrativeAppendBadge = fixtureViewerHtml.includes(
+  "appendEdgeBadge(geom.mx, geom.my, narrativeBadgeLabel(edges))",
+);
 if (
   narrativeKindsDecl < 0 ||
   narrativeBadgeFn < 0 ||
@@ -1006,7 +1037,8 @@ if (
   narrativeMigratesCss < 0 ||
   edgeBadgeClass < 0 ||
   narrativeLegend < 0 ||
-  dataNarrativeAttr < 0
+  dataNarrativeAttr < 0 ||
+  !narrativeAppendBadge
 ) {
   fail(
     "viewer canvas should label publishes/consumes/migrates with narrative edge badges",
