@@ -96,31 +96,32 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] SQL + Prisma table unification polish (names, relations, migrations edge, column dedupe)
 - [x] README heading roles as weak projection hints
 - [x] Viewer inspector: show collaboration edges (uses/renders/exposes) before raw imports
+- [x] Inspector: surface migration + sqlName/prismaName on unified tables
+- [x] Collapse relation-only Prisma fields on overview while keeping table↔table edges
 
 ### In progress / next
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Inspector: surface migration + sqlName/prismaName on unified tables
-- [ ] Collapse relation-only Prisma fields on overview while keeping table↔table edges
-- [ ] Multi-file route frameworks / Next-style app router hints (only if it helps the chosen stack)
 - [ ] Inspector: show collaboration edge detail text (not just kind · label)
+- [ ] Canvas: style collaboration edges differently from imports/calls
+- [ ] Multi-file route frameworks / Next-style app router hints (only if it helps the chosen stack)
+- [ ] Inspector: show table↔table relation labels beside Data access nodes
 
 ### Seed backlog (pull from here when In progress < 3)
 
 Not a full roadmap — a menu the agent may reorder. Pick what most improves the end goal now.
 
-- Inspector: surface migration + sqlName/prismaName on unified tables
-- Collapse relation-only Prisma fields on overview while keeping table↔table edges
-- Multi-file route frameworks / Next-style app router hints (only if it helps the chosen stack)
 - Inspector: show collaboration edge detail text (not just kind · label)
 - Canvas: style collaboration edges differently from imports/calls
+- Multi-file route frameworks / Next-style app router hints (only if it helps the chosen stack)
+- Inspector: show table↔table relation labels beside Data access nodes
 - Performance pass only if scan becomes painful on mini-stack / self repo
 - Docs only when CLI/behavior changed
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (reconciled README heading hints + inspector Collaboration before Imports & calls). Now surface migration + sqlName/prismaName on unified tables in the inspector so Data access nodes explain their dual Prisma/SQL sources.
+> **Next focus:** This work is done (reconciled Prisma/SQL inspector + collapsed relation-only fields). Now show collaboration edge detail text in the inspector (not just kind · label) so system collaboration explains *how* nodes connect.
 
 ### Learning log (append every tick)
 
@@ -143,6 +144,7 @@ Append short bullets like:
 - 2026-08-02 03:25 UTC | Done: collaboration edges (compile uses extractors/graph/schema, viewer renders graph+IR, CLI triggers compile + exposes artifacts, schema configures extractors/graph) + verify | Next: extractor roster on Extractors system | Learned: flows-to alone reads as a pipeline; uses/renders/exposes/triggers make system collaboration legible without overcrowding the Product flow band
 - 2026-08-02 03:30 UTC | Done: reconciled extractor roster + mini-stack flowOrder on Status board; polished SQL+Prisma table unify (labels/sources, migrates edges, FK relations, column dedupe, fix retarget-before-attach) + verify | Next: README heading roles as weak projection hints | Learned: retargeting SQL table ids after attach resurrects product→table contains; merge redirects must land before Data access nesting; column camel/snake aliases otherwise restates the schema twice
 - 2026-08-02 03:40 UTC | Done: reconciled README heading hints on Status board; inspector Collaboration section (uses/renders/exposes/triggers/configures/flows-to) before Imports & calls + verify | Next: inspector migration/sqlName/prismaName on unified tables | Learned: prior tick can land a feature without updating the plan—reconcile Done first; product-story edges must outrank module imports in the inspector or founders still see a dependency dump
+- 2026-08-02 03:45 UTC | Done: reconciled Prisma/SQL inspector on Status board; collapse relation-only Prisma fields (order/payments) with relationOnly + viewer hide; keep Payment↔Order edges + verify | Next: inspector collaboration edge detail text | Learned: ORM navigation fields restate table↔table edges as fake columns once Details is on; collapse them at projection time and hide unless searched so Data access stays schema-true
 
 ---
 
