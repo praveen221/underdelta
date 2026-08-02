@@ -8244,21 +8244,49 @@ if (!miniKustomizeDeploy || miniKustomizeDeploy.label !== "Overlays") {
   pass("mini-kustomize Deploy labeled Overlays");
 }
 
-const nestedKustomizeUnits = [
-  ...miniKustomizeOverlayServices,
-  ...miniKustomizeResources,
-].filter((node) => node.parentId === miniKustomizeDeploy?.id);
-if (nestedKustomizeUnits.length < 7) {
+// Base/Overlay hubs nest under Overlays; path-linked k8s nest under hubs.
+const nestedKustomizeHubs = miniKustomizeOverlayServices.filter(
+  (node) => node.parentId === miniKustomizeDeploy?.id,
+);
+if (nestedKustomizeHubs.length < 3) {
   fail(
-    `mini-kustomize expected ≥7 units (2 bases + overlay + 4 resources) nested under Overlays, found ${nestedKustomizeUnits.length}`,
+    `mini-kustomize expected ≥3 Base/Overlay hubs nested under Overlays, found ${nestedKustomizeHubs.length}`,
   );
 } else {
   pass(
-    `mini-kustomize ${nestedKustomizeUnits.length} units nested under Overlays`,
+    `mini-kustomize ${nestedKustomizeHubs.length} Base/Overlay hubs nested under Overlays`,
   );
 }
 
-const miniKustomizeOverviewHubs = nestedKustomizeUnits.filter(
+const miniKustomizeApiBase = miniKustomizeHubs.find(
+  (node) => node.label === "API · Base",
+);
+const miniKustomizeWebBase = miniKustomizeHubs.find(
+  (node) => node.label === "Web · Base",
+);
+const miniKustomizeNotesOverlay = miniKustomizeHubs.find(
+  (node) => node.label === "Notes · Overlay",
+);
+const miniKustomizeOwnedByHub = [
+  ["Deployment/api", miniKustomizeApiBase],
+  ["Service/api", miniKustomizeApiBase],
+  ["Deployment/web", miniKustomizeWebBase],
+  ["Ingress/notes", miniKustomizeNotesOverlay],
+];
+for (const [address, hub] of miniKustomizeOwnedByHub) {
+  const resource = miniKustomizeResources.find(
+    (node) => node.metadata?.address === address,
+  );
+  if (!resource || !hub || resource.parentId !== hub.id) {
+    fail(
+      `mini-kustomize ${address} should nest under ${hub?.label ?? "(missing hub)"}; found parent=${resource ? miniKustomizeGraph.nodes.find((node) => node.id === resource.parentId)?.label ?? resource.parentId : "(missing)"}`,
+    );
+  } else {
+    pass(`mini-kustomize ${address} nested under ${hub.label}`);
+  }
+}
+
+const miniKustomizeOverviewHubs = nestedKustomizeHubs.filter(
   (node) =>
     node.metadata?.overviewHub === true &&
     node.metadata?.collapsedInOverview !== true &&
@@ -8311,20 +8339,19 @@ for (const expected of [
   }
 }
 
-const miniKustomizeOverviewLeaves = nestedKustomizeUnits.filter(
+const miniKustomizeOverviewLeaves = miniKustomizeResources.filter(
   (node) =>
-    node.metadata?.kustomization !== true &&
     node.metadata?.collapsedInOverview !== true &&
     node.metadata?.exampleChrome !== true,
 );
 if (miniKustomizeOverviewLeaves.length > 0) {
   fail(
-    `mini-kustomize overview should collapse Deployments/Services/Ingress under Overlays, still visible: ${miniKustomizeOverviewLeaves
+    `mini-kustomize overview should collapse Deployments/Services/Ingress under Base/Overlay hubs, still visible: ${miniKustomizeOverviewLeaves
       .map((node) => node.label)
       .join(", ")}`,
   );
 } else {
-  pass("mini-kustomize overview collapses resources under Overlays");
+  pass("mini-kustomize overview collapses resources under Base/Overlay hubs");
 }
 
 const miniKustomizeFlow = miniKustomizeSemantic
@@ -8607,16 +8634,52 @@ if (kustomizeRealRoot) {
     const kustomizeRealK8s = kustomizeRealGraph.nodes.filter(
       (node) =>
         node.kind === "service" &&
-        node.metadata?.kubernetesResource === true &&
-        node.parentId === kustomizeRealDeploy?.id,
+        node.metadata?.kubernetesResource === true,
     );
-    if (kustomizeRealK8s.length < 8) {
+    // Path-linked base ownership: Backend · Base owns its Deployment/Service.
+    const kustomizeRealBackendBase = productOverlays.find(
+      (node) => node.label === "Backend · Base",
+    );
+    const backendOwned = kustomizeRealK8s.filter(
+      (node) => node.parentId === kustomizeRealBackendBase?.id,
+    );
+    const backendOwnedAddresses = new Set(
+      backendOwned.map((node) => node.metadata?.address),
+    );
+    for (const expected of ["Deployment/backend", "Service/backend"]) {
+      if (!backendOwnedAddresses.has(expected)) {
+        fail(
+          `kustomize-real-repo Backend · Base should own ${expected}; found ${[...backendOwnedAddresses].join(", ") || "(none)"} under hub`,
+        );
+      } else {
+        pass(`kustomize-real-repo Backend · Base owns ${expected}`);
+      }
+    }
+
+    const hubOwnedK8s = kustomizeRealK8s.filter((node) =>
+      productOverlays.some((hub) => hub.id === node.parentId),
+    );
+    if (hubOwnedK8s.length < 14) {
       fail(
-        `kustomize-real-repo expected ≥8 kubernetes resources nested under Deploy, found ${kustomizeRealK8s.length}`,
+        `kustomize-real-repo expected ≥14 kubernetes resources nested under Base/Overlay hubs, found ${hubOwnedK8s.length}`,
       );
     } else {
       pass(
-        `kustomize-real-repo ${kustomizeRealK8s.length} kubernetes resources nested under Deploy`,
+        `kustomize-real-repo ${hubOwnedK8s.length} kubernetes resources nested under Base/Overlay hubs`,
+      );
+    }
+
+    // webapp/ + secure/ sit outside bases/overlays — still under Deploy.
+    const deployOwnedK8s = kustomizeRealK8s.filter(
+      (node) => node.parentId === kustomizeRealDeploy?.id,
+    );
+    if (deployOwnedK8s.length < 8) {
+      fail(
+        `kustomize-real-repo expected ≥8 kubernetes resources outside hubs still under Deploy, found ${deployOwnedK8s.length}`,
+      );
+    } else {
+      pass(
+        `kustomize-real-repo ${deployOwnedK8s.length} non-hub kubernetes resources nested under Deploy`,
       );
     }
 
@@ -8628,12 +8691,14 @@ if (kustomizeRealRoot) {
     );
     if (visibleK8sLeaves.length > 0) {
       fail(
-        `kustomize-real-repo overview should collapse Deployments/Services under Deploy, still visible: ${visibleK8sLeaves
+        `kustomize-real-repo overview should collapse Deployments/Services under Base/Overlay hubs, still visible: ${visibleK8sLeaves
           .map((node) => node.label)
           .join(", ")}`,
       );
     } else {
-      pass("kustomize-real-repo overview collapses kubernetes resources under Deploy");
+      pass(
+        "kustomize-real-repo overview collapses kubernetes resources under Base/Overlay hubs",
+      );
     }
 
     const kustomizeRealFlow = kustomizeRealSemantic

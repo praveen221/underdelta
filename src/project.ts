@@ -1751,6 +1751,61 @@ function quietManifestIndexOverlayChrome(
 }
 
 /**
+ * Nest kubernetes Deployments/Services/Ingress under the Base/Overlay hub
+ * whose `overlayRoot` owns the manifest path. Longest prefix wins so
+ * `deploy/bases/backend/deployment.yaml` → Backend · Base, not a parent tree.
+ * Resources outside any hub (podinfo `deploy/webapp/`) stay under Deploy.
+ */
+function nestKubernetesUnderKustomizeHubs(
+  nodes: Map<string, ArchitectureNode>,
+  attachToSystem: (
+    nodeId: string,
+    systemId: string,
+    evidence: Evidence,
+  ) => void,
+): void {
+  const hubs = [...nodes.values()]
+    .filter(
+      (node) =>
+        node.kind === "service" &&
+        node.metadata?.kustomization === true &&
+        typeof node.metadata?.overlayRoot === "string" &&
+        String(node.metadata.overlayRoot).length > 0,
+    )
+    .map((node) => ({
+      id: node.id,
+      root: normalizePath(String(node.metadata!.overlayRoot)),
+    }))
+    .sort((a, b) => b.root.length - a.root.length);
+  if (hubs.length === 0) return;
+
+  for (const node of [...nodes.values()]) {
+    if (node.metadata?.kubernetesResource !== true) continue;
+    const file = normalizePath(node.evidence[0]?.file ?? "");
+    if (!file) continue;
+    const hub = hubs.find(
+      (entry) => file === entry.root || file.startsWith(`${entry.root}/`),
+    );
+    if (!hub) continue;
+    attachToSystem(
+      node.id,
+      hub.id,
+      node.evidence[0] ?? projectionEvidence("."),
+    );
+    // Hubs are not semantic systems, so the semantic-parent collapse pass
+    // never sees these leaves — collapse them so only Base/Overlay hubs
+    // remain on the North-star cold-read.
+    const nested = nodes.get(node.id);
+    if (!nested) continue;
+    nested.metadata = {
+      ...nested.metadata,
+      collapsedInOverview: true,
+    };
+    nodes.set(nested.id, nested);
+  }
+}
+
+/**
  * Concrete Kustomize Overlay hubs are the Deploy story for overlay-led repos.
  * Keep them as overview hubs beside Deploy — Boutique kustomize/components
  * beside kubernetes-manifests stay quiet via exampleChrome.
@@ -2538,6 +2593,10 @@ export function projectSemanticArchitecture(
         node.evidence[0] ?? projectionEvidence("."),
       );
     }
+
+    // Path-link kubernetes resources under owning Base/Overlay hubs
+    // (Backend · Base owns deploy/bases/backend/*). Longest overlayRoot wins.
+    nestKubernetesUnderKustomizeHubs(nodes, attachToSystem);
   }
 
   // Nest extracted pipelines under the semantic Pipelines system.
