@@ -296,6 +296,18 @@ function guessSourceFromDist(entryPath: string): string {
     .replace(/\.js$/i, ".ts");
 }
 
+/** Language extractor module: `…/extractors/<id>.ts` (not the runner `extractor.ts`). */
+function extractorIdFromModule(file: string): string | undefined {
+  const match = normalizePath(file).match(
+    /(?:^|\/)extractors\/([^/]+)\.[cm]?[jt]sx?$/i,
+  );
+  const id = match?.[1]?.toLowerCase();
+  if (!id || id === "index") return undefined;
+  return id;
+}
+
+const infraExtractorIds = new Set(["repository", "projection"]);
+
 function dedupeEvidence(evidence: Evidence[]): Evidence[] {
   const seen = new Set<string>();
   const result: Evidence[] = [];
@@ -961,6 +973,70 @@ export function projectSemanticArchitecture(
 
   assignFlowOrder(systems, preferredFlows);
 
+  // Surface the language-extractor roster on the Extractors system so the
+  // default map answers "which extractors power this architecture?"
+  const extractorsSystem = systems.get("extractors");
+  if (extractorsSystem) {
+    const rosterById = new Map<string, string>();
+    for (const [moduleId, systemId] of moduleToSystem) {
+      if (systemId !== extractorsSystem.id) continue;
+      const moduleNode = nodes.get(moduleId);
+      if (!moduleNode) continue;
+      const file = modulePath(moduleNode);
+      const extractorId = extractorIdFromModule(file);
+      if (!extractorId) continue;
+      rosterById.set(extractorId, file);
+    }
+    for (const registered of graph.extractors) {
+      if (infraExtractorIds.has(registered.id)) continue;
+      if (rosterById.has(registered.id)) continue;
+      rosterById.set(registered.id, `src/extractors/${registered.id}.ts`);
+    }
+    const roster = [...rosterById.entries()]
+      .map(([id, file]) => ({ id, file }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+
+    extractorsSystem.metadata = {
+      ...extractorsSystem.metadata,
+      extractorRoster: roster.map((item) => item.id),
+    };
+
+    for (const item of roster) {
+      const childId = stableId("extractor", item.id);
+      if (nodes.has(childId)) continue;
+      const child: ArchitectureNode = {
+        id: childId,
+        kind: "service",
+        label: item.id,
+        technology: item.id,
+        parentId: extractorsSystem.id,
+        metadata: {
+          role: "extractor",
+          extractorId: item.id,
+          projectedSystem: "extractors",
+          collapsedInOverview: true,
+        },
+        evidence: [
+          projectionEvidence(
+            item.file,
+            `${item.id} language extractor on the Extractors roster`,
+          ),
+        ],
+      };
+      nodes.set(childId, child);
+      const contains = edgeFrom(
+        "contains",
+        extractorsSystem.id,
+        childId,
+        child.evidence[0]!,
+      );
+      edges.set(contains.id, contains);
+      extractorsSystem.evidence.push(child.evidence[0]!);
+    }
+    extractorsSystem.evidence = dedupeEvidence(extractorsSystem.evidence);
+    nodes.set(extractorsSystem.id, extractorsSystem);
+  }
+
   // Surface key source files on every semantic system for the inspector.
   for (const system of systems.values()) {
     const keyFiles: string[] = [];
@@ -972,9 +1048,19 @@ export function projectSemanticArchitecture(
       const moduleNode = nodes.get(moduleId);
       if (moduleNode) keyFiles.push(modulePath(moduleNode));
     }
+    // Prefer language-extractor modules first on the Extractors system.
+    const unique = [...new Set(keyFiles)];
+    if (system.metadata?.systemKey === "extractors") {
+      unique.sort((a, b) => {
+        const aExtractor = extractorIdFromModule(a) ? 0 : 1;
+        const bExtractor = extractorIdFromModule(b) ? 0 : 1;
+        if (aExtractor !== bExtractor) return aExtractor - bExtractor;
+        return a.localeCompare(b);
+      });
+    }
     system.metadata = {
       ...system.metadata,
-      keyFiles: [...new Set(keyFiles)].slice(0, 12),
+      keyFiles: unique.slice(0, 12),
     };
     system.evidence = dedupeEvidence(system.evidence);
     nodes.set(system.id, system);

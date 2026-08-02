@@ -364,6 +364,60 @@ if (
   pass(`CLI keyFiles: ${cliKeyFiles.join(", ")}`);
 }
 
+const extractorsSystem = selfGraph.nodes.find(
+  (node) =>
+    node.label === "Extractors" && node.metadata?.projection === "semantic",
+);
+const extractorRoster = Array.isArray(extractorsSystem?.metadata?.extractorRoster)
+  ? extractorsSystem.metadata.extractorRoster
+  : [];
+const requiredExtractors = ["prisma", "sql", "typescript"];
+const missingExtractors = requiredExtractors.filter(
+  (id) => !extractorRoster.includes(id),
+);
+if (!extractorsSystem || missingExtractors.length > 0) {
+  fail(
+    `expected Extractors.extractorRoster to include ${requiredExtractors.join(", ")}, found ${JSON.stringify(extractorRoster)}`,
+  );
+} else {
+  pass(`Extractors roster: ${extractorRoster.join(", ")}`);
+}
+
+const extractorKeyFiles = Array.isArray(extractorsSystem?.metadata?.keyFiles)
+  ? extractorsSystem.metadata.keyFiles
+  : [];
+const requiredExtractorFiles = [
+  "src/extractors/prisma.ts",
+  "src/extractors/sql.ts",
+  "src/extractors/typescript.ts",
+];
+const missingExtractorFiles = requiredExtractorFiles.filter(
+  (file) => !extractorKeyFiles.includes(file),
+);
+if (missingExtractorFiles.length > 0) {
+  fail(
+    `expected Extractors keyFiles to include language extractors, missing ${JSON.stringify(missingExtractorFiles)}; found ${JSON.stringify(extractorKeyFiles)}`,
+  );
+} else {
+  pass(`Extractors keyFiles: ${extractorKeyFiles.join(", ")}`);
+}
+
+const extractorChildren = selfGraph.nodes.filter(
+  (node) =>
+    node.parentId === extractorsSystem?.id &&
+    node.metadata?.role === "extractor" &&
+    requiredExtractors.includes(node.label),
+);
+if (extractorChildren.length < requiredExtractors.length) {
+  fail(
+    `expected Extractors child labels ${requiredExtractors.join(", ")}, found ${JSON.stringify(extractorChildren.map((node) => node.label))}`,
+  );
+} else {
+  pass(
+    `Extractors child labels: ${extractorChildren.map((node) => node.label).sort().join(", ")}`,
+  );
+}
+
 const systemsWithKeyFiles = selfGraph.nodes.filter(
   (node) =>
     node.metadata?.projection === "semantic" &&
