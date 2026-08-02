@@ -69,6 +69,15 @@ export const GRAPHQL_CLIENT_EXAMPLE_SERVER = {
   dirname: "graphql-client-example-server",
 };
 
+/** @type {RealRepoPin} */
+export const EXAMPLE_VOTING_APP = {
+  name: "dockersamples/example-voting-app",
+  url: "https://github.com/dockersamples/example-voting-app.git",
+  // Pinned 2026-08-02 — tip of main at plan rung-7 Docker/Compose real-repo kickoff.
+  sha: "63e9150ca17af4ed05880d4245e486481f73fcb4",
+  dirname: "example-voting-app",
+};
+
 export const REAL_REPO_ROOT = path.join(repoRoot, ".underdelta-real");
 
 function git(args, cwd, opts = {}) {
@@ -155,6 +164,11 @@ const PINS_BY_NAME = {
   graphql: GRAPHQL_CLIENT_EXAMPLE_SERVER,
   "graphql-client-example-server": GRAPHQL_CLIENT_EXAMPLE_SERVER,
   "gql-server": GRAPHQL_CLIENT_EXAMPLE_SERVER,
+  [EXAMPLE_VOTING_APP.dirname]: EXAMPLE_VOTING_APP,
+  voting: EXAMPLE_VOTING_APP,
+  "voting-app": EXAMPLE_VOTING_APP,
+  "example-voting-app": EXAMPLE_VOTING_APP,
+  docker: EXAMPLE_VOTING_APP,
 };
 
 const isMain =
@@ -171,6 +185,7 @@ if (isMain) {
         HACKATHON_STARTER,
         SWAGGER_PETSTORE,
         GRAPHQL_CLIENT_EXAMPLE_SERVER,
+        EXAMPLE_VOTING_APP,
       ];
   if (requested && pins.length === 0) {
     throw new Error(

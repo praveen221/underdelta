@@ -8,6 +8,7 @@ import { compileRepository } from "../dist/compile.js";
 import { renderArchitectureHtml } from "../dist/viewer.js";
 import {
   ensureRealRepo,
+  EXAMPLE_VOTING_APP,
   FASTAPI_REALWORLD,
   GRAPHQL_CLIENT_EXAMPLE_SERVER,
   HACKATHON_STARTER,
@@ -5545,6 +5546,272 @@ if (dockerCommerceNoise) {
   );
 } else {
   pass("mini-docker has no Checkout/orders commerce collaboration noise");
+}
+
+// ---------------------------------------------------------------------------
+// Capability ladder rung 7: real Docker/Compose repo (pinned SHA, gitignored).
+// Golden-lock dockersamples/example-voting-app services under Deploy.
+// ---------------------------------------------------------------------------
+let dockerRealRoot;
+try {
+  dockerRealRoot = await ensureRealRepo(EXAMPLE_VOTING_APP);
+  pass(
+    `docker real repo ${EXAMPLE_VOTING_APP.name} ready @ ${EXAMPLE_VOTING_APP.sha.slice(0, 12)}`,
+  );
+} catch (error) {
+  fail(
+    `could not ensure docker real repo ${EXAMPLE_VOTING_APP.name}@${EXAMPLE_VOTING_APP.sha}: ${error instanceof Error ? error.message : error}`,
+  );
+}
+
+if (dockerRealRoot) {
+  let dockerRealGraph;
+  try {
+    dockerRealGraph = await compileRepository(dockerRealRoot);
+    pass(
+      `docker-real-repo scan completed: ${dockerRealGraph.nodes.length} nodes, ${dockerRealGraph.edges.length} edges`,
+    );
+  } catch (error) {
+    fail(
+      `docker-real-repo scan crashed on ${EXAMPLE_VOTING_APP.name}: ${error instanceof Error ? error.message : error}`,
+    );
+  }
+
+  if (dockerRealGraph) {
+    const dockerRealServices = dockerRealGraph.nodes.filter(
+      (node) => node.kind === "service" && node.metadata?.dockerService === true,
+    );
+    const dockerRealSemantic = dockerRealGraph.nodes.filter(
+      (node) => node.metadata?.projection === "semantic",
+    );
+    const dockerRealProduct = dockerRealGraph.nodes.find(
+      (node) => node.kind === "product",
+    );
+    const dockerRealByKey = new Map(
+      dockerRealSemantic
+        .filter((node) => typeof node.metadata?.systemKey === "string")
+        .map((node) => [node.metadata.systemKey, node]),
+    );
+    const dockerRealDeploy = dockerRealByKey.get("deploy");
+    const dockerRealServiceNames = new Set(
+      dockerRealServices.map((node) => node.metadata?.serviceName),
+    );
+    const dockerRealServiceLabels = new Set(
+      dockerRealServices.map((node) => node.label),
+    );
+
+    const dockerRealSummary = {
+      pin: `${EXAMPLE_VOTING_APP.name}@${EXAMPLE_VOTING_APP.sha}`,
+      product: dockerRealProduct?.label ?? null,
+      nodes: dockerRealGraph.nodes.length,
+      edges: dockerRealGraph.edges.length,
+      services: dockerRealServiceNames.size,
+      semantic: dockerRealSemantic.map((node) => node.label),
+    };
+    console.log(
+      `Docker-real-repo scan summary: ${JSON.stringify(dockerRealSummary)}`,
+    );
+
+    if (
+      !dockerRealProduct ||
+      dockerRealProduct.label !== "Example Voting App"
+    ) {
+      fail(
+        `docker-real-repo product label expected 'Example Voting App', found '${dockerRealProduct?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass(`docker-real-repo product label: ${dockerRealProduct.label}`);
+    }
+
+    if (!dockerRealDeploy || dockerRealDeploy.label !== "Deploy") {
+      fail(
+        `docker-real-repo deploy system label expected 'Deploy', found '${dockerRealDeploy?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass("docker-real-repo deploy system labeled 'Deploy'");
+    }
+
+    if (!dockerRealGraph.extractors.some((item) => item.id === "docker")) {
+      fail("docker-real-repo graph.extractors missing docker");
+    } else {
+      pass("docker-real-repo registers docker extractor");
+    }
+
+    if (dockerRealServiceNames.size < 6) {
+      fail(
+        `docker-real-repo expected ≥6 unique compose services, found ${dockerRealServiceNames.size}`,
+      );
+    } else {
+      pass(
+        `docker-real-repo ${dockerRealServiceNames.size} unique compose services`,
+      );
+    }
+
+    for (const expected of [
+      "vote",
+      "result",
+      "worker",
+      "redis",
+      "db",
+      "seed",
+    ]) {
+      if (!dockerRealServiceNames.has(expected)) {
+        fail(
+          `docker-real-repo missing compose service ${expected}; found ${[...dockerRealServiceNames].sort().join(", ") || "(none)"}`,
+        );
+      } else {
+        pass(`docker-real-repo has compose service ${expected}`);
+      }
+    }
+
+    for (const expected of [
+      "Vote",
+      "Result",
+      "Worker",
+      "Redis",
+      "DB",
+      "Seed",
+    ]) {
+      if (!dockerRealServiceLabels.has(expected)) {
+        fail(
+          `docker-real-repo missing humanized service label ${expected}; found ${[...dockerRealServiceLabels].sort().join(" | ") || "(none)"}`,
+        );
+      } else {
+        pass(`docker-real-repo service label ${expected}`);
+      }
+    }
+
+    const nestedDockerRealServices = dockerRealServices.filter(
+      (node) => node.parentId === dockerRealDeploy?.id,
+    );
+    if (nestedDockerRealServices.length < 6) {
+      fail(
+        `docker-real-repo expected ≥6 services nested under Deploy, found ${nestedDockerRealServices.length}`,
+      );
+    } else {
+      pass(
+        `docker-real-repo ${nestedDockerRealServices.length} services nested under Deploy`,
+      );
+    }
+
+    const dockerRealOverviewLeaves = nestedDockerRealServices.filter(
+      (node) => node.metadata?.collapsedInOverview !== true,
+    );
+    if (dockerRealOverviewLeaves.length > 0) {
+      fail(
+        `docker-real-repo overview should collapse services under Deploy, still visible: ${dockerRealOverviewLeaves
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass(
+        "docker-real-repo services collapsed on overview (Deploy tells the story)",
+      );
+    }
+
+    const dockerRealFlow = dockerRealSemantic
+      .filter((node) => typeof node.metadata?.flowOrder === "number")
+      .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+    const dockerRealFlowKeys = dockerRealFlow.map(
+      (node) => node.metadata?.systemKey,
+    );
+    if (!dockerRealFlowKeys.includes("deploy")) {
+      fail(
+        `docker-real-repo flowOrder expected Deploy, got ${dockerRealFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+      );
+    } else {
+      pass(
+        `docker-real-repo flowOrder includes Deploy: ${dockerRealFlow.map((node) => node.label).join(" → ")}`,
+      );
+    }
+
+    const dockerRealModules = dockerRealGraph.nodes.filter(
+      (node) => node.kind === "module" && node.metadata?.dockerModule === true,
+    );
+    const dockerRealComposeModule = dockerRealModules.find((node) =>
+      /(?:^|\/)docker-compose\.yml$/i.test(
+        String(node.metadata?.file ?? node.label).replaceAll("\\", "/"),
+      ),
+    );
+    if (
+      !dockerRealComposeModule ||
+      dockerRealComposeModule.parentId !== dockerRealDeploy?.id ||
+      dockerRealComposeModule.metadata?.collapsedInOverview !== true
+    ) {
+      fail(
+        `docker-real-repo docker-compose.yml should nest+collapse under Deploy, found parent=${dockerRealComposeModule?.parentId ?? "(missing)"} collapsed=${dockerRealComposeModule?.metadata?.collapsedInOverview}`,
+      );
+    } else {
+      pass("docker-real-repo docker-compose.yml nested+collapsed under Deploy");
+    }
+
+    const dockerRealEvidenceGaps = dockerRealServices.filter((node) => {
+      const detail = node.evidence?.[0]?.detail ?? "";
+      const name = node.metadata?.serviceName;
+      return typeof name !== "string" || !detail.includes(`service:${name}`);
+    });
+    if (dockerRealEvidenceGaps.length > 0) {
+      fail(
+        `docker-real-repo evidence should cite service: ${dockerRealEvidenceGaps
+          .map((node) => node.metadata?.serviceName ?? node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass("docker-real-repo evidence details cite service:");
+    }
+
+    // Primary compose file must carry vote/result/worker/redis/db/seed (images
+    // overlay may duplicate names — uniqueness is on serviceName set above).
+    const primaryComposeServices = dockerRealServices.filter((node) =>
+      /(?:^|\/)docker-compose\.yml$/i.test(
+        String(node.evidence?.[0]?.file ?? "").replaceAll("\\", "/"),
+      ),
+    );
+    const primaryNames = new Set(
+      primaryComposeServices.map((node) => node.metadata?.serviceName),
+    );
+    for (const expected of [
+      "vote",
+      "result",
+      "worker",
+      "redis",
+      "db",
+      "seed",
+    ]) {
+      if (!primaryNames.has(expected)) {
+        fail(
+          `docker-real-repo docker-compose.yml missing service ${expected}; found ${[...primaryNames].sort().join(", ") || "(none)"}`,
+        );
+      } else {
+        pass(`docker-real-repo docker-compose.yml has service ${expected}`);
+      }
+    }
+
+    const dockerRealCommerceNoise = dockerRealGraph.edges.some((edge) =>
+      /checkout|orders?/i.test(
+        `${edge.label ?? ""} ${JSON.stringify(edge.metadata ?? {})}`,
+      ),
+    );
+    if (dockerRealCommerceNoise) {
+      fail(
+        "docker-real-repo should not inherit Checkout/orders commerce collaboration copy",
+      );
+    } else {
+      pass(
+        "docker-real-repo has no Checkout/orders commerce collaboration noise",
+      );
+    }
+
+    // Deploy must stay visible on overview when Compose services exist (not
+    // Dockerfile-only packaging chrome).
+    if (dockerRealDeploy.metadata?.collapsedInOverview === true) {
+      fail(
+        "docker-real-repo Deploy with Compose services should stay visible on overview",
+      );
+    } else {
+      pass("docker-real-repo Deploy stays visible on overview (Compose story)");
+    }
+  }
 }
 
 if (process.exitCode) {
