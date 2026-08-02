@@ -114,6 +114,13 @@ v0 extractors above are in-tree. Next focus after merge/try:
 - UX polish for cold-reads by non-coders (see North star notes in
   [`docs/V0_BUILD_CONTEXT.md`](docs/V0_BUILD_CONTEXT.md))
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, PR expectations, and the
+evidence-backed contribution rules. Security reports go through
+[SECURITY.md](SECURITY.md) (private reporting preferred). Community standards
+are in [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+
 ## License
 
 MIT

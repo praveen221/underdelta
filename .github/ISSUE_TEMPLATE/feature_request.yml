@@ -1,0 +1,45 @@
+name: Feature request
+description: New stack support, extractor coverage, or viewer capability
+title: "[feat] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / opportunity
+      description: What gap does this fill for people mapping real products?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How should Underdelta behave? Prefer evidence-backed extraction over guessing.
+    validations:
+      required: true
+  - type: textarea
+    id: stacks
+    attributes:
+      label: Stacks / examples
+      description: Frameworks, file patterns, or public repos that should be supported.
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Extractors
+        - architecture.json contract
+        - Viewer / browser map
+        - CLI / install / scan scripts
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: extras
+    attributes:
+      label: Additional context
+    validations:
+      required: false

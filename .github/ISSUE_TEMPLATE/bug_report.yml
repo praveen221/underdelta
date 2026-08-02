@@ -1,0 +1,54 @@
+name: Bug report
+description: Unexpected scan, contract, or viewer behavior
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. For security issues, use [private vulnerability reporting](https://github.com/praveen221/underdelta/security/advisories/new) instead.
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Clear description of the unexpected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Minimal steps or a small fixture repo that triggers the issue.
+      placeholder: |
+        1. npm install && npm run build
+        2. node dist/cli.js scan /path/to/repro
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Underdelta version / commit
+      placeholder: 0.1.0 or git SHA
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      placeholder: v22.x
+    validations:
+      required: false
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Logs, screenshots, OS, or related PRs.
+    validations:
+      required: false
