@@ -120,6 +120,27 @@ export function preferProductLabel(
   return /[-_]/.test(base) ? humanizePackageName(base) : base;
 }
 
+/** README titles that are sample/demo boilerplate rather than the product name. */
+export function isSampleBoilerplateTitle(title: string): boolean {
+  return /\b(sample|example|demo|boilerplate)\b/i.test(title.trim());
+}
+
+/**
+ * OpenAPI `info.title` often appends version chrome ("Swagger Petstore - OpenAPI 3.0").
+ * Strip that so the canvas brand reads as the product.
+ */
+export function cleanOpenApiInfoTitle(title: string): string {
+  return title
+    .trim()
+    .replace(/\s*[-–—|:]\s*(?:OpenAPI|Swagger|OAS)\s*\d+(?:\.\d+)*\s*$/i, "")
+    .trim();
+}
+
+/** OpenAPI summaries are sentence fragments — drop trailing periods on the canvas. */
+export function humanizeOpenApiSummaryLabel(summary: string): string {
+  return summary.trim().replace(/[.。]+$/u, "").trim();
+}
+
 interface SystemRole {
   key: string;
   label: string;
@@ -1196,8 +1217,55 @@ export function projectSemanticArchitecture(
   const product = [...nodes.values()].find((node) => node.kind === "product");
   if (!product) return graph;
 
+  // OpenAPI/Swagger specs carry the real product name when the README is
+  // sample/demo boilerplate ("Swagger Petstore Sample").
+  const openapiInfoTitle = [...nodes.values()]
+    .map((node) =>
+      node.metadata?.openapiSpec === true &&
+      typeof node.metadata.openapiTitle === "string"
+        ? cleanOpenApiInfoTitle(node.metadata.openapiTitle)
+        : undefined,
+    )
+    .find((title) => title && title.length > 0);
+
   // Prefer a cleaned README H1 when package.json name is scoped/non-descriptive.
-  if (options.readmeTitle) {
+  // When README is sample boilerplate and an OpenAPI info.title exists, prefer
+  // the contract title (North-star brand over "… Sample" docs chrome).
+  if (
+    openapiInfoTitle &&
+    options.readmeTitle &&
+    isSampleBoilerplateTitle(options.readmeTitle)
+  ) {
+    if (openapiInfoTitle !== product.label) {
+      product.metadata = {
+        ...product.metadata,
+        ...(product.label !== openapiInfoTitle
+          ? { packageName: product.label }
+          : {}),
+        labelSource: "openapi",
+        openapiTitle: openapiInfoTitle,
+        ...(options.readmeTitle ? { readmeTitle: options.readmeTitle } : {}),
+      };
+      product.label = openapiInfoTitle;
+      const specFile =
+        [...nodes.values()].find(
+          (node) =>
+            node.metadata?.openapiSpec === true &&
+            typeof node.metadata.openapiTitle === "string",
+        )?.qualifiedName ??
+        [...nodes.values()].find((node) => node.metadata?.openapiSpec === true)
+          ?.label ??
+        "openapi.yaml";
+      product.evidence = dedupeEvidence([
+        ...product.evidence,
+        projectionEvidence(
+          String(specFile),
+          `Product label from OpenAPI info.title "${openapiInfoTitle}" (README was sample boilerplate)`,
+        ),
+      ]);
+      nodes.set(product.id, product);
+    }
+  } else if (options.readmeTitle) {
     const preferred = preferProductLabel(
       options.packageManifest?.name,
       options.readmeTitle,
@@ -1649,8 +1717,9 @@ export function projectSemanticArchitecture(
       node.metadata.summary.trim()
     ) {
       // OpenAPI/Swagger summaries are already product vocabulary ("List notes").
-      // Prefer them over path-derived labels so list vs detail stay distinct.
-      nextLabel = node.metadata.summary.trim();
+      // Prefer them over path-derived labels so list vs detail stay distinct;
+      // strip trailing periods so canvas labels aren't sentence chrome.
+      nextLabel = humanizeOpenApiSummaryLabel(node.metadata.summary);
     } else if (
       node.kind === "route" &&
       typeof node.metadata?.path === "string" &&

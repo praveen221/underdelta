@@ -4282,12 +4282,17 @@ if (openapiRealRoot) {
       `OpenAPI-real-repo scan summary: ${JSON.stringify(openapiRealSummary)}`,
     );
 
-    if (!openapiRealProduct || openapiRealProduct.label !== "Swagger Petstore Sample") {
+    // README is "Swagger Petstore Sample" (boilerplate); prefer cleaned OpenAPI info.title.
+    if (!openapiRealProduct || openapiRealProduct.label !== "Swagger Petstore") {
       fail(
-        `openapi-real-repo product label expected 'Swagger Petstore Sample' from README, found '${openapiRealProduct?.label ?? "(missing)"}'`,
+        `openapi-real-repo product label expected 'Swagger Petstore' from OpenAPI info.title, found '${openapiRealProduct?.label ?? "(missing)"}'`,
+      );
+    } else if (openapiRealProduct.metadata?.labelSource !== "openapi") {
+      fail(
+        `openapi-real-repo product labelSource expected 'openapi', found '${openapiRealProduct.metadata?.labelSource ?? "(missing)"}'`,
       );
     } else {
-      pass(`openapi-real-repo product label: ${openapiRealProduct.label}`);
+      pass(`openapi-real-repo product label: ${openapiRealProduct.label} (OpenAPI info.title)`);
     }
 
     if (!openapiRealApi || openapiRealApi.label !== "HTTP API") {
@@ -4358,19 +4363,20 @@ if (openapiRealRoot) {
       }
     }
 
+    // Summaries keep product vocabulary; trailing periods are stripped for the canvas.
     for (const expected of [
-      "Add a new pet to the store.",
-      "Update an existing pet.",
-      "Find pet by ID.",
-      "Deletes a pet.",
-      "Finds Pets by status.",
-      "Returns pet inventories by status.",
-      "Place an order for a pet.",
-      "Find purchase order by ID.",
-      "Create user.",
-      "Logs user into the system.",
-      "Logs out current logged in user session.",
-      "Get user by user name.",
+      "Add a new pet to the store",
+      "Update an existing pet",
+      "Find pet by ID",
+      "Deletes a pet",
+      "Finds Pets by status",
+      "Returns pet inventories by status",
+      "Place an order for a pet",
+      "Find purchase order by ID",
+      "Create user",
+      "Logs user into the system",
+      "Logs out current logged in user session",
+      "Get user by user name",
     ]) {
       if (!openapiRealLabels.has(expected)) {
         fail(
@@ -4379,6 +4385,16 @@ if (openapiRealRoot) {
       } else {
         pass(`openapi-real-repo summary label ${expected}`);
       }
+    }
+    const petstorePeriodLabels = [...openapiRealLabels].filter((label) =>
+      /[.。]$/u.test(label),
+    );
+    if (petstorePeriodLabels.length > 0) {
+      fail(
+        `openapi-real-repo OpenAPI summary labels should strip trailing periods, still: ${petstorePeriodLabels.join(" | ")}`,
+      );
+    } else {
+      pass("openapi-real-repo OpenAPI summary labels have no trailing periods");
     }
 
     const nestedPetstoreRoutes = openapiRealRoutes.filter(
@@ -4494,6 +4510,28 @@ if (openapiRealRoot) {
       );
     } else {
       pass("openapi-real-repo module chrome collapsed on overview");
+    }
+
+    // CI/ release scripts must not enter the product map (ignored directory).
+    const petstoreCiChrome = openapiRealGraph.nodes.filter((node) => {
+      const file = String(
+        node.metadata?.file ?? node.qualifiedName ?? node.label ?? "",
+      ).replaceAll("\\", "/");
+      return (
+        /(^|\/)CI\//.test(file) ||
+        /\b(ghApiClient|lastRelease|publishRelease|releaseNotes)\.py$/i.test(
+          file,
+        )
+      );
+    });
+    if (petstoreCiChrome.length > 0) {
+      fail(
+        `openapi-real-repo should ignore CI/release-script chrome, still: ${petstoreCiChrome
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass("openapi-real-repo ignores CI/release-script module chrome");
     }
   }
 }

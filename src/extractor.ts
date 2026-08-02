@@ -14,6 +14,8 @@ const ignoredDirectories = new Set([
   ".venv",
   "__pycache__",
   "build",
+  // Release/CI tooling (e.g. swagger-petstore CI/*.py) is not product architecture.
+  "CI",
   "coverage",
   "dist",
   "node_modules",

@@ -182,6 +182,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 5 prep: OpenAPI extractor — `openapi.yaml`/`yml`/`json` + `swagger.*`; paths+operations → routes; spec modules path-role → HTTP API; humanize openapi routes; `verification/mini-openapi` smoke floors + Extractors roster includes `openapi`
 - [x] Rung 5: thicken mini-openapi golden — dual-format `openapi.yaml` + `swagger.json` (basePath `/api` tags), summary-first route labels, operationId/summary/evidence floors, flowOrder Notes API, collapse spec modules
 - [x] Rung 5: pin `swagger-api/swagger-petstore` @ `8f0dd286987880b4af7bce552aca3813166f3049`; clone into gitignored `.underdelta-real/swagger-petstore`; golden-lock 19 ops under HTTP API (summary labels + operationIds + evidence + flowOrder + collapsed spec)
+- [x] Rung 5 polish: Petstore default browser — strip OpenAPI summary trailing periods; ignore `CI/` release-script chrome; prefer cleaned OpenAPI `info.title` (`Swagger Petstore`) over README sample boilerplate
 
 ### Real-repo pins (Capability ladder)
 
@@ -197,10 +198,10 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 5 polish: Petstore default browser — strip trailing periods on OpenAPI summaries, tame CI/ release-script module chrome, prefer OpenAPI `info.title` when README is sample boilerplate
-- [ ] Rung 5 polish: collapse path-param twin chrome if list/detail still collide after summary preference; confirm Nest/Express dual-source repos still nest under one HTTP API
+- [ ] Rung 5 polish/lock: collapse path-param twin chrome if list/detail still collide after summary preference; confirm Nest/Express dual-source repos still nest under one HTTP API; North-star cold-read then **lock Rung 5**
 - [ ] Standing polish: Underdelta self-map cold-read pass — any leftover jargon labels or weak hierarchy after mongo noise + inspector hygiene
 - [ ] Standing polish: hide remaining compiler chrome pills (`labelSource`, `pathRoleLabel`, `collapsedInOverview`, `overviewHub`) if they still dump in inspector
+- [ ] Rung 6 prep (after Rung 5 lock): promote next README-roadmap capability — GraphQL operations extractor sketch + mini fixture
 
 ### Seed backlog (pull from here when In progress < 3)
 
@@ -213,7 +214,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (pin + golden-lock swagger-petstore OpenAPI ops under HTTP API). Now polish the Petstore default browser (summary punctuation, CI module quieting, OpenAPI title preference) so Rung 5 can lock for the North star user.
+> **Next focus:** This work is done (Petstore polish — summary periods stripped, `CI/` ignored, product branded `Swagger Petstore` from OpenAPI info.title). Now check path-param twin chrome / dual-source nesting, cold-read the Petstore map, and lock Rung 5 so the ladder can climb to GraphQL.
 
 ### Learning log (append every tick)
 
@@ -272,6 +273,7 @@ Append short bullets like:
 - 2026-08-02 05:40 UTC | Done: Rung 5 prep — `src/extractors/openapi.ts` YAML/JSON paths+ops, spec modules as file-modules → HTTP API, humanize openapi routes, `verification/mini-openapi` Notes API smoke + Extractors roster `openapi` | Next: thicken mini-openapi golden (swagger.json dual-format + flowOrder) | Learned: isFileModule was JS/TS/Py-only so openapi.yaml never got path-role until yaml/json spec filenames were admitted; keep YAML path walking dependency-free for typical specs; `spec`/`specs` dirs stay ignored — put contracts at `openapi.yaml` or under `openapi/`
 - 2026-08-02 05:45 UTC | Done: Rung 5 mini-openapi golden — swagger.json dual-format (basePath `/api` tags), summary-first OpenAPI labels (List notes vs GET Notes twins), operationId/summary/evidence + flowOrder floors, collapse both spec modules | Next: pin real OpenAPI OSS repo | Learned: path-humanize collapses list+detail to the same label; OpenAPI `summary` is the contract’s product vocabulary and should win when present; Swagger2 `basePath` must be golden-locked separately from OAS3 YAML so JSON parsing cannot silently regress
 - 2026-08-02 05:50 UTC | Done: Rung 5 pin+golden — `swagger-api/swagger-petstore` @ `8f0dd2869878` gitignored; 19 OpenAPI ops nested/collapsed under HTTP API with summary labels + operationIds + evidence; flowOrder HTTP API; openapi.yaml module collapsed | Next: Petstore North-star polish (summary periods, CI chrome, info.title) | Learned: classic Petstore keeps the contract at `src/main/resources/openapi.yaml` which already matches filename conventions (no `specs/` ignore fight); Java sources are invisible to current extractors so the map is honestly API-only — polish is label/chrome, not missing Nest dual-source
+- 2026-08-02 05:45 UTC | Done: Rung 5 Petstore polish — strip summary trailing periods; ignore `CI/` so release scripts never enter the graph; prefer cleaned OpenAPI info.title (`Swagger Petstore - OpenAPI 3.0` → `Swagger Petstore`) when README is sample boilerplate; golden-lock | Next: twin-chrome check + Rung 5 lock | Learned: summary preference already eliminates Petstore list/detail label collisions (no duplicate canvas labels); README "… Sample" must lose to the contract title or the brand stays docs chrome; collapsing CI modules is weaker than ignoring the directory — zero nodes beat quiet nodes
 
 ---
 
