@@ -137,26 +137,27 @@ Update checkboxes + Next focus every tick (unless Idle protocol).
 - [x] Polish pass: `walk-hint` + `emptyInspectorMessage` tier copy; Code lane (not Details); self-map Beginner cold-read floor (CLI→…→Viewer)  
 - [x] Intermediate edge calm: collapse `contains` ownership fans; gate/quiet derived `depends-on`/`calls`/`imports` hairlines (`showsStructuralEdge`); verify floors  
 - [x] Keyboard: Esc = back one tier (`goBack` / `handleEscapeKey`; search clear first when typing); verify floors  
+- [x] Search enters cluster: `clusterRootFor` + `enterSearchMatch` (Enter/click); results list; calmOverview ignores query (no god-graph dump); verify floors  
 
 ### In progress / next
 
 Keep **at least 3 unchecked items** here until LOOP COMPLETE (refill from Seed backlog).  
 These remaining items are the **mandatory** walkable slice — finishing them (with gates 1–8) is what completes the loop:
 
-- [ ] Search jumps to a node and **enters its cluster** (not only highlights in a god-graph)  
 - [ ] Persist last tier/focus in `sessionStorage` for reload comfort  
 - [ ] Mini-stack + one real-repo pin spot-check in Learning log (manual note OK if verify covers floors)  
+- [ ] Docs: short “How to read the map” blurb in README (tiers + search enters cluster)  
 
 ### Seed backlog (optional — not required for LOOP COMPLETE)
 
 Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder freely.  
 **Do not** use this list to delay LOOP COMPLETE after gates 1–8 pass.
 
-- Docs: short “How to read the map” blurb in README only if behavior changed  
+- *(empty — README blurb pulled into In progress)*  
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Esc = goBack one focus-stack step, search clear first). Now Search jumps to a node and enters its cluster so finding a part walks you in, not just highlights a god-graph.
+> **Next focus:** This work is done (Search Enter/click → `clusterRootFor` / `enterSearchMatch`, no query god-graph). Now Persist last tier/focus in `sessionStorage` so reload keeps the walk.
 
 ### Learning log (append every tick)
 
@@ -174,6 +175,7 @@ Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder fr
 - 2026-08-02 14:05 UTC | Done: walk-hint + emptyInspectorMessage by tier; Code lane; verify self-map Beginner story labels | Next: restyle derived edge fans in Intermediate focus | Learned: static “Select a component…” empty copy still said Details-era dump; tier-aware chrome makes Beginner/Advanced failure modes self-explanatory without new controls  
 - 2026-08-02 14:10 UTC | Done: showsStructuralEdge — contains fans never painted; derived depends-on/calls/imports selection- or Advanced-gated + quiet `.edge.structural` restyle; verify Extractors fan floor | Next: Esc = back one tier | Learned: Extractors Intermediate had 12 yellow contains edges — ownership is already the neighborhood layout, so painting contains is pure spaghetti; keep story edges (flows-to/collab/narrative) always-on  
 - 2026-08-02 14:12 UTC | Done: Esc → goBack (same stack step as Back); search clear/blur first when typing; verify Escape handler floor | Next: Search enters cluster | Learned: reuse goBack for mouse + keyboard so Esc cannot drift from Back; clear search before navigating or Esc steals the find affordance mid-type  
+- 2026-08-02 14:25 UTC | Done: Search Enter/click → clusterRootFor + enterSearchMatch; results list; calmOverview ignores query; verify createCheckout/Order/Extractors floors | Next: sessionStorage tier/focus | Learned: query-driven visibleNodes was the god-graph; jump via cluster roots (function→module, table→system) keeps Find aligned with double-click walk  
 
 ---
 

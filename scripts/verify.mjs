@@ -1169,6 +1169,19 @@ if (
     "viewer Esc must call goBack (one focus-stack step) after clearing search when typing",
   );
 } else if (
+  !viewerHtml.includes("function clusterRootFor(id)") ||
+  !viewerHtml.includes("function enterSearchMatch(matchId)") ||
+  !viewerHtml.includes("function searchMatchNodes()") ||
+  !viewerHtml.includes("function handleSearchKeydown(event)") ||
+  !viewerHtml.includes('id="search-results"') ||
+  !viewerHtml.includes("Enter enters its cluster") ||
+  !viewerHtml.includes("const calmOverview = !state.focus;") ||
+  viewerHtml.includes("const calmOverview = !state.focus && !query;")
+) {
+  fail(
+    "viewer Search must enter a match’s cluster (clusterRootFor/enterSearchMatch) without query dumping the god-graph",
+  );
+} else if (
   !viewerHtml.includes("function emptyInspectorMessage()") ||
   !viewerHtml.includes("function walkHintText()") ||
   !viewerHtml.includes('id="walk-hint"') ||
@@ -1195,6 +1208,7 @@ if (
 } else {
   pass("viewer Walkable tiers: Beginner / Intermediate / Advanced (cluster-scoped Advanced)");
   pass("viewer navigation: breadcrumb + Back/Overview + Esc tier sync");
+  pass("viewer Search Enter/click enters cluster (no query god-graph dump)");
   pass("viewer tier copy: walk-hint + emptyInspectorMessage + Code lane");
   pass("viewer Intermediate edge calm: ownership fans collapsed + structural hairlines gated");
 }
@@ -1491,6 +1505,145 @@ if (!focusExtractorsSystem) {
 } else {
   pass(
     `Intermediate focus neighborhoods: Extractors ${selfExtractorsFocus.length} nodes, Checkout API ${fixtureCheckoutFocus.length} nodes (children + collab, no advanced dump)`,
+  );
+}
+
+// Search → cluster floor: jump targets are walkable roots, not a god-graph filter.
+const searchFunctionFocusKinds = new Set([
+  "module",
+  "api",
+  "service",
+  "function",
+  "route",
+  "ui",
+  "page",
+  "component",
+  "hook",
+]);
+const searchAdvancedKinds = new Set(["function", "column", "module", "pipeline-step"]);
+const searchIntermediateKinds = new Set([
+  "table",
+  "collection",
+  "queue",
+  "cron",
+  "route",
+  "page",
+  "component",
+  "hook",
+  "job",
+  "database",
+  "schema",
+]);
+function clusterRootForGraph(graph, id) {
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+  const incoming = new Map();
+  for (const edge of graph.edges) {
+    if (!incoming.has(edge.target)) incoming.set(edge.target, []);
+    incoming.get(edge.target).push(edge);
+  }
+  const parentOf = (node) => {
+    if (!node) return null;
+    if (node.parentId && byId.has(node.parentId)) return byId.get(node.parentId);
+    const owned = (incoming.get(node.id) || []).find((edge) => edge.kind === "contains");
+    return owned ? byId.get(owned.source) || null : null;
+  };
+  const node = byId.get(id);
+  if (!node || node.kind === "product") return null;
+  if (
+    node.kind === "system" ||
+    node.kind === "pipeline" ||
+    node.kind === "api" ||
+    node.kind === "service" ||
+    node.kind === "ui" ||
+    node.kind === "module"
+  ) {
+    return node.id;
+  }
+  if (searchAdvancedKinds.has(node.kind)) {
+    let cur = node;
+    while (cur) {
+      const parent = parentOf(cur);
+      if (!parent) break;
+      if (searchFunctionFocusKinds.has(parent.kind)) return parent.id;
+      cur = parent;
+    }
+  }
+  if (
+    searchIntermediateKinds.has(node.kind) ||
+    node.kind === "external" ||
+    node.kind === "config"
+  ) {
+    let cur = node;
+    while (cur) {
+      const parent = parentOf(cur);
+      if (!parent) break;
+      if (
+        parent.kind === "system" ||
+        parent.kind === "pipeline" ||
+        parent.kind === "api" ||
+        parent.kind === "service" ||
+        parent.kind === "ui"
+      ) {
+        return parent.id;
+      }
+      cur = parent;
+    }
+  }
+  let cur = node;
+  while (cur) {
+    if (
+      cur.kind === "system" ||
+      cur.kind === "pipeline" ||
+      cur.kind === "api" ||
+      cur.kind === "service" ||
+      cur.kind === "ui" ||
+      cur.kind === "module"
+    ) {
+      return cur.id;
+    }
+    cur = parentOf(cur);
+  }
+  return node.id;
+}
+const fixtureCreateCheckout = fixtureGraph.nodes.find(
+  (node) => node.kind === "function" && node.label === "createCheckout",
+);
+const fixtureOrderTable = fixtureGraph.nodes.find(
+  (node) => node.kind === "table" && node.label === "Order",
+);
+const createCheckoutCluster = fixtureCreateCheckout
+  ? fixtureGraph.nodes.find(
+      (node) => node.id === clusterRootForGraph(fixtureGraph, fixtureCreateCheckout.id),
+    )
+  : null;
+const orderCluster = fixtureOrderTable
+  ? fixtureGraph.nodes.find(
+      (node) => node.id === clusterRootForGraph(fixtureGraph, fixtureOrderTable.id),
+    )
+  : null;
+const selfExtractorsClusterId = focusExtractorsSystem
+  ? clusterRootForGraph(selfGraph, focusExtractorsSystem.id)
+  : null;
+if (!fixtureCreateCheckout || !createCheckoutCluster) {
+  fail("search cluster floor needs createCheckout → module/api root");
+} else if (
+  createCheckoutCluster.kind !== "module" ||
+  createCheckoutCluster.label !== "src/server.ts"
+) {
+  fail(
+    `createCheckout search should enter src/server.ts module cluster, got ${createCheckoutCluster.kind}:${createCheckoutCluster.label}`,
+  );
+} else if (!fixtureOrderTable || !orderCluster) {
+  fail("search cluster floor needs Order table → Catalog data system");
+} else if (orderCluster.kind !== "system" || orderCluster.label !== "Catalog data") {
+  fail(
+    `Order search should enter Catalog data system, got ${orderCluster.kind}:${orderCluster.label}`,
+  );
+} else if (!focusExtractorsSystem || selfExtractorsClusterId !== focusExtractorsSystem.id) {
+  fail("Extractors search should focus the Extractors system itself");
+} else {
+  pass(
+    "Search enters cluster: createCheckout→src/server.ts, Order→Catalog data, Extractors→self",
   );
 }
 

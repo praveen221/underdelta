@@ -43,8 +43,28 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     #focus-crumb .crumb.current { color: var(--text); cursor: default; font-weight: 650; }
     #focus-crumb .crumb.current:hover { background: transparent; }
     #focus-crumb .crumb-sep { color: var(--muted); user-select: none; }
-    #search { width: min(340px, 30vw); margin-left: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; outline: none; }
+    #search-wrap { position: relative; margin-left: auto; width: min(340px, 30vw); }
+    #search { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; outline: none; }
     #search:focus { border-color: var(--accent); }
+    #search-results {
+      position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 4px);
+      max-height: min(320px, 50vh); overflow: auto; margin: 0; padding: 4px;
+      list-style: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, .35);
+    }
+    #search-results[hidden] { display: none; }
+    #search-results button {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+      width: 100%; text-align: left; background: transparent; border: 1px solid transparent;
+      border-radius: 6px; padding: 7px 8px; cursor: pointer;
+    }
+    #search-results button:hover, #search-results button[data-active="true"] {
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+    }
+    #search-results .match-label { font-weight: 650; }
+    #search-results .match-meta { color: var(--muted); font-size: 11px; }
+    #search-results .match-hint { color: var(--accent); font-size: 10px; margin-top: 2px; }
     #workspace { display: grid; grid-template-columns: 1fr 320px; min-height: 0; }
     #viewport { position: relative; overflow: hidden; cursor: grab; }
     #viewport.dragging { cursor: grabbing; }
@@ -157,7 +177,10 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       <button id="overview" title="Return to Beginner overview">Overview</button>
       <button id="tier" title="Beginner: product story · Intermediate: enter a system’s neighborhood · Advanced: code in focus (modules; functions inside a module/api)">View: Beginner</button>
       <nav class="meta" id="focus-crumb" hidden aria-label="Focus path"></nav>
-      <input id="search" type="search" placeholder="Find a system, route, table, job…" />
+      <div id="search-wrap">
+        <input id="search" type="search" placeholder="Find… Enter enters its cluster" autocomplete="off" />
+        <ul id="search-results" hidden role="listbox" aria-label="Search matches"></ul>
+      </div>
     </header>
     <div id="workspace">
       <main id="viewport">
@@ -395,11 +418,13 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       if (searchEl && document.activeElement === searchEl) {
         if (searchEl.value) {
           searchEl.value = "";
+          renderSearchResults();
           render();
           event.preventDefault();
           return;
         }
         searchEl.blur();
+        renderSearchResults();
         event.preventDefault();
         return;
       }
@@ -413,6 +438,150 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         render();
         event.preventDefault();
       }
+    }
+    function parentOf(node) {
+      if (!node) return null;
+      if (node.parentId && byId.has(node.parentId)) return byId.get(node.parentId);
+      const owned = (incoming.get(node.id) || []).find((edge) => edge.kind === "contains");
+      return owned ? byId.get(owned.source) || null : null;
+    }
+    // Search jump: enter a walkable cluster, not a whole-repo highlight dump.
+    // Functions → module/api; Intermediate leaves → system/api hub; hubs → self.
+    function clusterRootFor(id) {
+      const node = byId.get(id);
+      if (!node || node.kind === "product") return null;
+      if (
+        node.kind === "system" ||
+        node.kind === "pipeline" ||
+        node.kind === "api" ||
+        node.kind === "service" ||
+        node.kind === "ui" ||
+        node.kind === "module"
+      ) {
+        return node.id;
+      }
+      // Code leaves: open the code container so Advanced can show them.
+      if (advancedKinds.has(node.kind)) {
+        let cur = node;
+        while (cur) {
+          const parent = parentOf(cur);
+          if (!parent) break;
+          if (functionFocusKinds.has(parent.kind)) return parent.id;
+          cur = parent;
+        }
+      }
+      // Routes/tables/jobs/… → containing system / pipeline / api / service.
+      if (intermediateKinds.has(node.kind) || node.kind === "external" || node.kind === "config") {
+        let cur = node;
+        while (cur) {
+          const parent = parentOf(cur);
+          if (!parent) break;
+          if (
+            parent.kind === "system" ||
+            parent.kind === "pipeline" ||
+            parent.kind === "api" ||
+            parent.kind === "service" ||
+            parent.kind === "ui"
+          ) {
+            return parent.id;
+          }
+          cur = parent;
+        }
+      }
+      let cur = node;
+      while (cur) {
+        if (
+          cur.kind === "system" ||
+          cur.kind === "pipeline" ||
+          cur.kind === "api" ||
+          cur.kind === "service" ||
+          cur.kind === "ui" ||
+          cur.kind === "module"
+        ) {
+          return cur.id;
+        }
+        cur = parentOf(cur);
+      }
+      return node.id;
+    }
+    function searchMatchNodes() {
+      const query = search.value.trim().toLowerCase();
+      if (!query) return [];
+      const scored = [];
+      for (const node of graph.nodes) {
+        if (node.kind === "product") continue;
+        const hay = (node.label + " " + node.kind + " " + (node.qualifiedName || "")).toLowerCase();
+        if (!hay.includes(query)) continue;
+        const label = String(node.label).toLowerCase();
+        let score = 40;
+        if (label === query) score = 100;
+        else if (label.startsWith(query)) score = 80;
+        else if (label.includes(query)) score = 60;
+        if (node.kind === "system" || node.kind === "pipeline") score += 3;
+        else if (node.kind === "api" || node.kind === "service" || node.kind === "ui") score += 2;
+        else if (advancedKinds.has(node.kind)) score -= 1;
+        scored.push({ node, score });
+      }
+      scored.sort((a, b) => b.score - a.score || String(a.node.label).localeCompare(String(b.node.label)));
+      return scored.map((item) => item.node).slice(0, 12);
+    }
+    function enterSearchMatch(matchId) {
+      const root = clusterRootFor(matchId);
+      if (!root) return false;
+      search.value = "";
+      renderSearchResults();
+      if (state.focus !== root) {
+        focusNode(root);
+      } else {
+        syncTierToFocus();
+        resetCamera();
+        applyTransform();
+      }
+      selectNode(matchId);
+      return true;
+    }
+    function renderSearchResults() {
+      const list = document.getElementById("search-results");
+      if (!list) return;
+      const matches = searchMatchNodes();
+      if (!matches.length) {
+        list.hidden = true;
+        list.innerHTML = "";
+        return;
+      }
+      list.hidden = false;
+      list.innerHTML = matches.map((node, index) => (
+        '<li role="option">' +
+          '<button type="button" data-id="' + node.id + '" data-active="' + (index === 0 ? "true" : "false") + '">' +
+            '<span class="match-label"></span>' +
+            '<span class="match-meta"></span>' +
+            '<span class="match-hint"></span>' +
+          "</button>" +
+        "</li>"
+      )).join("");
+      list.querySelectorAll("button[data-id]").forEach((button, index) => {
+        const node = matches[index];
+        const rootId = clusterRootFor(node.id);
+        const root = rootId ? byId.get(rootId) : null;
+        button.querySelector(".match-label").textContent = node.label;
+        button.querySelector(".match-meta").textContent =
+          node.kind + (node.technology ? " · " + node.technology : "");
+        button.querySelector(".match-hint").textContent = root && root.id !== node.id
+          ? "Enter → " + root.label + " cluster"
+          : "Enter focuses this cluster";
+        button.onclick = (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          enterSearchMatch(node.id);
+        };
+      });
+    }
+    function handleSearchKeydown(event) {
+      if (event.key !== "Enter") return;
+      const matches = searchMatchNodes();
+      if (!matches.length) return;
+      event.preventDefault();
+      enterSearchMatch(matches[0].id);
     }
     const viewport = document.getElementById("viewport");
     const world = document.getElementById("world");
@@ -472,12 +641,11 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       let allowed = state.focus
         ? focusNeighborhood(state.focus)
         : new Set(graph.nodes.map((node) => node.id));
-      const query = search.value.trim().toLowerCase();
-      // Without a focused system (and without search), stay Product Flow–calm.
-      // Intermediate/Advanced labels alone must not globally uncollapse hubs.
-      const calmOverview = !state.focus && !query;
+      // Search picks from a results list and enters a cluster — it must not
+      // break calm overview into a whole-repo match dump / god-graph.
+      const calmOverview = !state.focus;
       // When a Product Flow exists, calm overview is that band only — drill in
-      // (double-click) to see a system’s Intermediate neighborhood.
+      // (double-click / search Enter) to see a system’s Intermediate neighborhood.
       const hasProductFlow =
         calmOverview &&
         graph.nodes.some(
@@ -489,7 +657,6 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         // table↔table edges / real models carry the story. Terraform
         // examples/wrappers and vpc_issue module chrome is the same kind of noise.
         if (
-          !query &&
           node.metadata &&
           (node.metadata.relationOnly ||
             node.metadata.joinTable ||
@@ -524,7 +691,6 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           return false;
         }
         if (node.kind === "product") return false;
-        if (query && !(node.label + " " + node.kind + " " + (node.qualifiedName || "")).toLowerCase().includes(query)) return false;
         return true;
       });
     }
@@ -1429,13 +1595,17 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       // Without a focused system, Intermediate/Advanced stay Product Flow–calm
       // (no global hub dump). Double-click a system to enter its neighborhood;
       // Advanced reveals modules in that focus; functions after drilling into a
-      // module/api. Search reveals matches without dumping the whole repo.
+      // module/api. Search Enter/click enters a match’s cluster (no god-graph dump).
       syncTierButton();
       if (!state.selected) inspector.innerHTML = emptyInspectorHtml();
       render();
     };
     syncTierButton();
-    search.oninput = render;
+    search.oninput = () => {
+      renderSearchResults();
+    };
+    search.onkeydown = handleSearchKeydown;
+    search.addEventListener("focus", renderSearchResults);
     viewport.onclick = () => {
       state.selected = null;
       inspector.innerHTML = emptyInspectorHtml();
