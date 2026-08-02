@@ -2053,19 +2053,6 @@ if (nextRealRoot) {
       }
     }
 
-    const nextFlowOrdered = nextSemantic
-      .filter((node) => typeof node.metadata?.flowOrder === "number")
-      .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
-    const nextFlowLabels = nextFlowOrdered.map((node) => node.label);
-    const uiFlowIndex = nextFlowLabels.indexOf("UI");
-    const apiFlowIndex = nextFlowLabels.indexOf("HTTP API");
-    if (uiFlowIndex < 0 || apiFlowIndex < 0 || uiFlowIndex >= apiFlowIndex) {
-      fail(
-        `next-real-repo flowOrder should place UI before HTTP API, got ${nextFlowLabels.join(" → ") || "(none)"}`,
-      );
-    } else {
-      pass(`next-real-repo flowOrder: ${nextFlowLabels.join(" → ")}`);
-    }
     if (nextUi && nextApi) {
       const uiFlowsToApi = nextRealGraph.edges.some(
         (edge) =>
@@ -2110,12 +2097,145 @@ if (nextRealRoot) {
         `next-real-repo client components: ${nextClientComponents.length}`,
       );
     }
-    if (nextTables.length < 3) {
+    const nextData = nextSemantic.find(
+      (node) => node.metadata?.systemKey === "data",
+    );
+    if (!nextData) {
+      fail("next-real-repo missing Data access semantic system");
+    } else if (nextData.label !== "Data access") {
       fail(
-        `next-real-repo table floor: ${nextTables.length} < 3 (Drizzle/SQL models missing)`,
+        `next-real-repo data system label expected 'Data access', found '${nextData.label}'`,
       );
     } else {
-      pass(`next-real-repo tables: ${nextTables.length}`);
+      pass("next-real-repo data system labeled 'Data access'");
+    }
+    if (
+      nextSemantic.some(
+        (node) =>
+          node.metadata?.systemKey === "schema" ||
+          node.label === "Schema contract",
+      )
+    ) {
+      fail(
+        "next-real-repo should not project lib/db/schema.ts as Schema contract",
+      );
+    } else {
+      pass("next-real-repo has no Schema contract pollution from Drizzle schema");
+    }
+
+    const nextProductTables = nextTables.filter(
+      (node) => node.metadata?.joinTable !== true,
+    );
+    const expectedNextTables = [
+      "User",
+      "Team",
+      "Team member",
+      "Activity log",
+      "Invitation",
+    ];
+    const nextTableLabels = new Set(
+      nextProductTables.map((node) => node.label),
+    );
+    const missingNextTables = expectedNextTables.filter(
+      (label) => !nextTableLabels.has(label),
+    );
+    const publicAliasLeak = nextProductTables.filter((node) =>
+      /^public\./i.test(node.label),
+    );
+    if (missingNextTables.length) {
+      fail(
+        `next-real-repo missing product tables: ${missingNextTables.join(", ")}; found ${[...nextTableLabels].join(", ") || "(none)"}`,
+      );
+    } else if (publicAliasLeak.length) {
+      fail(
+        `next-real-repo Public.* table aliases not deduped: ${publicAliasLeak
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else if (nextProductTables.length !== expectedNextTables.length) {
+      fail(
+        `next-real-repo expected ${expectedNextTables.length} product tables after Public.* dedupe, found ${nextProductTables.length}: ${[...nextTableLabels].join(", ")}`,
+      );
+    } else {
+      pass(
+        `next-real-repo product tables: ${expectedNextTables.join(", ")}`,
+      );
+    }
+    if (nextData) {
+      const orphanTables = nextProductTables.filter(
+        (node) => node.parentId !== nextData.id,
+      );
+      if (orphanTables.length) {
+        fail(
+          `next-real-repo tables not nested under Data access: ${orphanTables
+            .map((node) => node.label)
+            .join(", ")}`,
+        );
+      } else {
+        pass(
+          `next-real-repo ${nextProductTables.length} tables nested under Data access`,
+        );
+      }
+      const collapsedProductTables = nextProductTables.filter(
+        (node) => node.metadata?.collapsedInOverview === true,
+      );
+      if (collapsedProductTables.length) {
+        fail(
+          `next-real-repo product tables should stay visible under Data access: ${collapsedProductTables
+            .map((node) => node.label)
+            .join(", ")}`,
+        );
+      } else {
+        pass(
+          "next-real-repo product tables visible under Data access on overview",
+        );
+      }
+    }
+
+    // Re-check flow with Data access in the SaaS story band.
+    const nextFlowWithData = nextSemantic
+      .filter((node) => typeof node.metadata?.flowOrder === "number")
+      .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder)
+      .map((node) => node.label);
+    const uiIdx = nextFlowWithData.indexOf("UI");
+    const apiIdx = nextFlowWithData.indexOf("HTTP API");
+    const dataIdx = nextFlowWithData.indexOf("Data access");
+    if (
+      uiIdx < 0 ||
+      apiIdx < 0 ||
+      dataIdx < 0 ||
+      !(uiIdx < apiIdx && apiIdx < dataIdx)
+    ) {
+      fail(
+        `next-real-repo flowOrder should be UI → HTTP API → Data access, got ${nextFlowWithData.join(" → ") || "(none)"}`,
+      );
+    } else {
+      pass(`next-real-repo flowOrder: ${nextFlowWithData.join(" → ")}`);
+    }
+    if (nextApi && nextData) {
+      const apiFlowsToData = nextRealGraph.edges.some(
+        (edge) =>
+          edge.kind === "flows-to" &&
+          edge.source === nextApi.id &&
+          edge.target === nextData.id,
+      );
+      const apiUsesData = nextRealGraph.edges.some(
+        (edge) =>
+          edge.kind === "uses" &&
+          edge.source === nextApi.id &&
+          edge.target === nextData.id &&
+          edge.label === "query",
+      );
+      if (!apiFlowsToData) {
+        fail("next-real-repo missing flows-to edge HTTP API → Data access");
+      } else {
+        pass("next-real-repo flows-to: HTTP API → Data access");
+      }
+      if (!apiUsesData) {
+        fail("next-real-repo missing uses edge HTTP API → Data access (query)");
+      } else {
+        pass("next-real-repo collaboration: HTTP API -[uses:query]-> Data access");
+      }
     }
 
     const nextCommerceNoise = nextRealGraph.edges.filter(

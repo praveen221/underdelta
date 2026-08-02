@@ -422,6 +422,15 @@ const collaborationEdges: Array<{
     detail: "UI calls the HTTP API and server actions",
     requiresNone: ["pipelines", "workers", "jobs"],
   },
+  // Neutral API→Data for SaaS / RealWorld-style maps (commerce uses "orders").
+  {
+    from: "api",
+    to: "data",
+    kind: "uses",
+    label: "query",
+    detail: "HTTP API reads and writes product data",
+    requiresNone: ["pipelines", "workers", "jobs"],
+  },
 ];
 
 function assignFlowOrder(
@@ -505,9 +514,6 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
   if (file.includes("/ui/") || file.includes("/components/")) {
     return { key: "ui", label: "UI", kind: "ui" };
   }
-  if (/(^|\/)schema\.[cm]?[jt]sx?$/.test(file)) {
-    return { key: "schema", label: "Schema contract", kind: "system" };
-  }
   if (/(^|\/)graph\.[cm]?[jt]sx?$/.test(file)) {
     return { key: "graph", label: "Graph assembly", kind: "system" };
   }
@@ -547,11 +553,19 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
   ) {
     return { key: "pipelines", label: "Pipelines", kind: "pipeline" };
   }
+  // Drizzle/ORM app schemas live under /db/ (e.g. lib/db/schema.ts). Classify
+  // those as Data access BEFORE the bare schema.ts → Schema contract rule, or
+  // SaaS starters project a fake "Schema contract" instead of tables under Data.
   if (
     /(^|\/)(db|database|orders|reconcile)\.[cm]?[jt]sx?$/.test(file) ||
-    file.includes("/prisma/")
+    file.includes("/prisma/") ||
+    file.includes("/db/")
   ) {
     return { key: "data", label: "Data access", kind: "system" };
+  }
+  // Architecture / compiler schema modules (Underdelta src/schema.ts), not ORM.
+  if (/(^|\/)schema\.[cm]?[jt]sx?$/.test(file)) {
+    return { key: "schema", label: "Schema contract", kind: "system" };
   }
 
   return undefined;
@@ -618,6 +632,10 @@ function dedupeEvidence(evidence: Evidence[]): Evidence[] {
 
 function normalizeTableKey(label: string): string {
   let value = label.trim().toLowerCase();
+  // Strip Postgres schema qualifiers so public.users merges with users.
+  if (value.includes(".")) {
+    value = value.slice(value.lastIndexOf(".") + 1);
+  }
   if (value.endsWith("ies") && value.length > 3) {
     value = `${value.slice(0, -3)}y`;
   } else if (value.endsWith("s") && !value.endsWith("ss") && value.length > 3) {
@@ -633,7 +651,16 @@ function normalizeColumnKey(label: string): string {
 function titleCaseSingular(label: string): string {
   const key = normalizeTableKey(label);
   if (!key) return label;
-  return `${key.charAt(0).toUpperCase()}${key.slice(1)}`;
+  // team_member → Team member (readable for non-coders; not Team_member).
+  return key
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((part, index) =>
+      index === 0
+        ? `${part.charAt(0).toUpperCase()}${part.slice(1)}`
+        : part.toLowerCase(),
+    )
+    .join(" ");
 }
 
 function preferredTableLabel(bucket: ArchitectureNode[]): string {
@@ -646,7 +673,16 @@ function preferredTableLabel(bucket: ArchitectureNode[]): string {
   if (best.technology === "prisma" && !best.metadata?.discoveredFromUsage) {
     return best.label;
   }
-  if (best.technology === "sql") return titleCaseSingular(best.label);
+  if (best.technology === "sql") {
+    const raw = best.label.trim();
+    // Keep `_ArticleToTag`-style join chrome so collapse can still see the `_`.
+    if (raw.startsWith("_") || /(^|\.)_/.test(raw)) {
+      return raw.includes(".")
+        ? raw.slice(raw.lastIndexOf(".") + 1)
+        : raw;
+    }
+    return titleCaseSingular(best.label);
+  }
   return best.label;
 }
 
@@ -713,7 +749,17 @@ function isJoinTableNoise(
 ): boolean {
   const label = node.label.trim();
   const sqlName = String(node.metadata?.sqlName ?? "");
-  if (label.startsWith("_") || sqlName.startsWith("_")) return true;
+  const aliasNames = Array.isArray(node.metadata?.aliases)
+    ? (node.metadata.aliases as unknown[]).map((item) => String(item))
+    : [];
+  const candidates = [label, sqlName, ...aliasNames];
+  if (
+    candidates.some(
+      (name) => name.trim().startsWith("_") || /(^|\.)_/.test(name.trim()),
+    )
+  ) {
+    return true;
+  }
 
   const sources = Array.isArray(node.metadata?.sources)
     ? (node.metadata.sources as string[])

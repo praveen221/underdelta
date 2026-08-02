@@ -26,7 +26,12 @@ function evidence(file: string, source: string, offset: number): Evidence {
 }
 
 function cleanIdentifier(identifier: string): string {
-  return identifier.replaceAll(/["'`[\]]/g, "");
+  const stripped = identifier.replaceAll(/["'`[\]]/g, "");
+  // Drizzle/Postgres FK targets arrive as public.users — keep the table name.
+  if (stripped.includes(".")) {
+    return stripped.slice(stripped.lastIndexOf(".") + 1);
+  }
+  return stripped;
 }
 
 export const sqlExtractor: ArchitectureExtractor = {
