@@ -3069,6 +3069,82 @@ if (miniMongoVisibleChrome.length > 0) {
   pass("mini-mongo module chrome collapsed on overview");
 }
 
+// Mongo `.aggregate([...])` → pipeline hubs under Catalog data (RAG/query story).
+const miniMongoAggregates = miniMongoGraph.nodes.filter(
+  (node) =>
+    node.kind === "pipeline" && node.metadata?.mongoAggregate === true,
+);
+const miniMongoAggregateLabels = new Set(
+  miniMongoAggregates.map((node) => node.label),
+);
+for (const expected of ["Search chunks pipeline", "Note pipeline"]) {
+  if (!miniMongoAggregateLabels.has(expected)) {
+    fail(
+      `mini-mongo missing aggregate pipeline ${expected}; found ${[...miniMongoAggregateLabels].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-mongo has aggregate pipeline ${expected}`);
+  }
+}
+
+const miniMongoAggregatesUnderData = miniMongoAggregates.filter(
+  (node) => node.parentId === miniMongoData?.id,
+);
+if (miniMongoAggregatesUnderData.length !== 2) {
+  fail(
+    `mini-mongo expected exactly 2 aggregate pipelines nested under Catalog data, found ${miniMongoAggregatesUnderData.length} (${[...miniMongoAggregateLabels].join(", ")})`,
+  );
+} else {
+  pass(
+    `mini-mongo ${miniMongoAggregatesUnderData.length} aggregate pipelines nested under Catalog data`,
+  );
+}
+
+if (
+  miniMongoAggregatesUnderData.some(
+    (node) =>
+      node.metadata?.overviewHub !== true ||
+      node.metadata?.collapsedInOverview === true,
+  )
+) {
+  fail(
+    "mini-mongo aggregate pipelines should stay visible on overview (overviewHub)",
+  );
+} else {
+  pass("mini-mongo aggregate pipelines visible as overview hubs under Catalog data");
+}
+
+const miniMongoAggregateSteps = miniMongoGraph.nodes.filter(
+  (node) =>
+    node.kind === "pipeline-step" &&
+    typeof node.metadata?.mongoStage === "string",
+);
+const miniMongoStepLabels = new Set(
+  miniMongoAggregateSteps.map((node) => node.label),
+);
+for (const expected of ["Filter", "Group", "Sort"]) {
+  if (!miniMongoStepLabels.has(expected)) {
+    fail(
+      `mini-mongo missing aggregate stage ${expected}; found ${[...miniMongoStepLabels].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-mongo has aggregate stage ${expected}`);
+  }
+}
+
+const miniMongoPipelineUsesCollection = miniMongoGraph.edges.some(
+  (edge) =>
+    edge.kind === "uses" &&
+    edge.label === "query" &&
+    miniMongoAggregates.some((pipe) => pipe.id === edge.source) &&
+    miniMongoCollections.some((col) => col.id === edge.target),
+);
+if (!miniMongoPipelineUsesCollection) {
+  fail("mini-mongo expected aggregate pipeline -[uses:query]-> collection");
+} else {
+  pass("mini-mongo aggregate pipeline -[uses:query]-> collection");
+}
+
 // ---------------------------------------------------------------------------
 // Capability ladder rung 3: real FastAPI repo (pinned SHA, gitignored).
 // Golden-lock include_router prefixes, empty-path mounts, product title from

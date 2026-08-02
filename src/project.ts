@@ -1374,12 +1374,15 @@ export function projectSemanticArchitecture(
   }
 
   // Nest extracted pipelines under the semantic Pipelines system.
+  // Mongo aggregation pipelines stay out — they nest under Data access so we
+  // never invent a Pipelines system that would gate Checkout commerce collab.
   const pipelinesSystem = systems.get("pipelines");
   if (pipelinesSystem) {
     for (const node of [...nodes.values()]) {
       if (
         node.kind === "pipeline" &&
         node.metadata?.projection !== "semantic" &&
+        node.metadata?.mongoAggregate !== true &&
         node.id !== pipelinesSystem.id
       ) {
         attachToSystem(
@@ -1902,6 +1905,77 @@ export function projectSemanticArchitecture(
           nodes.set(node.id, node);
         }
       }
+    }
+
+    // Mongo `.aggregate` pipelines are the RAG/query story beside collections.
+    // Nest under Data access, humanize labels from the canonical collection,
+    // and keep them visible on overview (pipeline-steps stay Details-only).
+    const collectionsByNormalized = new Map<string, ArchitectureNode>();
+    for (const node of nodes.values()) {
+      if (!isMongoCollection(node)) continue;
+      const key = normalizeTableKey(
+        typeof node.metadata?.collectionName === "string"
+          ? node.metadata.collectionName
+          : node.label,
+      );
+      collectionsByNormalized.set(key, node);
+      collectionsByNormalized.set(normalizeTableKey(node.label), node);
+    }
+    for (const node of [...nodes.values()]) {
+      if (node.kind !== "pipeline" || node.metadata?.mongoAggregate !== true) {
+        continue;
+      }
+      const binding =
+        typeof node.metadata?.bindingName === "string"
+          ? node.metadata.bindingName
+          : undefined;
+      const modelName =
+        typeof node.metadata?.modelName === "string"
+          ? node.metadata.modelName
+          : undefined;
+      const collectionName =
+        typeof node.metadata?.collectionName === "string"
+          ? node.metadata.collectionName
+          : undefined;
+      const matchKey = normalizeTableKey(
+        collectionName ?? modelName ?? binding ?? node.label,
+      );
+      const collection =
+        collectionsByNormalized.get(matchKey) ??
+        (modelName
+          ? collectionsByNormalized.get(normalizeTableKey(modelName))
+          : undefined) ??
+        (binding
+          ? collectionsByNormalized.get(normalizeTableKey(binding))
+          : undefined);
+      const baseLabel = collection
+        ? collection.label
+        : binding && isScreamingSnakeBinding(binding)
+          ? humanizeIdentifierLabel(binding)
+          : modelName && /^[A-Z]/.test(modelName)
+            ? modelName
+            : humanizeIdentifierLabel(
+                collectionName ?? modelName ?? binding ?? node.label,
+              ).replace(/\s+pipeline$/i, "");
+      const nextLabel = `${baseLabel} pipeline`;
+      if (nextLabel !== node.label) {
+        node.metadata = {
+          ...node.metadata,
+          technicalLabel: node.label,
+        };
+        node.label = nextLabel;
+      }
+      attachToSystem(
+        node.id,
+        dataSystem.id,
+        node.evidence[0] ?? projectionEvidence("."),
+      );
+      node.metadata = {
+        ...node.metadata,
+        overviewHub: true,
+        collapsedInOverview: false,
+      };
+      nodes.set(node.id, node);
     }
   }
 

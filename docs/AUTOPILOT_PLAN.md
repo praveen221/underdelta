@@ -174,6 +174,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 4: `verification/mini-mongo` fixture (Express Notes API + Mongoose Note/User/Tag) + verify golden floors (Catalog data collections, API→Data uses:query, overview collapse)
 - [x] Rung 4: pin `sahat/hackathon-starter` @ `d20161b9e81e817d38b3633e08349f327b01d974`; clone into gitignored `.underdelta-real/hackathon-starter`; golden-lock User/Session/Ai agent checkpoint under Data access + HTTP API→Data flow/uses; skip FAQ/HTML README heading pollution (`http://` in `<img src>` must not rename API)
 - [x] Rung 4: resolve `.collection(CONST)` same-file string bindings — Rag chunks / Llm semantic cache on hackathon-starter + Search chunks / Query cache on mini-mongo; SCREAMING_SNAKE consts → humanized labels; golden-lock
+- [x] Rung 4: Mongo `.aggregate([...])` → pipeline nodes (stages as Filter/Group/Sort… steps); nest under Data as overview hubs; mini-mongo Search chunks + Note pipelines golden-locked (hackathon-starter only documents aggregate in README)
 
 ### Real-repo pins (Capability ladder)
 
@@ -188,11 +189,10 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 4: Mongo aggregation pipelines (`.aggregate([...])`) → pipeline nodes when present in fixture/real repo
+- [ ] Rung 4: surface `createCollectionForVectorSearch(db, CONST, …)` helpers as collection evidence when `.collection` is wrapped
+- [ ] Rung 4 polish pass: North-star legibility on mini-mongo + hackathon-starter (aggregate hubs beside collections; quiet any remaining chrome) before calling the rung locked
 - [ ] Standing polish: inspector metadata hygiene (hide projection/systemKey/flowOrder pills) on self-map + RealWorld
 - [ ] Standing guarantee: spot-check Underdelta self-map + mini-stack still demo-ready after Mongo ladder work
-- [ ] Rung 4 polish pass once real Mongo map is richer (North-star legibility before calling the rung locked)
-- [ ] Rung 4: surface `createCollectionForVectorSearch(db, CONST, …)` helpers as collection evidence when `.collection` is wrapped
 
 ### Seed backlog (pull from here when In progress < 3)
 
@@ -204,7 +204,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (`.collection(CONST)` → Rag chunks / Llm semantic cache on the real Mongo map). Now extract Mongo aggregation pipelines (`.aggregate([...])`) so RAG/query flows show as pipeline nodes before the Rung 4 polish lock.
+> **Next focus:** This work is done (Mongo `.aggregate` → Search chunks / Note pipeline hubs under Catalog data). Now surface `createCollectionForVectorSearch(db, CONST, …)` helper wrappers as collection evidence so vector-search collections are not invisible when `.collection` is wrapped.
 
 ### Learning log (append every tick)
 
@@ -255,6 +255,7 @@ Append short bullets like:
 - 2026-08-02 05:20 UTC | Done: Rung 4 prep+fixture — `src/extractors/mongo.ts` (mongoose.model / Schema collection / .collection), project nest+dedupe collections under Data, `/models/` path-role, `verification/mini-mongo` Notes API→Catalog data Note/User/Tag, verify golden + Extractors roster `mongo` | Next: pin real Mongo OSS repo + golden-lock | Learned: do not infer mongoose model names from nearby Schema calls in multi-model files (Tag Schema + later `model("Note")` mis-labels); emit raw collection names and let projection merge Note↔notes; unscoped package.json names beat README H1 in preferProductLabel — omit fixture package.json when the README title is the product name
 - 2026-08-02 05:35 UTC | Done: Rung 4 pin+golden — `sahat/hackathon-starter` @ `d20161b9e81e` gitignored; User/Session/Ai agent checkpoint under Data; HTTP API→Data flow/uses; skip FAQ/`?` headings + strip HTML `<img src="http://…">` so README chrome cannot rename API; golden-lock | Next: `.collection(CONST)` identifier resolution for RAG/cache collections | Learned: after FAQ skip, the next false API label was a Date Cheatsheet whose raw HTML `src="http://…"` matched `\bhttp\b` — sanitize must strip HTML before system-key inference; well-known mongoose apps still hide collections behind `const NAME = '…'; db.collection(NAME)`
 - 2026-08-02 05:45 UTC | Done: `.collection(CONST)` same-file string bindings — Rag chunks / Llm semantic cache + mini-mongo Search chunks / Query cache; SCREAMING_SNAKE → humanizeIdentifierLabel; golden-lock | Next: Mongo `.aggregate` pipelines | Learned: resolve identifier→literal in-extractor and keep `collectionName` for dedupe keys; prefer binding names for labels because `rag_chunks` singularizes to "Rag chunk" while `RAG_CHUNKS` keeps the product plural
+- 2026-08-02 05:55 UTC | Done: Mongo `.aggregate` → pipeline + humanized stage steps; nest under Data as overviewHub (never invent Pipelines system — Checkout gate); mask comments so JSDoc cannot invent call sites; mini-mongo golden-lock Search chunks + Note pipelines | Next: createCollectionForVectorSearch helpers | Learned: sahat/hackathon-starter only shows aggregate in README (fixture carries the rung); `$sum` accumulators must not become stages — whitelist known stage ops; comment masking is mandatory for regex extractors
 
 ---
 

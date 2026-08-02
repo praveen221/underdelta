@@ -19,6 +19,7 @@ const mongoose = {
       modelName: name,
       find: async () => [],
       create: async (doc: unknown) => doc,
+      aggregate: async (_pipeline: unknown[]) => [],
     };
   },
 };

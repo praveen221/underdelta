@@ -21,13 +21,34 @@ const QUERY_CACHE = "query_cache";
 
 const db = {
   collection(name: string) {
-    return { name, find: async () => [] };
+    return {
+      name,
+      find: async () => [],
+      aggregate: async (_pipeline: unknown[]) => [],
+    };
   },
 };
 
 export async function warmSearchIndex() {
   void db.collection(SEARCH_CHUNKS);
   void db.collection(QUERY_CACHE);
+}
+
+/** RAG ranking via native driver aggregate on SEARCH_CHUNKS. */
+export async function rankSearchChunks() {
+  return db.collection(SEARCH_CHUNKS).aggregate([
+    { $match: { active: true } },
+    { $group: { _id: "$topic", count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+  ]);
+}
+
+/** Product totals via mongoose Model.aggregate. */
+export async function countNotesByAuthor() {
+  return Note.aggregate([
+    { $match: { published: true } },
+    { $group: { _id: "$author", total: { $sum: 1 } } },
+  ]);
 }
 
 export function listNotes(
