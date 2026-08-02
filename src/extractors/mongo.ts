@@ -94,15 +94,104 @@ function humanizeStage(operator: string): string {
   return STAGE_LABELS[operator] ?? operator;
 }
 
+/** Keywords that may be followed by a regex literal (`return /x/`, …). */
+const REGEX_PREFIX_KEYWORDS = new Set([
+  "return",
+  "case",
+  "throw",
+  "typeof",
+  "delete",
+  "void",
+  "new",
+  "of",
+  "in",
+  "await",
+  "yield",
+  "instanceof",
+]);
+
 /**
  * Replace line and block comments with spaces (newlines kept) so regex scans
  * do not treat prose like `collection.aggregate (` in JSDoc as call sites.
+ *
+ * Must also treat slash-delimited regex literals as opaque spans. Otherwise a
+ * character-class pattern that contains quote characters opens quote mode, and
+ * every later line/block comment stays live — inventing Collection/Note hubs
+ * from this extractor's own docs onto the product self-map.
  */
 function maskComments(source: string): string {
   let out = "";
   let i = 0;
   let quote: string | undefined;
   let escaped = false;
+  let lastCode = "";
+  let lastIdent = "";
+
+  const canBeginRegex = (): boolean => {
+    if (!lastCode) return true;
+    if ("{(=,:;!&|?+*%^~<>[\n".includes(lastCode)) return true;
+    // `x - /re/` is valid JS; treat unary/binary `-` as regex-friendly.
+    if (lastCode === "-") return true;
+    if (REGEX_PREFIX_KEYWORDS.has(lastIdent)) return true;
+    return false;
+  };
+
+  /** Consume `/…/flags` starting at `i` when it is a well-formed regex literal. */
+  const tryConsumeRegex = (): boolean => {
+    let j = i + 1;
+    let inClass = false;
+    let esc = false;
+    while (j < source.length) {
+      const c = source[j]!;
+      if (esc) {
+        esc = false;
+        j += 1;
+        continue;
+      }
+      if (c === "\\") {
+        esc = true;
+        j += 1;
+        continue;
+      }
+      if (c === "\n" || c === "\r") return false;
+      if (c === "[") {
+        inClass = true;
+        j += 1;
+        continue;
+      }
+      if (c === "]" && inClass) {
+        inClass = false;
+        j += 1;
+        continue;
+      }
+      if (c === "/" && !inClass) {
+        j += 1;
+        while (j < source.length && /[gimsuy]/.test(source[j]!)) j += 1;
+        while (i < j) {
+          out += source[i]!;
+          i += 1;
+        }
+        lastCode = out[out.length - 1] ?? "/";
+        lastIdent = "";
+        return true;
+      }
+      j += 1;
+    }
+    return false;
+  };
+
+  const noteCodeChar = (ch: string): void => {
+    if (/\s/.test(ch)) return;
+    lastCode = ch;
+    if (/[A-Za-z_$]/.test(ch)) {
+      lastIdent += ch;
+    } else if (/\d/.test(ch) && lastIdent) {
+      lastIdent += ch;
+    } else {
+      lastIdent = "";
+    }
+  };
+
   while (i < source.length) {
     const ch = source[i]!;
     const next = source[i + 1];
@@ -110,7 +199,11 @@ function maskComments(source: string): string {
       out += ch;
       if (escaped) escaped = false;
       else if (ch === "\\") escaped = true;
-      else if (ch === quote) quote = undefined;
+      else if (ch === quote) {
+        quote = undefined;
+        lastCode = ch;
+        lastIdent = "";
+      }
       i += 1;
       continue;
     }
@@ -143,7 +236,11 @@ function maskComments(source: string): string {
       }
       continue;
     }
+    if (ch === "/" && canBeginRegex() && tryConsumeRegex()) {
+      continue;
+    }
     out += ch;
+    noteCodeChar(ch);
     i += 1;
   }
   return out;

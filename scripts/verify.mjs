@@ -262,6 +262,28 @@ if (fakeHttpRoutes.length || leakedMapGetRoutes.length) {
   pass("self-map has no Map.get-style false-positive HTTP routes");
 }
 
+// Mongo maskComments must treat /regex/ literals so JSDoc/line comments in
+// src/extractors/mongo.ts (and project.ts docs) cannot invent collections.
+const selfMongoCommentNoise = selfGraph.nodes.filter(
+  (node) =>
+    (node.kind === "collection" || node.label === "MongoDB") &&
+    (node.evidence ?? []).some(
+      (item) =>
+        item.extractor === "mongo" &&
+        (item.file === "src/extractors/mongo.ts" ||
+          item.file === "src/project.ts"),
+    ),
+);
+if (selfMongoCommentNoise.length) {
+  fail(
+    `self-map has mongo comment-noise nodes (maskComments regex-literal bug): ${selfMongoCommentNoise
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("self-map has no mongo extractor comment-noise collections/MongoDB hubs");
+}
+
 const artifact = selfGraph.nodes.find(
   (node) =>
     node.label === "architecture.json" && node.metadata?.role === "artifact",
