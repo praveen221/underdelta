@@ -549,12 +549,20 @@ function normalizePath(value: string): string {
   return value.replaceAll("\\", "/");
 }
 
-function isFileModule(node: ArchitectureNode): boolean {
+/** OpenAPI/Swagger spec paths — modules even though they are not JS/TS/Py. */
+function isOpenApiSpecModulePath(file: string): boolean {
+  const normalized = normalizePath(file).toLowerCase();
   return (
-    node.kind === "module" &&
-    /\.(?:[cm]?[jt]sx?|py)$/i.test(
-      normalizePath(node.qualifiedName ?? node.label),
-    )
+    /(^|\/)(openapi|swagger)\.(json|ya?ml)$/.test(normalized) ||
+    /(?:^|\/)openapi\/.+\.(json|ya?ml)$/.test(normalized)
+  );
+}
+
+function isFileModule(node: ArchitectureNode): boolean {
+  if (node.kind !== "module") return false;
+  const file = normalizePath(node.qualifiedName ?? node.label);
+  return (
+    /\.(?:[cm]?[jt]sx?|py)$/i.test(file) || isOpenApiSpecModulePath(file)
   );
 }
 
@@ -612,7 +620,10 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
     file.includes("/api/") ||
     // Python servers: Django urlpatterns + FastAPI APIRouter modules.
     /(^|\/)urls\.py$/.test(file) ||
-    file.includes("/routers/")
+    file.includes("/routers/") ||
+    // OpenAPI / Swagger specs are the HTTP API contract surface.
+    isOpenApiSpecModulePath(file) ||
+    file.includes("/openapi/")
   ) {
     return { key: "api", label: "HTTP API", kind: "api" };
   }
@@ -1637,10 +1648,11 @@ export function projectSemanticArchitecture(
       (node.metadata?.next === "route" ||
         node.metadata?.framework === "fastapi" ||
         node.metadata?.framework === "django" ||
+        node.metadata?.openapi === true ||
         node.metadata.path.startsWith("/api/") ||
         node.metadata.path === "/api")
     ) {
-      // Next/FastAPI/Django (+ /api/*): GET /api/articles/{slug} → GET Articles.
+      // Next/FastAPI/Django/OpenAPI (+ /api/*): GET /api/articles/{slug} → GET Articles.
       const method =
         typeof node.metadata.method === "string" ? node.metadata.method : "GET";
       nextLabel = humanizeHttpRouteLabel(method, node.metadata.path);

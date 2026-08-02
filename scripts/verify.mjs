@@ -18,6 +18,7 @@ const fixtureRoot = path.join(repoRoot, "verification", "mini-stack");
 const miniNextRoot = path.join(repoRoot, "verification", "mini-next");
 const miniPythonRoot = path.join(repoRoot, "verification", "mini-python");
 const miniMongoRoot = path.join(repoRoot, "verification", "mini-mongo");
+const miniOpenapiRoot = path.join(repoRoot, "verification", "mini-openapi");
 
 function fail(message) {
   console.error(`VERIFY FAIL: ${message}`);
@@ -100,6 +101,7 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file.includes("mini-next/") ||
         file.includes("mini-python/") ||
         file.includes("mini-mongo/") ||
+        file.includes("mini-openapi/") ||
         file === ".underdelta-real" ||
         file.startsWith(".underdelta-real/") ||
         file.includes("/.underdelta-real/")
@@ -490,7 +492,14 @@ const extractorsSystem = selfGraph.nodes.find(
 const extractorRoster = Array.isArray(extractorsSystem?.metadata?.extractorRoster)
   ? extractorsSystem.metadata.extractorRoster
   : [];
-const requiredExtractors = ["mongo", "prisma", "python", "sql", "typescript"];
+const requiredExtractors = [
+  "mongo",
+  "openapi",
+  "prisma",
+  "python",
+  "sql",
+  "typescript",
+];
 const missingExtractors = requiredExtractors.filter(
   (id) => !extractorRoster.includes(id),
 );
@@ -507,6 +516,7 @@ const extractorKeyFiles = Array.isArray(extractorsSystem?.metadata?.keyFiles)
   : [];
 const requiredExtractorFiles = [
   "src/extractors/mongo.ts",
+  "src/extractors/openapi.ts",
   "src/extractors/prisma.ts",
   "src/extractors/python.ts",
   "src/extractors/sql.ts",
@@ -3952,6 +3962,125 @@ if (mongoRealRoot) {
       pass("mongo-real-repo module chrome collapsed on overview");
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Capability ladder rung 5 prep: OpenAPI extractor + verification/mini-openapi.
+// Smoke floors — full golden polish lands in the next tick.
+// ---------------------------------------------------------------------------
+const miniOpenapiGraph = await compileRepository(miniOpenapiRoot);
+const miniOpenapiRoutes = miniOpenapiGraph.nodes.filter(
+  (node) => node.kind === "route" && node.metadata?.openapi === true,
+);
+const miniOpenapiRouteLabels = miniOpenapiRoutes.map((node) => node.label);
+console.log(
+  `Mini-openapi graph: ${miniOpenapiGraph.nodes.length} nodes, ${miniOpenapiGraph.edges.length} edges → routes ${[...new Set(miniOpenapiRouteLabels)].sort().join(", ")}`,
+);
+
+const miniOpenapiProduct = miniOpenapiGraph.nodes.find(
+  (node) => node.kind === "product",
+);
+if (!miniOpenapiProduct || miniOpenapiProduct.label !== "Mini OpenAPI notes") {
+  fail(
+    `mini-openapi product label expected 'Mini OpenAPI notes', found '${miniOpenapiProduct?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-openapi product labeled Mini OpenAPI notes");
+}
+
+const miniOpenapiExtractors = miniOpenapiGraph.extractors.map(
+  (item) => item.id,
+);
+if (!miniOpenapiExtractors.includes("openapi")) {
+  fail(
+    `mini-openapi graph.extractors missing openapi; found ${JSON.stringify(miniOpenapiExtractors)}`,
+  );
+} else {
+  pass("mini-openapi registers openapi extractor");
+}
+
+const miniOpenapiOps = new Set(
+  miniOpenapiRoutes.map(
+    (node) => `${node.metadata?.method ?? "?"} ${node.metadata?.path ?? "?"}`,
+  ),
+);
+for (const expected of [
+  "GET /notes",
+  "POST /notes",
+  "GET /notes/{id}",
+  "DELETE /notes/{id}",
+]) {
+  if (!miniOpenapiOps.has(expected)) {
+    fail(
+      `mini-openapi missing operation ${expected}; found ${[...miniOpenapiOps].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-openapi has operation ${expected}`);
+  }
+}
+
+for (const expected of ["GET Notes", "POST Notes", "DELETE Notes"]) {
+  if (!miniOpenapiRouteLabels.includes(expected)) {
+    fail(
+      `mini-openapi missing humanized route ${expected}; found ${miniOpenapiRouteLabels.join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-openapi humanized route ${expected}`);
+  }
+}
+
+const miniOpenapiSystems = miniOpenapiGraph.nodes.filter(
+  (node) => node.metadata?.projection === "semantic",
+);
+const miniOpenapiByKey = new Map(
+  miniOpenapiSystems
+    .filter((node) => typeof node.metadata?.systemKey === "string")
+    .map((node) => [node.metadata.systemKey, node]),
+);
+const miniOpenapiApi = miniOpenapiByKey.get("api");
+if (!miniOpenapiApi || miniOpenapiApi.label !== "Notes API") {
+  fail(
+    `mini-openapi API label expected 'Notes API' from README, found '${miniOpenapiApi?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-openapi API labeled Notes API");
+}
+
+const nestedOpenapiRoutes = miniOpenapiRoutes.filter(
+  (node) => node.parentId === miniOpenapiApi?.id,
+);
+if (nestedOpenapiRoutes.length < 4) {
+  fail(
+    `mini-openapi expected ≥4 routes nested under Notes API, found ${nestedOpenapiRoutes.length}`,
+  );
+} else {
+  pass(`mini-openapi ${nestedOpenapiRoutes.length} routes nested under Notes API`);
+}
+
+const openapiOverviewLeaves = nestedOpenapiRoutes.filter(
+  (node) => node.metadata?.collapsedInOverview !== true,
+);
+if (openapiOverviewLeaves.length > 0) {
+  fail(
+    `mini-openapi overview should collapse routes under Notes API, still visible: ${openapiOverviewLeaves
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-openapi overview collapses routes under Notes API");
+}
+
+const openapiCommerceNoise = miniOpenapiGraph.edges.some((edge) =>
+  /checkout|orders?/i.test(
+    `${edge.label ?? ""} ${edge.metadata?.detail ?? ""}`,
+  ),
+);
+if (openapiCommerceNoise) {
+  fail(
+    "mini-openapi should not inherit Checkout/orders commerce collaboration copy",
+  );
+} else {
+  pass("mini-openapi has no Checkout/orders commerce collaboration noise");
 }
 
 if (process.exitCode) {

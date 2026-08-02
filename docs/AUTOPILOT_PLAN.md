@@ -179,6 +179,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 4 polish: North-star mini-mongo + hackathon-starter — acronym labels (RAG/LLM/AI), aggregate hubs in Data constellation beside collections, collapse aggregate stages on overview, bare `/api` → `GET API`; golden-lock — **Rung 4 locked**
 - [x] Standing guarantee: mongo `maskComments` treats `/regex/` literals — self-map free of Collection/Note/Receiver/MongoDB comment noise; golden-lock in verify
 - [x] Standing polish: inspector metadata hygiene — hide `projection` / `systemKey` / `flowOrder` pills so North-star users see product evidence, not compiler internals; golden-lock in verify
+- [x] Rung 5 prep: OpenAPI extractor — `openapi.yaml`/`yml`/`json` + `swagger.*`; paths+operations → routes; spec modules path-role → HTTP API; humanize openapi routes; `verification/mini-openapi` smoke floors + Extractors roster includes `openapi`
 
 ### Real-repo pins (Capability ladder)
 
@@ -193,8 +194,8 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 5 prep: pick OpenAPI from README roadmap; sketch extractor surface (`openapi.yaml` / `swagger.json` paths + operations) + mini fixture target
-- [ ] Rung 5: add `verification/mini-openapi` fixture + verify golden floors (HTTP API ops nested, product title, flow)
+- [ ] Rung 5: thicken mini-openapi golden floors (swagger.json dual-format, flowOrder, operationId/summary evidence) + North-star polish pass
+- [ ] Rung 5: pin a real OpenAPI-bearing OSS repo (gitignored clone + golden-lock ops under HTTP API)
 - [ ] Standing polish: Underdelta self-map cold-read pass — any leftover jargon labels or weak hierarchy after mongo noise + inspector hygiene
 - [ ] Standing polish: hide remaining compiler chrome pills (`labelSource`, `pathRoleLabel`, `collapsedInOverview`, `overviewHub`) if they still dump in inspector
 
@@ -202,13 +203,14 @@ Keep **at least 3 unchecked items** here at all times (refill from Self-renewing
 
 Not a full roadmap — a menu the agent may reorder. Pick what most improves the **Capability ladder** now.
 
-- Rung 5+: GraphQL / OpenAPI / Docker-monorepo / Terraform / Kubernetes (README roadmap after Mongo)
+- Rung 5+: GraphQL / Docker-monorepo / Terraform / Kubernetes (README roadmap after OpenAPI)
+- OAS3 `servers` / `$ref` path-item resolution if real-repo pins need it
 - Performance pass only if scanning a real repo becomes painfully slow
 - Docs only when CLI/behavior changed
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (inspector hides projection/systemKey/flowOrder pills + golden-lock). Now do Rung 5 prep: sketch OpenAPI extractor surface + `verification/mini-openapi` target so the ladder climbs past Mongo into API-spec semantics.
+> **Next focus:** This work is done (OpenAPI extractor + mini-openapi smoke + roster). Now thicken mini-openapi golden floors (swagger.json dual-format + flowOrder/operation evidence) so Rung 5 can pin a real OpenAPI repo next.
 
 ### Learning log (append every tick)
 
@@ -264,6 +266,7 @@ Append short bullets like:
 - 2026-08-02 05:30 UTC | Done: Rung 4 locked — acronym-aware labels (RAG/LLM/AI), viewer puts mongoAggregate hubs in Data constellation beside collections, collapse aggregate stages, `/api`→GET API; golden-lock | Next: fix maskComments regex literals (self-map Collection/Note noise) | Learned: comment masking is defeated by `/regex/` patterns that contain quotes — later JSDoc/line comments stay live and the mongo extractor maps its own docs onto Underdelta’s self-map; semantic `kind:pipeline` systems must stay in Systems lane while mongo hubs route to Data via laneNameFor
 - 2026-08-02 05:33 UTC | Done: maskComments consumes `/regex/` literals (char-class + escapes + flags; keyword/punctuator prefix heuristic) so JSDoc stays masked; self-map drops Collection/Note/Receiver/MongoDB chrome; verify golden-lock | Next: inspector metadata pill hygiene | Learned: the poison was cleanName's quote-stripping character-class regex — a quote inside `/[…]/` flipped maskComments into string mode for the rest of the file; regex extractors need a real mini-lexer, not only quote+comment tracking
 - 2026-08-02 05:34 UTC | Done: inspector hygiene — hide projection/systemKey/flowOrder from structuredMetaKeys pill dump; golden-lock in verify | Next: Rung 5 OpenAPI extractor sketch + mini-openapi fixture | Learned: system nodes dump compiler internals as the first inspector chrome a founder sees; structuredMetaKeys already owned messaging/table keys — extending that set is enough without a second filter
+- 2026-08-02 05:40 UTC | Done: Rung 5 prep — `src/extractors/openapi.ts` YAML/JSON paths+ops, spec modules as file-modules → HTTP API, humanize openapi routes, `verification/mini-openapi` Notes API smoke + Extractors roster `openapi` | Next: thicken mini-openapi golden (swagger.json dual-format + flowOrder) | Learned: isFileModule was JS/TS/Py-only so openapi.yaml never got path-role until yaml/json spec filenames were admitted; keep YAML path walking dependency-free for typical specs; `spec`/`specs` dirs stay ignored — put contracts at `openapi.yaml` or under `openapi/`
 
 ---
 
