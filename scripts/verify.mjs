@@ -115,6 +115,7 @@ for (const expected of [
   "Schema contract",
   "Viewer",
   "architecture.json",
+  "index.html",
 ]) {
   if (!selfLabels.has(expected)) {
     fail(`Underdelta self-map missing semantic node '${expected}'`);
@@ -133,6 +134,18 @@ if (!artifact) {
   pass("architecture.json artifact node present");
 }
 
+const browser = selfGraph.nodes.find(
+  (node) =>
+    node.label === "index.html" &&
+    node.metadata?.role === "artifact" &&
+    node.metadata?.artifactKind === "browser",
+);
+if (!browser) {
+  fail("missing index.html browser artifact node");
+} else {
+  pass("index.html browser artifact node present");
+}
+
 const flowOrdered = selfGraph.nodes.filter(
   (node) => typeof node.metadata?.flowOrder === "number",
 );
@@ -143,6 +156,19 @@ if (flowOrdered.length < 5) {
     .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder)
     .map((node) => node.label);
   pass(`self-map flowOrder: ${orderedLabels.join(" → ")}`);
+  if (!orderedLabels.includes("architecture.json") || !orderedLabels.includes("index.html")) {
+    fail("expected both scan artifacts in flowOrder band");
+  } else {
+    const irOrder = orderedLabels.indexOf("architecture.json");
+    const browserOrder = orderedLabels.indexOf("index.html");
+    if (browserOrder <= irOrder) {
+      fail(
+        `expected architecture.json before index.html in flow, got ${orderedLabels.join(" → ")}`,
+      );
+    } else {
+      pass("scan artifacts ordered architecture.json → index.html");
+    }
+  }
 }
 
 const artifactFlow = selfGraph.edges.some(
@@ -154,6 +180,31 @@ if (!artifactFlow) {
   fail("architecture.json artifact missing flows-to linkage");
 } else {
   pass("architecture.json participates in product flow");
+}
+
+const browserFromArtifact = selfGraph.edges.some(
+  (edge) =>
+    edge.kind === "flows-to" &&
+    edge.source === artifact?.id &&
+    edge.target === browser?.id,
+);
+const browserFromViewer = selfGraph.edges.some(
+  (edge) =>
+    edge.kind === "flows-to" &&
+    edge.target === browser?.id &&
+    selfGraph.nodes.some(
+      (node) =>
+        node.id === edge.source &&
+        node.label === "Viewer" &&
+        node.metadata?.projection === "semantic",
+    ),
+);
+if (!browserFromArtifact || !browserFromViewer) {
+  fail(
+    `index.html missing expected flows (artifact→browser=${browserFromArtifact}, viewer→browser=${browserFromViewer})`,
+  );
+} else {
+  pass("index.html flows from architecture.json and Viewer");
 }
 
 const cli = selfGraph.nodes.find(

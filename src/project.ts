@@ -31,6 +31,8 @@ const preferredFlows: Array<[string, string]> = [
   ["compile", "artifact"],
   ["graph", "artifact"],
   ["artifact", "viewer"],
+  ["artifact", "browser"],
+  ["viewer", "browser"],
   ["schema", "graph"],
   ["schema", "extractors"],
   ["ui", "api"],
@@ -637,7 +639,8 @@ export function projectSemanticArchitecture(
     if (!edges.has(dependency.id)) edges.set(dependency.id, dependency);
   }
 
-  // Synthesize the compiled architecture artifact on tooling self-maps.
+  // Synthesize scan output artifacts on tooling self-maps:
+  // architecture.json (IR) beside index.html (browser).
   if (
     (systems.has("compile") || systems.has("graph")) &&
     (systems.has("viewer") || systems.has("cli"))
@@ -652,6 +655,7 @@ export function projectSemanticArchitecture(
         projection: "semantic",
         systemKey: "artifact",
         role: "artifact",
+        artifactKind: "architecture-ir",
       },
       evidence: [
         {
@@ -671,6 +675,38 @@ export function projectSemanticArchitecture(
       artifact.evidence[0]!,
     );
     edges.set(productEdge.id, productEdge);
+
+    const browserId = stableId("system", "browser");
+    const browser: ArchitectureNode = {
+      id: browserId,
+      kind: "config",
+      label: "index.html",
+      technology: "underdelta",
+      metadata: {
+        projection: "semantic",
+        systemKey: "browser",
+        role: "artifact",
+        artifactKind: "browser",
+      },
+      evidence: [
+        {
+          file: ".underdelta/index.html",
+          extractor: "projection",
+          certainty: "derived",
+          detail:
+            "Self-contained architecture browser written by underdelta scan/render",
+        },
+      ],
+    };
+    systems.set("browser", browser);
+    nodes.set(browser.id, browser);
+    const browserProductEdge = edgeFrom(
+      "contains",
+      product.id,
+      browser.id,
+      browser.evidence[0]!,
+    );
+    edges.set(browserProductEdge.id, browserProductEdge);
   }
 
   const systemsByKey = new Map(
