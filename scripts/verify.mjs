@@ -653,9 +653,13 @@ const tableRelation = fixtureGraph.edges.find((edge) => {
 });
 if (!tableRelation) {
   fail("expected table relation edge between Payment and Order");
+} else if (!tableRelation.label || tableRelation.label === "depends-on") {
+  fail(
+    `expected named table↔table relation label (payments/order), got ${JSON.stringify(tableRelation.label)}`,
+  );
 } else {
   pass(
-    `table relation: ${fixtureTables.find((t) => t.id === tableRelation.source)?.label} → ${fixtureTables.find((t) => t.id === tableRelation.target)?.label}`,
+    `table relation: ${fixtureTables.find((t) => t.id === tableRelation.source)?.label} → ${fixtureTables.find((t) => t.id === tableRelation.target)?.label} via ${tableRelation.label}`,
   );
 }
 
@@ -935,6 +939,37 @@ if (relationOnlyHide < 0) {
   fail("viewer should hide metadata.relationOnly columns on the default map");
 } else {
   pass("viewer hides relation-only Prisma fields unless searched");
+}
+
+// Inspector: table↔table relation labels under Data access (tables + data system).
+const tableRelationsFn = fixtureViewerHtml.indexOf("function tableRelationsHtml");
+const isTableRelationEdgeFn = fixtureViewerHtml.indexOf("function isTableRelationEdge");
+const relationsHeading = fixtureViewerHtml.indexOf("<h3>Relations</h3>");
+const relationDetailClass = fixtureViewerHtml.indexOf('class="relation-detail"');
+const viaRelationDetail = fixtureViewerHtml.indexOf('via \' + label');
+const tableRelationOwned =
+  fixtureViewerHtml.includes('node.kind === "table" && isTableRelationEdge(edge)');
+const dataAccessRelations =
+  fixtureViewerHtml.includes("function isDataAccessSystem") &&
+  fixtureViewerHtml.includes('meta.systemKey === "data"');
+if (tableRelationsFn < 0 || isTableRelationEdgeFn < 0 || relationsHeading < 0) {
+  fail("viewer inspector missing Relations section for table↔table edges");
+} else if (relationDetailClass < 0 || viaRelationDetail < 0) {
+  fail("viewer inspector should render relation labels as 'via <name>' detail text");
+} else if (!tableRelationOwned) {
+  fail(
+    "viewer inspector should own table↔table depends-on edges in Relations (not Imports & calls)",
+  );
+} else if (!dataAccessRelations) {
+  fail("viewer inspector should aggregate Relations on Data access system nodes");
+} else if (!tableRelation?.label || !["payments", "order", "references"].includes(tableRelation.label)) {
+  fail(
+    `expected fixture Payment↔Order relation label payments/order, got ${JSON.stringify(tableRelation?.label)}`,
+  );
+} else {
+  pass(
+    `viewer inspector surfaces table↔table relation labels (via ${tableRelation.label}) beside Data access nodes`,
+  );
 }
 
 if (process.exitCode) {

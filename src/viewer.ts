@@ -91,6 +91,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     .collab-edge { margin: 0 0 10px; }
     .collab-edge .pill { margin-bottom: 2px; }
     .collab-detail { margin: 2px 0 0; font-size: 12px; line-height: 1.35; color: var(--text); }
+    .table-relation { margin: 0 0 10px; }
+    .table-relation .pill { margin-bottom: 2px; }
+    .relation-detail { margin: 2px 0 0; font-size: 12px; line-height: 1.35; color: var(--text); }
     .evidence { border-top: 1px solid var(--line); padding: 9px 0; }
     .evidence a { color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
     .evidence a:hover { color: var(--accent); }
@@ -427,6 +430,82 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       return "<h3>Prisma / SQL</h3>" + pills.join("") + (migrationLinks ? '<p class="table-migrations">' + migrationLinks + "</p>" : "");
     }
 
+    function isTableNode(id) {
+      const node = byId.get(id);
+      return !!(node && node.kind === "table");
+    }
+
+    // Table↔table depends-on edges carry Prisma/SQL relation names (payments / order).
+    function isTableRelationEdge(edge) {
+      return edge.kind === "depends-on" && isTableNode(edge.source) && isTableNode(edge.target);
+    }
+
+    function isDataAccessSystem(node) {
+      if (!node || node.kind !== "system") return false;
+      const meta = node.metadata || {};
+      return meta.systemKey === "data" || meta.pathRoleLabel === "Data access";
+    }
+
+    function relationLabelText(edge) {
+      if (edge.label && edge.label !== "depends-on") return edge.label;
+      for (const item of edge.evidence || []) {
+        if (item.detail) return item.detail;
+      }
+      return "related";
+    }
+
+    function tableRelationItem(edge, fromId, toId) {
+      const other = byId.get(toId);
+      const label = relationLabelText(edge);
+      const button = '<button class="pill connection" data-id="' + (other?.id || "") + '">' + (other?.label || "table") + "</button>";
+      const detail = '<p class="relation-detail">via ' + label + "</p>";
+      return '<div class="table-relation">' + button + detail + "</div>";
+    }
+
+    // Data access tables: surface named relations before generic connections.
+    function tableRelationsHtml(node, connections) {
+      if (node.kind === "table") {
+        const relations = connections.filter(isTableRelationEdge);
+        if (!relations.length) return "";
+        const items = relations.slice(0, 16).map((edge) => {
+          const otherId = edge.source === node.id ? edge.target : edge.source;
+          return tableRelationItem(edge, node.id, otherId);
+        }).join("");
+        return "<h3>Relations</h3>" + items;
+      }
+      if (!isDataAccessSystem(node)) return "";
+      // Aggregate child table↔table relations so Data access tells the schema story.
+      const childTables = (outgoing.get(node.id) || [])
+        .filter((edge) => edge.kind === "contains" && isTableNode(edge.target))
+        .map((edge) => edge.target);
+      const childSet = new Set(childTables);
+      const seen = new Set();
+      const items = [];
+      for (const tableId of childTables) {
+        const edges = [...(outgoing.get(tableId) || []), ...(incoming.get(tableId) || [])];
+        for (const edge of edges) {
+          if (!isTableRelationEdge(edge)) continue;
+          if (!childSet.has(edge.source) || !childSet.has(edge.target)) continue;
+          const pairKey = [edge.source, edge.target].sort().join("|") + "|" + (edge.label || "");
+          if (seen.has(pairKey)) continue;
+          seen.add(pairKey);
+          const source = byId.get(edge.source);
+          const target = byId.get(edge.target);
+          const label = relationLabelText(edge);
+          items.push(
+            '<div class="table-relation">' +
+              '<button class="pill connection" data-id="' + (source?.id || "") + '">' + (source?.label || "table") + "</button>" +
+              '<span class="pill">→</span>' +
+              '<button class="pill connection" data-id="' + (target?.id || "") + '">' + (target?.label || "table") + "</button>" +
+              '<p class="relation-detail">via ' + label + "</p>" +
+            "</div>",
+          );
+        }
+      }
+      if (!items.length) return "";
+      return "<h3>Relations</h3>" + items.slice(0, 16).join("");
+    }
+
     function selectNode(id) {
       state.selected = id;
       const node = byId.get(id);
@@ -436,22 +515,26 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const connections = [...incomingEdges, ...outgoingEdges];
       const collaboration = connections.filter((edge) => collaborationKinds.has(edge.kind));
       // Table migration lineage is owned by the Prisma / SQL section.
+      // Table↔table relation names are owned by the Relations section.
       const importsAndCalls = connections.filter((edge) => {
         if (collaborationKinds.has(edge.kind)) return false;
         if (node.kind === "table" && edge.kind === "migrates") return false;
+        if (node.kind === "table" && isTableRelationEdge(edge)) return false;
         return true;
       });
       const metadataEntries = Object.entries(node.metadata || {}).filter(([key]) => !structuredMetaKeys.has(key));
       const metadata = metadataEntries.map(([key, value]) => '<span class="pill">' + key + ": " + String(value) + "</span>").join("");
       const tableSources = tableSourcesHtml(node, incomingEdges);
+      const tableRelations = tableRelationsHtml(node, connections);
       const collabLinks = collaboration.slice(0, 16).map((edge) => collaborationItem(edge, id)).join("");
       const otherLinks = importsAndCalls.slice(0, 20).map((edge) => connectionButton(edge, id)).join("");
       const collaborationHtml = collabLinks
         ? "<h3>Collaboration</h3>" + collabLinks
         : "";
+      const structuredSections = tableSources || tableRelations || collabLinks;
       const otherHtml = otherLinks
         ? "<h3>" + (collabLinks ? "Imports &amp; calls" : "Connections") + "</h3>" + otherLinks
-        : (collabLinks || tableSources ? "" : "<h3>Connections</h3><p>None visible</p>");
+        : (structuredSections ? "" : "<h3>Connections</h3><p>None visible</p>");
       const keyFileList = Array.isArray(node.metadata && node.metadata.keyFiles) ? node.metadata.keyFiles : [];
       const keyFiles = keyFileList.length
         ? "<h3>Key files</h3>" + keyFileList.map((file) => {
@@ -472,7 +555,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         const href = "vscode://file/" + graph.project.root.replace(/\\/$/, "") + "/" + item.file + ":" + line;
         return '<div class="evidence"><a href="' + href + '">' + item.file + ":" + line + '</a><div class="certainty ' + item.certainty + '">' + item.certainty + " · " + item.extractor + "</div>" + (item.detail ? "<p>" + item.detail + "</p>" : "") + "</div>";
       }).join("");
-      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + tableSources + binHtml + rosterHtml + keyFiles + collaborationHtml + otherHtml + "<h3>Source evidence</h3>" + evidence;
+      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + tableSources + tableRelations + binHtml + rosterHtml + keyFiles + collaborationHtml + otherHtml + "<h3>Source evidence</h3>" + evidence;
       inspector.querySelector("h2").textContent = node.label;
       inspector.querySelectorAll(".connection").forEach((button) => {
         button.onclick = () => selectNode(button.dataset.id);
