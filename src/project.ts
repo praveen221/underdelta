@@ -804,8 +804,19 @@ export function projectSemanticArchitecture(
     nodes.set(queueId, queue);
   }
 
+  // Cron schedules are the jobs story — keep them visible like messaging hubs.
+  for (const node of nodes.values()) {
+    if (node.kind !== "cron") continue;
+    if (!node.metadata?.expression && !node.metadata?.handler) continue;
+    node.metadata = {
+      ...node.metadata,
+      scheduleHub: true,
+    };
+    nodes.set(node.id, node);
+  }
+
   // Hide leaves that only restate their parent semantic system on the overview.
-  // Messaging hubs stay visible so publish/consume is readable without Details.
+  // Messaging hubs + cron schedules stay visible so automation reads without Details.
   const collapsibleKinds = new Set([
     "route",
     "component",
@@ -821,6 +832,7 @@ export function projectSemanticArchitecture(
     if (node.metadata?.projection === "semantic") continue;
     if (!collapsibleKinds.has(node.kind)) continue;
     if (node.kind === "queue" && node.metadata?.messagingHub) continue;
+    if (node.kind === "cron" && node.metadata?.scheduleHub) continue;
     const parent = node.parentId ? nodes.get(node.parentId) : undefined;
     if (parent?.metadata?.projection === "semantic") {
       node.metadata = {

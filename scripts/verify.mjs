@@ -763,6 +763,18 @@ if (!cron || !String(cron.label).includes("reconcilePayments")) {
   pass(`cron label humanized: ${cron.label}`);
 }
 
+if (!cron || cron.metadata?.scheduleHub !== true) {
+  fail(
+    `expected cron scheduleHub=true so jobs stay on the overview, found ${JSON.stringify(
+      cron?.metadata ?? null,
+    )}`,
+  );
+} else if (cron.metadata?.collapsedInOverview === true) {
+  fail("cron schedule hub should stay visible on overview (like messaging hubs)");
+} else {
+  pass("cron schedule hub visible on overview");
+}
+
 const pipelines = fixtureByKey.get("pipelines");
 const checkout = fixtureGraph.nodes.find(
   (node) =>
