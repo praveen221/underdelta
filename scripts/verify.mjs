@@ -7,6 +7,7 @@ import { renderArchitectureHtml } from "../dist/viewer.js";
 import {
   ensureRealRepo,
   FASTAPI_REALWORLD,
+  HACKATHON_STARTER,
   NEXTJS_SAAS_STARTER,
   REALWORLD_EXPRESS,
 } from "./ensure-real-repo.mjs";
@@ -3435,6 +3436,262 @@ if (fastapiRealRoot) {
       );
     } else {
       pass("fastapi-real-repo Comment→Article relation: on");
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Capability ladder rung 4: real Mongo/Mongoose repo (pinned SHA, gitignored).
+// Golden-lock sahat/hackathon-starter collections under Data access + FAQ
+// README question headings must not rename HTTP API.
+// ---------------------------------------------------------------------------
+let mongoRealRoot;
+try {
+  mongoRealRoot = await ensureRealRepo(HACKATHON_STARTER);
+  pass(
+    `mongo real repo ${HACKATHON_STARTER.name} ready @ ${HACKATHON_STARTER.sha.slice(0, 12)}`,
+  );
+} catch (error) {
+  fail(
+    `could not ensure mongo real repo ${HACKATHON_STARTER.name}@${HACKATHON_STARTER.sha}: ${error instanceof Error ? error.message : error}`,
+  );
+}
+
+if (mongoRealRoot) {
+  let mongoRealGraph;
+  try {
+    mongoRealGraph = await compileRepository(mongoRealRoot);
+    pass(
+      `mongo-real-repo scan completed: ${mongoRealGraph.nodes.length} nodes, ${mongoRealGraph.edges.length} edges`,
+    );
+  } catch (error) {
+    fail(
+      `mongo-real-repo scan crashed on ${HACKATHON_STARTER.name}: ${error instanceof Error ? error.message : error}`,
+    );
+  }
+
+  if (mongoRealGraph) {
+    const mongoRoutes = mongoRealGraph.nodes.filter(
+      (node) => node.kind === "route",
+    );
+    const mongoCollections = mongoRealGraph.nodes.filter(
+      (node) => node.kind === "collection",
+    );
+    const mongoSemantic = mongoRealGraph.nodes.filter(
+      (node) => node.metadata?.projection === "semantic",
+    );
+    const mongoProduct = mongoRealGraph.nodes.find(
+      (node) => node.kind === "product",
+    );
+    const mongoByKey = new Map(
+      mongoSemantic
+        .filter((node) => typeof node.metadata?.systemKey === "string")
+        .map((node) => [node.metadata.systemKey, node]),
+    );
+    const mongoApi = mongoByKey.get("api");
+    const mongoData = mongoByKey.get("data");
+    const mongoCollectionLabels = new Set(
+      mongoCollections.map((node) => node.label),
+    );
+
+    const mongoSummary = {
+      pin: `${HACKATHON_STARTER.name}@${HACKATHON_STARTER.sha}`,
+      product: mongoProduct?.label ?? null,
+      nodes: mongoRealGraph.nodes.length,
+      edges: mongoRealGraph.edges.length,
+      routes: mongoRoutes.length,
+      collections: [...mongoCollectionLabels].sort(),
+      semantic: mongoSemantic.map((node) => node.label),
+    };
+    console.log(`Mongo-real-repo scan summary: ${JSON.stringify(mongoSummary)}`);
+
+    if (mongoRealGraph.nodes.length < 40) {
+      fail(
+        `mongo-real-repo node floor: ${mongoRealGraph.nodes.length} < 40 (map looks empty)`,
+      );
+    } else {
+      pass(`mongo-real-repo nodes: ${mongoRealGraph.nodes.length}`);
+    }
+
+    if (!mongoProduct || mongoProduct.label !== "Hackathon Starter") {
+      fail(
+        `mongo-real-repo product label expected 'Hackathon Starter' from README, found '${mongoProduct?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass(`mongo-real-repo product label: ${mongoProduct.label}`);
+    }
+
+    if (!mongoApi || mongoApi.label !== "HTTP API") {
+      fail(
+        `mongo-real-repo api system label expected 'HTTP API' (FAQ questions must not rename it), found '${mongoApi?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass("mongo-real-repo api system labeled 'HTTP API'");
+    }
+
+    if (!mongoData || mongoData.label !== "Data access") {
+      fail(
+        `mongo-real-repo data system label expected 'Data access', found '${mongoData?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass("mongo-real-repo data system labeled 'Data access'");
+    }
+
+    if (!mongoRealGraph.extractors.some((item) => item.id === "mongo")) {
+      fail("mongo-real-repo graph.extractors missing mongo");
+    } else {
+      pass("mongo-real-repo registers mongo extractor");
+    }
+
+    for (const expected of ["User", "Session", "Ai agent checkpoint"]) {
+      if (!mongoCollectionLabels.has(expected)) {
+        fail(
+          `mongo-real-repo missing collection ${expected}; found ${[...mongoCollectionLabels].join(", ") || "(none)"}`,
+        );
+      } else {
+        pass(`mongo-real-repo has collection ${expected}`);
+      }
+    }
+
+    const mongoCollectionsUnderData = mongoCollections.filter(
+      (node) => node.parentId === mongoData?.id,
+    );
+    if (mongoCollectionsUnderData.length < 3) {
+      fail(
+        `mongo-real-repo expected ≥3 collections nested under Data access, found ${mongoCollectionsUnderData.length}`,
+      );
+    } else {
+      pass(
+        `mongo-real-repo ${mongoCollectionsUnderData.length} collections nested under Data access`,
+      );
+    }
+
+    if (
+      mongoCollectionsUnderData.some(
+        (node) => node.metadata?.collapsedInOverview === true,
+      )
+    ) {
+      fail("mongo-real-repo product collections should stay visible on overview");
+    } else {
+      pass(
+        "mongo-real-repo product collections visible under Data access on overview",
+      );
+    }
+
+    const mongoRoutesUnderApi = mongoRoutes.filter(
+      (node) => node.parentId === mongoApi?.id,
+    );
+    if (mongoRoutesUnderApi.length < 20) {
+      fail(
+        `mongo-real-repo expected ≥20 routes nested under HTTP API, found ${mongoRoutesUnderApi.length}`,
+      );
+    } else {
+      pass(
+        `mongo-real-repo ${mongoRoutesUnderApi.length} routes nested under HTTP API`,
+      );
+    }
+
+    const mongoCollapsedRoutes = mongoRoutesUnderApi.filter(
+      (node) => node.metadata?.collapsedInOverview === true,
+    );
+    if (mongoCollapsedRoutes.length < 20) {
+      fail(
+        `mongo-real-repo routes should collapse on overview under HTTP API: collapsed=${mongoCollapsedRoutes.length}`,
+      );
+    } else {
+      pass(
+        "mongo-real-repo routes collapsed on overview (API tells the story)",
+      );
+    }
+
+    const mongoFlow = mongoSemantic
+      .filter((node) => typeof node.metadata?.flowOrder === "number")
+      .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+    const mongoFlowKeys = mongoFlow.map((node) => node.metadata.systemKey);
+    if (
+      mongoFlowKeys[0] !== "api" ||
+      mongoFlowKeys[1] !== "data" ||
+      mongoFlowKeys.length < 2
+    ) {
+      fail(
+        `mongo-real-repo flowOrder expected HTTP API → Data access, got ${mongoFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+      );
+    } else {
+      pass(
+        `mongo-real-repo flowOrder: ${mongoFlow.map((node) => node.label).join(" → ")}`,
+      );
+    }
+
+    const mongoFlowsTo = mongoRealGraph.edges.some(
+      (edge) =>
+        edge.kind === "flows-to" &&
+        edge.source === mongoApi?.id &&
+        edge.target === mongoData?.id,
+    );
+    if (!mongoFlowsTo) {
+      fail("mongo-real-repo missing flows-to edge HTTP API → Data access");
+    } else {
+      pass("mongo-real-repo flows-to: HTTP API → Data access");
+    }
+
+    const mongoUsesQuery = mongoRealGraph.edges.some(
+      (edge) =>
+        edge.kind === "uses" &&
+        edge.label === "query" &&
+        edge.source === mongoApi?.id &&
+        edge.target === mongoData?.id,
+    );
+    if (!mongoUsesQuery) {
+      fail("mongo-real-repo expected HTTP API -[uses:query]-> Data access");
+    } else {
+      pass(
+        "mongo-real-repo collaboration: HTTP API -[uses:query]-> Data access",
+      );
+    }
+
+    const mongoCommerceNoise = mongoRealGraph.edges.some((edge) =>
+      /checkout|orders?/i.test(
+        `${edge.label ?? ""} ${edge.metadata?.detail ?? ""}`,
+      ),
+    );
+    if (mongoCommerceNoise) {
+      fail(
+        "mongo-real-repo should not inherit Checkout/orders commerce collaboration copy",
+      );
+    } else {
+      pass("mongo-real-repo has no Checkout/orders commerce collaboration noise");
+    }
+
+    const mongoMongooseDeclared = mongoCollections.filter(
+      (node) =>
+        node.technology === "mongoose" &&
+        node.evidence?.some((item) =>
+          /mongoose\.model\(/.test(item.detail ?? ""),
+        ),
+    );
+    if (mongoMongooseDeclared.length < 2) {
+      fail(
+        `mongo-real-repo expected ≥2 mongoose.model collections (User/Session), found ${mongoMongooseDeclared.length}`,
+      );
+    } else {
+      pass(
+        `mongo-real-repo ${mongoMongooseDeclared.length} collections from mongoose.model`,
+      );
+    }
+
+    const mongoVisibleChrome = mongoRealGraph.nodes.filter(
+      (node) =>
+        node.kind === "module" && node.metadata?.collapsedInOverview !== true,
+    );
+    if (mongoVisibleChrome.length > 0) {
+      fail(
+        `mongo-real-repo modules should collapse on overview, still visible: ${mongoVisibleChrome
+          .slice(0, 8)
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass("mongo-real-repo module chrome collapsed on overview");
     }
   }
 }

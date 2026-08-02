@@ -42,6 +42,15 @@ export const FASTAPI_REALWORLD = {
   dirname: "fastapi-realworld",
 };
 
+/** @type {RealRepoPin} */
+export const HACKATHON_STARTER = {
+  name: "sahat/hackathon-starter",
+  url: "https://github.com/sahat/hackathon-starter.git",
+  // Pinned 2026-08-02 — tip of master at plan rung-4 Mongo real-repo kickoff.
+  sha: "d20161b9e81e817d38b3633e08349f327b01d974",
+  dirname: "hackathon-starter",
+};
+
 export const REAL_REPO_ROOT = path.join(repoRoot, ".underdelta-real");
 
 function git(args, cwd, opts = {}) {
@@ -116,6 +125,10 @@ const PINS_BY_NAME = {
   [FASTAPI_REALWORLD.dirname]: FASTAPI_REALWORLD,
   fastapi: FASTAPI_REALWORLD,
   "fastapi-realworld": FASTAPI_REALWORLD,
+  [HACKATHON_STARTER.dirname]: HACKATHON_STARTER,
+  hackathon: HACKATHON_STARTER,
+  "hackathon-starter": HACKATHON_STARTER,
+  mongo: HACKATHON_STARTER,
 };
 
 const isMain =
@@ -125,7 +138,12 @@ if (isMain) {
   const requested = process.argv[2];
   const pins = requested
     ? [PINS_BY_NAME[requested]].filter(Boolean)
-    : [REALWORLD_EXPRESS, NEXTJS_SAAS_STARTER, FASTAPI_REALWORLD];
+    : [
+        REALWORLD_EXPRESS,
+        NEXTJS_SAAS_STARTER,
+        FASTAPI_REALWORLD,
+        HACKATHON_STARTER,
+      ];
   if (requested && pins.length === 0) {
     throw new Error(
       `unknown real-repo pin '${requested}'; known: ${Object.keys(PINS_BY_NAME).join(", ")}`,

@@ -172,6 +172,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 3 lock: North-star schedule hubs — `humanizeCronExpression` (`0 * * * *` → every hour, `*/15` → every 15 minutes); golden-lock mini-python + mini-stack cron phrases, Notes API/HTTP API `uses:query` → Data; **Rung 3 locked**
 - [x] Rung 4 prep: MongoDB collections extractor — `mongoose.model` / bare `model(` / Schema `{ collection }` / `.collection(`; `kind: collection` + technology mongoose|mongodb; nest/dedupe under Data access; `/models/` path-role; Extractors roster includes `mongo`
 - [x] Rung 4: `verification/mini-mongo` fixture (Express Notes API + Mongoose Note/User/Tag) + verify golden floors (Catalog data collections, API→Data uses:query, overview collapse)
+- [x] Rung 4: pin `sahat/hackathon-starter` @ `d20161b9e81e817d38b3633e08349f327b01d974`; clone into gitignored `.underdelta-real/hackathon-starter`; golden-lock User/Session/Ai agent checkpoint under Data access + HTTP API→Data flow/uses; skip FAQ/HTML README heading pollution (`http://` in `<img src>` must not rename API)
 
 ### Real-repo pins (Capability ladder)
 
@@ -180,16 +181,17 @@ Update these checkboxes and the “Next focus” section every tick.
 | 1 | `gothinkster/node-express-realworld-example-app` | `30b68e1e881462b2f4164ea09ab4c4f5699c7b0b` | `.underdelta-real/node-express-realworld` |
 | 2 | `nextjs/saas-starter` | `6e33e58b1e553a41fe22e6b941a7229a002de361` | `.underdelta-real/nextjs-saas-starter` |
 | 3 | `nsidnev/fastapi-realworld-example-app` | `029eb7781c60d5f563ee8990a0cbfb79b244538c` | `.underdelta-real/fastapi-realworld` |
+| 4 | `sahat/hackathon-starter` | `d20161b9e81e817d38b3633e08349f327b01d974` | `.underdelta-real/hackathon-starter` |
 
 ### In progress / next
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 4: pin a real Mongo-backed OSS repo (Mongoose or native driver) at an exact SHA under `.underdelta-real/`; golden-lock collections nested under Data access
+- [ ] Rung 4: resolve `.collection(CONST)` identifier literals (hackathon-starter `RAG_CHUNKS` / `LLM_SEMANTIC_CACHE`) so native Mongo collections join Data access
 - [ ] Rung 4: Mongo aggregation pipelines (`.aggregate([...])`) → pipeline nodes when present in fixture/real repo
 - [ ] Standing polish: inspector metadata hygiene (hide projection/systemKey/flowOrder pills) on self-map + RealWorld
 - [ ] Standing guarantee: spot-check Underdelta self-map + mini-stack still demo-ready after Mongo ladder work
-- [ ] Rung 4 polish pass once real Mongo map scans (North-star legibility before calling the rung locked)
+- [ ] Rung 4 polish pass once real Mongo map is richer (North-star legibility before calling the rung locked)
 
 ### Seed backlog (pull from here when In progress < 3)
 
@@ -201,7 +203,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Rung 4 mini-mongo fixture + mongoose collection extractor golden-locked). Now pin a real Mongo-backed OSS repo at an exact SHA and golden-lock its Data access collections so Rung 4 generalizes beyond our fixture.
+> **Next focus:** This work is done (Rung 4 pin+golden `sahat/hackathon-starter` collections under Data access). Now resolve `.collection(CONST)` identifier literals so RAG/semantic-cache collections appear on the real Mongo map before the aggregation + polish lock pass.
 
 ### Learning log (append every tick)
 
@@ -250,6 +252,7 @@ Append short bullets like:
 - 2026-08-02 05:05 UTC | Done: mini-python data story — generalize tag-join lift beyond Article (Note→Tag tags); author reverse for Note as well as Article; golden-lock tags/author/authored + quiet modules | Next: Rung 3 final North-star lock pass | Learned: `articles_to_tags` polish hardcoded Article so `notes_to_tags` collapsed silently with no product edge; tagged-entity lookup must be any non-tag FK on the junction
 - 2026-08-02 05:07 UTC | Done: Rung 3 locked — `humanizeCronExpression` for schedule hubs (every hour / every 15 minutes); golden-lock mini-python + mini-stack cron phrases + API uses:query→Data on FastAPI RealWorld/mini-python; promote Rung 4 MongoDB | Next: Rung 4 Mongo collections extractor + mini-mongo fixture | Learned: raw crontab glyphs on overview hubs (`0 * * * *`) are pure jargon for the North star user; keep expression in metadata, show plain English on the canvas; JSDoc must not contain `*/N` or it terminates the block comment
 - 2026-08-02 05:20 UTC | Done: Rung 4 prep+fixture — `src/extractors/mongo.ts` (mongoose.model / Schema collection / .collection), project nest+dedupe collections under Data, `/models/` path-role, `verification/mini-mongo` Notes API→Catalog data Note/User/Tag, verify golden + Extractors roster `mongo` | Next: pin real Mongo OSS repo + golden-lock | Learned: do not infer mongoose model names from nearby Schema calls in multi-model files (Tag Schema + later `model("Note")` mis-labels); emit raw collection names and let projection merge Note↔notes; unscoped package.json names beat README H1 in preferProductLabel — omit fixture package.json when the README title is the product name
+- 2026-08-02 05:35 UTC | Done: Rung 4 pin+golden — `sahat/hackathon-starter` @ `d20161b9e81e` gitignored; User/Session/Ai agent checkpoint under Data; HTTP API→Data flow/uses; skip FAQ/`?` headings + strip HTML `<img src="http://…">` so README chrome cannot rename API; golden-lock | Next: `.collection(CONST)` identifier resolution for RAG/cache collections | Learned: after FAQ skip, the next false API label was a Date Cheatsheet whose raw HTML `src="http://…"` matched `\bhttp\b` — sanitize must strip HTML before system-key inference; well-known mongoose apps still hide collections behind `const NAME = '…'; db.collection(NAME)`
 
 ---
 

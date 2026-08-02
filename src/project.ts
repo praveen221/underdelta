@@ -44,6 +44,10 @@ export function sanitizeMarkdownHeadingText(raw: string): string {
   text = text.replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1");
   // Links: keep visible text.
   text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+  // HTML <img> — drop entirely (src="http://…" must not match the api http rule).
+  text = text.replace(/<img\b[^>]*>/gi, " ");
+  // Other HTML tags: keep inner text when present.
+  text = text.replace(/<\/?[a-zA-Z][^>]*>/g, " ");
   // Leftover emphasis / code markers.
   text = text.replace(/[*_`~]/g, "").trim();
   // Collapse whitespace after removals.
@@ -142,16 +146,32 @@ export function inferSystemKeyFromHeading(heading: string): string | undefined {
 
   // Skip common README scaffolding that should never rename product systems.
   if (
-    /^(status|license|roadmap|near-term roadmap|try it|getting started|prerequisites?|environment variables?|install(?:ation)?|usage|contributing|changelog|design principles|overview|introduction|about|motivation)$/i.test(
+    /^(status|license|roadmap|near-term roadmap|try it|getting started|prerequisites?|environment variables?|install(?:ation)?|usage|contributing|changelog|design principles|overview|introduction|about|motivation|cheatsheets?|faq|table of contents|project structure|list of packages|useful tools and resources)$/i.test(
       text,
     )
   ) {
     return undefined;
   }
 
+  // Cheatsheet / FAQ section titles with logos ("ES6 Cheatsheet", "Mongoose Cheatsheet").
+  if (/\bcheatsheets?\b|\bfaq\b/.test(text)) {
+    return undefined;
+  }
+
   // Skip imperative how-to headings ("Generate your Prisma client", "Seed the database").
   if (
     /^(generate|install|run|create|configure|deploy|build|test|clone|download|add|update|set\s*up|make|enable|start|seed|apply|migrate|push|pull|open|visit|follow|copy|paste|replace|remove|delete|drop|reset)\b/.test(
+      text,
+    )
+  ) {
+    return undefined;
+  }
+
+  // Skip FAQ / question headings ("Why do you have all routes defined in app.js?").
+  // They mention routes/API/database but are docs chrome, not system names.
+  if (
+    /\?/.test(text) ||
+    /^(why|how|what|when|where|who|which|can|should|does|do|is|are|will|i\s+(?:am|get|got|have|see))\b/.test(
       text,
     )
   ) {
