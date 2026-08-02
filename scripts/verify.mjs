@@ -882,7 +882,11 @@ if (!routesUnderApi) {
 }
 
 const cron = fixtureGraph.nodes.find((node) => node.kind === "cron");
-if (!cron || !String(cron.label).includes("reconcilePayments")) {
+if (
+  !cron ||
+  (!String(cron.label).includes("Reconcile payments") &&
+    !String(cron.label).includes("reconcilePayments"))
+) {
   fail(
     `expected humanized cron label with handler name, found '${cron?.label ?? "(none)"}'`,
   );
@@ -2617,6 +2621,123 @@ if (
 } else {
   pass(
     `mini-python flowOrder: ${miniPythonFlow.map((node) => node.label).join(" → ")}`,
+  );
+}
+
+// Celery @shared_task + beat_schedule → Scheduled jobs (fixture; RealWorld has none).
+const miniPythonJobs = miniPythonByKey.get("jobs");
+const miniPythonJobNodes = miniPythonGraph.nodes.filter(
+  (node) => node.kind === "job",
+);
+const miniPythonCronNodes = miniPythonGraph.nodes.filter(
+  (node) => node.kind === "cron",
+);
+const miniPythonJobLabels = new Set(
+  miniPythonJobNodes.map((node) => node.label),
+);
+const miniPythonCronLabels = new Set(
+  miniPythonCronNodes.map((node) => node.label),
+);
+if (!miniPythonJobs || miniPythonJobs.label !== "Scheduled jobs") {
+  fail(
+    `mini-python jobs system label expected 'Scheduled jobs', found '${miniPythonJobs?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-python jobs system labeled Scheduled jobs");
+}
+for (const expected of ["Send digest", "Purge stale notes"]) {
+  if (!miniPythonJobLabels.has(expected)) {
+    fail(
+      `mini-python missing Celery job ${expected}; found ${[...miniPythonJobLabels].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-python has Celery job ${expected}`);
+  }
+}
+if (miniPythonJobNodes.some((node) => node.technology !== "celery")) {
+  fail("mini-python Celery jobs should use technology=celery");
+} else {
+  pass("mini-python Celery jobs technology=celery");
+}
+const miniPythonJobsUnderSystem = miniPythonJobNodes.filter(
+  (node) => node.parentId === miniPythonJobs?.id,
+);
+if (miniPythonJobsUnderSystem.length < 2) {
+  fail(
+    `mini-python expected ≥2 jobs nested under Scheduled jobs, found ${miniPythonJobsUnderSystem.length}`,
+  );
+} else {
+  pass(
+    `mini-python ${miniPythonJobsUnderSystem.length} jobs nested under Scheduled jobs`,
+  );
+}
+const miniPythonCollapsedJobs = miniPythonJobsUnderSystem.filter(
+  (node) => node.metadata?.collapsedInOverview === true,
+);
+if (miniPythonCollapsedJobs.length < 2) {
+  fail(
+    `mini-python overview should collapse Celery jobs under Scheduled jobs (collapsed=${miniPythonCollapsedJobs.length})`,
+  );
+} else {
+  pass("mini-python overview collapses Celery jobs under Scheduled jobs");
+}
+if (miniPythonCronNodes.length < 2) {
+  fail(
+    `mini-python expected ≥2 Celery beat cron schedules, found ${miniPythonCronNodes.length}: ${[...miniPythonCronLabels].join(", ") || "(none)"}`,
+  );
+} else {
+  pass(`mini-python Celery beat schedules: ${[...miniPythonCronLabels].join(", ")}`);
+}
+const miniPythonCronHubs = miniPythonCronNodes.filter(
+  (node) =>
+    node.parentId === miniPythonJobs?.id &&
+    node.metadata?.scheduleHub === true &&
+    node.metadata?.collapsedInOverview !== true,
+);
+if (miniPythonCronHubs.length < 2) {
+  fail(
+    `mini-python expected ≥2 visible Celery schedule hubs under Scheduled jobs, found ${miniPythonCronHubs.length}`,
+  );
+} else {
+  pass(
+    `mini-python ${miniPythonCronHubs.length} Celery schedule hubs visible on overview`,
+  );
+}
+if (
+  !miniPythonFlowKeys.includes("api") ||
+  !miniPythonFlowKeys.includes("jobs") ||
+  !miniPythonFlowKeys.includes("data")
+) {
+  fail(
+    `mini-python flowOrder expected Notes API → Scheduled jobs → Data access, got ${miniPythonFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `mini-python flowOrder with jobs: ${miniPythonFlow.map((node) => node.label).join(" → ")}`,
+  );
+}
+const miniPythonJobsUsesData = miniPythonGraph.edges.some(
+  (edge) =>
+    edge.kind === "uses" &&
+    edge.source === miniPythonJobs?.id &&
+    edge.target === miniPythonData?.id &&
+    edge.label === "sync",
+);
+if (!miniPythonJobsUsesData) {
+  fail("mini-python expected Scheduled jobs -[uses:sync]-> Data access");
+} else {
+  pass("mini-python collaboration: Scheduled jobs -[uses:sync]-> Data access");
+}
+const miniPythonScheduleEdges = miniPythonGraph.edges.filter(
+  (edge) => edge.kind === "schedules",
+);
+if (miniPythonScheduleEdges.length < 2) {
+  fail(
+    `mini-python expected ≥2 cron→job schedules edges, found ${miniPythonScheduleEdges.length}`,
+  );
+} else {
+  pass(
+    `mini-python ${miniPythonScheduleEdges.length} Celery schedules edges cron→job`,
   );
 }
 

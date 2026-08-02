@@ -406,15 +406,15 @@ const collaborationEdges: Array<{
     detail: "Viewer emits the index.html browser artifact",
   },
   // Mini-stack / commerce product systems — collaboration beyond flows-to.
-  // Gate on commerce-only systems so bare UI+API (Next) / API+Data (RealWorld)
-  // maps never inherit Checkout/orders copy.
+  // Gate on pipelines/workers only — Celery `jobs` alone (notes apps) must NOT
+  // inherit Checkout/orders/payments copy or suppress neutral API→Data edges.
   {
     from: "ui",
     to: "api",
     kind: "uses",
     label: "checkout",
     detail: "Storefront UI uses Checkout API for order status and checkout",
-    requiresAny: ["pipelines", "workers", "jobs"],
+    requiresAny: ["pipelines", "workers"],
   },
   {
     from: "api",
@@ -422,7 +422,7 @@ const collaborationEdges: Array<{
     kind: "triggers",
     label: "checkout",
     detail: "Checkout API triggers the Order pipeline after an order is accepted",
-    requiresAny: ["pipelines", "workers", "jobs"],
+    requiresAny: ["pipelines", "workers"],
   },
   {
     from: "api",
@@ -430,7 +430,7 @@ const collaborationEdges: Array<{
     kind: "triggers",
     label: "fulfill",
     detail: "Checkout API triggers Fulfillment workers via the fulfillment queue",
-    requiresAny: ["pipelines", "workers", "jobs"],
+    requiresAny: ["pipelines", "workers"],
   },
   {
     from: "api",
@@ -438,7 +438,7 @@ const collaborationEdges: Array<{
     kind: "reads",
     label: "orders",
     detail: "Checkout API reads Catalog data when fulfilling orders",
-    requiresAny: ["pipelines", "workers", "jobs"],
+    requiresAny: ["pipelines", "workers"],
   },
   {
     from: "jobs",
@@ -446,7 +446,7 @@ const collaborationEdges: Array<{
     kind: "uses",
     label: "payments",
     detail: "Reconciliation jobs use Catalog data for payment reconciliation",
-    requiresAny: ["pipelines", "workers", "jobs"],
+    requiresAny: ["pipelines", "workers"],
   },
   // Neutral UI→API collaboration for App Router / non-commerce products.
   {
@@ -455,16 +455,25 @@ const collaborationEdges: Array<{
     kind: "uses",
     label: "fetch",
     detail: "UI calls the HTTP API and server actions",
-    requiresNone: ["pipelines", "workers", "jobs"],
+    requiresNone: ["pipelines", "workers"],
   },
-  // Neutral API→Data for SaaS / RealWorld-style maps (commerce uses "orders").
+  // Neutral API→Data for SaaS / RealWorld / Celery-notes maps (commerce uses "orders").
   {
     from: "api",
     to: "data",
     kind: "uses",
     label: "query",
     detail: "HTTP API reads and writes product data",
-    requiresNone: ["pipelines", "workers", "jobs"],
+    requiresNone: ["pipelines", "workers"],
+  },
+  // Neutral jobs→data for Celery / scheduled-task products without commerce.
+  {
+    from: "jobs",
+    to: "data",
+    kind: "uses",
+    label: "sync",
+    detail: "Scheduled jobs read and write product data",
+    requiresNone: ["pipelines", "workers"],
   },
 ];
 
@@ -587,7 +596,15 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
   ) {
     return { key: "api", label: "HTTP API", kind: "api" };
   }
-  if (/(^|\/)jobs?\.[cm]?[jt]sx?$/.test(file) || file.includes("/jobs/")) {
+  if (
+    /(^|\/)jobs?\.[cm]?[jt]sx?$/.test(file) ||
+    file.includes("/jobs/") ||
+    // Celery: tasks.py / celery.py / celery_app.py / tasks/ package
+    /(^|\/)tasks\.py$/.test(file) ||
+    file.includes("/tasks/") ||
+    /(^|\/)celery(?:_app)?\.py$/.test(file) ||
+    file.includes("/celery/")
+  ) {
     return { key: "jobs", label: "Scheduled jobs", kind: "system" };
   }
   if (/(^|\/)workers?\.[cm]?[jt]sx?$/.test(file) || file.includes("/workers/")) {
@@ -1145,6 +1162,7 @@ export function projectSemanticArchitecture(
     if (
       node.kind === "route" ||
       node.kind === "cron" ||
+      node.kind === "job" ||
       node.kind === "queue" ||
       node.kind === "component" ||
       node.kind === "page" ||
@@ -1156,6 +1174,21 @@ export function projectSemanticArchitecture(
       (node.kind === "function" && node.metadata?.serverAction === true)
     ) {
       attachToSystem(node.id, systemId, evidence);
+    }
+  }
+
+  // When a Scheduled jobs system exists, nest every Celery/cron/job leaf under
+  // it — beat schedules in celery_app.py and @shared_task in tasks.py share one story.
+  const jobsSystem = systems.get("jobs");
+  if (jobsSystem) {
+    for (const node of [...nodes.values()]) {
+      if (node.kind !== "cron" && node.kind !== "job") continue;
+      if (node.metadata?.projection === "semantic") continue;
+      attachToSystem(
+        node.id,
+        jobsSystem.id,
+        node.evidence[0] ?? projectionEvidence("."),
+      );
     }
   }
 
@@ -1328,6 +1361,7 @@ export function projectSemanticArchitecture(
     "page",
     "hook",
     "cron",
+    "job",
     "queue",
     "database",
     "schema",
@@ -1415,6 +1449,20 @@ export function projectSemanticArchitecture(
     } else if (node.metadata?.serverAction === true) {
       // checkoutAction → Checkout (drop trailing Action factory chrome).
       nextLabel = humanizeServerActionLabel(node.label);
+    } else if (node.kind === "job") {
+      // Celery send_digest → Send digest
+      nextLabel = humanizeIdentifierLabel(
+        typeof node.metadata?.handler === "string"
+          ? node.metadata.handler
+          : node.label,
+      );
+    } else if (
+      node.kind === "cron" &&
+      typeof node.metadata?.handler === "string" &&
+      typeof node.metadata?.expression === "string"
+    ) {
+      // Celery/node-cron: send_digest (0 * * * *) → Send digest (0 * * * *)
+      nextLabel = `${humanizeIdentifierLabel(node.metadata.handler)} (${node.metadata.expression})`;
     } else if (node.kind === "component") {
       // All components (client + server): tame PascalCase Card*/skeletons too.
       nextLabel = humanizeIdentifierLabel(node.label);

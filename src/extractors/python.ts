@@ -702,6 +702,245 @@ function ensureTableNode(
 }
 
 /**
+ * Parse celery.schedules.crontab(...) kwargs into a 5-field cron expression.
+ * Missing fields default to `*` (Celery semantics).
+ */
+function crontabToExpression(args: string): string {
+  const fields: Record<string, string> = {
+    minute: "*",
+    hour: "*",
+    day_of_month: "*",
+    month_of_year: "*",
+    day_of_week: "*",
+  };
+  const kw =
+    /\b(minute|hour|day_of_month|month_of_year|day_of_week)\s*=\s*([^,)]+)/g;
+  for (const match of args.matchAll(kw)) {
+    const key = match[1];
+    const raw = match[2]?.trim();
+    if (!key || !raw) continue;
+    fields[key] = unquote(raw).replace(/^["']|["']$/g, "");
+  }
+  // Positional: crontab(0, 7) → minute=0, hour=7
+  const positional = args
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part && !part.includes("="));
+  const order = [
+    "minute",
+    "hour",
+    "day_of_month",
+    "month_of_year",
+    "day_of_week",
+  ] as const;
+  positional.forEach((value, index) => {
+    const key = order[index];
+    if (key) fields[key] = unquote(value);
+  });
+  return [
+    fields.minute,
+    fields.hour,
+    fields.day_of_month,
+    fields.month_of_year,
+    fields.day_of_week,
+  ].join(" ");
+}
+
+/** Human-readable schedule string from beat_schedule values. */
+function scheduleExpression(scheduleExpr: string): string | undefined {
+  const trimmed = scheduleExpr.trim();
+  if (!trimmed) return undefined;
+  const crontab = /^crontab\s*\(([\s\S]*)\)$/.exec(trimmed);
+  if (crontab) return crontabToExpression(crontab[1] ?? "");
+  const timedelta = /^timedelta\s*\(([\s\S]*)\)$/.exec(trimmed);
+  if (timedelta) {
+    const args = timedelta[1] ?? "";
+    const minutes = /\bminutes\s*=\s*(\d+)/.exec(args);
+    if (minutes) return `every ${minutes[1]} minutes`;
+    const seconds = /\bseconds\s*=\s*(\d+)/.exec(args);
+    if (seconds) return `every ${seconds[1]} seconds`;
+    const hours = /\bhours\s*=\s*(\d+)/.exec(args);
+    if (hours) return `every ${hours[1]} hours`;
+    return "interval";
+  }
+  if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
+    return `every ${trimmed} seconds`;
+  }
+  return trimmed;
+}
+
+function taskBasename(taskPath: string): string {
+  const parts = taskPath.split(".").filter(Boolean);
+  return parts[parts.length - 1] || taskPath;
+}
+
+/**
+ * Celery tasks + beat schedules:
+ *   @shared_task / @app.task / @celery_app.task → job nodes
+ *   app.conf.beat_schedule = { … crontab(...) … } → cron schedule hubs
+ *   sender.add_periodic_task(crontab(...), task.s(), name="…")
+ */
+function extractCelery(
+  file: string,
+  source: string,
+  moduleId: string,
+  nodes: ArchitectureNode[],
+  edges: ArchitectureEdge[],
+): void {
+  // @shared_task / @task / @app.task / @celery_app.task (optionally with args)
+  const taskDecorator =
+    /@(?:shared_task|task|(?:[A-Za-z_][\w]*)\.task)\b(?:\s*\([^)]*\))?\s*(?:\n\s*@[^\n]+)*\s*(?:\n\s*)?(?:async\s+)?def\s+([A-Za-z_][\w]*)/g;
+  for (const match of source.matchAll(taskDecorator)) {
+    if (match.index === undefined || !match[1]) continue;
+    const name = match[1];
+    const jobId = stableId("job", file, name);
+    if (nodes.some((node) => node.id === jobId)) continue;
+    const evidence = evidenceAt(
+      file,
+      source,
+      match.index,
+      `Celery task ${name}`,
+    );
+    nodes.push({
+      id: jobId,
+      kind: "job",
+      label: name,
+      parentId: moduleId,
+      technology: "celery",
+      metadata: {
+        handler: name,
+        framework: "celery",
+      },
+      evidence: [evidence],
+    });
+    edges.push(edgeFrom("contains", moduleId, jobId, evidence));
+  }
+
+  // app.conf.beat_schedule = { "name": { "task": "…", "schedule": crontab(...) } }
+  const beatAssign =
+    /\b(?:[A-Za-z_][\w]*\.)?(?:conf\.)?beat_schedule\s*=\s*\{/g;
+  for (const assign of source.matchAll(beatAssign)) {
+    if (assign.index === undefined) continue;
+    const openBrace = source.indexOf("{", assign.index);
+    if (openBrace < 0) continue;
+    // Match brace depth for the schedule dict.
+    let depth = 0;
+    let close = -1;
+    for (let i = openBrace; i < source.length; i++) {
+      const ch = source[i];
+      if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        if (depth === 0) {
+          close = i;
+          break;
+        }
+      }
+    }
+    if (close < 0) continue;
+    const body = source.slice(openBrace + 1, close);
+    // Each entry: "name": { ... "task": "..." ... "schedule": crontab(...) ... }
+    const entryPattern =
+      /(["'][^"']+["'])\s*:\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g;
+    for (const entry of body.matchAll(entryPattern)) {
+      const entryName = unquote(entry[1] ?? "");
+      const entryBody = entry[2] ?? "";
+      const taskMatch = /\b(?:["']?)task(?:["']?)\s*:\s*(["'][^"']+["'])/.exec(
+        entryBody,
+      );
+      const scheduleMatch =
+        /\b(?:["']?)schedule(?:["']?)\s*:\s*([^,}\n]+(?:\([^)]*\))?)/.exec(
+          entryBody,
+        );
+      if (!taskMatch?.[1] || !scheduleMatch?.[1]) continue;
+      const taskPath = unquote(taskMatch[1]);
+      const expression = scheduleExpression(scheduleMatch[1].trim());
+      if (!expression) continue;
+      const handler = taskBasename(taskPath);
+      const cronId = stableId("cron", file, entryName || handler, expression);
+      if (nodes.some((node) => node.id === cronId)) continue;
+      const evidence = evidenceAt(
+        file,
+        source,
+        assign.index,
+        `Celery beat_schedule ${entryName || handler}`,
+      );
+      nodes.push({
+        id: cronId,
+        kind: "cron",
+        label: `${handler} (${expression})`,
+        parentId: moduleId,
+        technology: "celery",
+        metadata: {
+          expression,
+          handler,
+          scheduleName: entryName,
+          framework: "celery",
+        },
+        evidence: [evidence],
+      });
+      edges.push(edgeFrom("contains", moduleId, cronId, evidence));
+      // Link schedule → task job when we extracted it in this graph.
+      const jobId = stableId("job", file, handler);
+      // Job may live in another file — search by handler metadata later via schedules edge on matching labels.
+      const jobNode = nodes.find(
+        (node) =>
+          node.kind === "job" &&
+          (node.metadata?.handler === handler || node.label === handler),
+      );
+      if (jobNode) {
+        edges.push(edgeFrom("schedules", cronId, jobNode.id, evidence));
+      } else if (nodes.some((node) => node.id === jobId)) {
+        edges.push(edgeFrom("schedules", cronId, jobId, evidence));
+      }
+    }
+  }
+
+  // sender.add_periodic_task(crontab(...), task.s(), name="…")
+  const periodic =
+    /\.add_periodic_task\s*\(\s*([^,]+)\s*,\s*([A-Za-z_][\w]*)(?:\.s\s*\([^)]*\))?\s*(?:,\s*name\s*=\s*(["'][^"']+["']))?/g;
+  for (const match of source.matchAll(periodic)) {
+    if (match.index === undefined) continue;
+    const scheduleRaw = match[1]?.trim() ?? "";
+    const handler = match[2];
+    if (!handler) continue;
+    const expression = scheduleExpression(scheduleRaw) ?? scheduleRaw;
+    const scheduleName = match[3] ? unquote(match[3]) : handler;
+    const cronId = stableId("cron", file, scheduleName, expression);
+    if (nodes.some((node) => node.id === cronId)) continue;
+    const evidence = evidenceAt(
+      file,
+      source,
+      match.index,
+      `Celery add_periodic_task ${scheduleName}`,
+    );
+    nodes.push({
+      id: cronId,
+      kind: "cron",
+      label: `${handler} (${expression})`,
+      parentId: moduleId,
+      technology: "celery",
+      metadata: {
+        expression,
+        handler,
+        scheduleName,
+        framework: "celery",
+      },
+      evidence: [evidence],
+    });
+    edges.push(edgeFrom("contains", moduleId, cronId, evidence));
+    const jobNode = nodes.find(
+      (node) =>
+        node.kind === "job" &&
+        (node.metadata?.handler === handler || node.label === handler),
+    );
+    if (jobNode) {
+      edges.push(edgeFrom("schedules", cronId, jobNode.id, evidence));
+    }
+  }
+}
+
+/**
  * Alembic migrations: op.create_table("users", sa.Column(...), …)
  * Plus SQLAlchemy `__tablename__` / PyPika `__table__` model declarations.
  */
@@ -919,6 +1158,43 @@ export const pythonExtractor: ArchitectureExtractor = {
       );
       extractDjangoRoutes(model.file, model.source, moduleId, nodes, edges);
       extractPythonTables(model.file, model.source, nodes, edges);
+      extractCelery(model.file, model.source, moduleId, nodes, edges);
+    }
+
+    // Beat schedules often live in celery_app.py while @shared_task lives in
+    // tasks.py — link cron → job by handler name across the whole graph.
+    const jobsByHandler = new Map<string, string>();
+    for (const node of nodes) {
+      if (node.kind !== "job") continue;
+      const handler =
+        typeof node.metadata?.handler === "string"
+          ? node.metadata.handler
+          : node.label;
+      if (handler) jobsByHandler.set(handler, node.id);
+    }
+    for (const node of nodes) {
+      if (node.kind !== "cron") continue;
+      const handler =
+        typeof node.metadata?.handler === "string"
+          ? node.metadata.handler
+          : undefined;
+      if (!handler) continue;
+      const jobId = jobsByHandler.get(handler);
+      if (!jobId) continue;
+      const already = edges.some(
+        (edge) =>
+          edge.kind === "schedules" &&
+          edge.source === node.id &&
+          edge.target === jobId,
+      );
+      if (already) continue;
+      const evidence = node.evidence[0] ?? {
+        file: String(node.metadata?.scheduleName ?? "."),
+        extractor: "python",
+        certainty: "derived" as const,
+        detail: `Celery schedule → ${handler}`,
+      };
+      edges.push(edgeFrom("schedules", node.id, jobId, evidence));
     }
 
     return {

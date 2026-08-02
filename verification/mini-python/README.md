@@ -7,3 +7,7 @@ own by `npm run verify`; ignored by a normal product scan of the repo root.
 
 HTTP routes for listing and reading notes — FastAPI decorators plus Django
 urlpatterns.
+
+## Scheduled jobs
+
+Celery tasks and beat schedules that keep notes fresh (digest email, stale purge).
