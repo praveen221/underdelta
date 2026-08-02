@@ -511,7 +511,9 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
   if (/(^|\/)viewer\.[cm]?[jt]sx?$/.test(file)) {
     return { key: "viewer", label: "Viewer", kind: "ui" };
   }
-  if (file.includes("/ui/") || file.includes("/components/")) {
+  // Top-level `components/` / `ui/` (no leading slash) must match too —
+  // Next fixtures often keep client widgets beside `app/`, not under `src/`.
+  if (/(^|\/)(ui|components)\//.test(file)) {
     return { key: "ui", label: "UI", kind: "ui" };
   }
   if (/(^|\/)graph\.[cm]?[jt]sx?$/.test(file)) {
@@ -661,6 +663,45 @@ function titleCaseSingular(label: string): string {
         : part.toLowerCase(),
     )
     .join(" ");
+}
+
+/**
+ * Turn camelCase / PascalCase / kebab identifiers into calm product words.
+ * `createPost` → `Create post`, `PostList` → `Post list`, `sign-in` → `Sign in`.
+ */
+export function humanizeIdentifierLabel(label: string): string {
+  const trimmed = label.trim();
+  if (!trimmed || /\s/.test(trimmed)) return trimmed;
+  const spaced = trimmed
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!spaced) return trimmed;
+  return spaced
+    .split(" ")
+    .map((part, index) =>
+      index === 0
+        ? `${part.charAt(0).toUpperCase()}${part.slice(1).toLowerCase()}`
+        : part.toLowerCase(),
+    )
+    .join(" ");
+}
+
+/**
+ * App Router URL paths → product page labels for the North star non-coder.
+ * `/dashboard/activity` → `Dashboard · Activity`, `/sign-in` → `Sign in`.
+ */
+export function humanizeAppPathLabel(path: string): string {
+  const trimmed = path.trim();
+  if (!trimmed || trimmed === "/") return "Home";
+  if (!trimmed.startsWith("/")) return trimmed;
+  const segments = trimmed
+    .split("/")
+    .filter(Boolean)
+    .filter((segment) => !segment.startsWith("(") && !segment.startsWith("@"));
+  if (!segments.length) return "Home";
+  return segments.map((segment) => humanizeIdentifierLabel(segment)).join(" · ");
 }
 
 function preferredTableLabel(bucket: ArchitectureNode[]): string {
@@ -967,6 +1008,18 @@ export function projectSemanticArchitecture(
     if (!systemId) continue;
     const evidence = node.evidence[0] ?? projectionEvidence(".");
 
+    // Keep default-export page/layout implementations nested under their
+    // App Router convention node so Home → HomePage does not flatten into UI.
+    if (node.kind === "component" || node.kind === "function") {
+      const parent = node.parentId ? nodes.get(node.parentId) : undefined;
+      if (
+        parent &&
+        (parent.metadata?.next === "page" || parent.metadata?.next === "layout")
+      ) {
+        continue;
+      }
+    }
+
     if (
       node.kind === "route" ||
       node.kind === "cron" ||
@@ -976,7 +1029,9 @@ export function projectSemanticArchitecture(
       node.kind === "hook" ||
       (node.kind === "pipeline" && node.technology !== "semantic") ||
       node.kind === "database" ||
-      node.kind === "schema"
+      node.kind === "schema" ||
+      // Server actions are the Posts/API story — nest under HTTP API, not modules.
+      (node.kind === "function" && node.metadata?.serverAction === true)
     ) {
       attachToSystem(node.id, systemId, evidence);
     }
@@ -1142,12 +1197,17 @@ export function projectSemanticArchitecture(
     "database",
     "schema",
     "pipeline",
+    "function",
   ]);
   for (const node of nodes.values()) {
     if (node.metadata?.projection === "semantic") continue;
     if (!collapsibleKinds.has(node.kind)) continue;
     if (node.kind === "queue" && node.metadata?.messagingHub) continue;
     if (node.kind === "cron" && node.metadata?.scheduleHub) continue;
+    // Only collapse server-action functions — raw handlers stay module-local.
+    if (node.kind === "function" && node.metadata?.serverAction !== true) {
+      continue;
+    }
     const parent = node.parentId ? nodes.get(node.parentId) : undefined;
     if (parent?.metadata?.projection === "semantic") {
       node.metadata = {
@@ -1155,6 +1215,48 @@ export function projectSemanticArchitecture(
         collapsedInOverview: true,
       };
     }
+  }
+
+  // Humanize Next.js App Router chrome so the default browser reads as a
+  // product story (Dashboard, Sign in, Create post) instead of paths/camelCase.
+  for (const node of nodes.values()) {
+    if (node.metadata?.projection === "semantic") continue;
+    let nextLabel: string | undefined;
+
+    if (node.kind === "page" && node.metadata?.next === "page") {
+      const path =
+        typeof node.metadata.path === "string" ? node.metadata.path : node.label;
+      nextLabel = humanizeAppPathLabel(path);
+    } else if (
+      node.kind === "component" &&
+      node.metadata?.next === "layout" &&
+      typeof node.metadata.path === "string"
+    ) {
+      // Convention layout node (has App Router path) — not the default-export fn.
+      nextLabel =
+        node.metadata.path === "/"
+          ? "App layout"
+          : `${humanizeAppPathLabel(node.metadata.path)} layout`;
+    } else if (node.metadata?.serverAction === true) {
+      nextLabel = humanizeIdentifierLabel(node.label);
+    } else if (
+      node.kind === "component" &&
+      (node.metadata?.clientComponent === true ||
+        node.metadata?.runtime === "client" ||
+        node.metadata?.next === "page" ||
+        node.metadata?.next === "layout")
+    ) {
+      // Client widgets + page/layout default exports: PostList → Post list.
+      nextLabel = humanizeIdentifierLabel(node.label);
+    }
+
+    if (!nextLabel || nextLabel === node.label) continue;
+    node.metadata = {
+      ...node.metadata,
+      technicalLabel: node.label,
+    };
+    node.label = nextLabel;
+    nodes.set(node.id, node);
   }
 
   // Attach databases discovered only via Prisma/SQL files to Data access.

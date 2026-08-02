@@ -1299,12 +1299,12 @@ for (const expected of ["GET /api/posts", "POST /api/posts", "GET /api/health"])
 
 const miniNextPages = miniNextGraph.nodes.filter((node) => node.kind === "page");
 const miniNextPageLabels = new Set(miniNextPages.map((node) => node.label));
-if (!miniNextPageLabels.has("Home") || !miniNextPageLabels.has("/dashboard")) {
+if (!miniNextPageLabels.has("Home") || !miniNextPageLabels.has("Dashboard")) {
   fail(
-    `mini-next expected Home + /dashboard pages, found ${[...miniNextPageLabels].join(", ") || "(none)"}`,
+    `mini-next expected humanized Home + Dashboard pages, found ${[...miniNextPageLabels].join(", ") || "(none)"}`,
   );
 } else {
-  pass("mini-next App Router pages: Home, /dashboard");
+  pass("mini-next App Router pages: Home, Dashboard");
 }
 
 const miniNextClientComponents = miniNextGraph.nodes.filter(
@@ -1312,14 +1312,19 @@ const miniNextClientComponents = miniNextGraph.nodes.filter(
     node.kind === "component" &&
     (node.metadata?.clientComponent === true || node.metadata?.runtime === "client"),
 );
-if (miniNextClientComponents.length < 2) {
+const miniNextClientLabels = new Set(
+  miniNextClientComponents.map((node) => node.label),
+);
+if (
+  miniNextClientComponents.length < 2 ||
+  !miniNextClientLabels.has("Post list") ||
+  !miniNextClientLabels.has("Post form")
+) {
   fail(
-    `mini-next expected >=2 client components (use client), found ${miniNextClientComponents.length}`,
+    `mini-next expected humanized client components Post list + Post form, found ${[...miniNextClientLabels].join(", ") || "(none)"}`,
   );
 } else {
-  pass(
-    `mini-next client components: ${miniNextClientComponents.map((node) => node.label).sort().join(", ")}`,
-  );
+  pass("mini-next client components: Post form, Post list");
 }
 
 const miniNextServerActions = miniNextGraph.nodes.filter(
@@ -1329,14 +1334,28 @@ const miniNextServerActionLabels = new Set(
   miniNextServerActions.map((node) => node.label),
 );
 if (
-  !miniNextServerActionLabels.has("createPost") ||
-  !miniNextServerActionLabels.has("deletePost")
+  !miniNextServerActionLabels.has("Create post") ||
+  !miniNextServerActionLabels.has("Delete post")
 ) {
   fail(
-    `mini-next missing server actions createPost/deletePost; found ${[...miniNextServerActionLabels].join(", ") || "(none)"}`,
+    `mini-next missing humanized server actions Create post/Delete post; found ${[...miniNextServerActionLabels].join(", ") || "(none)"}`,
   );
 } else {
-  pass("mini-next server actions: createPost, deletePost");
+  pass("mini-next server actions: Create post, Delete post");
+}
+
+const miniNextLayout = miniNextGraph.nodes.find(
+  (node) =>
+    node.metadata?.next === "layout" &&
+    node.kind === "component" &&
+    typeof node.metadata?.path === "string",
+);
+if (!miniNextLayout || miniNextLayout.label !== "App layout") {
+  fail(
+    `mini-next expected App layout label, found '${miniNextLayout?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-next layout humanized: App layout");
 }
 
 const miniNextSystems = miniNextGraph.nodes.filter(
@@ -1443,6 +1462,46 @@ if (miniNextCollapsedRoutes.length < 3 || miniNextCollapsedPages.length < 2) {
   );
 } else {
   pass("mini-next overview collapses App Router pages + route handlers under systems");
+}
+
+const miniNextActionsUnderApi = miniNextServerActions.filter(
+  (node) => node.parentId === miniNextApi?.id,
+);
+if (miniNextActionsUnderApi.length < 2) {
+  fail(
+    `mini-next expected server actions nested under Posts API, found ${miniNextActionsUnderApi.length}`,
+  );
+} else {
+  pass("mini-next server actions nested under Posts API");
+}
+
+const miniNextClientsUnderUi = miniNextClientComponents.filter(
+  (node) => node.parentId === miniNextUi?.id,
+);
+if (miniNextClientsUnderUi.length < 2) {
+  fail(
+    `mini-next expected client components nested under Journal UI, found ${miniNextClientsUnderUi.length}`,
+  );
+} else {
+  pass("mini-next client components nested under Journal UI");
+}
+
+const miniNextHome = miniNextPages.find((node) => node.label === "Home");
+const miniNextHomeChild = miniNextGraph.nodes.find(
+  (node) =>
+    node.parentId === miniNextHome?.id &&
+    node.kind === "component" &&
+    /home page/i.test(node.label),
+);
+if (!miniNextHomeChild) {
+  fail(
+    `mini-next expected Home page implementation nested under Home page node, found children: ${miniNextGraph.nodes
+      .filter((node) => node.parentId === miniNextHome?.id)
+      .map((node) => node.label)
+      .join(", ") || "(none)"}`,
+  );
+} else {
+  pass("mini-next Home page keeps Home page child nested (not flattened onto UI)");
 }
 
 // ---------------------------------------------------------------------------
@@ -1953,13 +2012,13 @@ if (nextRealRoot) {
 
     const expectedNextPages = [
       "Home",
-      "/pricing",
-      "/dashboard",
-      "/dashboard/activity",
-      "/dashboard/general",
-      "/dashboard/security",
-      "/sign-in",
-      "/sign-up",
+      "Pricing",
+      "Dashboard",
+      "Dashboard · Activity",
+      "Dashboard · General",
+      "Dashboard · Security",
+      "Sign in",
+      "Sign up",
     ];
     const nextPageLabels = new Set(nextPages.map((node) => node.label));
     const missingNextPages = expectedNextPages.filter(
@@ -1967,7 +2026,7 @@ if (nextRealRoot) {
     );
     if (missingNextPages.length) {
       fail(
-        `next-real-repo missing App Router pages: ${missingNextPages.join(", ")}; found ${[...nextPageLabels].join(", ") || "(none)"}`,
+        `next-real-repo missing humanized App Router pages: ${missingNextPages.join(", ")}; found ${[...nextPageLabels].join(", ") || "(none)"}`,
       );
     } else {
       pass(
@@ -2081,12 +2140,12 @@ if (nextRealRoot) {
     const nextActionLabels = new Set(
       nextServerActions.map((node) => node.label),
     );
-    if (!nextActionLabels.has("signOut")) {
+    if (!nextActionLabels.has("Sign out")) {
       fail(
-        `next-real-repo missing server action signOut; found ${[...nextActionLabels].join(", ") || "(none)"}`,
+        `next-real-repo missing humanized server action Sign out; found ${[...nextActionLabels].join(", ") || "(none)"}`,
       );
     } else {
-      pass("next-real-repo server action: signOut");
+      pass("next-real-repo server action: Sign out");
     }
     if (nextClientComponents.length < 5) {
       fail(
