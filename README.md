@@ -11,20 +11,22 @@ visual claim links to the source location from which it was derived.
 
 ## Status
 
-This is an early executable foundation. The architecture contract and extractor
-API are intentionally stack-neutral; the first deterministic extractors cover:
+**v0 (branch `cursor/visual-system-browser-7649`, frozen 2026-08-02).**  
+Stack-neutral `architecture.json` contract with deterministic extractors for
+common app and deploy stacks. Evidence is marked `observed`, `derived`, or
+`inferred` — unknown framework semantics are not invented.
 
-- TypeScript and JavaScript modules, functions, React components and hooks
-- JSX render relationships
-- Local imports and function calls
-- Express-style HTTP routes and handlers
-- `cron.schedule`-style scheduled jobs
-- BullMQ-style queues and workers
-- Prisma models, fields, relationships, and common read/write operations
-- SQL `CREATE TABLE` and `ALTER TABLE` migrations
+Supported in v0 (fixtures + pinned real-repo golden locks via `npm run verify`):
 
-Unknown framework semantics are not invented. Extracted evidence is marked as
-`observed`, `derived`, or `inferred`.
+- TypeScript/JavaScript — modules, React/Next UI, Express routes, cron, BullMQ
+- Next.js App Router — pages, layouts, route handlers, server actions
+- Prisma + SQL migrations; MongoDB collections and aggregates
+- Python — FastAPI, Django routes, SQLAlchemy/Alembic, Celery
+- OpenAPI / Swagger; GraphQL SDL and tagged documents
+- Docker / Compose; Terraform; Kubernetes; Helm; Kustomize
+
+Build history, pin SHAs, and freeze rules:
+[`docs/V0_BUILD_CONTEXT.md`](docs/V0_BUILD_CONTEXT.md).
 
 ## Try it
 
@@ -53,14 +55,12 @@ During development:
 npm run dev -- scan /path/to/repository
 ```
 
-Cloud / loop verification (isolated mini-stack; not part of the product diagram):
+Verification (isolated `verification/mini-*` fixtures + optional pinned real
+repos under gitignored `.underdelta-real/`; never part of the product diagram):
 
 ```bash
 npm run verify
 ```
-
-The suite compiles `verification/mini-stack`, asserts architecture kinds/edges, then
-confirms a normal scan of this repository excludes that tree.
 
 ## Core contract
 
@@ -109,13 +109,13 @@ runtime traces, and alternative graph sources replaceable.
 
 ## Near-term roadmap
 
-- Python extraction: FastAPI, Django, SQLAlchemy, Celery, Airflow
-- Next.js route and server-action semantics
-- MongoDB collections and aggregation pipelines
-- OpenAPI, GraphQL, Docker, Terraform, and Kubernetes extraction
+v0 extractors above are in-tree. Next focus after merge/try:
+
 - Stable graph snapshots and structural change overlays
 - Runtime evidence via OpenTelemetry
-- Extractor/plugin SDK and conformance fixtures
+- Extractor/plugin SDK and deeper conformance fixtures
+- UX polish for cold-reads by non-coders (see North star notes in
+  [`docs/V0_BUILD_CONTEXT.md`](docs/V0_BUILD_CONTEXT.md))
 
 ## License
 

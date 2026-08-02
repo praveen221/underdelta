@@ -377,7 +377,7 @@ export const kubernetesExtractor: ArchitectureExtractor = {
             kubernetes: true,
             kubernetesModule: true,
             file,
-            ...(/(^|\/)kustomize\//i.test(file)
+            ...(/(^|\/)kustomize\/components\//i.test(file)
               ? { kustomizeChrome: true }
               : {}),
           },
@@ -428,7 +428,7 @@ export const kubernetesExtractor: ArchitectureExtractor = {
             ...(resource.backendServices?.length
               ? { backendServices: resource.backendServices }
               : {}),
-            ...(/(^|\/)kustomize\//i.test(file)
+            ...(/(^|\/)kustomize\/components\//i.test(file)
               ? { kustomizeChrome: true }
               : {}),
           },

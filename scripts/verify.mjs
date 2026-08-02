@@ -8339,6 +8339,32 @@ for (const expected of [
   }
 }
 
+if (
+  !miniKustomizeNotesOverlay ||
+  miniKustomizeNotesOverlay.metadata?.namePrefix !== "notes-" ||
+  miniKustomizeNotesOverlay.metadata?.legacyBases !== true ||
+  miniKustomizeNotesOverlay.metadata?.namespace !== "notes"
+) {
+  fail(
+    `mini-kustomize Notes · Overlay should carry namePrefix=notes-, legacyBases, namespace=notes; found prefix=${miniKustomizeNotesOverlay?.metadata?.namePrefix} legacyBases=${miniKustomizeNotesOverlay?.metadata?.legacyBases} namespace=${miniKustomizeNotesOverlay?.metadata?.namespace}`,
+  );
+} else {
+  pass(
+    "mini-kustomize Notes · Overlay locks namePrefix + legacy bases: + namespace",
+  );
+}
+const notesOverlayDetail = miniKustomizeNotesOverlay?.evidence?.[0]?.detail ?? "";
+if (
+  !/namePrefix:notes-/.test(notesOverlayDetail) ||
+  !/\blegacyBases\b/.test(notesOverlayDetail)
+) {
+  fail(
+    `mini-kustomize Notes · Overlay evidence should cite namePrefix + legacyBases; found '${notesOverlayDetail}'`,
+  );
+} else {
+  pass("mini-kustomize Notes · Overlay evidence cites namePrefix + legacyBases");
+}
+
 const miniKustomizeOverviewLeaves = miniKustomizeResources.filter(
   (node) =>
     node.metadata?.collapsedInOverview !== true &&

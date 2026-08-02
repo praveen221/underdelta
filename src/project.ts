@@ -1064,18 +1064,24 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
   ) {
     return { key: "ui", label: "UI", kind: "ui" };
   }
+  // Kustomize `bases/api` / overlay trees are Deploy, not an HTTP API path-role.
+  const underKustomizeTree =
+    /(^|\/)kustomize\//.test(file) ||
+    /(^|\/)overlays?\//.test(file) ||
+    /(^|\/)bases?\//.test(file);
   if (
-    /(^|\/)(server|app|routes?)\.[cm]?[jt]sx?$/.test(file) ||
-    file.includes("/routes/") ||
-    file.includes("/api/") ||
-    // Python servers: Django urlpatterns + FastAPI APIRouter modules.
-    /(^|\/)urls\.py$/.test(file) ||
-    file.includes("/routers/") ||
-    // OpenAPI / Swagger specs are the HTTP API contract surface.
-    isOpenApiSpecModulePath(file) ||
-    file.includes("/openapi/") ||
-    // GraphQL SDL / documents are the API contract surface.
-    isGraphqlSchemaModulePath(file)
+    !underKustomizeTree &&
+    (/(^|\/)(server|app|routes?)\.[cm]?[jt]sx?$/.test(file) ||
+      file.includes("/routes/") ||
+      file.includes("/api/") ||
+      // Python servers: Django urlpatterns + FastAPI APIRouter modules.
+      /(^|\/)urls\.py$/.test(file) ||
+      file.includes("/routers/") ||
+      // OpenAPI / Swagger specs are the HTTP API contract surface.
+      isOpenApiSpecModulePath(file) ||
+      file.includes("/openapi/") ||
+      // GraphQL SDL / documents are the API contract surface.
+      isGraphqlSchemaModulePath(file))
   ) {
     return { key: "api", label: "HTTP API", kind: "api" };
   }
@@ -1605,11 +1611,11 @@ function isTerraformExampleChromePath(file: string): boolean {
 }
 
 /**
- * Kustomize overlay/component trees (Online Boutique `kustomize/components/`)
- * are optional deploy patches beside the primary kubernetes-manifests story.
+ * Boutique-style `kustomize/components/` patches beside kubernetes-manifests.
+ * Product trees under `kustomize/bases` / `kustomize/overlays` are not chrome.
  */
 function isKustomizeChromePath(file: string): boolean {
-  return /(^|\/)kustomize\//i.test(normalizePath(file));
+  return /(^|\/)kustomize\/components\//i.test(normalizePath(file));
 }
 
 /**
@@ -1629,6 +1635,9 @@ function quietKustomizeChrome(nodes: Map<string, ArchitectureNode>): void {
           "",
       ),
     );
+    // Workloads under kustomize/bases|overlays are the overlay story itself —
+    // only kubernetes-manifests (or similar) outside `kustomize/` count as primary.
+    if (/(^|\/)kustomize\//i.test(file)) return false;
     return (
       node.metadata?.kustomizeChrome !== true && !isKustomizeChromePath(file)
     );
@@ -1651,9 +1660,13 @@ function quietKustomizeChrome(nodes: Map<string, ArchitectureNode>): void {
           "",
       ),
     );
+    // Beside kubernetes-manifests, any `kustomize/` tree is packaging chrome
+    // (components/ and overlay indexes). Product-only trees never reach here.
+    const underKustomizeProductTree = /(^|\/)kustomize\//i.test(file);
     if (
       node.metadata?.kustomizeChrome !== true &&
-      !isKustomizeChromePath(file)
+      !isKustomizeChromePath(file) &&
+      !underKustomizeProductTree
     ) {
       continue;
     }
@@ -1765,13 +1778,29 @@ function nestKubernetesUnderKustomizeHubs(
   ) => void,
 ): void {
   const hubs = [...nodes.values()]
-    .filter(
-      (node) =>
-        node.kind === "service" &&
-        node.metadata?.kustomization === true &&
-        typeof node.metadata?.overlayRoot === "string" &&
-        String(node.metadata.overlayRoot).length > 0,
-    )
+    .filter((node) => {
+      if (node.kind !== "service" || node.metadata?.kustomization !== true) {
+        return false;
+      }
+      if (
+        node.metadata?.kustomizeChrome === true ||
+        node.metadata?.exampleChrome === true
+      ) {
+        return false;
+      }
+      const root = normalizePath(String(node.metadata?.overlayRoot ?? ""));
+      if (!root) return false;
+      // Boutique-style manifest-index kustomizations
+      // (`kubernetes-manifests/kustomization.yaml`) are not product Base/Overlay
+      // owners — leave workloads nested under Deploy for the cold-read.
+      if (
+        /(^|\/)(k8s|kubernetes)(-?manifests?)?(\/|$)/i.test(root) ||
+        /(^|\/)manifests?(\/|$)/i.test(root)
+      ) {
+        return false;
+      }
+      return true;
+    })
     .map((node) => ({
       id: node.id,
       root: normalizePath(String(node.metadata!.overlayRoot)),

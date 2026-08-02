@@ -71,12 +71,36 @@ export interface ParsedKustomization {
   namespace?: string;
   namePrefix?: string;
   nameSuffix?: string;
+  /** Combined `resources:` + legacy `bases:` entries (needs targets). */
   resources: string[];
+  /** True when the file used the legacy `bases:` key. */
+  legacyBases?: boolean;
+}
+
+/** Read a YAML list under a top-level `key:` block. */
+function readYamlStringList(source: string, key: string): string[] {
+  const keyMatch = new RegExp(`^\\s*${key}\\s*:\\s*$`, "m").exec(source);
+  if (!keyMatch || keyMatch.index === undefined) return [];
+  const values: string[] = [];
+  const after = source.slice(keyMatch.index + keyMatch[0].length);
+  for (const line of after.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const item = /^\s*-\s+["']?([^"'#\n]+?)["']?\s*$/.exec(line);
+    if (!item) {
+      // Next top-level key ends the list.
+      if (/^[A-Za-z_]/.test(line)) break;
+      continue;
+    }
+    const value = item[1]?.trim();
+    if (value) values.push(value);
+  }
+  return values;
 }
 
 /**
  * Dependency-free kustomization.yaml walker — typical Kustomize identity
  * fields only (name from directory; optional namespace/prefix/suffix/resources).
+ * Also accepts the legacy `bases:` key (pre-resources Kustomize).
  */
 export function parseKustomizationYaml(
   source: string,
@@ -88,8 +112,13 @@ export function parseKustomizationYaml(
   // Accept kind: Kustomization alone — some trees omit apiVersion in samples.
   if (!kindMatch && !apiMatch) {
     // Still accept resource-list files named kustomization.yaml without kind
-    // when they declare a resources: block (legacy / simplified fixtures).
-    if (!/^\s*resources\s*:\s*$/m.test(source)) return undefined;
+    // when they declare a resources: or legacy bases: block.
+    if (
+      !/^\s*resources\s*:\s*$/m.test(source) &&
+      !/^\s*bases\s*:\s*$/m.test(source)
+    ) {
+      return undefined;
+    }
   }
 
   const name = overlayDirName.trim();
@@ -102,21 +131,17 @@ export function parseKustomizationYaml(
   const suffixMatch =
     /^\s*nameSuffix\s*:\s*["']?([^"'#\n]+?)["']?\s*$/m.exec(source);
 
-  const resources: string[] = [];
-  const resourcesKey = /^\s*resources\s*:\s*$/m.exec(source);
-  if (resourcesKey && resourcesKey.index !== undefined) {
-    const after = source.slice(resourcesKey.index + resourcesKey[0].length);
-    for (const line of after.split(/\r?\n/)) {
-      if (!line.trim()) continue;
-      const item = /^\s*-\s+["']?([^"'#\n]+?)["']?\s*$/.exec(line);
-      if (!item) {
-        // Next top-level key ends the list.
-        if (/^[A-Za-z_]/.test(line)) break;
-        continue;
-      }
-      const value = item[1]?.trim();
-      if (value) resources.push(value);
-    }
+  const resourceEntries = readYamlStringList(source, "resources");
+  const baseEntries = readYamlStringList(source, "bases");
+  const resources = [...baseEntries, ...resourceEntries];
+  if (
+    resources.length === 0 &&
+    !kindMatch &&
+    !apiMatch &&
+    !namespaceMatch &&
+    !prefixMatch
+  ) {
+    return undefined;
   }
 
   const offset = kindMatch?.index ?? apiMatch?.index ?? 0;
@@ -129,6 +154,7 @@ export function parseKustomizationYaml(
     ...(prefixMatch?.[1]?.trim() ? { namePrefix: prefixMatch[1].trim() } : {}),
     ...(suffixMatch?.[1]?.trim() ? { nameSuffix: suffixMatch[1].trim() } : {}),
     resources,
+    ...(baseEntries.length > 0 ? { legacyBases: true } : {}),
   };
 }
 
@@ -232,6 +258,12 @@ export const kustomizeExtractor: ArchitectureExtractor = {
       if (kustomization.namespace) {
         detailParts.push(`namespace:${kustomization.namespace}`);
       }
+      if (kustomization.namePrefix) {
+        detailParts.push(`namePrefix:${kustomization.namePrefix}`);
+      }
+      if (kustomization.legacyBases) {
+        detailParts.push("legacyBases");
+      }
       if (kustomization.resources.length > 0) {
         detailParts.push(`resources:${kustomization.resources.length}`);
       }
@@ -265,12 +297,14 @@ export const kustomizeExtractor: ArchitectureExtractor = {
           ...(kustomization.nameSuffix
             ? { nameSuffix: kustomization.nameSuffix }
             : {}),
+          ...(kustomization.legacyBases ? { legacyBases: true } : {}),
           ...(kustomization.resources.length > 0
             ? { resources: kustomization.resources }
             : {}),
           // Boutique-style trees under kustomize/components stay tagged so
-          // projection can quiet them beside kubernetes-manifests.
-          ...(/(^|\/)kustomize\//i.test(normalized)
+          // projection can quiet them beside kubernetes-manifests. Product
+          // trees under kustomize/bases|overlays must NOT be chrome.
+          ...(/(^|\/)kustomize\/components\//i.test(normalized)
             ? { kustomizeChrome: true }
             : {}),
         },
