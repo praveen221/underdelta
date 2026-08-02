@@ -936,13 +936,21 @@ export function humanizeIdentifierLabel(label: string): string {
 }
 
 /**
- * GraphQL Query/Mutation/Subscription fields → canvas labels.
- * `createNote` → `Mutation Create note`; keeps the operation kind for clarity.
+ * GraphQL Query/Mutation/Subscription → canvas labels for the North star user.
+ *
+ * - SDL schema fields keep the kind: `createNote` → `Mutation Create note`
+ * - Named `gql` documents drop the kind (like OpenAPI summaries) so they stay
+ *   distinct from the schema twin: `CreateNote` → `Create note` (not another
+ *   `Mutation Create note` colliding with the SDL field).
  */
 export function humanizeGraphqlOperationLabel(
   operationType: string,
   field: string,
+  options?: { sourceKind?: "sdl" | "gql"; operationName?: string },
 ): string {
+  if (options?.sourceKind === "gql" && options.operationName?.trim()) {
+    return humanizeIdentifierLabel(options.operationName);
+  }
   const kind = operationType.trim().toLowerCase();
   const titled =
     kind === "query" || kind === "mutation" || kind === "subscription"
@@ -1755,13 +1763,21 @@ export function projectSemanticArchitecture(
       typeof node.metadata?.operationType === "string" &&
       typeof node.metadata?.field === "string"
     ) {
-      // GraphQL: Query createNote → Query Create note (keep kind + product words).
+      // GraphQL: SDL keeps Query/Mutation + field; named documents use the
+      // operation name alone so CreateNote ≠ Mutation Create note on canvas.
+      const sourceKind =
+        node.metadata.sourceKind === "gql" || node.metadata.sourceKind === "sdl"
+          ? node.metadata.sourceKind
+          : undefined;
       nextLabel = humanizeGraphqlOperationLabel(
         node.metadata.operationType,
-        // Prefer named document ops (ListNotes) when present.
-        typeof node.metadata.operationName === "string"
-          ? node.metadata.operationName
-          : node.metadata.field,
+        node.metadata.field,
+        {
+          ...(sourceKind ? { sourceKind } : {}),
+          ...(typeof node.metadata.operationName === "string"
+            ? { operationName: node.metadata.operationName }
+            : {}),
+        },
       );
     } else if (
       node.kind === "route" &&

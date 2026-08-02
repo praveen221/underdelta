@@ -4745,8 +4745,9 @@ if (openapiRealRoot) {
 }
 
 // ---------------------------------------------------------------------------
-// Capability ladder rung 6 prep: GraphQL extractor + verification/mini-graphql.
-// Smoke floors — SDL Query/Mutation fields + gql tagged documents.
+// Capability ladder rung 6: GraphQL extractor + verification/mini-graphql.
+// Thickened golden — SDL + gql dual-source, unique North-star labels, evidence,
+// schema + operations.ts module chrome collapsed under Notes API.
 // ---------------------------------------------------------------------------
 const miniGraphqlGraph = await compileRepository(miniGraphqlRoot);
 const miniGraphqlRoutes = miniGraphqlGraph.nodes.filter(
@@ -4805,14 +4806,14 @@ const miniGraphqlDocs = new Set(
     .filter((node) => node.metadata?.sourceKind === "gql")
     .map(
       (node) =>
-        `${node.metadata?.operationType}:${node.metadata?.operationName ?? node.metadata?.field}`,
+        `${node.metadata?.operationType}:${node.metadata?.operationName ?? "?"}:${node.metadata?.field ?? "?"}`,
     ),
 );
 for (const expected of [
-  "query:ListNotes",
-  "query:GetNote",
-  "mutation:CreateNote",
-  "mutation:DeleteNote",
+  "query:ListNotes:notes",
+  "query:GetNote:note",
+  "mutation:CreateNote:createNote",
+  "mutation:DeleteNote:deleteNote",
 ]) {
   if (!miniGraphqlDocs.has(expected)) {
     fail(
@@ -4823,18 +4824,19 @@ for (const expected of [
   }
 }
 
+// SDL keeps Query/Mutation + field; named documents drop the kind so twins
+// (createNote ↔ CreateNote) stay distinct on the North-star canvas.
 for (const expected of [
   "Query Notes",
   "Query Note",
   "Query Tags",
   "Mutation Create note",
   "Mutation Delete note",
-  "Query List notes",
-  "Query Get note",
-  "Mutation Create note",
-  "Mutation Delete note",
+  "List notes",
+  "Get note",
+  "Create note",
+  "Delete note",
 ]) {
-  // Create/Delete note appear from both SDL field and named document — label may collide.
   if (!miniGraphqlRouteLabels.includes(expected)) {
     fail(
       `mini-graphql missing label ${expected}; found ${miniGraphqlRouteLabels.join(", ") || "(none)"}`,
@@ -4842,6 +4844,46 @@ for (const expected of [
   } else {
     pass(`mini-graphql label ${expected}`);
   }
+}
+
+const miniGraphqlLabelDupes = miniGraphqlRouteLabels.filter(
+  (label, index) => miniGraphqlRouteLabels.indexOf(label) !== index,
+);
+if (miniGraphqlLabelDupes.length > 0) {
+  fail(
+    `mini-graphql GraphQL labels must be unique (no SDL+document twin chrome), duplicates: ${[
+      ...new Set(miniGraphqlLabelDupes),
+    ].join(", ")}`,
+  );
+} else {
+  pass(
+    `mini-graphql ${miniGraphqlRouteLabels.length} labels are unique (no twin chrome)`,
+  );
+}
+
+const miniGraphqlEvidenceGaps = miniGraphqlRoutes.filter((node) => {
+  const detail = node.evidence?.[0]?.detail ?? "";
+  const field = node.metadata?.field;
+  if (typeof field !== "string" || !field) return true;
+  if (!detail.includes(`field:${field}`)) return true;
+  if (node.metadata?.sourceKind === "gql") {
+    const opName = node.metadata?.operationName;
+    if (typeof opName !== "string" || !opName) return true;
+    if (!detail.includes(opName)) return true;
+  }
+  return false;
+});
+if (miniGraphqlEvidenceGaps.length > 0) {
+  fail(
+    `mini-graphql evidence should cite field/operationName: ${miniGraphqlEvidenceGaps
+      .map(
+        (node) =>
+          `${node.metadata?.operationName ?? node.metadata?.field ?? node.label}`,
+      )
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-graphql evidence details cite field + operationName");
 }
 
 const miniGraphqlSemantic = miniGraphqlGraph.nodes.filter(
@@ -4871,6 +4913,22 @@ if (nestedGraphqlRoutes.length < 9) {
 } else {
   pass(
     `mini-graphql ${nestedGraphqlRoutes.length} ops nested under Notes API`,
+  );
+}
+
+const nestedGraphqlSdl = nestedGraphqlRoutes.filter(
+  (node) => node.metadata?.sourceKind === "sdl",
+);
+const nestedGraphqlDocs = nestedGraphqlRoutes.filter(
+  (node) => node.metadata?.sourceKind === "gql",
+);
+if (nestedGraphqlSdl.length < 5 || nestedGraphqlDocs.length < 4) {
+  fail(
+    `mini-graphql expected schema+document ops nested under Notes API (SDL≥5, gql≥4), found SDL ${nestedGraphqlSdl.length} / gql ${nestedGraphqlDocs.length}`,
+  );
+} else {
+  pass(
+    `mini-graphql nests schema (${nestedGraphqlSdl.length}) + document (${nestedGraphqlDocs.length}) ops under Notes API`,
   );
 }
 
@@ -4915,17 +4973,28 @@ if (!miniGraphqlSpecModules.some((node) => /schema\.graphql$/i.test(node.label))
   pass("mini-graphql has schema.graphql module");
 }
 
-const graphqlModuleChrome = miniGraphqlSpecModules.filter(
-  (node) => node.metadata?.collapsedInOverview !== true,
+const miniGraphqlOpsModule = miniGraphqlGraph.nodes.find(
+  (node) =>
+    node.kind === "module" && /(?:^|\/)operations\.ts$/i.test(node.label),
 );
+if (!miniGraphqlOpsModule) {
+  fail("mini-graphql missing operations.ts module (gql document chrome)");
+} else {
+  pass("mini-graphql has operations.ts module");
+}
+
+const graphqlModuleChrome = [
+  ...miniGraphqlSpecModules,
+  ...(miniGraphqlOpsModule ? [miniGraphqlOpsModule] : []),
+].filter((node) => node.metadata?.collapsedInOverview !== true);
 if (graphqlModuleChrome.length > 0) {
   fail(
-    `mini-graphql overview should collapse schema modules, still visible: ${graphqlModuleChrome
+    `mini-graphql overview should collapse schema + ops.ts modules, still visible: ${graphqlModuleChrome
       .map((node) => node.label)
       .join(", ")}`,
   );
 } else {
-  pass("mini-graphql overview collapses GraphQL schema modules");
+  pass("mini-graphql overview collapses schema.graphql + operations.ts chrome");
 }
 
 const graphqlCommerceNoise = miniGraphqlGraph.edges.some((edge) =>

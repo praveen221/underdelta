@@ -243,9 +243,18 @@ function readBalancedBlock(
 }
 
 /**
+ * First root selection-set field inside a GraphQL operation body.
+ * `query ListNotes { notes { id } }` → `notes` (not the operation name).
+ */
+function firstSelectedField(body: string): string | undefined {
+  const selection = /\{[\s\S]*?\b([A-Za-z_][\w]*)\b/.exec(body);
+  return selection?.[1];
+}
+
+/**
  * Extract operations from gql`…` / graphql`…` tagged templates.
- * Captures named ops (`query ListNotes { notes { id } }`) and falls back to
- * the first selected field when the operation is anonymous.
+ * Captures named ops (`query ListNotes { notes { id } }`) and always records
+ * the first selected schema field separately from the document operationName.
  */
 function parseGqlTaggedOperations(source: string): ParsedOperation[] {
   const operations: ParsedOperation[] = [];
@@ -258,12 +267,8 @@ function parseGqlTaggedOperations(source: string): ParsedOperation[] {
     if (!opMatch?.[1]) continue;
     const operationType = opMatch[1].toLowerCase() as OperationType;
     const operationName = opMatch[2];
-    let field = operationName ?? "";
-    if (!field) {
-      // First selection set field after the operation keyword.
-      const selection = /\{[\s\S]*?\b([A-Za-z_][\w]*)\b/.exec(body);
-      field = selection?.[1] ?? operationType;
-    }
+    const field =
+      firstSelectedField(body) ?? operationName ?? operationType;
     const innerOffset = opMatch.index ?? 0;
     operations.push({
       operationType,
@@ -358,9 +363,11 @@ export const graphqlExtractor: ArchitectureExtractor = {
         if (seen.has(routeId)) continue;
         seen.add(routeId);
 
+        // Evidence must cite the schema field and, for documents, the op name —
+        // verify golden-locks these so SDL↔client dual-source stays trustworthy.
         const detail = op.operationName
-          ? `${op.operationType} ${op.operationName} (${op.field})`
-          : `${op.operationType} ${op.field}`;
+          ? `${op.operationType} ${op.operationName} field:${op.field}`
+          : `${op.operationType} field:${op.field}`;
         const routeEvidence = evidence(file, source, op.offset, detail);
         const label = `${titleOperation(op.operationType)} ${op.field}`;
         nodes.push({
