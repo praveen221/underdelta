@@ -55,12 +55,20 @@ export function isKubernetesManifestPath(file: string): boolean {
     base === "compose.yaml" ||
     /^docker-compose\.[^/]+\.ya?ml$/.test(base) ||
     /(^|\/)(openapi|swagger)\.(ya?ml)$/.test(normalized) ||
-    /(?:^|\/)openapi\//.test(normalized)
+    /(?:^|\/)openapi\//.test(normalized) ||
+    // Helm templates are Go-templated stubs — not product workload surface.
+    /(^|\/)charts?\//.test(normalized) ||
+    /(^|\/)helm(?:-?chart)?\//.test(normalized) ||
+    // CI / release-cluster wiring is chrome beside the product manifests.
+    /(^|\/)\.github\//.test(normalized)
   ) {
     return false;
   }
   return (
-    /(^|\/)(k8s|kubernetes|manifests?)(\/|$)/.test(normalized) ||
+    // `k8s/`, `kubernetes/`, `manifests/`, and hyphenated folders like
+    // `kubernetes-manifests/` (Online Boutique) / `k8s-manifests/`.
+    /(^|\/)(k8s|kubernetes)(-?manifests?)?(\/|$)/.test(normalized) ||
+    /(^|\/)manifests?(\/|$)/.test(normalized) ||
     /(^|\/)deploy(?:ment)?s?\//.test(normalized) ||
     /\.(?:deployment|service|ingress|statefulset|daemonset|cronjob)\.ya?ml$/.test(
       normalized,
@@ -169,6 +177,16 @@ export const kubernetesExtractor: ArchitectureExtractor = {
       const ext = path.extname(file.replaceAll("\\", "/")).toLowerCase();
       if (ext !== ".yaml" && ext !== ".yml") continue;
       if (isNonKubernetesYamlPath(file)) continue;
+      // Prefer path conventions; still accept scattered apiVersion+kind yaml,
+      // but never treat Helm chart templates / .github CI manifests as product.
+      const normalizedFile = file.replaceAll("\\", "/").toLowerCase();
+      if (
+        /(^|\/)charts?\//.test(normalizedFile) ||
+        /(^|\/)helm(?:-?chart)?\//.test(normalizedFile) ||
+        /(^|\/)\.github\//.test(normalizedFile)
+      ) {
+        continue;
+      }
 
       let source: string;
       try {
@@ -178,7 +196,10 @@ export const kubernetesExtractor: ArchitectureExtractor = {
       }
 
       if (!looksLikeKubernetesManifest(source)) continue;
-      const resources = parseKubernetesResources(source);
+      const resources = parseKubernetesResources(source).filter(
+        // Skip Go-template placeholder names (`{{ .Values.frontend.name }}`).
+        (resource) => !/\{\{/.test(resource.name),
+      );
       if (resources.length === 0) continue;
 
       const moduleId = stableId("module", "kubernetes", file);

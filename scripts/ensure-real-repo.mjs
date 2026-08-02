@@ -87,6 +87,15 @@ export const TERRAFORM_AWS_VPC = {
   dirname: "terraform-aws-vpc",
 };
 
+/** @type {RealRepoPin} */
+export const MICROSERVICES_DEMO = {
+  name: "GoogleCloudPlatform/microservices-demo",
+  url: "https://github.com/GoogleCloudPlatform/microservices-demo.git",
+  // Pinned 2026-08-02 — tip of main at plan rung-9 Kubernetes real-repo kickoff.
+  sha: "9a4616e77f0f9cbcbecaf27d711c38890dda1404",
+  dirname: "microservices-demo",
+};
+
 export const REAL_REPO_ROOT = path.join(repoRoot, ".underdelta-real");
 
 function git(args, cwd, opts = {}) {
@@ -182,6 +191,12 @@ const PINS_BY_NAME = {
   vpc: TERRAFORM_AWS_VPC,
   "terraform-aws-vpc": TERRAFORM_AWS_VPC,
   terraform: TERRAFORM_AWS_VPC,
+  [MICROSERVICES_DEMO.dirname]: MICROSERVICES_DEMO,
+  "microservices-demo": MICROSERVICES_DEMO,
+  boutique: MICROSERVICES_DEMO,
+  "online-boutique": MICROSERVICES_DEMO,
+  kubernetes: MICROSERVICES_DEMO,
+  k8s: MICROSERVICES_DEMO,
 };
 
 const isMain =
@@ -200,6 +215,7 @@ if (isMain) {
         GRAPHQL_CLIENT_EXAMPLE_SERVER,
         EXAMPLE_VOTING_APP,
         TERRAFORM_AWS_VPC,
+        MICROSERVICES_DEMO,
       ];
   if (requested && pins.length === 0) {
     throw new Error(

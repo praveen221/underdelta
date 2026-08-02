@@ -58,15 +58,34 @@ export function sanitizeMarkdownHeadingText(raw: string): string {
 /** First H1 in a README, sanitized — product-title territory, not system hints. */
 export function parseReadmeTitle(markdown: string): string | undefined {
   const match = /^#\s+(.+?)\s*$/m.exec(markdown);
-  if (!match?.[1]) return undefined;
-  const title = sanitizeMarkdownHeadingText(
-    match[1].replace(/\s+#+\s*$/, ""),
-  );
-  if (!title) return undefined;
-  // Badges / bare URLs are not product names.
-  if (/^https?:\/\//i.test(title)) return undefined;
-  if (title.length > 80) return undefined;
-  return title;
+  if (match?.[1]) {
+    const title = sanitizeMarkdownHeadingText(
+      match[1].replace(/\s+#+\s*$/, ""),
+    );
+    if (
+      title &&
+      !/^https?:\/\//i.test(title) &&
+      title.length <= 80
+    ) {
+      return title;
+    }
+  }
+
+  // No usable H1 — accept a leading bold brand used as the product name
+  // (`**Online Boutique** is a cloud-first…`) after stripping comments/badges.
+  const head = markdown
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .slice(0, 2500);
+  const bold =
+    /^\s*\*\*([^*]{2,60})\*\*\s+is\b/im.exec(head) ??
+    /\n\s*\*\*([^*]{2,60})\*\*\s+is\b/i.exec(head);
+  if (!bold?.[1]) return undefined;
+  const boldTitle = sanitizeMarkdownHeadingText(bold[1]);
+  if (!boldTitle || /^https?:\/\//i.test(boldTitle) || boldTitle.length > 80) {
+    return undefined;
+  }
+  return boldTitle;
 }
 
 /**
@@ -856,12 +875,16 @@ function isKubernetesModulePath(file: string): boolean {
     base === "compose.yml" ||
     base === "compose.yaml" ||
     /^docker-compose\.[^/]+\.ya?ml$/.test(base) ||
-    isOpenApiSpecModulePath(normalized)
+    isOpenApiSpecModulePath(normalized) ||
+    /(^|\/)charts?\//.test(normalized) ||
+    /(^|\/)helm(?:-?chart)?\//.test(normalized) ||
+    /(^|\/)\.github\//.test(normalized)
   ) {
     return false;
   }
   return (
-    /(^|\/)(k8s|kubernetes|manifests?)(\/|$)/.test(normalized) ||
+    /(^|\/)(k8s|kubernetes)(-?manifests?)?(\/|$)/.test(normalized) ||
+    /(^|\/)manifests?(\/|$)/.test(normalized) ||
     /(^|\/)deploy(?:ment)?s?\//.test(normalized) ||
     /\.(?:deployment|service|ingress|statefulset|daemonset|cronjob)\.ya?ml$/.test(
       normalized,
@@ -906,7 +929,11 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
   }
   // Top-level `components/` / `ui/` (no leading slash) must match too —
   // Next fixtures often keep client widgets beside `app/`, not under `src/`.
-  if (/(^|\/)(ui|components)\//.test(file)) {
+  // Skip Kustomize `components/` overlays — those are deploy patches, not UI.
+  if (
+    !/(^|\/)kustomize\//.test(file) &&
+    /(^|\/)(ui|components)\//.test(file)
+  ) {
     return { key: "ui", label: "UI", kind: "ui" };
   }
   if (/(^|\/)graph\.[cm]?[jt]sx?$/.test(file)) {
@@ -1364,9 +1391,12 @@ export function humanizeTerraformLabel(
 /**
  * Kubernetes resources → North-star Deploy labels.
  * `Deployment/api` → `API · Deployment`; `Ingress/notes` → `Notes · Ingress`.
+ * Compound microservice names (`cartservice`) become camelCase before humanize
+ * so `adservice` → `Ad service` (space early-return must not skip title case).
  */
 export function humanizeKubernetesLabel(kind: string, name: string): string {
-  return `${humanizeIdentifierLabel(name)} · ${kind}`;
+  const splitService = name.replace(/([a-z0-9])service$/i, "$1Service");
+  return `${humanizeIdentifierLabel(splitService)} · ${kind}`;
 }
 
 /** Example/wrapper TF paths are sample chrome, not the module's product surface. */

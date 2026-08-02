@@ -198,6 +198,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 8 polish/lock: Terraform label/chrome — drop singleton `this` name chrome (`aws_vpc.this` → VPC), NAT/EIP/DynamoDB acronyms, quiet examples/wrappers/`vpc_issue_*` as `exampleChrome`; golden-lock mini-terraform + terraform-aws-vpc; verify finds root `main.tf` not examples/*/main.tf — **Rung 8 locked**
 - [x] Standing polish: hide remaining compiler chrome pills (`labelSource`, `pathRoleLabel`, `collapsedInOverview`, `overviewHub`, `exampleChrome`) from inspector structuredMetaKeys dump
 - [x] Rung 9 prep: Kubernetes manifests extractor — `Deployment`/`Service`/`Ingress` (+ StatefulSet/DaemonSet/CronJob/Job) → Deploy; path-role `k8s/`/`kubernetes/`/`manifests/`; README Workloads; `verification/mini-k8s` smoke floors + Extractors roster `kubernetes`; quiet Dockerfile-only Deploy still collapses unless K8s units exist
+- [x] Rung 9: pin `GoogleCloudPlatform/microservices-demo` @ `9a4616e77f0f9cbcbecaf27d711c38890dda1404`; clone into gitignored `.underdelta-real/microservices-demo`; path-match `kubernetes-manifests/`; skip Helm/`{{` + `.github` CI chrome; bold-README product title Online Boutique; golden-lock 23+ Deployments/Services nested/collapsed under Deploy
 
 ### Real-repo pins (Capability ladder)
 
@@ -211,13 +212,14 @@ Update these checkboxes and the “Next focus” section every tick.
 | 6 | `zth/graphql-client-example-server` | `814f2ba089368c29f433dc395fe169ae52740a46` | `.underdelta-real/graphql-client-example-server` |
 | 7 | `dockersamples/example-voting-app` | `63e9150ca17af4ed05880d4245e486481f73fcb4` | `.underdelta-real/example-voting-app` |
 | 8 | `terraform-aws-modules/terraform-aws-vpc` | `3ffbd46fb1c7733e1b34d8666893280454e27436` | `.underdelta-real/terraform-aws-vpc` |
+| 9 | `GoogleCloudPlatform/microservices-demo` | `9a4616e77f0f9cbcbecaf27d711c38890dda1404` | `.underdelta-real/microservices-demo` |
 
 ### In progress / next
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 9: pin a real Kubernetes OSS repo (Deployment/Service/Ingress surface) @ exact SHA into gitignored `.underdelta-real/`; golden-lock under Deploy/Workloads
-- [ ] Rung 9 polish: Service→Deployment needs edges / Ingress host labels / quiet non-product chrome beside Workloads then lock
+- [ ] Rung 9 polish: Service→Deployment selector/needs edges + Ingress host labels; quiet thin HTTP API / kustomize chrome beside Deploy then lock
+- [ ] Rung 9 polish: Online Boutique label/compound-name pass (`Productcatalog`/`Shoppingassistant`/`Loadgenerator`/`Opentelemetrycollector`) for North-star canvas
 - [ ] GraphQL `schema { query: Root }` / non-Query root types (SWAPI-style) if a later pin needs it
 - [ ] Standing polish: Underdelta self-map cold-read pass — leftover jargon labels or weak hierarchy
 
@@ -233,7 +235,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Rung 9 prep — Kubernetes extractor + mini-k8s Workloads smoke). Now pin a real Kubernetes OSS repo at an exact SHA into `.underdelta-real/` and golden-lock Deploy/Workloads nesting so Rung 9 can advance.
+> **Next focus:** This work is done (Rung 9 pin — Online Boutique kubernetes-manifests under Deploy). Now polish Service→Deployment needs edges / Ingress hosts and quiet thin HTTP API beside Deploy so Rung 9 can lock.
 
 ### Learning log (append every tick)
 
@@ -306,6 +308,7 @@ Append short bullets like:
 - 2026-08-02 06:25 UTC | Done: Rung 8 prep — `src/extractors/terraform.ts` resource/module blocks → Deploy services; path-role `.tf` + README Infrastructure; mini-terraform Notes · S3 bucket / Items · Dynamodb table / API · Lambda / Network; roster `terraform`; keep Dockerfile-only Deploy quiet unless Terraform units exist | Next: pin real Terraform OSS repo + golden-lock | Learned: treat Terraform units as kind:service like Compose so nest/collapse/flowOrder reuse Deploy; strip provider prefixes for North-star labels (`aws_s3_bucket.notes` → Notes · S3 bucket); ignore `.terraform/` in discovery before any real-repo pin
 - 2026-08-02 06:30 UTC | Done: Rung 8 pin+golden — `terraform-aws-modules/terraform-aws-vpc` @ `3ffbd46` gitignored; 94 resources + example modules nested/collapsed under Deploy; VPC/Subnet/NAT/IGW/route/EIP/flow-log floors + flowOrder Deploy-only; golden-lock | Next: Terraform label polish (`this`/NAT/EIP/VPC acronyms + quiet example module noise) then lock | Learned: module repos already map Deploy-led without README Infrastructure; `resource "aws_vpc" "this"` yields `This · VPC` chrome and examples/`vpc_issue_*` modules crowd Details — polish must drop singleton `this` names and tame example module blocks before calling the rung locked
 - 2026-08-02 06:31 UTC | Done: health-reconcile Rung 8 polish (root `main.tf` verify was matching `examples/*/main.tf`); lock Rung 8; standing inspector chrome pills; Rung 9 prep — `src/extractors/kubernetes.ts` Deployment/Service/Ingress (+ peers), mini-k8s Workloads smoke (API/Web/Ingress nested/collapsed), roster `kubernetes` | Next: pin real Kubernetes OSS repo + golden-lock | Learned: verify `.find(/main\.tf$/)` on terraform-aws-vpc hits example chrome first — pin assertions to exact `file === "main.tf"`; K8s multi-doc `---` YAML needs offset-preserving splits so evidence lines stay honest; README `Workloads` heading refines Deploy like Containers/Infrastructure
+- 2026-08-02 06:45 UTC | Done: Rung 9 pin+golden — `GoogleCloudPlatform/microservices-demo` @ `9a4616e` gitignored; path-match `kubernetes-manifests/`; skip Helm templates + `.github` CI manifests; bold-README `**Online Boutique** is…` product title; `*service` → camelCase humanize (Cart service); golden-lock 23+ units nested/collapsed under Deploy | Next: Service→Deployment needs + quiet thin HTTP API then lock | Learned: `(^|/)kubernetes(/|$)` misses hyphenated `kubernetes-manifests/`; Helm `{{ .Values }}` names and `.github/release-cluster` Ingress are chrome beside the product manifests; README without H1 still brands via leading bold + “is”; pre-spacing before humanizeIdentifierLabel skips title case because of the whitespace early-return
 
 ---
 

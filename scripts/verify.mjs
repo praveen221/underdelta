@@ -12,6 +12,7 @@ import {
   FASTAPI_REALWORLD,
   GRAPHQL_CLIENT_EXAMPLE_SERVER,
   HACKATHON_STARTER,
+  MICROSERVICES_DEMO,
   NEXTJS_SAAS_STARTER,
   REALWORLD_EXPRESS,
   SWAGGER_PETSTORE,
@@ -6897,6 +6898,329 @@ if (k8sCommerceNoise) {
   );
 } else {
   pass("mini-k8s has no Checkout/orders commerce collaboration noise");
+}
+
+// ---------------------------------------------------------------------------
+// Capability ladder rung 9: real Kubernetes repo (pinned SHA, gitignored).
+// Golden-lock GoogleCloudPlatform/microservices-demo workloads under Deploy.
+// ---------------------------------------------------------------------------
+let k8sRealRoot;
+try {
+  k8sRealRoot = await ensureRealRepo(MICROSERVICES_DEMO);
+  pass(
+    `kubernetes real repo ${MICROSERVICES_DEMO.name} ready @ ${MICROSERVICES_DEMO.sha.slice(0, 12)}`,
+  );
+} catch (error) {
+  fail(
+    `could not ensure kubernetes real repo ${MICROSERVICES_DEMO.name}@${MICROSERVICES_DEMO.sha}: ${error instanceof Error ? error.message : error}`,
+  );
+}
+
+if (k8sRealRoot) {
+  let k8sRealGraph;
+  try {
+    k8sRealGraph = await compileRepository(k8sRealRoot);
+    pass(
+      `kubernetes-real-repo scan completed: ${k8sRealGraph.nodes.length} nodes, ${k8sRealGraph.edges.length} edges`,
+    );
+  } catch (error) {
+    fail(
+      `kubernetes-real-repo scan crashed on ${MICROSERVICES_DEMO.name}: ${error instanceof Error ? error.message : error}`,
+    );
+  }
+
+  if (k8sRealGraph) {
+    const k8sRealServices = k8sRealGraph.nodes.filter(
+      (node) => node.kind === "service" && node.metadata?.kubernetes === true,
+    );
+    const k8sRealResources = k8sRealServices.filter(
+      (node) => node.metadata?.kubernetesResource === true,
+    );
+    const k8sRealSemantic = k8sRealGraph.nodes.filter(
+      (node) => node.metadata?.projection === "semantic",
+    );
+    const k8sRealProduct = k8sRealGraph.nodes.find(
+      (node) => node.kind === "product",
+    );
+    const k8sRealByKey = new Map(
+      k8sRealSemantic
+        .filter((node) => typeof node.metadata?.systemKey === "string")
+        .map((node) => [node.metadata.systemKey, node]),
+    );
+    const k8sRealDeploy = k8sRealByKey.get("deploy");
+    const k8sRealAddresses = new Set(
+      k8sRealResources.map((node) => node.metadata?.address),
+    );
+    const k8sRealLabels = new Set(
+      k8sRealServices.map((node) => node.label),
+    );
+
+    const k8sRealSummary = {
+      pin: `${MICROSERVICES_DEMO.name}@${MICROSERVICES_DEMO.sha}`,
+      product: k8sRealProduct?.label ?? null,
+      nodes: k8sRealGraph.nodes.length,
+      edges: k8sRealGraph.edges.length,
+      resources: k8sRealResources.length,
+      semantic: k8sRealSemantic.map((node) => node.label),
+    };
+    console.log(
+      `Kubernetes-real-repo scan summary: ${JSON.stringify(k8sRealSummary)}`,
+    );
+
+    if (!k8sRealProduct || k8sRealProduct.label !== "Online Boutique") {
+      fail(
+        `kubernetes-real-repo product label expected 'Online Boutique', found '${k8sRealProduct?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass(`kubernetes-real-repo product label: ${k8sRealProduct.label}`);
+    }
+
+    if (!k8sRealDeploy || k8sRealDeploy.label !== "Deploy") {
+      fail(
+        `kubernetes-real-repo deploy system label expected 'Deploy', found '${k8sRealDeploy?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass("kubernetes-real-repo deploy system labeled 'Deploy'");
+    }
+
+    if (!k8sRealGraph.extractors.some((item) => item.id === "kubernetes")) {
+      fail("kubernetes-real-repo graph.extractors missing kubernetes");
+    } else {
+      pass("kubernetes-real-repo registers kubernetes extractor");
+    }
+
+    if (k8sRealResources.length < 20) {
+      fail(
+        `kubernetes-real-repo expected ≥20 kubernetes resources, found ${k8sRealResources.length}`,
+      );
+    } else {
+      pass(
+        `kubernetes-real-repo ${k8sRealResources.length} kubernetes resources`,
+      );
+    }
+
+    for (const expected of [
+      "Deployment/frontend",
+      "Service/frontend",
+      "Deployment/cartservice",
+      "Service/cartservice",
+      "Deployment/checkoutservice",
+      "Service/checkoutservice",
+      "Deployment/productcatalogservice",
+      "Service/productcatalogservice",
+      "Deployment/recommendationservice",
+      "Service/recommendationservice",
+      "Deployment/paymentservice",
+      "Service/paymentservice",
+      "Deployment/shippingservice",
+      "Service/shippingservice",
+      "Deployment/emailservice",
+      "Service/emailservice",
+      "Deployment/currencyservice",
+      "Service/currencyservice",
+      "Deployment/adservice",
+      "Service/adservice",
+      "Deployment/redis-cart",
+      "Service/redis-cart",
+      "Deployment/loadgenerator",
+    ]) {
+      if (!k8sRealAddresses.has(expected)) {
+        fail(
+          `kubernetes-real-repo missing resource ${expected}; found ${[...k8sRealAddresses].sort().slice(0, 20).join(", ") || "(none)"}…`,
+        );
+      } else {
+        pass(`kubernetes-real-repo has resource ${expected}`);
+      }
+    }
+
+    for (const expected of [
+      "Frontend · Deployment",
+      "Frontend · Service",
+      "Cart service · Deployment",
+      "Cart service · Service",
+      "Checkout service · Deployment",
+      "Productcatalog service · Deployment",
+      "Recommendation service · Deployment",
+      "Payment service · Deployment",
+      "Shipping service · Deployment",
+      "Email service · Deployment",
+      "Currency service · Deployment",
+      "Ad service · Deployment",
+      "Redis cart · Deployment",
+      "Loadgenerator · Deployment",
+    ]) {
+      if (!k8sRealLabels.has(expected)) {
+        fail(
+          `kubernetes-real-repo missing humanized service label ${expected}; found ${[...k8sRealLabels].sort().slice(0, 25).join(" | ") || "(none)"}…`,
+        );
+      } else {
+        pass(`kubernetes-real-repo service label ${expected}`);
+      }
+    }
+
+    const k8sHelmChrome = [...k8sRealLabels].filter((label) =>
+      /\{\{/.test(label),
+    );
+    if (k8sHelmChrome.length > 0) {
+      fail(
+        `kubernetes-real-repo should skip Helm template placeholder names; found ${k8sHelmChrome
+          .slice(0, 8)
+          .join(", ")}`,
+      );
+    } else {
+      pass("kubernetes-real-repo skips Helm {{ .Values }} chrome");
+    }
+
+    const k8sGithubChrome = k8sRealResources.filter((node) =>
+      /\.github\//i.test(
+        String(node.evidence?.[0]?.file ?? "").replaceAll("\\", "/"),
+      ),
+    );
+    if (k8sGithubChrome.length > 0) {
+      fail(
+        `kubernetes-real-repo should skip .github CI manifests; found ${k8sGithubChrome
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass("kubernetes-real-repo skips .github CI kubernetes manifests");
+    }
+
+    const nestedK8sReal = k8sRealServices.filter(
+      (node) => node.parentId === k8sRealDeploy?.id,
+    );
+    if (nestedK8sReal.length < 20) {
+      fail(
+        `kubernetes-real-repo expected ≥20 kubernetes units nested under Deploy, found ${nestedK8sReal.length}`,
+      );
+    } else {
+      pass(
+        `kubernetes-real-repo ${nestedK8sReal.length} units nested under Deploy`,
+      );
+    }
+
+    const k8sRealOverviewLeaves = nestedK8sReal.filter(
+      (node) => node.metadata?.collapsedInOverview !== true,
+    );
+    if (k8sRealOverviewLeaves.length > 0) {
+      fail(
+        `kubernetes-real-repo overview should collapse Deployments/Services under Deploy, still visible: ${k8sRealOverviewLeaves
+          .map((node) => node.label)
+          .slice(0, 12)
+          .join(", ")}`,
+      );
+    } else {
+      pass(
+        "kubernetes-real-repo services collapsed on overview (Deploy tells the story)",
+      );
+    }
+
+    if (k8sRealDeploy.metadata?.collapsedInOverview === true) {
+      fail(
+        "kubernetes-real-repo Deploy with Kubernetes units should stay visible on overview",
+      );
+    } else {
+      pass("kubernetes-real-repo Deploy stays visible on overview");
+    }
+
+    const k8sRealFlow = k8sRealSemantic
+      .filter((node) => typeof node.metadata?.flowOrder === "number")
+      .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+    if (
+      k8sRealFlow.length < 1 ||
+      !k8sRealFlow.some((node) => node.metadata?.systemKey === "deploy")
+    ) {
+      fail(
+        `kubernetes-real-repo flowOrder expected to include Deploy, got ${k8sRealFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+      );
+    } else {
+      pass(
+        `kubernetes-real-repo flowOrder: ${k8sRealFlow.map((node) => node.label).join(" → ")}`,
+      );
+    }
+
+    const k8sManifestModules = k8sRealGraph.nodes.filter(
+      (node) =>
+        node.kind === "module" &&
+        node.metadata?.kubernetesModule === true &&
+        /(?:^|\/)kubernetes-manifests\//i.test(
+          String(node.metadata?.file ?? node.label).replaceAll("\\", "/"),
+        ),
+    );
+    const k8sFrontendModule = k8sManifestModules.find((node) =>
+      /frontend\.ya?ml$/i.test(
+        String(node.metadata?.file ?? node.label).replaceAll("\\", "/"),
+      ),
+    );
+    if (
+      !k8sFrontendModule ||
+      k8sFrontendModule.parentId !== k8sRealDeploy?.id ||
+      k8sFrontendModule.metadata?.collapsedInOverview !== true
+    ) {
+      fail(
+        `kubernetes-real-repo kubernetes-manifests/frontend.yaml should nest+collapse under Deploy, found parent=${k8sFrontendModule?.parentId ?? "(missing)"} collapsed=${k8sFrontendModule?.metadata?.collapsedInOverview}`,
+      );
+    } else {
+      pass(
+        "kubernetes-real-repo kubernetes-manifests/frontend.yaml nested+collapsed under Deploy",
+      );
+    }
+
+    if (k8sManifestModules.length < 10) {
+      fail(
+        `kubernetes-real-repo expected ≥10 kubernetes-manifests modules, found ${k8sManifestModules.length}`,
+      );
+    } else {
+      pass(
+        `kubernetes-real-repo ${k8sManifestModules.length} kubernetes-manifests modules`,
+      );
+    }
+
+    const k8sRealEvidenceGaps = k8sRealResources.filter((node) => {
+      const detail = node.evidence?.[0]?.detail ?? "";
+      return !/^kind:/.test(detail);
+    });
+    if (k8sRealEvidenceGaps.length > 0) {
+      fail(
+        `kubernetes-real-repo evidence should cite kind: ${k8sRealEvidenceGaps
+          .map((node) => node.label)
+          .slice(0, 8)
+          .join(", ")}`,
+      );
+    } else {
+      pass("kubernetes-real-repo evidence details cite kind:");
+    }
+
+    const k8sRealKmEvidence = k8sRealResources.filter((node) =>
+      /(?:^|\/)kubernetes-manifests\//i.test(
+        String(node.evidence?.[0]?.file ?? "").replaceAll("\\", "/"),
+      ),
+    );
+    if (k8sRealKmEvidence.length < 20) {
+      fail(
+        `kubernetes-real-repo expected ≥20 resources from kubernetes-manifests/, found ${k8sRealKmEvidence.length}`,
+      );
+    } else {
+      pass(
+        `kubernetes-real-repo ${k8sRealKmEvidence.length} resources evidenced from kubernetes-manifests/`,
+      );
+    }
+
+    const k8sRealCommerceNoise = k8sRealGraph.edges.some((edge) =>
+      /checkout|orders?/i.test(
+        `${edge.label ?? ""} ${JSON.stringify(edge.metadata ?? {})}`,
+      ),
+    );
+    if (k8sRealCommerceNoise) {
+      fail(
+        "kubernetes-real-repo should not inherit Checkout/orders commerce collaboration copy",
+      );
+    } else {
+      pass(
+        "kubernetes-real-repo has no Checkout/orders commerce collaboration noise",
+      );
+    }
+  }
 }
 
 if (process.exitCode) {
