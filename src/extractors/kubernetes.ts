@@ -21,6 +21,13 @@ const PRODUCT_KINDS = new Set([
   "Job",
 ]);
 
+/** Workloads that own pod selectors Services can target. */
+const SELECTABLE_WORKLOAD_KINDS = new Set([
+  "Deployment",
+  "StatefulSet",
+  "DaemonSet",
+]);
+
 function evidence(
   file: string,
   source: string,
@@ -70,6 +77,8 @@ export function isKubernetesManifestPath(file: string): boolean {
     /(^|\/)(k8s|kubernetes)(-?manifests?)?(\/|$)/.test(normalized) ||
     /(^|\/)manifests?(\/|$)/.test(normalized) ||
     /(^|\/)deploy(?:ment)?s?\//.test(normalized) ||
+    // Kustomize overlay trees often ship optional workload components.
+    /(^|\/)kustomize\//.test(normalized) ||
     /\.(?:deployment|service|ingress|statefulset|daemonset|cronjob)\.ya?ml$/.test(
       normalized,
     ) ||
@@ -88,6 +97,100 @@ export interface ParsedKubernetesResource {
   name: string;
   offset: number;
   namespace?: string;
+  /** Service `spec.selector` flat labels (app: api). */
+  selector?: Record<string, string>;
+  /** Deployment/StatefulSet/DaemonSet `spec.selector.matchLabels`. */
+  matchLabels?: Record<string, string>;
+  /** Ingress rule hosts (notes.example.com). */
+  hosts?: string[];
+  /** Ingress backend Service names (rules + defaultBackend). */
+  backendServices?: string[];
+}
+
+/**
+ * Parse indented `key: value` pairs under a YAML mapping block.
+ * Stops when indentation returns to or above the block key.
+ */
+function parseIndentedMap(
+  text: string,
+  blockKeyRe: RegExp,
+): Record<string, string> | undefined {
+  const match = blockKeyRe.exec(text);
+  if (!match || match.index === undefined) return undefined;
+  const afterKey = text.slice(match.index + match[0].length);
+  const lines = afterKey.split(/\r?\n/);
+  // First non-empty line sets the child indent.
+  let childIndent: number | null = null;
+  const out: Record<string, string> = {};
+  for (const line of lines) {
+    if (!line.trim() || /^\s*#/.test(line)) continue;
+    const indent = line.match(/^(\s*)/)?.[1]?.length ?? 0;
+    if (childIndent === null) {
+      // Still on the same line as the key (inline map) — rare; skip.
+      if (indent === 0 && match[0].includes("\n") === false && lines[0] === line) {
+        // Fall through — treat as block content if indented below.
+      }
+      if (indent === 0) break;
+      childIndent = indent;
+    }
+    if (indent < childIndent) break;
+    if (indent > childIndent) continue; // nested deeper than flat labels
+    const kv = /^\s*([^:#\s][^:]*)\s*:\s*["']?([^"'#\n]*?)["']?\s*$/.exec(line);
+    if (!kv) continue;
+    const key = kv[1]?.trim();
+    const value = kv[2]?.trim();
+    if (!key || value === undefined || value === "") continue;
+    // Skip nested map markers (`matchLabels:` as a value-less key was the block).
+    out[key] = value;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** Collect Ingress `host:` lines and backend `service.name` references. */
+function parseIngressWiring(text: string): {
+  hosts?: string[];
+  backendServices?: string[];
+} {
+  const hosts: string[] = [];
+  // Rules often use list items: `- host: notes.example.com`
+  for (const match of text.matchAll(
+    /^\s*-?\s*host\s*:\s*["']?([^"'#\n]+?)["']?\s*$/gm,
+  )) {
+    const host = match[1]?.trim();
+    if (host && !/\{\{/.test(host)) hosts.push(host);
+  }
+
+  const backendServices: string[] = [];
+  // Typical Ingress backend:
+  //   backend:
+  //     service:
+  //       name: api
+  // Also defaultBackend with the same shape.
+  for (const match of text.matchAll(
+    /\b(?:defaultB|b)ackend\s*:\s*\n([\s\S]{0,400}?)(?=\n\S|\n---|\n\s{0,2}\w+\s*:|$)/g,
+  )) {
+    const window = match[1] ?? "";
+    const nameMatch =
+      /^\s*name\s*:\s*["']?([^"'#\n]+?)["']?\s*$/m.exec(window) ||
+      /service\s*:\s*\n\s*name\s*:\s*["']?([^"'#\n]+?)["']?/m.exec(window);
+    const name = nameMatch?.[1]?.trim();
+    if (name && !/\{\{/.test(name)) backendServices.push(name);
+  }
+  // Path backends often nest deeper than the coarse window — also scan
+  // `service:\n  name:` pairs under the Ingress doc.
+  for (const match of text.matchAll(
+    /^\s*service\s*:\s*\n\s+name\s*:\s*["']?([^"'#\n]+?)["']?\s*$/gm,
+  )) {
+    const name = match[1]?.trim();
+    if (name && !/\{\{/.test(name)) backendServices.push(name);
+  }
+
+  return {
+    ...(hosts.length ? { hosts: [...new Set(hosts)] } : {}),
+    ...(backendServices.length
+      ? { backendServices: [...new Set(backendServices)] }
+      : {}),
+  };
 }
 
 /**
@@ -133,16 +236,50 @@ export function parseKubernetesResources(
 
     // Offset of the kind line inside the document for evidence.
     const kindLine = kindMatch.index ?? 0;
-    resources.push({
+    const resource: ParsedKubernetesResource = {
       apiVersion: apiMatch[1] ?? "",
       kind,
       name,
       offset: part.offset + kindLine,
       ...(nsMatch?.[1]?.trim() ? { namespace: nsMatch[1].trim() } : {}),
-    });
+    };
+
+    if (kind === "Service") {
+      // Service selector is a flat map (not matchLabels).
+      const selector = parseIndentedMap(
+        part.text,
+        /^\s*selector\s*:\s*(?:\{\s*\})?\s*$/m,
+      );
+      if (selector) resource.selector = selector;
+    }
+
+    if (SELECTABLE_WORKLOAD_KINDS.has(kind)) {
+      const matchLabels = parseIndentedMap(
+        part.text,
+        /^\s*matchLabels\s*:\s*(?:\{\s*\})?\s*$/m,
+      );
+      if (matchLabels) resource.matchLabels = matchLabels;
+    }
+
+    if (kind === "Ingress") {
+      const wiring = parseIngressWiring(part.text);
+      if (wiring.hosts) resource.hosts = wiring.hosts;
+      if (wiring.backendServices) resource.backendServices = wiring.backendServices;
+    }
+
+    resources.push(resource);
   }
 
   return resources;
+}
+
+function labelsMatch(
+  selector: Record<string, string>,
+  target: Record<string, string>,
+): boolean {
+  const keys = Object.keys(selector);
+  if (keys.length === 0) return false;
+  return keys.every((key) => target[key] === selector[key]);
 }
 
 function isNonKubernetesYamlPath(file: string): boolean {
@@ -155,7 +292,10 @@ function isNonKubernetesYamlPath(file: string): boolean {
     base === "compose.yaml" ||
     /^docker-compose\.[^/]+\.ya?ml$/.test(base) ||
     /(^|\/)(openapi|swagger)\.(ya?ml)$/.test(normalized) ||
-    /(?:^|\/)openapi\//.test(normalized)
+    /(?:^|\/)openapi\//.test(normalized) ||
+    // Kustomization index files are not workloads.
+    base === "kustomization.yaml" ||
+    base === "kustomization.yml"
   );
 }
 
@@ -171,6 +311,10 @@ export const kubernetesExtractor: ArchitectureExtractor = {
     const nodes: ArchitectureNode[] = [];
     const edges: ArchitectureEdge[] = [];
     const seen = new Set<string>();
+    const resourcesById = new Map<
+      string,
+      ParsedKubernetesResource & { id: string; file: string }
+    >();
 
     for (const absolute of context.files) {
       const file = relativeFile(context.root, absolute);
@@ -221,6 +365,9 @@ export const kubernetesExtractor: ArchitectureExtractor = {
             kubernetes: true,
             kubernetesModule: true,
             file,
+            ...(/(^|\/)kustomize\//i.test(file)
+              ? { kustomizeChrome: true }
+              : {}),
           },
           evidence: [moduleEvidence],
         });
@@ -233,12 +380,18 @@ export const kubernetesExtractor: ArchitectureExtractor = {
         const resourceId = stableId("service", "kubernetes", address);
         if (seen.has(resourceId)) continue;
         seen.add(resourceId);
-        const detail = `kind:${resource.kind} name:${resource.name}`;
+        const detailParts = [`kind:${resource.kind} name:${resource.name}`];
+        if (resource.hosts?.length) {
+          detailParts.push(`hosts:${resource.hosts.join(",")}`);
+        }
+        if (resource.backendServices?.length) {
+          detailParts.push(`backends:${resource.backendServices.join(",")}`);
+        }
         const resourceEvidence = evidence(
           file,
           source,
           resource.offset,
-          detail,
+          detailParts.join(" "),
         );
         nodes.push({
           id: resourceId,
@@ -255,11 +408,108 @@ export const kubernetesExtractor: ArchitectureExtractor = {
             resourceName: resource.name,
             address,
             ...(resource.namespace ? { namespace: resource.namespace } : {}),
+            ...(resource.selector ? { selector: resource.selector } : {}),
+            ...(resource.matchLabels
+              ? { matchLabels: resource.matchLabels }
+              : {}),
+            ...(resource.hosts?.length ? { hosts: resource.hosts } : {}),
+            ...(resource.backendServices?.length
+              ? { backendServices: resource.backendServices }
+              : {}),
+            ...(/(^|\/)kustomize\//i.test(file)
+              ? { kustomizeChrome: true }
+              : {}),
           },
           evidence: [resourceEvidence],
         });
         edges.push(
           edgeFrom("exposes", moduleId, resourceId, resourceEvidence),
+        );
+        resourcesById.set(resourceId, { ...resource, id: resourceId, file });
+      }
+    }
+
+    // Service selector → Deployment/StatefulSet/DaemonSet matchLabels (needs).
+    const workloads = [...resourcesById.values()].filter((resource) =>
+      SELECTABLE_WORKLOAD_KINDS.has(resource.kind),
+    );
+    const services = [...resourcesById.values()].filter(
+      (resource) => resource.kind === "Service",
+    );
+    for (const service of services) {
+      if (!service.selector) continue;
+      for (const workload of workloads) {
+        if (!workload.matchLabels) continue;
+        // Prefer same-namespace matches when both declare one.
+        if (
+          service.namespace &&
+          workload.namespace &&
+          service.namespace !== workload.namespace
+        ) {
+          continue;
+        }
+        if (!labelsMatch(service.selector, workload.matchLabels)) continue;
+        const depEvidence = evidence(
+          service.file,
+          "",
+          0,
+          `needs ${workload.kind}/${workload.name}`,
+        );
+        // Reuse first real evidence line when available.
+        const realEvidence = nodes.find((node) => node.id === service.id)
+          ?.evidence[0];
+        edges.push(
+          edgeFrom(
+            "depends-on",
+            service.id,
+            workload.id,
+            {
+              ...(realEvidence ?? depEvidence),
+              detail: `needs ${workload.kind}/${workload.name}`,
+            },
+            "needs",
+          ),
+        );
+      }
+    }
+
+    // Ingress backend → Service (needs).
+    const ingresses = [...resourcesById.values()].filter(
+      (resource) => resource.kind === "Ingress",
+    );
+    for (const ingress of ingresses) {
+      for (const backendName of ingress.backendServices ?? []) {
+        const target = services.find((service) => {
+          if (service.name !== backendName) return false;
+          if (
+            ingress.namespace &&
+            service.namespace &&
+            ingress.namespace !== service.namespace
+          ) {
+            return false;
+          }
+          return true;
+        });
+        if (!target) continue;
+        const realEvidence = nodes.find((node) => node.id === ingress.id)
+          ?.evidence[0];
+        edges.push(
+          edgeFrom(
+            "depends-on",
+            ingress.id,
+            target.id,
+            {
+              ...(realEvidence ??
+                evidence(
+                  ingress.file,
+                  "",
+                  0,
+                  `needs Service/${backendName}`,
+                )),
+              detail: `needs Service/${backendName}`,
+            },
+            "needs",
+          ),
         );
       }
     }

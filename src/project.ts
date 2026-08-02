@@ -772,8 +772,9 @@ function quietNonCompilerProductChrome(
   }
 
   // Compose-led apps (example-voting-app) often pick up a single root GET /
-  // from a result UI server. That thin HTTP API steals the cold-read from
-  // Deploy — collapse it so containers lead the overview.
+  // from a result UI server. Kubernetes-led apps (Online Boutique) invent a
+  // path-role HTTP API from bare `server.js` modules with no routes. Either
+  // thin-or-empty API steals the cold-read from Deploy — collapse it.
   const hasComposeServices = Boolean(
     deploy &&
       [...nodes.values()].some(
@@ -782,14 +783,22 @@ function quietNonCompilerProductChrome(
           node.metadata?.dockerService === true,
       ),
   );
-  if (api && hasComposeServices) {
+  const hasKubernetesUnits = Boolean(
+    deploy &&
+      [...nodes.values()].some(
+        (node) =>
+          node.parentId === deploy.id &&
+          node.metadata?.kubernetesResource === true,
+      ),
+  );
+  if (api && (hasComposeServices || hasKubernetesUnits)) {
     const apiRoutes = [...nodes.values()].filter(
       (node) => node.parentId === api.id && node.kind === "route",
     );
-    const thinApi =
-      apiRoutes.length > 0 &&
+    const thinOrEmptyApi =
+      apiRoutes.length === 0 ||
       apiRoutes.every((route) => isThinHttpRoutePath(route.metadata?.path));
-    if (thinApi) {
+    if (thinOrEmptyApi) {
       api.metadata = {
         ...api.metadata,
         collapsedInOverview: true,
@@ -1391,17 +1400,67 @@ export function humanizeTerraformLabel(
 /**
  * Kubernetes resources → North-star Deploy labels.
  * `Deployment/api` → `API · Deployment`; `Ingress/notes` → `Notes · Ingress`.
+ * Ingress hosts become canvas vocabulary like Compose ports
+ * (`Notes · notes.example.com`) so founders read where traffic lands.
  * Compound microservice names (`cartservice`) become camelCase before humanize
  * so `adservice` → `Ad service` (space early-return must not skip title case).
  */
-export function humanizeKubernetesLabel(kind: string, name: string): string {
+export function humanizeKubernetesLabel(
+  kind: string,
+  name: string,
+  hosts?: string[],
+): string {
   const splitService = name.replace(/([a-z0-9])service$/i, "$1Service");
-  return `${humanizeIdentifierLabel(splitService)} · ${kind}`;
+  const base = humanizeIdentifierLabel(splitService);
+  if (kind === "Ingress") {
+    const host = hosts?.find((item) => typeof item === "string" && item.trim());
+    if (host) return `${base} · ${host.trim()}`;
+  }
+  return `${base} · ${kind}`;
 }
 
 /** Example/wrapper TF paths are sample chrome, not the module's product surface. */
 function isTerraformExampleChromePath(file: string): boolean {
   return /(^|\/)(examples|wrappers)(\/|$)/i.test(normalizePath(file));
+}
+
+/**
+ * Kustomize overlay/component trees (Online Boutique `kustomize/components/`)
+ * are optional deploy patches beside the primary kubernetes-manifests story.
+ */
+function isKustomizeChromePath(file: string): boolean {
+  return /(^|\/)kustomize\//i.test(normalizePath(file));
+}
+
+/**
+ * Hide kustomize/ overlay workloads from the default browser (Details still
+ * searchable) so Deploy reads as the primary kubernetes-manifests product.
+ */
+function quietKustomizeChrome(nodes: Map<string, ArchitectureNode>): void {
+  for (const node of nodes.values()) {
+    if (node.metadata?.kubernetes !== true) continue;
+    const file = normalizePath(
+      String(
+        node.evidence?.[0]?.file ??
+          node.metadata?.file ??
+          node.label ??
+          "",
+      ),
+    );
+    if (
+      node.metadata?.kustomizeChrome !== true &&
+      !isKustomizeChromePath(file)
+    ) {
+      continue;
+    }
+    node.metadata = {
+      ...node.metadata,
+      kustomizeChrome: true,
+      exampleChrome: true,
+      collapsedInOverview: true,
+    };
+    nodes.set(node.id, node);
+  }
 }
 
 /** Regression-fixture / GitHub-issue sample modules (`vpc_issue_44`, …). */
@@ -2329,10 +2388,16 @@ export function projectSemanticArchitecture(
       typeof node.metadata?.k8sKind === "string" &&
       typeof node.metadata?.resourceName === "string"
     ) {
-      // Deployment/api → API · Deployment
+      // Deployment/api → API · Deployment; Ingress/notes → Notes · host
+      const hosts = Array.isArray(node.metadata.hosts)
+        ? node.metadata.hosts.filter(
+            (host): host is string => typeof host === "string" && Boolean(host),
+          )
+        : undefined;
       nextLabel = humanizeKubernetesLabel(
         node.metadata.k8sKind,
         node.metadata.resourceName,
+        hosts,
       );
     }
 
@@ -3399,8 +3464,8 @@ export function projectSemanticArchitecture(
   }
 
   // Quiet empty CLI / Schema-contract / table-less Data chrome, Dockerfile-only
-  // Deploy, and thin HTTP API beside Compose Deploy so product overviews stay
-  // story-led (API for GraphQL/OpenAPI; Deploy for voting-app containers).
+  // Deploy, and thin/empty HTTP API beside Compose/Kubernetes Deploy so product
+  // overviews stay story-led (API for GraphQL/OpenAPI; Deploy for containers/k8s).
   quietNonCompilerProductChrome(
     systems,
     nodes,
@@ -3412,6 +3477,10 @@ export function projectSemanticArchitecture(
   // Terraform module repos ship examples/ + wrappers/ + vpc_issue_* samples that
   // restate the product under Deploy Details — hide like join-table chrome.
   quietTerraformExampleChrome(nodes);
+
+  // Kustomize overlay components (otel / shopping-assistant) sit beside the
+  // primary kubernetes-manifests story — quiet like Terraform examples.
+  quietKustomizeChrome(nodes);
 
   assignFlowOrder(systems, preferredFlows);
 

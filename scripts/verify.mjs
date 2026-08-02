@@ -6785,7 +6785,7 @@ for (const expected of [
   "API · Deployment",
   "API · Service",
   "Web · Deployment",
-  "Notes · Ingress",
+  "Notes · notes.example.com",
 ]) {
   if (!miniK8sServiceLabels.includes(expected)) {
     fail(
@@ -6793,6 +6793,47 @@ for (const expected of [
     );
   } else {
     pass(`mini-k8s service label ${expected}`);
+  }
+}
+
+const miniK8sIngress = miniK8sServices.find(
+  (node) => node.metadata?.k8sKind === "Ingress",
+);
+if (
+  !Array.isArray(miniK8sIngress?.metadata?.hosts) ||
+  !miniK8sIngress.metadata.hosts.includes("notes.example.com")
+) {
+  fail(
+    `mini-k8s Ingress hosts expected ["notes.example.com"], found ${JSON.stringify(miniK8sIngress?.metadata?.hosts)}`,
+  );
+} else {
+  pass("mini-k8s Ingress hosts notes.example.com");
+}
+
+const miniK8sNeedsEdges = miniK8sGraph.edges.filter(
+  (edge) =>
+    edge.kind === "depends-on" &&
+    edge.label === "needs" &&
+    miniK8sServices.some((node) => node.id === edge.source) &&
+    miniK8sServices.some((node) => node.id === edge.target),
+);
+const miniK8sNeedsPairs = new Set(
+  miniK8sNeedsEdges.map((edge) => {
+    const from = miniK8sServices.find((node) => node.id === edge.source);
+    const to = miniK8sServices.find((node) => node.id === edge.target);
+    return `${from?.metadata?.k8sKind}/${from?.metadata?.resourceName}→${to?.metadata?.k8sKind}/${to?.metadata?.resourceName}`;
+  }),
+);
+for (const expected of [
+  "Service/api→Deployment/api",
+  "Ingress/notes→Service/api",
+]) {
+  if (!miniK8sNeedsPairs.has(expected)) {
+    fail(
+      `mini-k8s missing selector/backend needs edge ${expected}; found ${[...miniK8sNeedsPairs].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-k8s needs ${expected}`);
   }
 }
 
@@ -7127,16 +7168,86 @@ if (k8sRealRoot) {
       .filter((node) => typeof node.metadata?.flowOrder === "number")
       .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
     if (
-      k8sRealFlow.length < 1 ||
-      !k8sRealFlow.some((node) => node.metadata?.systemKey === "deploy")
+      k8sRealFlow.length !== 1 ||
+      k8sRealFlow[0]?.metadata?.systemKey !== "deploy"
     ) {
       fail(
-        `kubernetes-real-repo flowOrder expected to include Deploy, got ${k8sRealFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+        `kubernetes-real-repo flowOrder expected Deploy-only, got ${k8sRealFlow.map((node) => node.label).join(" → ") || "(none)"}`,
       );
     } else {
       pass(
         `kubernetes-real-repo flowOrder: ${k8sRealFlow.map((node) => node.label).join(" → ")}`,
       );
+    }
+
+    const k8sRealApi = k8sRealByKey.get("api");
+    if (
+      k8sRealApi &&
+      k8sRealApi.metadata?.collapsedInOverview !== true
+    ) {
+      fail(
+        `kubernetes-real-repo thin/empty HTTP API should collapse on overview beside Kubernetes Deploy, found collapsed=${k8sRealApi.metadata?.collapsedInOverview}`,
+      );
+    } else {
+      pass(
+        "kubernetes-real-repo thin HTTP API collapsed on overview (Deploy-led)",
+      );
+    }
+
+    const k8sKustomizeChrome = k8sRealResources.filter(
+      (node) =>
+        node.metadata?.kustomizeChrome === true ||
+        /(?:^|\/)kustomize\//i.test(
+          String(node.evidence?.[0]?.file ?? "").replaceAll("\\", "/"),
+        ),
+    );
+    if (k8sKustomizeChrome.length === 0) {
+      fail(
+        "kubernetes-real-repo expected kustomize/ overlay resources marked as chrome",
+      );
+    } else if (
+      k8sKustomizeChrome.some(
+        (node) => node.metadata?.collapsedInOverview !== true,
+      )
+    ) {
+      fail(
+        `kubernetes-real-repo kustomize chrome should collapse on overview; visible: ${k8sKustomizeChrome
+          .filter((node) => node.metadata?.collapsedInOverview !== true)
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass(
+        `kubernetes-real-repo ${k8sKustomizeChrome.length} kustomize overlay units quieted as chrome`,
+      );
+    }
+
+    const k8sRealNeedsEdges = k8sRealGraph.edges.filter(
+      (edge) =>
+        edge.kind === "depends-on" &&
+        edge.label === "needs" &&
+        k8sRealServices.some((node) => node.id === edge.source) &&
+        k8sRealServices.some((node) => node.id === edge.target),
+    );
+    const k8sRealNeedsPairs = new Set(
+      k8sRealNeedsEdges.map((edge) => {
+        const from = k8sRealServices.find((node) => node.id === edge.source);
+        const to = k8sRealServices.find((node) => node.id === edge.target);
+        return `${from?.metadata?.k8sKind}/${from?.metadata?.resourceName}→${to?.metadata?.k8sKind}/${to?.metadata?.resourceName}`;
+      }),
+    );
+    for (const expected of [
+      "Service/frontend→Deployment/frontend",
+      "Service/cartservice→Deployment/cartservice",
+      "Service/frontend-external→Deployment/frontend",
+    ]) {
+      if (!k8sRealNeedsPairs.has(expected)) {
+        fail(
+          `kubernetes-real-repo missing selector needs edge ${expected}; found ${[...k8sRealNeedsPairs].sort().slice(0, 12).join(", ") || "(none)"}…`,
+        );
+      } else {
+        pass(`kubernetes-real-repo needs ${expected}`);
+      }
     }
 
     const k8sManifestModules = k8sRealGraph.nodes.filter(

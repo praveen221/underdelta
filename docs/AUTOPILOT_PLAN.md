@@ -199,6 +199,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Standing polish: hide remaining compiler chrome pills (`labelSource`, `pathRoleLabel`, `collapsedInOverview`, `overviewHub`, `exampleChrome`) from inspector structuredMetaKeys dump
 - [x] Rung 9 prep: Kubernetes manifests extractor — `Deployment`/`Service`/`Ingress` (+ StatefulSet/DaemonSet/CronJob/Job) → Deploy; path-role `k8s/`/`kubernetes/`/`manifests/`; README Workloads; `verification/mini-k8s` smoke floors + Extractors roster `kubernetes`; quiet Dockerfile-only Deploy still collapses unless K8s units exist
 - [x] Rung 9: pin `GoogleCloudPlatform/microservices-demo` @ `9a4616e77f0f9cbcbecaf27d711c38890dda1404`; clone into gitignored `.underdelta-real/microservices-demo`; path-match `kubernetes-manifests/`; skip Helm/`{{` + `.github` CI chrome; bold-README product title Online Boutique; golden-lock 23+ Deployments/Services nested/collapsed under Deploy
+- [x] Rung 9 polish: Service→Deployment selector/needs edges + Ingress host labels; quiet thin/empty HTTP API + kustomize/ overlay chrome beside Deploy (Deploy-only flowOrder)
 
 ### Real-repo pins (Capability ladder)
 
@@ -218,8 +219,8 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 9 polish: Service→Deployment selector/needs edges + Ingress host labels; quiet thin HTTP API / kustomize chrome beside Deploy then lock
-- [ ] Rung 9 polish: Online Boutique label/compound-name pass (`Productcatalog`/`Shoppingassistant`/`Loadgenerator`/`Opentelemetrycollector`) for North-star canvas
+- [ ] Rung 9 polish/lock: Online Boutique label/compound-name pass (`Productcatalog`/`Shoppingassistant`/`Loadgenerator`/`Opentelemetrycollector`) for North-star canvas, then lock Rung 9
+- [ ] Rung 10 prep: Helm charts / richer Kustomize after Kubernetes lock (promote from seed)
 - [ ] GraphQL `schema { query: Root }` / non-Query root types (SWAPI-style) if a later pin needs it
 - [ ] Standing polish: Underdelta self-map cold-read pass — leftover jargon labels or weak hierarchy
 
@@ -227,7 +228,7 @@ Keep **at least 3 unchecked items** here at all times (refill from Self-renewing
 
 Not a full roadmap — a menu the agent may reorder. Pick what most improves the **Capability ladder** now.
 
-- Rung 9+: Helm charts / Kustomize after Kubernetes polish/lock
+- Rung 10+: Helm charts / richer Kustomize after Kubernetes polish/lock
 - GraphQL `extend type Query` / schema stitching if a real-repo pin needs it
 - OAS3 `servers` / `$ref` path-item resolution if a later OpenAPI pin needs it
 - Performance pass only if scanning a real repo becomes painfully slow
@@ -235,7 +236,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Rung 9 pin — Online Boutique kubernetes-manifests under Deploy). Now polish Service→Deployment needs edges / Ingress hosts and quiet thin HTTP API beside Deploy so Rung 9 can lock.
+> **Next focus:** This work is done (Rung 9 Service→Deployment needs + Ingress hosts + quiet thin API/kustomize). Now humanize Online Boutique compound names (`Product catalog` / `Load generator` / …) and lock Rung 9.
 
 ### Learning log (append every tick)
 
@@ -309,6 +310,8 @@ Append short bullets like:
 - 2026-08-02 06:30 UTC | Done: Rung 8 pin+golden — `terraform-aws-modules/terraform-aws-vpc` @ `3ffbd46` gitignored; 94 resources + example modules nested/collapsed under Deploy; VPC/Subnet/NAT/IGW/route/EIP/flow-log floors + flowOrder Deploy-only; golden-lock | Next: Terraform label polish (`this`/NAT/EIP/VPC acronyms + quiet example module noise) then lock | Learned: module repos already map Deploy-led without README Infrastructure; `resource "aws_vpc" "this"` yields `This · VPC` chrome and examples/`vpc_issue_*` modules crowd Details — polish must drop singleton `this` names and tame example module blocks before calling the rung locked
 - 2026-08-02 06:31 UTC | Done: health-reconcile Rung 8 polish (root `main.tf` verify was matching `examples/*/main.tf`); lock Rung 8; standing inspector chrome pills; Rung 9 prep — `src/extractors/kubernetes.ts` Deployment/Service/Ingress (+ peers), mini-k8s Workloads smoke (API/Web/Ingress nested/collapsed), roster `kubernetes` | Next: pin real Kubernetes OSS repo + golden-lock | Learned: verify `.find(/main\.tf$/)` on terraform-aws-vpc hits example chrome first — pin assertions to exact `file === "main.tf"`; K8s multi-doc `---` YAML needs offset-preserving splits so evidence lines stay honest; README `Workloads` heading refines Deploy like Containers/Infrastructure
 - 2026-08-02 06:45 UTC | Done: Rung 9 pin+golden — `GoogleCloudPlatform/microservices-demo` @ `9a4616e` gitignored; path-match `kubernetes-manifests/`; skip Helm templates + `.github` CI manifests; bold-README `**Online Boutique** is…` product title; `*service` → camelCase humanize (Cart service); golden-lock 23+ units nested/collapsed under Deploy | Next: Service→Deployment needs + quiet thin HTTP API then lock | Learned: `(^|/)kubernetes(/|$)` misses hyphenated `kubernetes-manifests/`; Helm `{{ .Values }}` names and `.github/release-cluster` Ingress are chrome beside the product manifests; README without H1 still brands via leading bold + “is”; pre-spacing before humanizeIdentifierLabel skips title case because of the whitespace early-return
+
+- 2026-08-02 06:39 UTC | Done: Rung 9 polish — Service selector→Deployment matchLabels + Ingress backend→Service `needs` edges; Ingress host canvas labels (`Notes · notes.example.com`); quiet empty path-role HTTP API (`server.js`) + `kustomize/` overlay chrome beside Deploy; golden-lock Deploy-only flowOrder + needs pairs | Next: Online Boutique compound-name polish then lock Rung 9 | Learned: Boutique invents HTTP API from bare `server.js` path-role modules with zero routes — thin-API quiet must treat empty route sets, not only `/`/`/health`; Ingress `host:` lives on list items (`- host:`) so the regex needs optional `-`; `kustomize/components` optional overlays should quiet like Terraform examples, not compete with kubernetes-manifests
 
 ---
 

@@ -674,9 +674,10 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       "image", "build", "ports", "hostPorts", "dependsOn", "from", "expose",
       "dockerCompose", "dockerfile", "dockerModule", "technicalLabel",
       "composeFiles",
-      // Kubernetes story — kind/name owned by labels + evidence detail.
+      // Kubernetes story — kind/name/hosts/needs owned by the Workload section.
       "kubernetes", "kubernetesResource", "kubernetesModule",
       "k8sKind", "resourceName", "apiVersion", "namespace", "address",
+      "selector", "matchLabels", "hosts", "backendServices", "kustomizeChrome",
       "exampleChrome", "labelSource", "pathRoleLabel", "collapsedInOverview",
       "overviewHub",
     ]);
@@ -766,6 +767,34 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       }).join("");
       if (!pills.length && !dependLinks) return "";
       return "<h3>Container</h3>" + pills.join("") + (dependLinks ? '<p class="table-migrations">' + dependLinks + "</p>" : "");
+    }
+
+    // Kubernetes workloads: Ingress hosts · Service→Deployment needs as product words.
+    function workloadStoryHtml(node, connections) {
+      if (node.kind !== "service" || !(node.metadata && node.metadata.kubernetes)) {
+        return "";
+      }
+      const meta = node.metadata || {};
+      const pills = [];
+      if (typeof meta.k8sKind === "string" && meta.k8sKind) {
+        pills.push('<span class="pill">Kind: ' + meta.k8sKind + "</span>");
+      }
+      const hosts = Array.isArray(meta.hosts) ? meta.hosts.filter(Boolean) : [];
+      if (hosts.length) {
+        pills.push('<span class="pill">Host: ' + hosts.join(", ") + "</span>");
+      }
+      const depends = connections.filter((edge) => {
+        if (edge.kind !== "depends-on") return false;
+        if (edge.source !== node.id) return false;
+        const other = byId.get(edge.target);
+        return !!(other && other.kind === "service" && other.metadata && other.metadata.kubernetes);
+      });
+      const dependLinks = depends.slice(0, 8).map((edge) => {
+        const other = byId.get(edge.target);
+        return '<button class="pill connection" data-id="' + (other?.id || "") + '">needs · ' + (other?.label || "workload") + "</button>";
+      }).join("");
+      if (!pills.length && !dependLinks) return "";
+      return "<h3>Workload</h3>" + pills.join("") + (dependLinks ? '<p class="table-migrations">' + dependLinks + "</p>" : "");
     }
 
     // Unified tables: explain Prisma/SQL dual identity + migration lineage.
@@ -897,17 +926,29 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const metadataEntries = Object.entries(node.metadata || {}).filter(([key]) => !structuredMetaKeys.has(key));
       const metadata = metadataEntries.map(([key, value]) => '<span class="pill">' + key + ": " + String(value) + "</span>").join("");
       const containerStory = containerStoryHtml(node, connections);
+      const workloadStory = workloadStoryHtml(node, connections);
       const tableSources = tableSourcesHtml(node, incomingEdges);
       const tableRelations = tableRelationsHtml(node, connections);
       const collabLinks = collaboration.slice(0, 16).map((edge) => collaborationItem(edge, id)).join("");
-      // Compose depends_on edges are owned by the Container section.
+      // Compose depends_on / Kubernetes selector needs are owned by Container/Workload.
       const otherLinks = importsAndCalls
         .filter((edge) => {
           if (edge.kind !== "depends-on") return true;
-          if (!(node.metadata && node.metadata.docker)) return true;
-          const otherId = edge.source === node.id ? edge.target : edge.source;
+          const otherId = edge.source === id ? edge.target : edge.source;
           const other = byId.get(otherId);
-          return !(other && other.kind === "service" && other.metadata && other.metadata.docker);
+          if (!(other && other.kind === "service")) return true;
+          if (node.metadata && node.metadata.docker && other.metadata && other.metadata.docker) {
+            return false;
+          }
+          if (
+            node.metadata &&
+            node.metadata.kubernetes &&
+            other.metadata &&
+            other.metadata.kubernetes
+          ) {
+            return false;
+          }
+          return true;
         })
         .slice(0, 20)
         .map((edge) => connectionButton(edge, id))
@@ -915,7 +956,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const collaborationHtml = collabLinks
         ? "<h3>Collaboration</h3>" + collabLinks
         : "";
-      const structuredSections = containerStory || tableSources || tableRelations || messaging || collabLinks;
+      const structuredSections = containerStory || workloadStory || tableSources || tableRelations || messaging || collabLinks;
       const otherHtml = otherLinks
         ? "<h3>" + (collabLinks ? "Imports &amp; calls" : "Connections") + "</h3>" + otherLinks
         : (structuredSections ? "" : "<h3>Connections</h3><p>None visible</p>");
@@ -939,7 +980,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         const href = "vscode://file/" + graph.project.root.replace(/\\/$/, "") + "/" + item.file + ":" + line;
         return '<div class="evidence"><a href="' + href + '">' + item.file + ":" + line + '</a><div class="certainty ' + item.certainty + '">' + item.certainty + " · " + item.extractor + "</div>" + (item.detail ? "<p>" + item.detail + "</p>" : "") + "</div>";
       }).join("");
-      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + containerStory + tableSources + tableRelations + messaging + binHtml + rosterHtml + keyFiles + collaborationHtml + otherHtml + "<h3>Source evidence</h3>" + evidence;
+      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + containerStory + workloadStory + tableSources + tableRelations + messaging + binHtml + rosterHtml + keyFiles + collaborationHtml + otherHtml + "<h3>Source evidence</h3>" + evidence;
       inspector.querySelector("h2").textContent = node.label;
       inspector.querySelectorAll(".connection").forEach((button) => {
         button.onclick = () => selectNode(button.dataset.id);
