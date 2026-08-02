@@ -11,6 +11,7 @@ import { GraphBuilder, edgeFrom, stableId } from "./graph.js";
 import { prismaExtractor } from "./extractors/prisma.js";
 import { sqlExtractor } from "./extractors/sql.js";
 import { typescriptExtractor } from "./extractors/typescript.js";
+import { projectSemanticArchitecture } from "./project.js";
 import type { ArchitectureGraph, ArchitectureNode } from "./schema.js";
 
 const execFileAsync = promisify(execFile);
@@ -96,5 +97,5 @@ export async function compileRepository(
     root,
   };
   if (gitRevision !== undefined) project.revision = gitRevision;
-  return builder.build(project);
+  return projectSemanticArchitecture(builder.build(project));
 }

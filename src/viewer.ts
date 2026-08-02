@@ -60,6 +60,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     .node .kind { color: var(--muted); font-size: 11px; margin: 5px 0 0 34px; text-transform: capitalize; }
     .node[data-kind="module"] { --kind-color: #77808d; border-radius: 4px 10px 10px; }
     .node[data-kind="module"]::before { content: ""; position: absolute; width: 48px; height: 5px; left: -1px; top: -6px; border: 1px solid var(--kind-color); border-bottom: 0; border-radius: 5px 6px 0 0; background: var(--panel); }
+    .node[data-kind="system"] { --kind-color: #7c9cff; min-height: 72px; width: 210px; border-width: 2px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kind-color) 25%, transparent); }
     .node[data-kind="service"] { --kind-color: #8b7cf6; min-height: 68px; outline: 1px solid color-mix(in srgb, var(--kind-color) 35%, transparent); outline-offset: 3px; }
     .node[data-kind="component"], .node[data-kind="page"], .node[data-kind="ui"] { --kind-color: #63a8e8; border-radius: 5px 5px 14px 14px; border-top-width: 5px; }
     .node[data-kind="hook"] { --kind-color: #5dbfc1; width: 176px; min-height: 48px; border-style: dashed; border-radius: 999px; }
@@ -106,7 +107,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       <span class="meta" id="counts"></span>
       <button id="back" hidden>Back</button>
       <button id="overview">Overview</button>
-      <button id="implementation">Implementation: off</button>
+      <button id="implementation">Details: off</button>
       <input id="search" type="search" placeholder="Find a route, table, job, component…" />
     </header>
     <div id="workspace">
@@ -133,13 +134,15 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     }
 
     const lanes = [
+      { name: "Systems", kinds: ["system", "api", "service", "pipeline"] },
       { name: "Experience", kinds: ["ui", "page", "component", "hook"] },
-      { name: "Application", kinds: ["api", "route", "service", "module"] },
-      { name: "Data & automation", kinds: ["database", "schema", "table", "collection", "cron", "job", "queue", "topic", "pipeline", "pipeline-step"] },
+      { name: "Application", kinds: ["route"] },
+      { name: "Data & automation", kinds: ["database", "schema", "table", "collection", "cron", "job", "queue", "topic", "pipeline-step"] },
       { name: "External", kinds: ["external", "config", "unknown"] },
-      { name: "Implementation", kinds: ["function", "column"] }
+      { name: "Details", kinds: ["module", "function", "column"] }
     ];
-    const hiddenByDefault = new Set(["function", "column"]);
+    // Default view prefers product systems over raw modules/functions.
+    const hiddenByDefault = new Set(["function", "column", "module"]);
     const state = { scale: 1, x: 36, y: 40, dragging: false, startX: 0, startY: 0, focus: null, selected: null, implementation: false, history: [] };
     const viewport = document.getElementById("viewport");
     const world = document.getElementById("world");
@@ -182,6 +185,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     function iconForKind(kind) {
       const paths = {
         module: '<path d="M3 6.5h6l2 2h10v10H3z"/><path d="M3 9h18"/>',
+        system: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M8 5v14M14 5v14"/>',
         service: '<rect x="4" y="4" width="16" height="6" rx="2"/><rect x="4" y="14" width="16" height="6" rx="2"/><path d="M8 7h.01M8 17h.01"/>',
         component: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 8h18M7 6h.01M10 6h.01"/>',
         page: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 8h16M8 6h.01"/>',
@@ -226,7 +230,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const visibleIds = new Set(visible.map((node) => node.id));
       const positions = new Map();
       nodesLayer.innerHTML = "";
-      const activeLanes = lanes.filter((lane) => state.implementation || lane.name !== "Implementation");
+      const activeLanes = lanes.filter((lane) => state.implementation || lane.name !== "Details");
       const laneWidth = 240;
       let maxHeight = 0;
 
@@ -343,7 +347,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     };
     document.getElementById("implementation").onclick = (event) => {
       state.implementation = !state.implementation;
-      event.currentTarget.textContent = "Implementation: " + (state.implementation ? "on" : "off");
+      event.currentTarget.textContent = "Details: " + (state.implementation ? "on" : "off");
       render();
     };
     search.oninput = render;

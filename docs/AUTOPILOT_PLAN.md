@@ -41,17 +41,21 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] `npm run verify` asserts fixture kinds/edges and that default `scan .` excludes `verification/`
 - [x] Minimal `Pipeline` / step extraction in TypeScript extractor
 - [x] Ignore `verification` and `.underdelta-verify` in product discovery
+- [x] Semantic projection layer (`src/project.ts`) collapses modules into product systems
+- [x] Underdelta self-map projects CLI → Compile → Extractors → Graph → Viewer (+ Schema)
+- [x] Viewer defaults to Systems lane; modules/functions behind Details toggle
+- [x] `npm run verify` asserts self-map semantic nodes + fixture projection
 
 ### In progress / next
 
-- [ ] Semantic projection layer for product-level nodes/lanes
-- [ ] Full self-diagram of Underdelta: CLI → extractors → compile → graph → viewer → `architecture.json`
-- [ ] Full diagram quality pass for one concrete TS/JS stack fixture (verification only)
+- [ ] Full diagram quality pass for mini-stack (richer edges, fewer noise nodes, lane clarity)
+- [ ] Stronger evidence linking from systems back to key source files in the inspector
+- [ ] Expand projection heuristics beyond filename conventions (package exports, README roles)
 - [ ] Expand verify assertions as new architectural kinds become extractable
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (verification mini-system + `npm run verify` green). Now build a semantic projection layer that collapses Underdelta’s raw modules/functions into product nodes: CLI → extractors → compile → graph → viewer → `architecture.json`, so the default self-diagram reads as a system map rather than a symbol hairball.
+> **Next focus:** This work is done (semantic projection + self-map systems). Now improve full diagram quality for the mini-stack and Underdelta overview: tighter system flows, better lane placement for projected UI/API/pipeline nodes, and richer verify checks so the default browser reads as a complete product architecture.
 
 ### Learning log (append every tick)
 
@@ -63,6 +67,7 @@ Append short bullets like:
 
 - 2026-08-02 | Done: created living autopilot plan | Next: verification mini-system | Learned: loop needs explicit non-interrupt + plan-file updates to stay coherent overnight
 - 2026-08-02 02:10 UTC | Done: verification/mini-stack + npm run verify + Pipeline extraction + ignore verification/ | Next: semantic projection for Underdelta self-map | Learned: fixture must be scanned as its own root; directory-name ignores keep product diagrams clean without deleting the suite
+- 2026-08-02 02:28 UTC | Done: semantic projection + self-map systems + Details toggle | Next: diagram quality pass | Learned: Autopilot does not self-wake between ticks—each 15m iteration needs a new agent trigger; path-role projection is enough to turn a module hairball into CLI/Compile/Extractors/Graph/Viewer
 
 ---
 

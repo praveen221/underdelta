@@ -97,6 +97,41 @@ if (leaked.length > 0) {
   pass("default product scan excludes verification/");
 }
 
+const selfGraph = productGraph;
+const selfLabels = new Set(
+  selfGraph.nodes
+    .filter((node) =>
+      ["system", "pipeline", "ui", "api"].includes(node.kind),
+    )
+    .map((node) => node.label),
+);
+for (const expected of [
+  "CLI",
+  "Compile pipeline",
+  "Extractors",
+  "Graph assembly",
+  "Schema contract",
+  "Viewer",
+]) {
+  if (!selfLabels.has(expected)) {
+    fail(`Underdelta self-map missing semantic node '${expected}'`);
+  } else {
+    pass(`self-map has '${expected}'`);
+  }
+}
+
+const fixtureSystems = fixtureGraph.nodes.filter((node) =>
+  ["system", "pipeline", "api", "ui"].includes(node.kind) &&
+  node.metadata?.projection === "semantic",
+);
+if (fixtureSystems.length < 3) {
+  fail(
+    `expected semantic projection on fixture (3+ systems), found ${fixtureSystems.length}`,
+  );
+} else {
+  pass(`fixture semantic systems: ${fixtureSystems.length}`);
+}
+
 if (process.exitCode) {
   console.error("Verification suite failed.");
   process.exit(process.exitCode);
