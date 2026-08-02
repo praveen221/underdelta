@@ -1916,14 +1916,18 @@ export function projectSemanticArchitecture(
       }
 
       if (/tag/i.test(joinKey) || /tag/i.test(join.label)) {
-        const article = fkTargets.find(
-          (item) => normalizeTableKey(item.table.label) === "article",
-        )?.table;
         const tag = fkTargets.find(
           (item) => normalizeTableKey(item.table.label) === "tag",
         )?.table;
-        if (article && tag) {
-          addProductRelation(article, tag, "tags", evidence);
+        // Article↔Tag (RealWorld) or Note↔Tag (mini-python) — any non-tag
+        // product table on the junction owns the "tags" story edge.
+        const tagged = fkTargets.find(
+          (item) =>
+            item.table.id !== tag?.id &&
+            normalizeTableKey(item.table.label) !== "tag",
+        )?.table;
+        if (tagged && tag) {
+          addProductRelation(tagged, tag, "tags", evidence);
         }
       }
     }
@@ -1991,11 +1995,12 @@ export function projectSemanticArchitecture(
         relabeled.evidence = dedupeEvidence(edge.evidence);
         edges.set(relabeled.id, relabeled);
       }
-      // Article -author→ User also implies User -authored→ Article.
+      // Article/Note -author→ User also implies User -authored→ Article/Note.
+      const sourceKey = normalizeTableKey(source.label);
       if (
         label &&
         /\bauthor\b/i.test(label) &&
-        normalizeTableKey(source.label) === "article" &&
+        (sourceKey === "article" || sourceKey === "note") &&
         normalizeTableKey(target.label) === "user"
       ) {
         const reverseEvidence: Evidence = {

@@ -168,6 +168,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 3: Alembic `op.create_table` (+ SQLAlchemy/`__tablename__` + PyPika `__table__`) → Data access tables; collapse `*_to_*`/FK-only joins; golden-lock mini-python Note/User/Tag + FastAPI RealWorld User/Article/Tag/Commentary
 - [x] Rung 3 polish: FastAPI RealWorld default browser — humanize `/api` routes (params stripped), Commentary→Comment, collapse module chrome, lift join favorites/follows/tags + FK author/on story; golden-lock
 - [x] Rung 3: Celery `@shared_task`/`@app.task` + `beat_schedule`/`add_periodic_task` → job/cron; path-role `tasks.py`/`celery*.py`; mini-python fixture schedules; commerce gate drops bare `jobs`; golden-lock API→Jobs→Data + uses:sync
+- [x] Rung 3 polish: mini-python data story parity — lift `notes_to_tags` → Note→Tag tags (any tagged entity, not Article-only); Note↔User author/authored; quiet module chrome golden-lock
 
 ### Real-repo pins (Capability ladder)
 
@@ -181,10 +182,10 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 3 polish: mini-python map parity with real FastAPI data story (Note↔Tag tags edge, quiet modules, humanized Django/FastAPI parity already partly landed)
+- [ ] Rung 3 lock: final North-star pass on FastAPI RealWorld + mini-python (Celery schedule hubs + Note↔Tag/author story already golden) — confirm North-star legibility, then mark rung locked
 - [ ] Standing polish: inspector metadata hygiene (hide projection/systemKey/flowOrder pills) on self-map + RealWorld
-- [ ] Rung 3 lock: final North-star pass on FastAPI RealWorld + mini-python (Celery schedule hubs + data story), then mark rung locked
 - [ ] Rung 4 prep: promote next README-roadmap capability (MongoDB collections / GraphQL / OpenAPI / Docker-monorepo) once Rung 3 locks
+- [ ] Standing guarantee: spot-check Underdelta self-map + mini-stack still demo-ready after Python ladder work
 
 ### Seed backlog (pull from here when In progress < 3)
 
@@ -196,7 +197,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Celery tasks/beat schedules in python extractor + mini-python Scheduled jobs golden-lock). Now polish mini-python data story parity (Note↔Tag tags edge + quiet module chrome) so Rung 3 can take its final North-star lock pass.
+> **Next focus:** This work is done (mini-python Note↔Tag tags + Note↔User author/authored + quiet modules golden-lock). Now do the final Rung 3 North-star lock pass on FastAPI RealWorld + mini-python browsers, then mark rung locked and promote Rung 4.
 
 ### Learning log (append every tick)
 
@@ -242,6 +243,7 @@ Append short bullets like:
 - 2026-08-02 04:53 UTC | Done: Alembic `op.create_table` + SQLAlchemy/`__tablename__` + PyPika `__table__` in python extractor; join collapse via `*_to_*` + FK-only; repo-root `db/` path-role; mini-python db fixture; golden-lock User/Article/Tag/Commentary + Note/User/Tag | Next: FastAPI RealWorld polish pass | Learned: nsidnev RealWorld is Alembic+PyPika not declarative ORM; join collapse must not require Prisma keys; bare `db/` fixtures miss `includes("/db/")` unless `(^|/)db/` is accepted
 - 2026-08-02 05:05 UTC | Done: FastAPI RealWorld polish — `humanizeHttpRouteLabel` (drop `/api` + params), Commentary→Comment, collapse module chrome when systems exist, lift Alembic join favorites/follows/tags + FK author/on + reverse authored; golden-lock | Next: Celery tasks/schedules | Learned: collapsing join FK edges erased the whole M2M story until lift-before-drop; `mergeRelationLabels` must split prior ` / ` joins or authored duplicates; path-param strip makes GET list/detail share a label (verify by product words, not raw paths)
 - 2026-08-02 05:00 UTC | Done: Celery `@shared_task`/`beat_schedule`/`add_periodic_task` → job+cron; path-role tasks/celery*.py; mini-python Send digest/Purge stale notes + schedule hubs; commerce gate no longer treats bare `jobs` as Checkout; neutral jobs→data uses:sync; golden-lock | Next: mini-python Note↔Tag polish then Rung 3 lock | Learned: nsidnev RealWorld has no Celery so fixture carries the rung; `requiresAny: jobs` on commerce poisoned notes apps — gate Checkout/payments on pipelines/workers only
+- 2026-08-02 05:05 UTC | Done: mini-python data story — generalize tag-join lift beyond Article (Note→Tag tags); author reverse for Note as well as Article; golden-lock tags/author/authored + quiet modules | Next: Rung 3 final North-star lock pass | Learned: `articles_to_tags` polish hardcoded Article so `notes_to_tags` collapsed silently with no product edge; tagged-entity lookup must be any non-tag FK on the junction
 
 ---
 

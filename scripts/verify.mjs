@@ -2741,6 +2741,66 @@ if (miniPythonScheduleEdges.length < 2) {
   );
 }
 
+// Data story parity with FastAPI RealWorld: Note↔Tag tags, Note↔User author/
+// authored, quiet module chrome on overview.
+const miniPythonTableById = new Map(
+  miniPythonTables.map((node) => [node.id, node]),
+);
+const miniPythonProductRelations = miniPythonGraph.edges.filter(
+  (edge) =>
+    edge.kind === "depends-on" &&
+    miniPythonTableById.has(edge.source) &&
+    miniPythonTableById.has(edge.target) &&
+    !miniPythonTableById.get(edge.source)?.metadata?.joinTable &&
+    !miniPythonTableById.get(edge.target)?.metadata?.joinTable,
+);
+const miniPythonRelationSummary = (sourceLabel, targetLabel) =>
+  miniPythonProductRelations
+    .filter(
+      (edge) =>
+        miniPythonTableById.get(edge.source)?.label === sourceLabel &&
+        miniPythonTableById.get(edge.target)?.label === targetLabel,
+    )
+    .map((edge) => String(edge.label ?? ""));
+const miniPythonNoteTag = miniPythonRelationSummary("Note", "Tag");
+const miniPythonNoteUser = miniPythonRelationSummary("Note", "User");
+const miniPythonUserNote = miniPythonRelationSummary("User", "Note");
+if (!miniPythonNoteTag.some((label) => /\btags\b/i.test(label))) {
+  fail(
+    `mini-python missing Note→Tag tags (lift notes_to_tags), got ${JSON.stringify(miniPythonNoteTag)}`,
+  );
+} else {
+  pass("mini-python Note→Tag humanized to tags");
+}
+if (!miniPythonNoteUser.some((label) => /\bauthor\b/i.test(label))) {
+  fail(
+    `mini-python missing Note→User author, got ${JSON.stringify(miniPythonNoteUser)}`,
+  );
+} else {
+  pass("mini-python Note→User relation: author");
+}
+if (!miniPythonUserNote.some((label) => /\bauthored\b/i.test(label))) {
+  fail(
+    `mini-python missing User→Note authored reverse, got ${JSON.stringify(miniPythonUserNote)}`,
+  );
+} else {
+  pass("mini-python User→Note relation: authored");
+}
+const miniPythonVisibleChrome = miniPythonGraph.nodes.filter(
+  (node) =>
+    node.kind === "module" && node.metadata?.collapsedInOverview !== true,
+);
+if (miniPythonVisibleChrome.length > 0) {
+  fail(
+    `mini-python modules should collapse on overview, still visible: ${miniPythonVisibleChrome
+      .slice(0, 8)
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-python module chrome collapsed on overview");
+}
+
 // ---------------------------------------------------------------------------
 // Capability ladder rung 3: real FastAPI repo (pinned SHA, gitignored).
 // Golden-lock include_router prefixes, empty-path mounts, product title from
