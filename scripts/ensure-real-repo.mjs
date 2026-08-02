@@ -78,6 +78,15 @@ export const EXAMPLE_VOTING_APP = {
   dirname: "example-voting-app",
 };
 
+/** @type {RealRepoPin} */
+export const TERRAFORM_AWS_VPC = {
+  name: "terraform-aws-modules/terraform-aws-vpc",
+  url: "https://github.com/terraform-aws-modules/terraform-aws-vpc.git",
+  // Pinned 2026-08-02 — tip of master at plan rung-8 Terraform real-repo kickoff.
+  sha: "3ffbd46fb1c7733e1b34d8666893280454e27436",
+  dirname: "terraform-aws-vpc",
+};
+
 export const REAL_REPO_ROOT = path.join(repoRoot, ".underdelta-real");
 
 function git(args, cwd, opts = {}) {
@@ -169,6 +178,10 @@ const PINS_BY_NAME = {
   "voting-app": EXAMPLE_VOTING_APP,
   "example-voting-app": EXAMPLE_VOTING_APP,
   docker: EXAMPLE_VOTING_APP,
+  [TERRAFORM_AWS_VPC.dirname]: TERRAFORM_AWS_VPC,
+  vpc: TERRAFORM_AWS_VPC,
+  "terraform-aws-vpc": TERRAFORM_AWS_VPC,
+  terraform: TERRAFORM_AWS_VPC,
 };
 
 const isMain =
@@ -186,6 +199,7 @@ if (isMain) {
         SWAGGER_PETSTORE,
         GRAPHQL_CLIENT_EXAMPLE_SERVER,
         EXAMPLE_VOTING_APP,
+        TERRAFORM_AWS_VPC,
       ];
   if (requested && pins.length === 0) {
     throw new Error(

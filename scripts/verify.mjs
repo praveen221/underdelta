@@ -15,6 +15,7 @@ import {
   NEXTJS_SAAS_STARTER,
   REALWORLD_EXPRESS,
   SWAGGER_PETSTORE,
+  TERRAFORM_AWS_VPC,
 } from "./ensure-real-repo.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -6326,6 +6327,307 @@ if (terraformCommerceNoise) {
   );
 } else {
   pass("mini-terraform has no Checkout/orders commerce collaboration noise");
+}
+
+// ---------------------------------------------------------------------------
+// Capability ladder rung 8: real Terraform repo (pinned SHA, gitignored).
+// Golden-lock terraform-aws-modules/terraform-aws-vpc resources under Deploy.
+// ---------------------------------------------------------------------------
+let terraformRealRoot;
+try {
+  terraformRealRoot = await ensureRealRepo(TERRAFORM_AWS_VPC);
+  pass(
+    `terraform real repo ${TERRAFORM_AWS_VPC.name} ready @ ${TERRAFORM_AWS_VPC.sha.slice(0, 12)}`,
+  );
+} catch (error) {
+  fail(
+    `could not ensure terraform real repo ${TERRAFORM_AWS_VPC.name}@${TERRAFORM_AWS_VPC.sha}: ${error instanceof Error ? error.message : error}`,
+  );
+}
+
+if (terraformRealRoot) {
+  let terraformRealGraph;
+  try {
+    terraformRealGraph = await compileRepository(terraformRealRoot);
+    pass(
+      `terraform-real-repo scan completed: ${terraformRealGraph.nodes.length} nodes, ${terraformRealGraph.edges.length} edges`,
+    );
+  } catch (error) {
+    fail(
+      `terraform-real-repo scan crashed on ${TERRAFORM_AWS_VPC.name}: ${error instanceof Error ? error.message : error}`,
+    );
+  }
+
+  if (terraformRealGraph) {
+    const terraformRealServices = terraformRealGraph.nodes.filter(
+      (node) => node.kind === "service" && node.metadata?.terraform === true,
+    );
+    const terraformRealResources = terraformRealServices.filter(
+      (node) => node.metadata?.terraformResource === true,
+    );
+    const terraformRealModuleBlocks = terraformRealServices.filter(
+      (node) => node.metadata?.terraformModuleBlock === true,
+    );
+    const terraformRealSemantic = terraformRealGraph.nodes.filter(
+      (node) => node.metadata?.projection === "semantic",
+    );
+    const terraformRealProduct = terraformRealGraph.nodes.find(
+      (node) => node.kind === "product",
+    );
+    const terraformRealByKey = new Map(
+      terraformRealSemantic
+        .filter((node) => typeof node.metadata?.systemKey === "string")
+        .map((node) => [node.metadata.systemKey, node]),
+    );
+    const terraformRealDeploy = terraformRealByKey.get("deploy");
+    const terraformRealAddresses = new Set(
+      terraformRealResources.map((node) => node.metadata?.address),
+    );
+    const terraformRealLabels = new Set(
+      terraformRealServices.map((node) => node.label),
+    );
+
+    const terraformRealSummary = {
+      pin: `${TERRAFORM_AWS_VPC.name}@${TERRAFORM_AWS_VPC.sha}`,
+      product: terraformRealProduct?.label ?? null,
+      nodes: terraformRealGraph.nodes.length,
+      edges: terraformRealGraph.edges.length,
+      resources: terraformRealResources.length,
+      moduleBlocks: terraformRealModuleBlocks.length,
+      semantic: terraformRealSemantic.map((node) => node.label),
+    };
+    console.log(
+      `Terraform-real-repo scan summary: ${JSON.stringify(terraformRealSummary)}`,
+    );
+
+    if (
+      !terraformRealProduct ||
+      terraformRealProduct.label !== "AWS VPC Terraform module"
+    ) {
+      fail(
+        `terraform-real-repo product label expected 'AWS VPC Terraform module', found '${terraformRealProduct?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass(`terraform-real-repo product label: ${terraformRealProduct.label}`);
+    }
+
+    if (!terraformRealDeploy || terraformRealDeploy.label !== "Deploy") {
+      fail(
+        `terraform-real-repo deploy system label expected 'Deploy', found '${terraformRealDeploy?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass("terraform-real-repo deploy system labeled 'Deploy'");
+    }
+
+    if (!terraformRealGraph.extractors.some((item) => item.id === "terraform")) {
+      fail("terraform-real-repo graph.extractors missing terraform");
+    } else {
+      pass("terraform-real-repo registers terraform extractor");
+    }
+
+    if (terraformRealResources.length < 40) {
+      fail(
+        `terraform-real-repo expected ≥40 terraform resources, found ${terraformRealResources.length}`,
+      );
+    } else {
+      pass(
+        `terraform-real-repo ${terraformRealResources.length} terraform resources`,
+      );
+    }
+
+    for (const expected of [
+      "aws_vpc.this",
+      "aws_subnet.public",
+      "aws_subnet.private",
+      "aws_nat_gateway.this",
+      "aws_internet_gateway.this",
+      "aws_route_table.public",
+      "aws_eip.nat",
+      "aws_flow_log.this",
+      "aws_db_subnet_group.database",
+    ]) {
+      if (!terraformRealAddresses.has(expected)) {
+        fail(
+          `terraform-real-repo missing resource ${expected}; found ${[...terraformRealAddresses].sort().slice(0, 20).join(", ") || "(none)"}…`,
+        );
+      } else {
+        pass(`terraform-real-repo has resource ${expected}`);
+      }
+    }
+
+    for (const expected of [
+      "This · VPC",
+      "Public · Subnet",
+      "Private · Subnet",
+      "This · Nat gateway",
+      "This · Internet gateway",
+      "Public · Route table",
+      "Nat · Eip",
+      "This · Flow log",
+      "Database · DB subnet group",
+      "VPC",
+      "VPC endpoints",
+      "S3 bucket",
+    ]) {
+      if (!terraformRealLabels.has(expected)) {
+        fail(
+          `terraform-real-repo missing humanized service label ${expected}; found ${[...terraformRealLabels].sort().slice(0, 25).join(" | ") || "(none)"}…`,
+        );
+      } else {
+        pass(`terraform-real-repo service label ${expected}`);
+      }
+    }
+
+    const nestedTerraformReal = terraformRealServices.filter(
+      (node) => node.parentId === terraformRealDeploy?.id,
+    );
+    if (nestedTerraformReal.length < 50) {
+      fail(
+        `terraform-real-repo expected ≥50 terraform units nested under Deploy, found ${nestedTerraformReal.length}`,
+      );
+    } else {
+      pass(
+        `terraform-real-repo ${nestedTerraformReal.length} units nested under Deploy`,
+      );
+    }
+
+    const terraformRealOverviewLeaves = nestedTerraformReal.filter(
+      (node) => node.metadata?.collapsedInOverview !== true,
+    );
+    if (terraformRealOverviewLeaves.length > 0) {
+      fail(
+        `terraform-real-repo overview should collapse resources/modules under Deploy, still visible: ${terraformRealOverviewLeaves
+          .map((node) => node.label)
+          .slice(0, 12)
+          .join(", ")}`,
+      );
+    } else {
+      pass(
+        "terraform-real-repo services collapsed on overview (Deploy tells the story)",
+      );
+    }
+
+    const terraformRealFlow = terraformRealSemantic
+      .filter((node) => typeof node.metadata?.flowOrder === "number")
+      .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+    if (
+      terraformRealFlow.length !== 1 ||
+      terraformRealFlow[0]?.metadata?.systemKey !== "deploy"
+    ) {
+      fail(
+        `terraform-real-repo flowOrder expected Deploy-only, got ${terraformRealFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+      );
+    } else {
+      pass("terraform-real-repo flowOrder is Deploy-only");
+    }
+
+    if (terraformRealDeploy.metadata?.collapsedInOverview === true) {
+      fail(
+        "terraform-real-repo Deploy with Terraform units should stay visible on overview",
+      );
+    } else {
+      pass("terraform-real-repo Deploy stays visible on overview");
+    }
+
+    const terraformRealOverviewSystems = terraformRealSemantic.filter(
+      (node) => node.metadata?.collapsedInOverview !== true,
+    );
+    if (
+      terraformRealOverviewSystems.length !== 1 ||
+      terraformRealOverviewSystems[0]?.metadata?.systemKey !== "deploy"
+    ) {
+      fail(
+        `terraform-real-repo overview systems expected Deploy only, found ${terraformRealOverviewSystems
+          .map((node) => node.label)
+          .join(", ") || "(none)"}`,
+      );
+    } else {
+      pass("terraform-real-repo overview systems: Deploy only");
+    }
+
+    const terraformRealTfModules = terraformRealGraph.nodes.filter(
+      (node) => node.kind === "module" && node.metadata?.terraformModule === true,
+    );
+    const terraformRealMainTf = terraformRealTfModules.find((node) =>
+      /(?:^|\/)main\.tf$/i.test(
+        String(node.metadata?.file ?? node.label).replaceAll("\\", "/"),
+      ),
+    );
+    if (
+      !terraformRealMainTf ||
+      terraformRealMainTf.parentId !== terraformRealDeploy?.id ||
+      terraformRealMainTf.metadata?.collapsedInOverview !== true
+    ) {
+      fail(
+        `terraform-real-repo main.tf should nest+collapse under Deploy, found parent=${terraformRealMainTf?.parentId ?? "(missing)"} collapsed=${terraformRealMainTf?.metadata?.collapsedInOverview}`,
+      );
+    } else {
+      pass("terraform-real-repo main.tf nested+collapsed under Deploy");
+    }
+
+    const terraformRealEvidenceGaps = terraformRealServices.filter((node) => {
+      const detail = node.evidence?.[0]?.detail ?? "";
+      return !/^(resource:|module:)/.test(detail);
+    });
+    if (terraformRealEvidenceGaps.length > 0) {
+      fail(
+        `terraform-real-repo evidence should cite resource:/module: ${terraformRealEvidenceGaps
+          .map((node) => node.label)
+          .slice(0, 8)
+          .join(", ")}`,
+      );
+    } else {
+      pass("terraform-real-repo evidence details cite resource/module");
+    }
+
+    const terraformRealVpcModule = terraformRealModuleBlocks.find(
+      (node) => node.metadata?.moduleName === "vpc",
+    );
+    if (
+      !terraformRealVpcModule ||
+      terraformRealVpcModule.metadata?.moduleSource !== "../../"
+    ) {
+      fail(
+        `terraform-real-repo examples module vpc source expected ../../, found ${terraformRealVpcModule?.metadata?.moduleSource ?? "(missing)"}`,
+      );
+    } else {
+      pass("terraform-real-repo examples module vpc source ../../");
+    }
+
+    const terraformRealVpcEvidence = terraformRealResources.find(
+      (node) => node.metadata?.address === "aws_vpc.this",
+    );
+    if (
+      !/(?:^|\/)main\.tf$/i.test(
+        String(terraformRealVpcEvidence?.evidence?.[0]?.file ?? "").replaceAll(
+          "\\",
+          "/",
+        ),
+      ) ||
+      terraformRealVpcEvidence?.evidence?.[0]?.detail !== "resource:aws_vpc.this"
+    ) {
+      fail(
+        `terraform-real-repo aws_vpc.this evidence expected main.tf resource:aws_vpc.this, found ${JSON.stringify(terraformRealVpcEvidence?.evidence?.[0])}`,
+      );
+    } else {
+      pass("terraform-real-repo aws_vpc.this evidence is main.tf");
+    }
+
+    const terraformRealCommerceNoise = terraformRealGraph.edges.some((edge) =>
+      /checkout|orders?/i.test(
+        `${edge.label ?? ""} ${JSON.stringify(edge.metadata ?? {})}`,
+      ),
+    );
+    if (terraformRealCommerceNoise) {
+      fail(
+        "terraform-real-repo should not inherit Checkout/orders commerce collaboration copy",
+      );
+    } else {
+      pass(
+        "terraform-real-repo has no Checkout/orders commerce collaboration noise",
+      );
+    }
+  }
 }
 
 if (process.exitCode) {
