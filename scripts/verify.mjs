@@ -1177,8 +1177,8 @@ if (
   );
 }
 
-// Canvas: on selection, badge collaboration + table↔table relation labels
-// (flows-to stays unlabeled — Product flow band already tells that story).
+// Canvas: table↔table relations are always-on (green data story); collab stays
+// selection-only; flows-to stays unlabeled (Product flow band).
 const selectionBadgeFn = viewerHtml.indexOf("function selectionEdgeBadgeLabel");
 const selectionBadgeSkipFlowsTo =
   viewerHtml.includes('if (edge.kind === "flows-to") return null') &&
@@ -1186,32 +1186,54 @@ const selectionBadgeSkipFlowsTo =
 const selectionBadgeUsesCollab =
   viewerHtml.includes("collaborationKinds.has(edge.kind)") &&
   viewerHtml.includes("selectionEdgeBadgeLabel(edge)");
-const selectionBadgeTableRelation =
-  viewerHtml.includes("isTableRelationEdge(edge)") &&
-  viewerHtml.includes("relationLabelText(edge)") &&
-  selectionBadgeFn >= 0;
+const selectionBadgeSkipsTableRelation =
+  selectionBadgeFn >= 0 &&
+  viewerHtml.includes("if (isTableRelationEdge(edge)) return null");
 const selectionLabelAttr = viewerHtml.indexOf('data-selection-label", "true"');
-const selectionBadgeGroupClass = viewerHtml.indexOf(
-  'selectionOnly ? "edge-badge-group selection" : "edge-badge-group"',
-);
 const selectionBadgeOnlyWhenSelected =
   viewerHtml.includes("if (selected) {") &&
   viewerHtml.includes("const badge = selectionEdgeBadgeLabel(edge)");
+const relationEdgeCss = viewerHtml.indexOf(".edge.relation");
+const relationGroups =
+  viewerHtml.includes("const relationGroups = new Map()") &&
+  viewerHtml.includes('data-relation", "true"');
+const relationAlwaysOnBadge =
+  viewerHtml.includes('appendEdgeBadge(geom.mx, geom.my, labels.join(" · "), false, "relation")') ||
+  viewerHtml.includes("appendEdgeBadge(geom.mx, geom.my, labels.join(\" · \"), false, \"relation\")");
+const relationLegend = viewerHtml.includes("table relations");
+const tableConstellation =
+  viewerHtml.includes('node.kind === "table"') &&
+  viewerHtml.includes("colGap") &&
+  viewerHtml.includes("tables.forEach");
 if (
   selectionBadgeFn < 0 ||
   !selectionBadgeSkipFlowsTo ||
   !selectionBadgeUsesCollab ||
-  !selectionBadgeTableRelation ||
+  !selectionBadgeSkipsTableRelation ||
   selectionLabelAttr < 0 ||
-  selectionBadgeGroupClass < 0 ||
   !selectionBadgeOnlyWhenSelected
 ) {
   fail(
-    "viewer canvas should label collaboration + table relation edges on selection (not always-on, skip flows-to)",
+    "viewer canvas should label collaboration edges on selection (skip flows-to + table relations)",
   );
 } else {
   pass(
-    "viewer canvas shows collaboration/relation edge labels on selection so founders read meaning without the inspector",
+    "viewer canvas shows collaboration edge labels on selection so founders read meaning without the inspector",
+  );
+}
+if (
+  relationEdgeCss < 0 ||
+  !relationGroups ||
+  !relationAlwaysOnBadge ||
+  !relationLegend ||
+  !tableConstellation
+) {
+  fail(
+    "viewer canvas should always-on label table↔table relations (.edge.relation) with a 2-column table constellation",
+  );
+} else {
+  pass(
+    "viewer canvas always labels table relations (favorites/follows) and lays tables in a constellation",
   );
 }
 
@@ -1564,30 +1586,42 @@ if (realRepoRoot) {
     const favoritesOnUserArticle = userArticleLabels.some((label) =>
       /\bfavorites\b/i.test(label),
     );
+    const authoredOnUserArticle = userArticleLabels.some((label) =>
+      /\bauthored\b/i.test(label),
+    );
     const favoritedByOnArticleUser = articleUserLabels.some((label) =>
-      /\bfavoritedBy\b/i.test(label),
+      /\bfavorited by\b/i.test(label),
+    );
+    const authorOnArticleUser = articleUserLabels.some((label) =>
+      /\bauthor\b/i.test(label),
     );
     const followsOnUser = userFollowLabels.some(
       (label) =>
         /\bfollows\b/i.test(label) ||
         (/\bfollowing\b/i.test(label) && /\bfollowedBy\b/i.test(label)),
     );
-    if (!favoritesOnUserArticle) {
+    const tagListHumanized = productTableRelations.some(
+      (edge) =>
+        tableById.get(edge.source)?.label === "Article" &&
+        tableById.get(edge.target)?.label === "Tag" &&
+        /\btags\b/i.test(String(edge.label ?? "")),
+    );
+    if (!favoritesOnUserArticle || !authoredOnUserArticle) {
       fail(
-        `real-repo missing User→Article favorites relation, got ${JSON.stringify(userArticleLabels)}`,
+        `real-repo missing humanized User→Article authored/favorites, got ${JSON.stringify(userArticleLabels)}`,
       );
     } else {
       pass(
-        `real-repo User→Article favorites: ${userArticleLabels.join(", ")}`,
+        `real-repo User→Article data story: ${userArticleLabels.join(", ")}`,
       );
     }
-    if (!favoritedByOnArticleUser) {
+    if (!favoritedByOnArticleUser || !authorOnArticleUser) {
       fail(
-        `real-repo missing Article→User favoritedBy relation, got ${JSON.stringify(articleUserLabels)}`,
+        `real-repo missing humanized Article→User author/favorited by, got ${JSON.stringify(articleUserLabels)}`,
       );
     } else {
       pass(
-        `real-repo Article→User favoritedBy: ${articleUserLabels.join(", ")}`,
+        `real-repo Article→User data story: ${articleUserLabels.join(", ")}`,
       );
     }
     if (!followsOnUser) {
@@ -1596,6 +1630,28 @@ if (realRepoRoot) {
       );
     } else {
       pass(`real-repo User→User follows: ${userFollowLabels.join(", ")}`);
+    }
+    if (!tagListHumanized) {
+      fail("real-repo Article→Tag should humanize tagList → tags");
+    } else {
+      pass("real-repo Article→Tag humanized to tags");
+    }
+    // Bare API+Data maps must not inherit mini-stack Checkout/orders collab copy.
+    const commerceNoise = realGraph.edges.filter(
+      (edge) =>
+        (edge.kind === "reads" || edge.kind === "uses" || edge.kind === "triggers") &&
+        /checkout|orders|fulfill|payments/i.test(
+          `${edge.label ?? ""} ${edge.evidence?.map((item) => item.detail).join(" ") ?? ""}`,
+        ),
+    );
+    if (commerceNoise.length) {
+      fail(
+        `real-repo leaked commerce collaboration copy: ${commerceNoise
+          .map((edge) => `${edge.kind}:${edge.label}`)
+          .join(", ")}`,
+      );
+    } else {
+      pass("real-repo has no Checkout/orders commerce collaboration noise");
     }
     const joinRelationNoise = realGraph.edges.filter(
       (edge) =>

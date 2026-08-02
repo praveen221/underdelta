@@ -274,6 +274,8 @@ const collaborationEdges: Array<{
   kind: EdgeKind;
   label: string;
   detail: string;
+  /** When set, only emit if at least one of these system keys exists (gates commerce copy off bare API+Data maps). */
+  requiresAny?: string[];
 }> = [
   {
     from: "cli",
@@ -367,12 +369,14 @@ const collaborationEdges: Array<{
     detail: "Viewer emits the index.html browser artifact",
   },
   // Mini-stack / commerce product systems — collaboration beyond flows-to.
+  // requiresAny keeps Checkout/orders copy off RealWorld-style API+Data-only maps.
   {
     from: "ui",
     to: "api",
     kind: "uses",
     label: "checkout",
     detail: "Storefront UI uses Checkout API for order status and checkout",
+    requiresAny: ["ui", "pipelines", "workers", "jobs"],
   },
   {
     from: "api",
@@ -380,6 +384,7 @@ const collaborationEdges: Array<{
     kind: "triggers",
     label: "checkout",
     detail: "Checkout API triggers the Order pipeline after an order is accepted",
+    requiresAny: ["ui", "pipelines", "workers", "jobs"],
   },
   {
     from: "api",
@@ -387,6 +392,7 @@ const collaborationEdges: Array<{
     kind: "triggers",
     label: "fulfill",
     detail: "Checkout API triggers Fulfillment workers via the fulfillment queue",
+    requiresAny: ["ui", "pipelines", "workers", "jobs"],
   },
   {
     from: "api",
@@ -394,6 +400,7 @@ const collaborationEdges: Array<{
     kind: "reads",
     label: "orders",
     detail: "Checkout API reads Catalog data when fulfilling orders",
+    requiresAny: ["ui", "pipelines", "workers", "jobs"],
   },
   {
     from: "jobs",
@@ -401,6 +408,7 @@ const collaborationEdges: Array<{
     kind: "uses",
     label: "payments",
     detail: "Reconciliation jobs use Catalog data for payment reconciliation",
+    requiresAny: ["ui", "pipelines", "workers", "jobs"],
   },
 ];
 
@@ -622,6 +630,20 @@ function tableRank(node: ArchitectureNode): number {
   return 0;
 }
 
+/** Turn Prisma field chrome into product words for the default browser. */
+function humanizeRelationField(label: string): string {
+  switch (label) {
+    case "favoritedBy":
+      return "favorited by";
+    case "followedBy":
+      return "followed by";
+    case "tagList":
+      return "tags";
+    default:
+      return label;
+  }
+}
+
 /**
  * Merge multiple Prisma field names on the same directed table pair into one
  * human label. `followedBy` + `following` → `follows` so User↔User reads as a
@@ -639,8 +661,16 @@ function mergeRelationLabels(labels: Iterable<string>): string | undefined {
     set.delete("following");
     set.add("follows");
   }
+  // User→Article often has both 1:n authored posts and M2M favorites.
+  if (set.has("articles") && set.has("favorites")) {
+    set.delete("articles");
+    set.add("authored");
+  }
   if (set.size === 0) return undefined;
-  return [...set].sort((a, b) => a.localeCompare(b)).join(" / ");
+  return [...set]
+    .map(humanizeRelationField)
+    .sort((a, b) => a.localeCompare(b))
+    .join(" / ");
 }
 
 /**
@@ -1478,6 +1508,12 @@ export function projectSemanticArchitecture(
     const from = systemsByKey.get(collab.from);
     const to = systemsByKey.get(collab.to);
     if (!from || !to) continue;
+    if (
+      collab.requiresAny &&
+      !collab.requiresAny.some((key) => systemsByKey.has(key))
+    ) {
+      continue;
+    }
     const edge = edgeFrom(
       collab.kind,
       from,

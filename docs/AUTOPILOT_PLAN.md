@@ -151,6 +151,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 1: RealWorld default map legible — HTTP API + Data access, all routes nested under API (incl. `GET /` from `main.ts`), product tables under Data, flowOrder API→Data, routes collapsed on overview
 - [x] Rung 1: golden-lock real-repo summary in verify (product title, systems/labels, 20 nested routes, 4 visible tables, flowOrder + flows-to, join collapse)
 - [x] Rung 1: surface User↔Article favorites + clean User↔User follows (merge multi-field Prisma labels; drop join-table FK edges; fix SQL ALTER TABLE FK source)
+- [x] Rung 1 polish: RealWorld default browser — humanize relation labels (authored/favorites, favorited by, tags), always-on green table-relation badges, 2-column table constellation, gate Checkout/orders collab off API+Data-only maps
 
 ### Real-repo pins (Capability ladder)
 
@@ -162,10 +163,10 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 1 polish: RealWorld default browser pass for the North star non-coder (hierarchy/spacing/labels now that favorites/follows edges are true)
 - [ ] Rung 2 prep: multi-file route frameworks / Next-style app router hints
 - [ ] Rung 2: `verification/mini-next` fixture (app router, server actions, API routes, client/server components)
 - [ ] Rung 2: pinned real Next.js OSS repo as scan target + golden lock
+- [ ] Standing polish: inspector metadata hygiene (hide projection/systemKey/flowOrder pills) on self-map + RealWorld
 
 ### Seed backlog (pull from here when In progress < 3)
 
@@ -179,7 +180,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (User↔Article favorites + User↔User follows on the RealWorld data story; join-table FK noise removed). Now do a RealWorld default-browser polish pass for the North star non-coder so the rung-1 map is beautiful before climbing to Next.js.
+> **Next focus:** This work is done (RealWorld default-browser polish: humanized favorites/follows/tags, always-on relation badges, table constellation, no Checkout noise). Now start Rung 2 — add `verification/mini-next` (app router / server actions / API routes / client vs server) so we can golden-lock Next.js semantics next.
 
 ### Learning log (append every tick)
 
@@ -211,6 +212,7 @@ Append short bullets like:
 - 2026-08-02 04:12 UTC | Human directive #2: polish restored as first-class twin engine (North star user = non-coder vibe-builders; the browser IS the product); ladder now only forbids polish-only stalls, and each rung ends with a polish pass; standing guarantee added — self-map + mini-stack always demo-ready | Next: continue rung 1 (README image label + join-table aliases) | Learned: steering must not swing the pendulum — deprioritizing polish would rot the exact surface the product is judged on
 - 2026-08-02 04:15 UTC | Done: nest all RealWorld routes under HTTP API (entrypoint `GET /` from `main.ts` was leaking); golden-lock API+Data nesting, overview route collapse, visible product tables, flowOrder API→Data + flows-to | Next: User↔Article favorites / follows relation edges | Learned: path-role owningSystem lift misses routes defined outside `/routes/`/`/api/`; when an API system exists, attach every `route` node to it before overview collapse
 - 2026-08-02 04:22 UTC | Done: merge multi-field Prisma relation labels (articles/favorites, author/favoritedBy); humanize followedBy+following→follows; drop join-table depends-on; fix SQL ALTER TABLE FK source attribution; golden-lock | Next: RealWorld polish pass | Learned: one-edge-per-pair dedupe silently drops M2M field names when a 1:n edge already owns the directed pair; Prisma migration ALTER FKs were all attributed to the last CREATE TABLE
+- 2026-08-02 04:30 UTC | Done: RealWorld polish — authored/favorites + favorited by + tags labels; always-on `.edge.relation` badges; 2-col table constellation; gate commerce collab behind requiresAny; verify | Next: Rung 2 mini-next fixture | Learned: selection-only relation badges hid the whole data story from cold readers; hardcoded Checkout api→data collab fired on any API+Data map and poisoned RealWorld until gated
 
 ---
 

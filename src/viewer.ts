@@ -59,10 +59,15 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     .edge.narrative.migrates { stroke: #52a976; }
     .edge.narrative.publishes.consumes { stroke: #d09a45; }
     .edge.narrative.active { stroke: var(--accent); stroke-width: 2.4; opacity: .96; }
+    /* Table↔table data story — always-on labels (favorites / follows / …) */
+    .edge.relation { stroke: #52a976; stroke-width: 1.7; opacity: .78; stroke-dasharray: none; }
+    .edge.relation.derived, .edge.relation.inferred { stroke-dasharray: none; stroke: #52a976; }
+    .edge.relation.active { stroke: var(--accent); stroke-width: 2.4; opacity: .96; }
     .edge.active { stroke: var(--accent); stroke-width: 2.3; opacity: .95; }
     .edge.collab.active { stroke: var(--accent); stroke-width: 2.45; opacity: .96; }
     .edge-badge-bg { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
     .edge-badge { fill: var(--text); font: 650 10px/1 Inter, ui-sans-serif, system-ui, sans-serif; }
+    .edge-badge-group.relation .edge-badge-bg { stroke: color-mix(in srgb, #52a976 55%, var(--line)); }
     #nodes { position: absolute; inset: 0; }
     .lane-label { position: absolute; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
     .node { --kind-color: #77808d; position: absolute; width: 190px; min-height: 58px; background: var(--panel); border: 1px solid var(--kind-color); border-radius: 9px; padding: 9px 10px; cursor: pointer; user-select: none; transition: opacity .12s, border-color .12s, background .12s; }
@@ -121,6 +126,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     #legend .inferred::before { border-color: var(--inferred); border-top-style: dotted; }
     #legend .collab::before { border-color: #6e8fe0; border-top-width: 2.5px; }
     #legend .narrative::before { border-color: #d17f54; border-top-width: 2.5px; }
+    #legend .relation::before { border-color: #52a976; border-top-width: 2.5px; }
     @media (max-width: 760px) {
       #workspace { grid-template-columns: 1fr; }
       aside { display: none; }
@@ -144,7 +150,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           <svg id="edges"></svg>
           <div id="nodes"></div>
         </div>
-        <div id="legend"><span>observed</span><span class="derived">derived</span><span class="inferred">inferred</span><span class="collab">collaboration</span><span class="narrative">publishes / migrates</span></div>
+        <div id="legend"><span>observed</span><span class="derived">derived</span><span class="inferred">inferred</span><span class="collab">collaboration</span><span class="narrative">publishes / migrates</span><span class="relation">table relations</span></div>
       </main>
       <aside id="inspector"><div class="empty">Select a component to inspect its connections and source evidence.</div></aside>
     </div>
@@ -351,11 +357,35 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           if (ao !== null || bo !== null) return (ao ?? 999) - (bo ?? 999) || a.label.localeCompare(b.label);
           return a.kind.localeCompare(b.kind) || a.label.localeCompare(b.label);
         });
-        laneNodes.forEach((node, index) => {
+        // Tables: 2-column constellation so favorites/follows edges aren't same-column spaghetti.
+        const tables = laneNodes.filter((node) => node.kind === "table");
+        const nonTables = laneNodes.filter((node) => node.kind !== "table");
+        let nextY = laneTop + 34;
+        if (tables.length >= 2) {
+          const colGap = 210;
+          const rowGap = 88;
+          tables.forEach((node, index) => {
+            const col = index % 2;
+            const row = Math.floor(index / 2);
+            const x = laneIndex * laneWidth + col * colGap;
+            const y = laneTop + 34 + row * rowGap;
+            placeNode(node, x, y);
+            nextY = Math.max(nextY, y + rowGap);
+            maxHeight = Math.max(maxHeight, y + 70);
+            maxWidth = Math.max(maxWidth, x + widthForKind(node.kind) + 80);
+          });
+        } else {
+          tables.forEach((node) => {
+            placeNode(node, laneIndex * laneWidth, nextY);
+            nextY += 78;
+            maxHeight = Math.max(maxHeight, nextY);
+          });
+        }
+        nonTables.forEach((node) => {
           const x = laneIndex * laneWidth;
-          const y = laneTop + 34 + index * 78;
-          placeNode(node, x, y);
-          maxHeight = Math.max(maxHeight, y + 70);
+          placeNode(node, x, nextY);
+          nextY += 78;
+          maxHeight = Math.max(maxHeight, nextY);
         });
       });
 
@@ -368,6 +398,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         ["arrow-consumes", "#c48a5a"],
         ["arrow-migrates", "#52a976"],
         ["arrow-narrative", "#d09a45"],
+        ["arrow-relation", "#52a976"],
         ["arrow-active", "#7c9cff"],
       ]) {
         const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
@@ -437,12 +468,12 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         };
       }
 
-      function appendEdgeBadge(mx, my, label, selectionOnly) {
+      function appendEdgeBadge(mx, my, label, selectionOnly, extraClass) {
         const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
-        group.setAttribute(
-          "class",
-          selectionOnly ? "edge-badge-group selection" : "edge-badge-group",
-        );
+        const classes = ["edge-badge-group"];
+        if (selectionOnly) classes.push("selection");
+        if (extraClass) classes.push(extraClass);
+        group.setAttribute("class", classes.join(" "));
         const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
         text.setAttribute("class", "edge-badge");
         text.setAttribute("x", String(mx));
@@ -465,15 +496,29 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         edgesLayer.appendChild(group);
       }
 
-      // On selection: label collab + table relations. Skip flows-to (Product flow band).
+      // On selection: label collab edges. Skip flows-to (Product flow band).
+      // Table relations get always-on badges below (data story must read cold).
       function selectionEdgeBadgeLabel(edge) {
         if (edge.kind === "flows-to") return null;
+        if (isTableRelationEdge(edge)) return null;
         if (collaborationKinds.has(edge.kind)) {
           if (edge.label && edge.label !== edge.kind) return edge.label;
           return edge.kind;
         }
-        if (isTableRelationEdge(edge)) return relationLabelText(edge);
         return null;
+      }
+
+      // Group table↔table relations by directed pair → one labeled green path.
+      const relationGroups = new Map();
+      const relationEdgeIds = new Set();
+      for (const edge of graph.edges) {
+        if (!isTableRelationEdge(edge)) continue;
+        if (!visibleIds.has(edge.source) || !visibleIds.has(edge.target)) continue;
+        if (!positions.get(edge.source) || !positions.get(edge.target)) continue;
+        const key = edge.source + "|" + edge.target;
+        if (!relationGroups.has(key)) relationGroups.set(key, []);
+        relationGroups.get(key).push(edge);
+        relationEdgeIds.add(edge.id);
       }
 
       for (const [key, edges] of narrativeGroups) {
@@ -504,9 +549,36 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         appendEdgeBadge(geom.mx, geom.my, narrativeBadgeLabel(edges));
       }
 
+      for (const [key, edges] of relationGroups) {
+        const sourceId = key.slice(0, key.indexOf("|"));
+        const targetId = key.slice(key.indexOf("|") + 1);
+        const source = positions.get(sourceId);
+        const target = positions.get(targetId);
+        if (!source || !target) continue;
+        const geom = edgeGeometry(source, target);
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", geom.d);
+        const classes = ["edge", "relation"];
+        if (edges.some((edge) => certaintyOf(edge) === "inferred")) classes.push("inferred");
+        else if (edges.some((edge) => certaintyOf(edge) === "derived")) classes.push("derived");
+        const active = state.selected === sourceId || state.selected === targetId;
+        if (active) classes.push("active");
+        path.setAttribute("class", classes.join(" "));
+        path.setAttribute("data-kind", "depends-on");
+        path.setAttribute("data-relation", "true");
+        path.setAttribute(
+          "marker-end",
+          "url(#" + (active ? "arrow-active" : "arrow-relation") + ")",
+        );
+        edgesLayer.appendChild(path);
+        const labels = [...new Set(edges.map((edge) => relationLabelText(edge)))];
+        appendEdgeBadge(geom.mx, geom.my, labels.join(" · "), false, "relation");
+      }
+
       for (const edge of graph.edges) {
         if (!visibleIds.has(edge.source) || !visibleIds.has(edge.target)) continue;
         if (narrativeEdgeIds.has(edge.id)) continue;
+        if (relationEdgeIds.has(edge.id)) continue;
         // contains under a labeled messaging/migration story just restates ownership.
         if (
           edge.kind === "contains" &&
@@ -531,7 +603,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         path.setAttribute("class", classes.join(" "));
         path.setAttribute("data-kind", edge.kind);
         edgesLayer.appendChild(path);
-        // Selection reveals what blue collab lines / table links mean on-canvas.
+        // Selection reveals what blue collab lines mean on-canvas.
         if (selected) {
           const badge = selectionEdgeBadgeLabel(edge);
           if (badge) {
