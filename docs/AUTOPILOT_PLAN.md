@@ -178,6 +178,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 4: surface `createCollectionForVectorSearch(db, CONST, …)` helper wrappers as collection evidence (mini-mongo Vector docs helper-only; hackathon-starter RAG_CHUNKS + LLM_SEMANTIC_CACHE append helper evidence)
 - [x] Rung 4 polish: North-star mini-mongo + hackathon-starter — acronym labels (RAG/LLM/AI), aggregate hubs in Data constellation beside collections, collapse aggregate stages on overview, bare `/api` → `GET API`; golden-lock — **Rung 4 locked**
 - [x] Standing guarantee: mongo `maskComments` treats `/regex/` literals — self-map free of Collection/Note/Receiver/MongoDB comment noise; golden-lock in verify
+- [x] Standing polish: inspector metadata hygiene — hide `projection` / `systemKey` / `flowOrder` pills so North-star users see product evidence, not compiler internals; golden-lock in verify
 
 ### Real-repo pins (Capability ladder)
 
@@ -192,10 +193,10 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Standing polish: inspector metadata hygiene (hide projection/systemKey/flowOrder pills) on self-map + RealWorld
-- [ ] Rung 5 prep: pick OpenAPI or GraphQL from README roadmap; sketch extractor surface + mini fixture target
-- [ ] Rung 5: add `verification/mini-openapi` or `verification/mini-graphql` fixture + verify golden floors
-- [ ] Standing polish: Underdelta self-map cold-read pass — any leftover jargon labels or weak hierarchy after mongo noise removal
+- [ ] Rung 5 prep: pick OpenAPI from README roadmap; sketch extractor surface (`openapi.yaml` / `swagger.json` paths + operations) + mini fixture target
+- [ ] Rung 5: add `verification/mini-openapi` fixture + verify golden floors (HTTP API ops nested, product title, flow)
+- [ ] Standing polish: Underdelta self-map cold-read pass — any leftover jargon labels or weak hierarchy after mongo noise + inspector hygiene
+- [ ] Standing polish: hide remaining compiler chrome pills (`labelSource`, `pathRoleLabel`, `collapsedInOverview`, `overviewHub`) if they still dump in inspector
 
 ### Seed backlog (pull from here when In progress < 3)
 
@@ -207,7 +208,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (`maskComments` regex-literal fix — self-map Collection/Note/Receiver/MongoDB chrome gone + golden-lock). Now do standing polish: hide projection/systemKey/flowOrder inspector pills so the North star user sees product evidence, not compiler internals.
+> **Next focus:** This work is done (inspector hides projection/systemKey/flowOrder pills + golden-lock). Now do Rung 5 prep: sketch OpenAPI extractor surface + `verification/mini-openapi` target so the ladder climbs past Mongo into API-spec semantics.
 
 ### Learning log (append every tick)
 
@@ -262,6 +263,7 @@ Append short bullets like:
 - 2026-08-02 05:25 UTC | Done: `createCollectionForVectorSearch(db, CONST)` → collections (+ append evidence on already-seen nodes); mini-mongo Vector docs helper-only golden-lock; hackathon-starter RAG_CHUNKS/LLM_SEMANTIC_CACHE helper evidence | Next: Rung 4 polish pass then lock | Learned: helper body `db.collection(collectionName)` is a param and correctly skipped — call sites carry the product CONST; fixture must omit bare `.collection(VECTOR_DOCS)` or the helper path is never proven
 - 2026-08-02 05:30 UTC | Done: Rung 4 locked — acronym-aware labels (RAG/LLM/AI), viewer puts mongoAggregate hubs in Data constellation beside collections, collapse aggregate stages, `/api`→GET API; golden-lock | Next: fix maskComments regex literals (self-map Collection/Note noise) | Learned: comment masking is defeated by `/regex/` patterns that contain quotes — later JSDoc/line comments stay live and the mongo extractor maps its own docs onto Underdelta’s self-map; semantic `kind:pipeline` systems must stay in Systems lane while mongo hubs route to Data via laneNameFor
 - 2026-08-02 05:33 UTC | Done: maskComments consumes `/regex/` literals (char-class + escapes + flags; keyword/punctuator prefix heuristic) so JSDoc stays masked; self-map drops Collection/Note/Receiver/MongoDB chrome; verify golden-lock | Next: inspector metadata pill hygiene | Learned: the poison was cleanName's quote-stripping character-class regex — a quote inside `/[…]/` flipped maskComments into string mode for the rest of the file; regex extractors need a real mini-lexer, not only quote+comment tracking
+- 2026-08-02 05:34 UTC | Done: inspector hygiene — hide projection/systemKey/flowOrder from structuredMetaKeys pill dump; golden-lock in verify | Next: Rung 5 OpenAPI extractor sketch + mini-openapi fixture | Learned: system nodes dump compiler internals as the first inspector chrome a founder sees; structuredMetaKeys already owned messaging/table keys — extending that set is enough without a second filter
 
 ---
 

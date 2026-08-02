@@ -1307,6 +1307,20 @@ if (messagingRolesFn < 0 || messagingHeading < 0) {
   pass("viewer inspector surfaces queue publisher/consumer lists on messaging hubs");
 }
 
+// Inspector hygiene: hide compiler-internal metadata pills (projection/systemKey/flowOrder).
+const hideCompilerMetaPills =
+  fixtureViewerHtml.includes('structuredMetaKeys = new Set([') &&
+  fixtureViewerHtml.includes('"projection"') &&
+  fixtureViewerHtml.includes('"systemKey"') &&
+  fixtureViewerHtml.includes('"flowOrder"');
+if (!hideCompilerMetaPills) {
+  fail(
+    "viewer inspector should hide projection/systemKey/flowOrder pills (compiler internals, not product evidence)",
+  );
+} else {
+  pass("viewer inspector hides projection/systemKey/flowOrder metadata pills");
+}
+
 // ---------------------------------------------------------------------------
 // Capability ladder rung 2: Next.js App Router fixture (verification/mini-next).
 // Smoke + golden floors: pages/layouts, route handlers, client/server split,

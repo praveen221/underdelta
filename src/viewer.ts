@@ -659,10 +659,13 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     }
 
     // Structured inspector sections own these keys (avoid raw pill dump).
+    // Compiler internals (projection/systemKey/flowOrder) stay hidden — North-star
+    // founders need product evidence, not projection machinery chrome.
     const structuredMetaKeys = new Set([
       "keyFiles", "binEntries", "binCommands", "packageExports", "extractorRoster",
       "prismaName", "sqlName", "sources", "aliases", "normalizedTable",
       "publishers", "consumers", "messagingHub",
+      "projection", "systemKey", "flowOrder",
     ]);
 
     function connectionButton(edge, id) {
