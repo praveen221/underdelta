@@ -5405,7 +5405,7 @@ for (const expected of ["api", "web", "db"]) {
   }
 }
 
-for (const expected of ["API", "Web", "DB"]) {
+for (const expected of ["API · 3000", "Web · 8080", "DB"]) {
   if (!miniDockerServiceLabels.includes(expected)) {
     fail(
       `mini-docker missing humanized service label ${expected}; found ${miniDockerServiceLabels.join(", ") || "(none)"}`,
@@ -5415,12 +5415,81 @@ for (const expected of ["API", "Web", "DB"]) {
   }
 }
 
-if (!miniDockerServiceLabels.includes("App image")) {
+// Compose `build: .` owns the root Dockerfile — quiet twin "App image" chrome.
+if (miniDockerServiceLabels.includes("App image")) {
   fail(
-    `mini-docker missing Dockerfile App image service; found ${miniDockerServiceLabels.join(", ") || "(none)"}`,
+    `mini-docker should quiet Dockerfile App image when Compose build owns it; found ${miniDockerServiceLabels.join(", ")}`,
   );
 } else {
-  pass("mini-docker has Dockerfile App image service");
+  pass("mini-docker quiets Dockerfile App image owned by Compose build");
+}
+
+const miniDockerApi = miniDockerServices.find(
+  (node) => node.metadata?.serviceName === "api",
+);
+const miniDockerWeb = miniDockerServices.find(
+  (node) => node.metadata?.serviceName === "web",
+);
+const miniDockerDb = miniDockerServices.find(
+  (node) => node.metadata?.serviceName === "db",
+);
+if (
+  !Array.isArray(miniDockerApi?.metadata?.hostPorts) ||
+  !miniDockerApi.metadata.hostPorts.includes("3000")
+) {
+  fail(
+    `mini-docker api hostPorts expected ["3000"], found ${JSON.stringify(miniDockerApi?.metadata?.hostPorts)}`,
+  );
+} else {
+  pass("mini-docker api publishes port 3000");
+}
+if (
+  !Array.isArray(miniDockerWeb?.metadata?.hostPorts) ||
+  !miniDockerWeb.metadata.hostPorts.includes("8080")
+) {
+  fail(
+    `mini-docker web hostPorts expected ["8080"], found ${JSON.stringify(miniDockerWeb?.metadata?.hostPorts)}`,
+  );
+} else {
+  pass("mini-docker web publishes port 8080");
+}
+if (miniDockerWeb?.metadata?.image !== "nginx:alpine") {
+  fail(
+    `mini-docker web image expected nginx:alpine, found ${miniDockerWeb?.metadata?.image ?? "(missing)"}`,
+  );
+} else {
+  pass("mini-docker web image label nginx:alpine");
+}
+if (miniDockerDb?.metadata?.image !== "postgres:16") {
+  fail(
+    `mini-docker db image expected postgres:16, found ${miniDockerDb?.metadata?.image ?? "(missing)"}`,
+  );
+} else {
+  pass("mini-docker db image label postgres:16");
+}
+
+const miniDockerNeedsEdges = miniDockerGraph.edges.filter(
+  (edge) =>
+    edge.kind === "depends-on" &&
+    edge.label === "needs" &&
+    miniDockerServices.some((node) => node.id === edge.source) &&
+    miniDockerServices.some((node) => node.id === edge.target),
+);
+const miniDockerNeedsPairs = new Set(
+  miniDockerNeedsEdges.map((edge) => {
+    const from = miniDockerServices.find((node) => node.id === edge.source);
+    const to = miniDockerServices.find((node) => node.id === edge.target);
+    return `${from?.metadata?.serviceName}→${to?.metadata?.serviceName}`;
+  }),
+);
+for (const expected of ["api→db", "web→api"]) {
+  if (!miniDockerNeedsPairs.has(expected)) {
+    fail(
+      `mini-docker missing depends_on edge ${expected}; found ${[...miniDockerNeedsPairs].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-docker depends_on ${expected}`);
+  }
 }
 
 const miniDockerEvidenceGaps = miniDockerServices.filter((node) => {
@@ -5464,9 +5533,9 @@ if (!miniDockerDeploy || miniDockerDeploy.label !== "Containers") {
 const nestedDockerServices = miniDockerServices.filter(
   (node) => node.parentId === miniDockerDeploy?.id,
 );
-if (nestedDockerServices.length < 4) {
+if (nestedDockerServices.length < 3) {
   fail(
-    `mini-docker expected ≥4 services nested under Containers, found ${nestedDockerServices.length}`,
+    `mini-docker expected ≥3 compose services nested under Containers, found ${nestedDockerServices.length}`,
   );
 } else {
   pass(
@@ -5665,8 +5734,8 @@ if (dockerRealRoot) {
     }
 
     for (const expected of [
-      "Vote",
-      "Result",
+      "Vote · 8080",
+      "Result · 8081",
       "Worker",
       "Redis",
       "DB",
@@ -5679,6 +5748,84 @@ if (dockerRealRoot) {
       } else {
         pass(`docker-real-repo service label ${expected}`);
       }
+    }
+
+    const dockerRealAppImages = dockerRealGraph.nodes.filter(
+      (node) =>
+        node.kind === "service" && node.metadata?.dockerfileService === true,
+    );
+    if (dockerRealAppImages.length > 0) {
+      fail(
+        `docker-real-repo should quiet Dockerfile App images owned by Compose build; found ${dockerRealAppImages.map((node) => node.label).join(", ")}`,
+      );
+    } else {
+      pass("docker-real-repo quiets Dockerfile App images owned by Compose build");
+    }
+
+    const dockerRealVote = dockerRealServices.find(
+      (node) =>
+        node.metadata?.serviceName === "vote" &&
+        String(node.evidence?.[0]?.file ?? "").endsWith("docker-compose.yml"),
+    );
+    if (
+      !Array.isArray(dockerRealVote?.metadata?.dependsOn) ||
+      !dockerRealVote.metadata.dependsOn.includes("redis")
+    ) {
+      fail(
+        `docker-real-repo vote dependsOn expected redis, found ${JSON.stringify(dockerRealVote?.metadata?.dependsOn)}`,
+      );
+    } else {
+      pass("docker-real-repo vote depends_on redis");
+    }
+    if (dockerRealVote?.metadata?.build !== "./vote") {
+      fail(
+        `docker-real-repo vote build.context expected ./vote, found ${dockerRealVote?.metadata?.build ?? "(missing)"}`,
+      );
+    } else {
+      pass("docker-real-repo vote build.context ./vote");
+    }
+
+    const dockerRealNeedsEdges = dockerRealGraph.edges.filter(
+      (edge) =>
+        edge.kind === "depends-on" &&
+        edge.label === "needs" &&
+        dockerRealServices.some((node) => node.id === edge.source) &&
+        dockerRealServices.some((node) => node.id === edge.target),
+    );
+    const dockerRealNeedsPairs = new Set(
+      dockerRealNeedsEdges.map((edge) => {
+        const from = dockerRealServices.find((node) => node.id === edge.source);
+        const to = dockerRealServices.find((node) => node.id === edge.target);
+        return `${from?.metadata?.serviceName}→${to?.metadata?.serviceName}`;
+      }),
+    );
+    for (const expected of [
+      "vote→redis",
+      "result→db",
+      "worker→redis",
+      "worker→db",
+      "seed→vote",
+    ]) {
+      if (![...dockerRealNeedsPairs].some((pair) => pair === expected)) {
+        fail(
+          `docker-real-repo missing depends_on edge ${expected}; found ${[...dockerRealNeedsPairs].sort().join(", ") || "(none)"}`,
+        );
+      } else {
+        pass(`docker-real-repo depends_on ${expected}`);
+      }
+    }
+
+    const dockerRealRedis = dockerRealServices.find(
+      (node) =>
+        node.metadata?.serviceName === "redis" &&
+        String(node.evidence?.[0]?.file ?? "").endsWith("docker-compose.yml"),
+    );
+    if (dockerRealRedis?.metadata?.image !== "redis:alpine") {
+      fail(
+        `docker-real-repo redis image expected redis:alpine, found ${dockerRealRedis?.metadata?.image ?? "(missing)"}`,
+      );
+    } else {
+      pass("docker-real-repo redis image label redis:alpine");
     }
 
     const nestedDockerRealServices = dockerRealServices.filter(

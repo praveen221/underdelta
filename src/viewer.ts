@@ -666,6 +666,10 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       "prismaName", "sqlName", "sources", "aliases", "normalizedTable",
       "publishers", "consumers", "messagingHub",
       "projection", "systemKey", "flowOrder",
+      // Docker Compose story — owned by the Container inspector section.
+      "docker", "dockerService", "dockerfileService", "serviceName",
+      "image", "build", "ports", "hostPorts", "dependsOn", "from", "expose",
+      "dockerCompose", "dockerfile", "dockerModule", "technicalLabel",
     ]);
 
     function connectionButton(edge, id) {
@@ -717,6 +721,42 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         ? '<p class="collab-detail">' + detail + "</p>"
         : "";
       return '<div class="collab-edge">' + button + detailHtml + "</div>";
+    }
+
+    // Compose / Dockerfile services: ports · image · depends_on as product words.
+    function containerStoryHtml(node, connections) {
+      if (node.kind !== "service" || !(node.metadata && node.metadata.docker)) {
+        return "";
+      }
+      const meta = node.metadata || {};
+      const pills = [];
+      if (typeof meta.image === "string" && meta.image) {
+        pills.push('<span class="pill">Image: ' + meta.image + "</span>");
+      }
+      if (typeof meta.build === "string" && meta.build) {
+        pills.push('<span class="pill">Build: ' + meta.build + "</span>");
+      }
+      const hostPorts = Array.isArray(meta.hostPorts) ? meta.hostPorts : [];
+      if (hostPorts.length) {
+        pills.push('<span class="pill">Ports: ' + hostPorts.join(", ") + "</span>");
+      } else if (Array.isArray(meta.expose) && meta.expose.length) {
+        pills.push('<span class="pill">Expose: ' + meta.expose.join(", ") + "</span>");
+      }
+      if (typeof meta.from === "string" && meta.from) {
+        pills.push('<span class="pill">From: ' + meta.from + "</span>");
+      }
+      const depends = connections.filter((edge) => {
+        if (edge.kind !== "depends-on") return false;
+        if (edge.source !== node.id) return false;
+        const other = byId.get(edge.target);
+        return !!(other && other.kind === "service" && other.metadata && other.metadata.docker);
+      });
+      const dependLinks = depends.slice(0, 8).map((edge) => {
+        const other = byId.get(edge.target);
+        return '<button class="pill connection" data-id="' + (other?.id || "") + '">needs · ' + (other?.label || "service") + "</button>";
+      }).join("");
+      if (!pills.length && !dependLinks) return "";
+      return "<h3>Container</h3>" + pills.join("") + (dependLinks ? '<p class="table-migrations">' + dependLinks + "</p>" : "");
     }
 
     // Unified tables: explain Prisma/SQL dual identity + migration lineage.
@@ -847,14 +887,26 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       });
       const metadataEntries = Object.entries(node.metadata || {}).filter(([key]) => !structuredMetaKeys.has(key));
       const metadata = metadataEntries.map(([key, value]) => '<span class="pill">' + key + ": " + String(value) + "</span>").join("");
+      const containerStory = containerStoryHtml(node, connections);
       const tableSources = tableSourcesHtml(node, incomingEdges);
       const tableRelations = tableRelationsHtml(node, connections);
       const collabLinks = collaboration.slice(0, 16).map((edge) => collaborationItem(edge, id)).join("");
-      const otherLinks = importsAndCalls.slice(0, 20).map((edge) => connectionButton(edge, id)).join("");
+      // Compose depends_on edges are owned by the Container section.
+      const otherLinks = importsAndCalls
+        .filter((edge) => {
+          if (edge.kind !== "depends-on") return true;
+          if (!(node.metadata && node.metadata.docker)) return true;
+          const otherId = edge.source === node.id ? edge.target : edge.source;
+          const other = byId.get(otherId);
+          return !(other && other.kind === "service" && other.metadata && other.metadata.docker);
+        })
+        .slice(0, 20)
+        .map((edge) => connectionButton(edge, id))
+        .join("");
       const collaborationHtml = collabLinks
         ? "<h3>Collaboration</h3>" + collabLinks
         : "";
-      const structuredSections = tableSources || tableRelations || messaging || collabLinks;
+      const structuredSections = containerStory || tableSources || tableRelations || messaging || collabLinks;
       const otherHtml = otherLinks
         ? "<h3>" + (collabLinks ? "Imports &amp; calls" : "Connections") + "</h3>" + otherLinks
         : (structuredSections ? "" : "<h3>Connections</h3><p>None visible</p>");
@@ -878,7 +930,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         const href = "vscode://file/" + graph.project.root.replace(/\\/$/, "") + "/" + item.file + ":" + line;
         return '<div class="evidence"><a href="' + href + '">' + item.file + ":" + line + '</a><div class="certainty ' + item.certainty + '">' + item.certainty + " · " + item.extractor + "</div>" + (item.detail ? "<p>" + item.detail + "</p>" : "") + "</div>";
       }).join("");
-      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + tableSources + tableRelations + messaging + binHtml + rosterHtml + keyFiles + collaborationHtml + otherHtml + "<h3>Source evidence</h3>" + evidence;
+      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + containerStory + tableSources + tableRelations + messaging + binHtml + rosterHtml + keyFiles + collaborationHtml + otherHtml + "<h3>Source evidence</h3>" + evidence;
       inspector.querySelector("h2").textContent = node.label;
       inspector.querySelectorAll(".connection").forEach((button) => {
         button.onclick = () => selectNode(button.dataset.id);

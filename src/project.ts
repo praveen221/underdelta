@@ -2039,8 +2039,17 @@ export function projectSemanticArchitecture(
       node.metadata?.docker === true &&
       typeof node.metadata?.serviceName === "string"
     ) {
-      // Compose service ids: api → API, web → Web, notes-api → Notes API.
-      nextLabel = humanizeIdentifierLabel(node.metadata.serviceName);
+      // Compose service ids: api → API, web → Web; published ports become
+      // North-star canvas vocabulary (Vote · 8080) like cron schedule phrases.
+      const base = humanizeIdentifierLabel(node.metadata.serviceName);
+      const hostPorts = Array.isArray(node.metadata.hostPorts)
+        ? node.metadata.hostPorts.filter(
+            (port): port is string => typeof port === "string" && Boolean(port),
+          )
+        : [];
+      // Prefer the primary published port; skip debugger twin ports (9229…).
+      const storyPort = hostPorts.find((port) => !/^9\d{3}$/.test(port));
+      nextLabel = storyPort ? `${base} · ${storyPort}` : base;
     }
 
     if (!nextLabel || nextLabel === node.label) continue;

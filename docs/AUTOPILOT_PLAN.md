@@ -190,6 +190,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 6 polish/lock: quiet non-compiler chrome — fold bare `schema.ts` Schema contract → HTTP API; collapse empty bin CLI + table-less Data; flowOrder HTTP API only; North-star overview HTTP API–led — **Rung 6 locked**
 - [x] Rung 7 prep: Docker/Compose extractor — `Dockerfile`/`docker-compose.y*ml` services → Deploy; path-role + Containers README; `verification/mini-docker` smoke floors + Extractors roster `docker`; quiet Dockerfile-only Deploy beside API/UI/Data
 - [x] Rung 7: pin `dockersamples/example-voting-app` @ `63e9150ca17af4ed05880d4245e486481f73fcb4`; clone into gitignored `.underdelta-real/example-voting-app`; golden-lock Vote/Result/Worker/Redis/DB/Seed under Deploy + flowOrder + compose evidence
+- [x] Rung 7 polish: Compose service story — depends_on / ports / image labels as North-star canvas vocabulary; quiet duplicate Dockerfile App image when Compose `build:` already owns the service
 
 ### Real-repo pins (Capability ladder)
 
@@ -207,7 +208,6 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 7 polish: Compose service story — depends_on / ports / image labels as North-star canvas vocabulary; quiet duplicate Dockerfile App image when Compose `build:` already owns the service
 - [ ] Rung 7 polish: dedupe compose overlay twins (`docker-compose.yml` + `docker-compose.images.yml` Vote/Result/…) into one service node; prefer build+image metadata
 - [ ] Rung 7 polish/lock: North-star Deploy-led overview for voting app (quiet thin HTTP API chrome if it steals the cold-read) then lock Rung 7
 - [ ] GraphQL `schema { query: Root }` / non-Query root types (SWAPI-style) if a later pin needs it
@@ -226,7 +226,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Rung 7 pin+golden — example-voting-app Deploy services). Now polish Compose service story (depends_on/ports/image labels + quiet duplicate Dockerfile App images when Compose `build:` owns the service) so the voting map reads as Containers, not packaging chrome.
+> **Next focus:** This work is done (Rung 7 Compose depends_on/ports/image + quiet App image twins). Now dedupe compose overlay twins (`docker-compose.yml` + `docker-compose.images.yml` Vote/Result/…) into one service node (prefer build+image metadata) so Deploy stops restating each service twice.
 
 ### Learning log (append every tick)
 
@@ -293,6 +293,7 @@ Append short bullets like:
 - 2026-08-02 06:01 UTC | Done: Rung 6 locked — `quietNonCompilerProductChrome` folds bare `schema.ts` Schema contract → HTTP API; collapses empty bin CLI + table-less Data; flowOrder skips collapsed; golden-lock North-star overview HTTP API only; promote Docker as Rung 7 | Next: Rung 7 Docker/Compose extractor + mini-docker fixture | Learned: path-role invention is correct for Underdelta’s compiler stack but steals product cold-reads — gate chrome quieting on absence of compile/extractors/graph/viewer so self-map stays rich while GraphQL example servers read as one HTTP API
 - 2026-08-02 06:05 UTC | Done: Rung 7 prep — `src/extractors/docker.ts` Compose services + Dockerfile App image; Deploy path-role; mini-docker Containers smoke (API/Web/DB + App image nested/collapsed); roster `docker`; quiet Dockerfile-only Deploy beside API/UI/Data (Petstore/RealWorld) | Next: pin real Docker/Compose OSS repo + golden-lock | Learned: bare `\bdocker\b` README heading matches "To run (via Docker)" and invents Deploy chrome — require containers/docker-compose phrasing; Dockerfile-only Deploy must collapse on API-led maps or every RealWorld pin grows a packaging lane
 - 2026-08-02 06:10 UTC | Done: Rung 7 pin+golden — `dockersamples/example-voting-app` @ `63e9150` gitignored; Vote/Result/Worker/Redis/DB/Seed nested/collapsed under Deploy; primary `docker-compose.yml` evidence; flowOrder includes Deploy; golden-lock | Next: Compose depends_on/ports/image polish + quiet Dockerfile App twins | Learned: voting app ships `docker-compose.yml` + `docker-compose.images.yml` so the same serviceName appears twice until overlay dedupe; README has no Containers heading so Deploy stays the system label; thin `GET /` HTTP API from result/server.js competes with Deploy on overview and needs a later quiet pass before lock
+- 2026-08-02 06:20 UTC | Done: Rung 7 Compose polish — parse ports/depends_on/build.context; Vote · 8080 canvas labels; needs edges; Container inspector; quiet App image when Compose build owns Dockerfile dir; golden-lock mini-docker + voting app | Next: dedupe compose overlay twins | Learned: multiline `build:` must read `context:` or vote/worker falsely own `.` and miss per-service Dockerfiles; `condition:` under depends_on map is not a service — only accept immediate children of the block key
 
 ---
 

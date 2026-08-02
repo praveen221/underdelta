@@ -61,16 +61,68 @@ export function isDockerPath(file: string): boolean {
   return isDockerComposePath(file) || isDockerfilePath(file);
 }
 
-interface ParsedComposeService {
+export interface ParsedComposeService {
   name: string;
   offset: number;
   image?: string;
   build?: string;
+  ports: string[];
+  dependsOn: string[];
+}
+
+type ServiceBlock = "depends_on" | "ports" | "build" | null;
+
+function stripYamlScalar(value: string): string {
+  return value.replace(/^['"]|['"]$/g, "").split(/\s+#/)[0]?.trim() ?? "";
+}
+
+/**
+ * Host port from a Compose ports mapping for North-star labels.
+ * `8080:80` → 8080; `127.0.0.1:9229:9229` → 9229; `3000` → 3000.
+ */
+export function hostPortFromMapping(mapping: string): string | undefined {
+  const cleaned = stripYamlScalar(mapping).split("/")[0] ?? "";
+  if (!cleaned) return undefined;
+  const parts = cleaned.split(":");
+  if (parts.length === 1) return parts[0] || undefined;
+  if (parts.length === 2) return parts[0] || undefined;
+  if (parts.length >= 3) return parts[1] || undefined;
+  return undefined;
+}
+
+/** Short image label for inspector / evidence (`postgres:15-alpine` → `postgres:15-alpine`). */
+export function shortImageLabel(image: string): string {
+  const trimmed = image.trim();
+  // Drop registry host when path is long; keep docker hub short names.
+  const withoutDigest = trimmed.split("@")[0] ?? trimmed;
+  return withoutDigest;
+}
+
+/**
+ * Resolve Compose `build` / `build.context` to a repo-relative directory
+ * that may contain a Dockerfile (so we can quiet duplicate App image nodes).
+ */
+export function composeBuildDirectory(
+  composeFile: string,
+  build: string,
+): string {
+  const normalizedCompose = composeFile.replaceAll("\\", "/");
+  const composeDir = path.posix.dirname(normalizedCompose);
+  const cleaned = build.replaceAll("\\", "/").replace(/\/$/, "") || ".";
+  const joined =
+    cleaned === "."
+      ? composeDir === "."
+        ? "."
+        : composeDir
+      : path.posix.normalize(
+          composeDir === "." ? cleaned : `${composeDir}/${cleaned}`,
+        );
+  return joined === "." ? "." : joined.replace(/^\.\//, "");
 }
 
 /**
  * Dependency-free Compose services walker for typical 2-space YAML.
- * Stops at the next top-level key (volumes/networks/…).
+ * Captures image / build(+context) / ports / depends_on for the Deploy story.
  */
 export function parseComposeServices(source: string): ParsedComposeService[] {
   const lines = source.split(/\r?\n/);
@@ -79,6 +131,8 @@ export function parseComposeServices(source: string): ParsedComposeService[] {
   let serviceIndent: number | undefined;
   const services: ParsedComposeService[] = [];
   let current: ParsedComposeService | undefined;
+  let block: ServiceBlock = null;
+  let blockIndent = 0;
 
   let offset = 0;
   for (let i = 0; i < lines.length; i++) {
@@ -103,36 +157,115 @@ export function parseComposeServices(source: string): ParsedComposeService[] {
       break;
     }
 
-    const keyMatch = /^([A-Za-z][\w-]*)\s*:\s*(.*?)\s*$/.exec(trimmed);
-    if (!keyMatch) continue;
-    const key = keyMatch[1] ?? "";
-    const rest = keyMatch[2] ?? "";
-
     if (serviceIndent === undefined && indent > servicesIndent) {
       serviceIndent = indent;
     }
 
-    if (serviceIndent !== undefined && indent === serviceIndent) {
-      current = { name: key, offset: lineOffset };
+    // New service at service indent.
+    const serviceKey = /^([A-Za-z][\w-]*)\s*:/.exec(trimmed);
+    if (serviceIndent !== undefined && indent === serviceIndent && serviceKey) {
+      current = {
+        name: serviceKey[1] ?? "",
+        offset: lineOffset,
+        ports: [],
+        dependsOn: [],
+      };
       services.push(current);
+      block = null;
       continue;
     }
 
     if (!current || serviceIndent === undefined) continue;
-    if (indent <= serviceIndent) continue;
+    if (indent <= serviceIndent) {
+      block = null;
+      continue;
+    }
 
-    // First-level keys under a service: image / build.
+    const keyMatch = /^([A-Za-z][\w-]*)\s*:\s*(.*?)\s*$/.exec(trimmed);
+    const listMatch = /^-\s+(.+?)\s*$/.exec(trimmed);
+
+    // First-level keys under a service.
     if (indent === serviceIndent + 2 || indent === serviceIndent + 1) {
+      if (!keyMatch) continue;
+      const key = keyMatch[1] ?? "";
+      const rest = keyMatch[2] ?? "";
+      block = null;
+
       if (key === "image" && rest && !rest.startsWith("|") && !rest.startsWith(">")) {
-        const image = rest.replace(/^['"]|['"]$/g, "").split(/\s+#/)[0]?.trim();
+        const image = stripYamlScalar(rest);
         if (image) current.image = image;
+        continue;
       }
+
       if (key === "build") {
         if (rest && rest !== "|" && rest !== ">") {
-          const build = rest.replace(/^['"]|['"]$/g, "").trim();
+          const build = stripYamlScalar(rest);
           if (build) current.build = build;
         } else {
-          current.build = ".";
+          // Mapping form — wait for context: under build.
+          block = "build";
+          blockIndent = indent;
+          if (!current.build) current.build = ".";
+        }
+        continue;
+      }
+
+      if (key === "ports") {
+        block = "ports";
+        blockIndent = indent;
+        continue;
+      }
+
+      if (key === "depends_on") {
+        block = "depends_on";
+        blockIndent = indent;
+        // Short inline: depends_on: [a, b] — rare; skip.
+        continue;
+      }
+
+      continue;
+    }
+
+    if (!block || indent <= blockIndent) {
+      if (indent <= blockIndent) block = null;
+      continue;
+    }
+
+    // Only immediate children of the block key (skip condition:/target: nests).
+    const immediate =
+      indent === blockIndent + 2 || indent === blockIndent + 1;
+    if (!immediate) continue;
+
+    if (block === "build" && keyMatch) {
+      const key = keyMatch[1] ?? "";
+      const rest = keyMatch[2] ?? "";
+      if (key === "context" && rest) {
+        const context = stripYamlScalar(rest);
+        if (context) current.build = context;
+      }
+      continue;
+    }
+
+    if (block === "ports" && listMatch) {
+      const port = stripYamlScalar(listMatch[1] ?? "");
+      if (port) current.ports.push(port);
+      continue;
+    }
+
+    if (block === "depends_on") {
+      // Map form: redis: { condition: ... } — dependency is the key.
+      if (keyMatch && !listMatch) {
+        const dep = keyMatch[1] ?? "";
+        if (dep && !current.dependsOn.includes(dep)) {
+          current.dependsOn.push(dep);
+        }
+        continue;
+      }
+      // List form: - redis
+      if (listMatch) {
+        const dep = stripYamlScalar(listMatch[1] ?? "");
+        if (dep && !current.dependsOn.includes(dep)) {
+          current.dependsOn.push(dep);
         }
       }
     }
@@ -164,6 +297,18 @@ export function parseDockerfile(source: string): ParsedDockerfile {
   };
 }
 
+interface PendingCompose {
+  file: string;
+  source: string;
+  services: ParsedComposeService[];
+}
+
+interface PendingDockerfile {
+  file: string;
+  source: string;
+  parsed: ParsedDockerfile;
+}
+
 export const dockerExtractor: ArchitectureExtractor = {
   id: "docker",
   version: "0.1.0",
@@ -174,6 +319,8 @@ export const dockerExtractor: ArchitectureExtractor = {
     const nodes: ArchitectureNode[] = [];
     const edges: ArchitectureEdge[] = [];
     const seen = new Set<string>();
+    const pendingCompose: PendingCompose[] = [];
+    const pendingDockerfiles: PendingDockerfile[] = [];
 
     for (const absolute of context.files) {
       const file = relativeFile(context.root, absolute);
@@ -187,118 +334,183 @@ export const dockerExtractor: ArchitectureExtractor = {
       }
 
       if (isDockerComposePath(file)) {
-        const services = parseComposeServices(source);
-        const moduleId = stableId("module", "docker", file);
-        const moduleEvidence = evidence(
+        pendingCompose.push({
           file,
           source,
-          0,
-          "Docker Compose services",
-        );
-        if (!seen.has(moduleId)) {
-          seen.add(moduleId);
-          nodes.push({
-            id: moduleId,
-            kind: "module",
-            label: file,
-            qualifiedName: file,
-            technology: "docker-compose",
-            metadata: {
-              dockerCompose: true,
-              dockerModule: true,
-            },
-            evidence: [moduleEvidence],
-          });
-        }
-
-        for (const svc of services) {
-          const serviceId = stableId("service", "docker", file, svc.name);
-          if (seen.has(serviceId)) continue;
-          seen.add(serviceId);
-          const detail = [
-            `service:${svc.name}`,
-            svc.image ? `image:${svc.image}` : undefined,
-            svc.build ? `build:${svc.build}` : undefined,
-          ]
-            .filter(Boolean)
-            .join(" ");
-          const serviceEvidence = evidence(file, source, svc.offset, detail);
-          nodes.push({
-            id: serviceId,
-            kind: "service",
-            label: svc.name,
-            technology: "docker-compose",
-            parentId: moduleId,
-            metadata: {
-              docker: true,
-              dockerService: true,
-              serviceName: svc.name,
-              ...(svc.image ? { image: svc.image } : {}),
-              ...(svc.build ? { build: svc.build } : {}),
-            },
-            evidence: [serviceEvidence],
-          });
-          edges.push(edgeFrom("exposes", moduleId, serviceId, serviceEvidence));
-        }
+          services: parseComposeServices(source),
+        });
         continue;
       }
 
       if (isDockerfilePath(file)) {
-        const parsed = parseDockerfile(source);
-        const moduleId = stableId("module", "docker", file);
-        const moduleEvidence = evidence(file, source, 0, "Dockerfile");
-        if (!seen.has(moduleId)) {
-          seen.add(moduleId);
-          nodes.push({
-            id: moduleId,
-            kind: "module",
-            label: file,
-            qualifiedName: file,
-            technology: "dockerfile",
-            metadata: {
-              dockerfile: true,
-              dockerModule: true,
-              ...(parsed.from ? { from: parsed.from } : {}),
-              ...(parsed.expose.length ? { expose: parsed.expose } : {}),
-            },
-            evidence: [moduleEvidence],
-          });
-        }
+        pendingDockerfiles.push({
+          file,
+          source,
+          parsed: parseDockerfile(source),
+        });
+      }
+    }
 
-        // Standalone image build target — product word for the container recipe.
-        const serviceId = stableId("service", "docker", file, "image");
-        if (!seen.has(serviceId)) {
-          seen.add(serviceId);
-          const detail = [
-            "dockerfile",
-            parsed.from ? `from:${parsed.from}` : undefined,
-            parsed.expose.length ? `expose:${parsed.expose.join(",")}` : undefined,
-          ]
-            .filter(Boolean)
-            .join(" ");
-          const serviceEvidence = evidence(
+    // Directories whose Compose `build:` already owns the image story —
+    // quiet duplicate Dockerfile "App image" nodes for those paths.
+    const composeOwnedDirs = new Set<string>();
+    for (const compose of pendingCompose) {
+      for (const svc of compose.services) {
+        if (!svc.build) continue;
+        composeOwnedDirs.add(composeBuildDirectory(compose.file, svc.build));
+      }
+    }
+
+    for (const compose of pendingCompose) {
+      const { file, source, services } = compose;
+      const moduleId = stableId("module", "docker", file);
+      const moduleEvidence = evidence(
+        file,
+        source,
+        0,
+        "Docker Compose services",
+      );
+      if (!seen.has(moduleId)) {
+        seen.add(moduleId);
+        nodes.push({
+          id: moduleId,
+          kind: "module",
+          label: file,
+          qualifiedName: file,
+          technology: "docker-compose",
+          metadata: {
+            dockerCompose: true,
+            dockerModule: true,
+          },
+          evidence: [moduleEvidence],
+        });
+      }
+
+      const serviceIds = new Map<string, string>();
+
+      for (const svc of services) {
+        const serviceId = stableId("service", "docker", file, svc.name);
+        if (seen.has(serviceId)) continue;
+        seen.add(serviceId);
+        serviceIds.set(svc.name, serviceId);
+
+        const hostPorts = svc.ports
+          .map(hostPortFromMapping)
+          .filter((port): port is string => Boolean(port));
+        const detail = [
+          `service:${svc.name}`,
+          svc.image ? `image:${shortImageLabel(svc.image)}` : undefined,
+          svc.build ? `build:${svc.build}` : undefined,
+          hostPorts.length ? `ports:${hostPorts.join(",")}` : undefined,
+          svc.dependsOn.length
+            ? `depends_on:${svc.dependsOn.join(",")}`
+            : undefined,
+        ]
+          .filter(Boolean)
+          .join(" ");
+        const serviceEvidence = evidence(file, source, svc.offset, detail);
+        nodes.push({
+          id: serviceId,
+          kind: "service",
+          label: svc.name,
+          technology: "docker-compose",
+          parentId: moduleId,
+          metadata: {
+            docker: true,
+            dockerService: true,
+            serviceName: svc.name,
+            ...(svc.image ? { image: shortImageLabel(svc.image) } : {}),
+            ...(svc.build ? { build: svc.build } : {}),
+            ...(svc.ports.length ? { ports: svc.ports } : {}),
+            ...(hostPorts.length ? { hostPorts } : {}),
+            ...(svc.dependsOn.length ? { dependsOn: svc.dependsOn } : {}),
+          },
+          evidence: [serviceEvidence],
+        });
+        edges.push(edgeFrom("exposes", moduleId, serviceId, serviceEvidence));
+      }
+
+      // Compose depends_on → service↔service edges (Deploy runtime story).
+      for (const svc of services) {
+        const sourceId = serviceIds.get(svc.name);
+        if (!sourceId) continue;
+        for (const dep of svc.dependsOn) {
+          const targetId = serviceIds.get(dep);
+          if (!targetId) continue;
+          const depEvidence = evidence(
             file,
             source,
-            parsed.offset,
-            detail,
+            svc.offset,
+            `needs ${dep}`,
           );
-          nodes.push({
-            id: serviceId,
-            kind: "service",
-            label: "App image",
-            technology: "dockerfile",
-            parentId: moduleId,
-            metadata: {
-              docker: true,
-              dockerfileService: true,
-              ...(parsed.from ? { from: parsed.from } : {}),
-              ...(parsed.expose.length ? { expose: parsed.expose } : {}),
-            },
-            evidence: [serviceEvidence],
-          });
-          edges.push(edgeFrom("exposes", moduleId, serviceId, serviceEvidence));
+          edges.push(
+            edgeFrom("depends-on", sourceId, targetId, depEvidence, "needs"),
+          );
         }
       }
+    }
+
+    for (const dockerfile of pendingDockerfiles) {
+      const { file, source, parsed } = dockerfile;
+      const moduleId = stableId("module", "docker", file);
+      const moduleEvidence = evidence(file, source, 0, "Dockerfile");
+      if (!seen.has(moduleId)) {
+        seen.add(moduleId);
+        nodes.push({
+          id: moduleId,
+          kind: "module",
+          label: file,
+          qualifiedName: file,
+          technology: "dockerfile",
+          metadata: {
+            dockerfile: true,
+            dockerModule: true,
+            ...(parsed.from ? { from: parsed.from } : {}),
+            ...(parsed.expose.length ? { expose: parsed.expose } : {}),
+          },
+          evidence: [moduleEvidence],
+        });
+      }
+
+      const dockerfileDir = path.posix.dirname(file.replaceAll("\\", "/"));
+      const ownedByCompose = composeOwnedDirs.has(
+        dockerfileDir === "" ? "." : dockerfileDir,
+      );
+      // Compose `build:` already names the deployable (Vote/API/…) — don't
+      // invent a twin "App image" packaging node beside it.
+      if (ownedByCompose) continue;
+
+      const serviceId = stableId("service", "docker", file, "image");
+      if (seen.has(serviceId)) continue;
+      seen.add(serviceId);
+      const detail = [
+        "dockerfile",
+        parsed.from ? `from:${parsed.from}` : undefined,
+        parsed.expose.length ? `expose:${parsed.expose.join(",")}` : undefined,
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const serviceEvidence = evidence(
+        file,
+        source,
+        parsed.offset,
+        detail,
+      );
+      nodes.push({
+        id: serviceId,
+        kind: "service",
+        label: "App image",
+        technology: "dockerfile",
+        parentId: moduleId,
+        metadata: {
+          docker: true,
+          dockerfileService: true,
+          ...(parsed.from ? { from: parsed.from } : {}),
+          ...(parsed.expose.length ? { expose: parsed.expose } : {}),
+        },
+        evidence: [serviceEvidence],
+      });
+      edges.push(edgeFrom("exposes", moduleId, serviceId, serviceEvidence));
     }
 
     return {
