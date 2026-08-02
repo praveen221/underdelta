@@ -522,12 +522,17 @@ function assignFlowOrder(
   systems: Map<string, ArchitectureNode>,
   flowPairs: Array<[string, string]>,
 ): void {
-  const keys = [...systems.keys()];
+  // Collapsed chrome systems stay in the graph for Details/search but must not
+  // occupy the Product flow band (e.g. empty CLI beside a GraphQL HTTP API).
+  const keys = [...systems.keys()].filter(
+    (key) => systems.get(key)?.metadata?.collapsedInOverview !== true,
+  );
+  const keySet = new Set(keys);
   const indegree = new Map(keys.map((key) => [key, 0]));
   const adjacency = new Map(keys.map((key) => [key, [] as string[]]));
 
   for (const [from, to] of flowPairs) {
-    if (!systems.has(from) || !systems.has(to)) continue;
+    if (!keySet.has(from) || !keySet.has(to)) continue;
     adjacency.get(from)!.push(to);
     indegree.set(to, (indegree.get(to) ?? 0) + 1);
   }
@@ -564,6 +569,143 @@ function assignFlowOrder(
       flowOrder: index,
     };
   });
+}
+
+/**
+ * On product apps (not Underdelta itself), path-role chrome can invent systems
+ * that steal the North-star cold-read: bare `schema.ts` → "Schema contract",
+ * package.json `bin` → empty "CLI", `db.ts` → empty "Data access". Fold or
+ * collapse those so an API-led map (GraphQL/OpenAPI/Express) reads cleanly.
+ * Compiler stacks (compile/extractors/graph/viewer) keep their full story.
+ */
+function quietNonCompilerProductChrome(
+  systems: Map<string, ArchitectureNode>,
+  nodes: Map<string, ArchitectureNode>,
+  edges: Map<string, ArchitectureEdge>,
+  moduleToSystem: Map<string, string>,
+  productId: string,
+): void {
+  const hasCompilerStack =
+    systems.has("compile") ||
+    systems.has("extractors") ||
+    systems.has("graph") ||
+    systems.has("viewer");
+  if (hasCompilerStack) return;
+
+  const api = systems.get("api");
+
+  // `src/schema.ts` in a GraphQL/product server is API surface, not an
+  // architecture Schema contract. Fold into HTTP API when both exist.
+  const schema = systems.get("schema");
+  if (schema && api) {
+    for (const node of nodes.values()) {
+      if (node.parentId !== schema.id) continue;
+      node.parentId = api.id;
+      node.metadata = {
+        ...node.metadata,
+        projectedSystem: "api",
+        collapsedInOverview: true,
+      };
+      nodes.set(node.id, node);
+      if (moduleToSystem.has(node.id)) {
+        moduleToSystem.set(node.id, api.id);
+      }
+    }
+    for (const [edgeId, edge] of [...edges.entries()]) {
+      if (edge.source === schema.id || edge.target === schema.id) {
+        if (edge.kind === "contains" && edge.source === schema.id) {
+          const retargeted = edgeFrom(
+            "contains",
+            api.id,
+            edge.target,
+            edge.evidence[0] ??
+              projectionEvidence(".", "Folded Schema contract module under HTTP API"),
+          );
+          edges.delete(edgeId);
+          if (!edges.has(retargeted.id)) edges.set(retargeted.id, retargeted);
+          continue;
+        }
+        edges.delete(edgeId);
+      }
+    }
+    // Drop product → schema contains; keep product → api.
+    for (const [edgeId, edge] of [...edges.entries()]) {
+      if (
+        edge.kind === "contains" &&
+        edge.source === productId &&
+        edge.target === schema.id
+      ) {
+        edges.delete(edgeId);
+      }
+    }
+    nodes.delete(schema.id);
+    systems.delete("schema");
+    api.evidence = dedupeEvidence([
+      ...api.evidence,
+      projectionEvidence(
+        ".",
+        "Folded path-role Schema contract into HTTP API (no compiler stack)",
+      ),
+    ]);
+    nodes.set(api.id, api);
+  }
+
+  // Empty CLI from package.json bin with no child modules — hide on overview.
+  const cli = systems.get("cli");
+  if (cli) {
+    const cliChildren = [...nodes.values()].some(
+      (node) => node.parentId === cli.id,
+    );
+    if (!cliChildren) {
+      cli.metadata = {
+        ...cli.metadata,
+        collapsedInOverview: true,
+      };
+      nodes.set(cli.id, cli);
+    }
+  }
+
+  // Data access with only modules/functions (no tables/collections) — quiet.
+  const data = systems.get("data");
+  if (data) {
+    const hasDataSurface = [...nodes.values()].some(
+      (node) =>
+        node.parentId === data.id &&
+        (node.kind === "table" ||
+          node.kind === "collection" ||
+          node.kind === "database"),
+    );
+    if (!hasDataSurface) {
+      data.metadata = {
+        ...data.metadata,
+        collapsedInOverview: true,
+      };
+      nodes.set(data.id, data);
+    }
+  }
+
+  // Drop flows-to / collab edges that point at collapsed chrome so the IR
+  // matches what the overview tells (no ghost API→Data story).
+  for (const [edgeId, edge] of [...edges.entries()]) {
+    if (
+      edge.kind !== "flows-to" &&
+      edge.kind !== "uses" &&
+      edge.kind !== "renders" &&
+      edge.kind !== "exposes" &&
+      edge.kind !== "triggers" &&
+      edge.kind !== "configures"
+    ) {
+      continue;
+    }
+    const source = nodes.get(edge.source);
+    const target = nodes.get(edge.target);
+    if (
+      source?.metadata?.collapsedInOverview === true ||
+      target?.metadata?.collapsedInOverview === true
+    ) {
+      edges.delete(edgeId);
+    }
+  }
 }
 
 function normalizePath(value: string): string {
@@ -2877,6 +3019,16 @@ export function projectSemanticArchitecture(
     };
     nodes.set(node.id, node);
   }
+
+  // Quiet empty CLI / Schema-contract / table-less Data chrome on product apps
+  // (GraphQL example servers, etc.) so the overview stays HTTP API–led.
+  quietNonCompilerProductChrome(
+    systems,
+    nodes,
+    edges,
+    moduleToSystem,
+    product.id,
+  );
 
   assignFlowOrder(systems, preferredFlows);
 

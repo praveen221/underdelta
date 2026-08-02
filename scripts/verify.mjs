@@ -5204,17 +5204,64 @@ if (graphqlRealRoot) {
     const graphqlRealFlow = graphqlRealSemantic
       .filter((node) => typeof node.metadata?.flowOrder === "number")
       .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
-    const graphqlRealFlowHasApi = graphqlRealFlow.some(
-      (node) => node.metadata?.systemKey === "api",
+    const graphqlRealFlowKeys = graphqlRealFlow.map(
+      (node) => node.metadata?.systemKey,
     );
-    if (!graphqlRealFlowHasApi) {
+    if (
+      graphqlRealFlow.length !== 1 ||
+      graphqlRealFlowKeys[0] !== "api"
+    ) {
       fail(
-        `graphql-real-repo flowOrder expected HTTP API, got ${graphqlRealFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+        `graphql-real-repo flowOrder expected HTTP API only, got ${graphqlRealFlow.map((node) => node.label).join(" → ") || "(none)"}`,
       );
     } else {
       pass(
-        `graphql-real-repo flowOrder includes HTTP API: ${graphqlRealFlow.map((node) => node.label).join(" → ")}`,
+        `graphql-real-repo flowOrder is HTTP API only: ${graphqlRealFlow.map((node) => node.label).join(" → ")}`,
       );
+    }
+
+    // Path-role chrome: bare schema.ts must fold under HTTP API (not invent a
+    // competing Schema contract); empty bin CLI + table-less Data stay collapsed.
+    const graphqlRealSchemaSystem = graphqlRealSemantic.find(
+      (node) => node.metadata?.systemKey === "schema",
+    );
+    if (graphqlRealSchemaSystem) {
+      fail(
+        `graphql-real-repo should fold Schema contract into HTTP API, still: ${graphqlRealSchemaSystem.label}`,
+      );
+    } else {
+      pass("graphql-real-repo has no Schema contract system (folded into HTTP API)");
+    }
+    const graphqlRealSchemaModule = graphqlRealGraph.nodes.find(
+      (node) =>
+        node.kind === "module" && /(?:^|\/)schema\.ts$/i.test(node.label),
+    );
+    if (
+      !graphqlRealSchemaModule ||
+      graphqlRealSchemaModule.parentId !== graphqlRealApi?.id ||
+      graphqlRealSchemaModule.metadata?.collapsedInOverview !== true
+    ) {
+      fail(
+        `graphql-real-repo schema.ts should nest+collapse under HTTP API, found parent=${graphqlRealSchemaModule?.parentId ?? "(missing)"} collapsed=${graphqlRealSchemaModule?.metadata?.collapsedInOverview}`,
+      );
+    } else {
+      pass("graphql-real-repo schema.ts nested+collapsed under HTTP API");
+    }
+    const graphqlRealCli = graphqlRealByKey.get("cli");
+    if (!graphqlRealCli || graphqlRealCli.metadata?.collapsedInOverview !== true) {
+      fail(
+        `graphql-real-repo empty bin CLI should collapse on overview, found ${graphqlRealCli ? `collapsed=${graphqlRealCli.metadata?.collapsedInOverview}` : "(missing)"}`,
+      );
+    } else {
+      pass("graphql-real-repo empty CLI collapsed on overview");
+    }
+    const graphqlRealData = graphqlRealByKey.get("data");
+    if (!graphqlRealData || graphqlRealData.metadata?.collapsedInOverview !== true) {
+      fail(
+        `graphql-real-repo table-less Data access should collapse on overview, found ${graphqlRealData ? `collapsed=${graphqlRealData.metadata?.collapsedInOverview}` : "(missing)"}`,
+      );
+    } else {
+      pass("graphql-real-repo table-less Data access collapsed on overview");
     }
 
     const graphqlRealSpecModules = graphqlRealGraph.nodes.filter(
@@ -5274,6 +5321,33 @@ if (graphqlRealRoot) {
     } else {
       pass(
         "graphql-real-repo has no Checkout/orders commerce collaboration noise",
+      );
+    }
+
+    // Cold-read: overview should tell "GraphQL Client Example Server → HTTP API"
+    // with CLI/Schema/Data chrome quiet (viewer also hides function/module leaves).
+    const graphqlOverviewHiddenKinds = new Set([
+      "function",
+      "column",
+      "module",
+      "pipeline-step",
+    ]);
+    const graphqlRealOverviewChrome = graphqlRealGraph.nodes.filter(
+      (node) =>
+        node.kind !== "product" &&
+        !graphqlOverviewHiddenKinds.has(node.kind) &&
+        node.metadata?.collapsedInOverview !== true &&
+        node.metadata?.systemKey !== "api",
+    );
+    if (graphqlRealOverviewChrome.length > 0) {
+      fail(
+        `graphql-real-repo North-star overview should only show HTTP API, still: ${graphqlRealOverviewChrome
+          .map((node) => `${node.kind}:${node.label}`)
+          .join(", ")}`,
+      );
+    } else {
+      pass(
+        "graphql-real-repo North-star overview is HTTP API only (GraphQL story)",
       );
     }
   }
