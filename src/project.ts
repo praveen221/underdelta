@@ -17,9 +17,12 @@ const preferredFlows: Array<[string, string]> = [
   ["cli", "compile"],
   ["compile", "extractors"],
   ["extractors", "graph"],
-  ["graph", "viewer"],
+  ["compile", "artifact"],
+  ["graph", "artifact"],
+  ["artifact", "viewer"],
   ["schema", "graph"],
   ["schema", "extractors"],
+  ["ui", "api"],
   ["api", "pipelines"],
   ["api", "workers"],
   ["api", "data"],
@@ -28,6 +31,52 @@ const preferredFlows: Array<[string, string]> = [
   ["workers", "data"],
   ["viewer", "api"],
 ];
+
+function assignFlowOrder(
+  systems: Map<string, ArchitectureNode>,
+  flowPairs: Array<[string, string]>,
+): void {
+  const keys = [...systems.keys()];
+  const indegree = new Map(keys.map((key) => [key, 0]));
+  const adjacency = new Map(keys.map((key) => [key, [] as string[]]));
+
+  for (const [from, to] of flowPairs) {
+    if (!systems.has(from) || !systems.has(to)) continue;
+    adjacency.get(from)!.push(to);
+    indegree.set(to, (indegree.get(to) ?? 0) + 1);
+  }
+
+  const queue = keys
+    .filter((key) => (indegree.get(key) ?? 0) === 0)
+    .sort((a, b) => a.localeCompare(b));
+  const ordered: string[] = [];
+
+  while (queue.length) {
+    const key = queue.shift()!;
+    ordered.push(key);
+    for (const next of adjacency.get(key) ?? []) {
+      const nextDegree = (indegree.get(next) ?? 0) - 1;
+      indegree.set(next, nextDegree);
+      if (nextDegree === 0) {
+        queue.push(next);
+        queue.sort((a, b) => a.localeCompare(b));
+      }
+    }
+  }
+
+  for (const key of keys) {
+    if (!ordered.includes(key)) ordered.push(key);
+  }
+
+  ordered.forEach((key, index) => {
+    const node = systems.get(key);
+    if (!node) return;
+    node.metadata = {
+      ...node.metadata,
+      flowOrder: index,
+    };
+  });
+}
 
 function normalizePath(value: string): string {
   return value.replaceAll("\\", "/");
@@ -414,6 +463,42 @@ export function projectSemanticArchitecture(
     if (!edges.has(dependency.id)) edges.set(dependency.id, dependency);
   }
 
+  // Synthesize the compiled architecture artifact on tooling self-maps.
+  if (
+    (systems.has("compile") || systems.has("graph")) &&
+    (systems.has("viewer") || systems.has("cli"))
+  ) {
+    const artifactId = stableId("system", "artifact");
+    const artifact: ArchitectureNode = {
+      id: artifactId,
+      kind: "config",
+      label: "architecture.json",
+      technology: "underdelta",
+      metadata: {
+        projection: "semantic",
+        systemKey: "artifact",
+        role: "artifact",
+      },
+      evidence: [
+        {
+          file: ".underdelta/architecture.json",
+          extractor: "projection",
+          certainty: "derived",
+          detail: "Compiled portable architecture IR written by underdelta scan",
+        },
+      ],
+    };
+    systems.set("artifact", artifact);
+    nodes.set(artifact.id, artifact);
+    const productEdge = edgeFrom(
+      "contains",
+      product.id,
+      artifact.id,
+      artifact.evidence[0]!,
+    );
+    edges.set(productEdge.id, productEdge);
+  }
+
   const systemsByKey = new Map(
     [...systems.entries()].map(([key, node]) => [key, node.id]),
   );
@@ -434,6 +519,11 @@ export function projectSemanticArchitecture(
       `${fromKey} → ${toKey}`,
     );
     if (!edges.has(flow.id)) edges.set(flow.id, flow);
+  }
+
+  assignFlowOrder(systems, preferredFlows);
+  for (const system of systems.values()) {
+    nodes.set(system.id, system);
   }
 
   const projected: ArchitectureGraph = {

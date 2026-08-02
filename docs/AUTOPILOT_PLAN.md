@@ -79,22 +79,24 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Distinguish Viewer vs UI projection labels; hide pipeline-steps by default
 - [x] Richer verify: fixture system labels, table dedupe, API contains routes
 - [x] Plan hardened: product-build > merge-prep, never-idle, self-renewing backlog
+- [x] Flow-ordered Product flow band in viewer (`metadata.flowOrder`)
+- [x] Explicit `architecture.json` artifact node on Underdelta self-map (compile/graph → artifact → viewer)
+- [x] Verify asserts artifact node, flowOrder chain, and artifact flows-to links
 
 ### In progress / next
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Overview layout: rank/position systems by flows-to so the browser reads left-to-right
-- [ ] Surface `architecture.json` / output artifact as an explicit node in Underdelta self-map
-- [ ] Expand projection heuristics beyond filename conventions (package exports, README roles)
-- [ ] Expand verify assertions as new architectural kinds become extractable
+- [ ] Better cron/job labeling (not raw `"0 * * * *"` only)
+- [ ] Nest extracted `checkout` pipeline under Pipelines without duplicate confusion
+- [ ] Collapse noisy default-visible leaves when a parent system already tells the story
+- [ ] Projection from package.json exports / bin entries / README headings
+- [ ] Inspector: show system → key files prominently
 
 ### Seed backlog (pull from here when In progress < 3)
 
 Not a full roadmap — a menu the agent may reorder. Pick what most improves the end goal now.
 
-- Flow-ordered / dependency-ordered overview layout in the viewer
-- Explicit artifact node(s): `architecture.json`, generated browser, CLI commands
 - Richer Underdelta self-map edges (compile uses extractors, viewer renders graph, etc.)
 - Projection from package.json exports / bin entries / README headings
 - Better cron/job labeling (not raw `"0 * * * *"` only)
@@ -102,16 +104,16 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 - Nest or relate extracted `checkout` pipeline under Pipelines without duplicate confusion
 - Collapse noisy default-visible leaves when a parent system already tells the story
 - Inspector: show system → key files prominently
+- Generated browser artifact node (`index.html`) beside architecture.json
 - Multi-file route frameworks / Next-style app router hints (only if it helps the chosen stack)
 - SQL + Prisma table unification polish (names, relations, migrations edge)
-- Verify: assert flow-order metadata / artifact node / no duplicate tables forever
 - Capture a “scan Underdelta” golden summary in verify (counts + required labels)
 - Performance pass only if scan becomes painful on mini-stack / self repo
 - Docs only when CLI/behavior changed
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (plan hardened for unattended product building). Now implement flow-ordered overview layout (systems ranked by flows-to / depends-on) and add an explicit `architecture.json` artifact node on the Underdelta self-map so compile → artifact → viewer reads as one story.
+> **Next focus:** This work is done (Product flow band + architecture.json artifact). Now improve mini-stack readability: humanize cron labels, nest the extracted `checkout` pipeline under Pipelines, and collapse noisy default-visible leaves that duplicate their parent systems.
 
 ### Learning log (append every tick)
 
@@ -126,6 +128,7 @@ Append short bullets like:
 - 2026-08-02 02:28 UTC | Done: semantic projection + self-map systems + Details toggle | Next: diagram quality pass | Learned: Autopilot does not self-wake between ticks—each 15m iteration needs a new agent trigger; path-role projection is enough to turn a module hairball into CLI/Compile/Extractors/Graph/Viewer
 - 2026-08-02 02:32 UTC | Done: nest runtime nodes under systems, dedupe tables, UI vs Viewer, richer verify | Next: flow-ordered layout + architecture.json artifact node | Learned: Prisma+SQL+usage tables triple-count without normalization; high-signal nodes must be reparented onto systems or the overview still feels like a parts bin
 - 2026-08-02 02:50 UTC | Done: hardened plan (product-build > merge-prep, never-idle, self-renewing backlog) | Next: flow-ordered layout + artifact node | Learned: checklist exhaustion and merge-ready autopilot skill can falsely idle a build loop unless the plan forbids it
+- 2026-08-02 02:55 UTC | Done: flowOrder Product flow band + architecture.json artifact + verify | Next: cron labels, nest checkout pipeline, collapse duplicate leaves | Learned: left-to-right product story needs a dedicated flow band above lanes; artifact should sit between compile/graph and viewer
 
 ---
 

@@ -76,6 +76,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     .node[data-kind="pipeline"], .node[data-kind="pipeline-step"] { --kind-color: #d09a45; clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%, 12px 50%); padding-left: 20px; }
     .node[data-kind="external"] { --kind-color: #b16fc5; border-style: dotted; border-width: 2px; }
     .node[data-kind="config"] { --kind-color: #9099a6; border-radius: 2px; }
+    .node[data-role="artifact"] { --kind-color: #c4a35a; border-style: dashed; border-width: 2px; }
     aside { min-width: 0; border-left: 1px solid var(--line); background: var(--panel); overflow: auto; padding: 16px; }
     aside h2 { margin: 0 0 4px; font-size: 17px; }
     aside h3 { margin: 20px 0 8px; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
@@ -225,46 +226,90 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       return 190;
     }
 
+    function flowOrderOf(node) {
+      const value = node.metadata && node.metadata.flowOrder;
+      return typeof value === "number" ? value : null;
+    }
+
+    function placeNode(node, x, y) {
+      positionsScratch.set(node.id, { x, y, width: widthForKind(node.kind) });
+      const element = document.createElement("div");
+      element.className = "node" + (state.selected === node.id ? " selected" : "");
+      element.dataset.kind = node.kind;
+      element.dataset.id = node.id;
+      if (node.metadata && node.metadata.role) element.dataset.role = node.metadata.role;
+      element.style.left = x + "px";
+      element.style.top = y + "px";
+      element.innerHTML = '<div class="top"><span class="glyph">' + iconForKind(node.kind) + '</span><span class="label"></span></div><div class="kind">' + node.kind.replace("-", " ") + (node.technology ? " · " + node.technology : "") + "</div>";
+      element.querySelector(".label").textContent = node.label;
+      element.onclick = (event) => { event.stopPropagation(); selectNode(node.id); };
+      element.ondblclick = (event) => { event.stopPropagation(); focusNode(node.id); };
+      nodesLayer.appendChild(element);
+      return y + 70;
+    }
+
+    let positionsScratch = new Map();
+
     function render() {
       const visible = visibleNodes();
       const visibleIds = new Set(visible.map((node) => node.id));
-      const positions = new Map();
+      positionsScratch = new Map();
+      const positions = positionsScratch;
       nodesLayer.innerHTML = "";
       const activeLanes = lanes.filter((lane) => state.implementation || lane.name !== "Details");
       const laneWidth = 240;
+      const flowGap = 220;
       let maxHeight = 0;
+      let maxWidth = activeLanes.length * laneWidth + 200;
+
+      const flowNodes = visible
+        .filter((node) => flowOrderOf(node) !== null)
+        .sort((a, b) => flowOrderOf(a) - flowOrderOf(b) || a.label.localeCompare(b.label));
+      const flowIds = new Set(flowNodes.map((node) => node.id));
+      let laneTop = 0;
+
+      if (flowNodes.length) {
+        const label = document.createElement("div");
+        label.className = "lane-label";
+        label.textContent = "Product flow";
+        label.style.left = "0px";
+        label.style.top = "0px";
+        nodesLayer.appendChild(label);
+        flowNodes.forEach((node, index) => {
+          const x = index * flowGap;
+          const y = 34;
+          placeNode(node, x, y);
+          maxHeight = Math.max(maxHeight, y + 70);
+          maxWidth = Math.max(maxWidth, x + widthForKind(node.kind) + 80);
+        });
+        laneTop = 130;
+      }
 
       activeLanes.forEach((lane, laneIndex) => {
-        const laneNodes = visible.filter((node) => lane.kinds.includes(node.kind));
+        const laneNodes = visible.filter((node) => lane.kinds.includes(node.kind) && !flowIds.has(node.id));
         if (!laneNodes.length) return;
         const label = document.createElement("div");
         label.className = "lane-label";
         label.textContent = lane.name;
         label.style.left = (laneIndex * laneWidth) + "px";
-        label.style.top = "0px";
+        label.style.top = laneTop + "px";
         nodesLayer.appendChild(label);
-        laneNodes.sort((a, b) => a.kind.localeCompare(b.kind) || a.label.localeCompare(b.label));
+        laneNodes.sort((a, b) => {
+          const ao = flowOrderOf(a);
+          const bo = flowOrderOf(b);
+          if (ao !== null || bo !== null) return (ao ?? 999) - (bo ?? 999) || a.label.localeCompare(b.label);
+          return a.kind.localeCompare(b.kind) || a.label.localeCompare(b.label);
+        });
         laneNodes.forEach((node, index) => {
           const x = laneIndex * laneWidth;
-          const y = 34 + index * 78;
-          positions.set(node.id, { x, y, width: widthForKind(node.kind) });
+          const y = laneTop + 34 + index * 78;
+          placeNode(node, x, y);
           maxHeight = Math.max(maxHeight, y + 70);
-          const element = document.createElement("div");
-          element.className = "node" + (state.selected === node.id ? " selected" : "");
-          element.dataset.kind = node.kind;
-          element.dataset.id = node.id;
-          element.style.left = x + "px";
-          element.style.top = y + "px";
-          element.innerHTML = '<div class="top"><span class="glyph">' + iconForKind(node.kind) + '</span><span class="label"></span></div><div class="kind">' + node.kind.replace("-", " ") + (node.technology ? " · " + node.technology : "") + "</div>";
-          element.querySelector(".label").textContent = node.label;
-          element.onclick = (event) => { event.stopPropagation(); selectNode(node.id); };
-          element.ondblclick = (event) => { event.stopPropagation(); focusNode(node.id); };
-          nodesLayer.appendChild(element);
         });
       });
 
       edgesLayer.innerHTML = "";
-      edgesLayer.setAttribute("width", String(activeLanes.length * laneWidth + 200));
+      edgesLayer.setAttribute("width", String(maxWidth));
       edgesLayer.setAttribute("height", String(maxHeight + 100));
       for (const edge of graph.edges) {
         if (!visibleIds.has(edge.source) || !visibleIds.has(edge.target)) continue;

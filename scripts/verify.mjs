@@ -101,7 +101,7 @@ const selfGraph = productGraph;
 const selfLabels = new Set(
   selfGraph.nodes
     .filter((node) =>
-      ["system", "pipeline", "ui", "api"].includes(node.kind),
+      ["system", "pipeline", "ui", "api", "config"].includes(node.kind),
     )
     .map((node) => node.label),
 );
@@ -112,12 +112,46 @@ for (const expected of [
   "Graph assembly",
   "Schema contract",
   "Viewer",
+  "architecture.json",
 ]) {
   if (!selfLabels.has(expected)) {
     fail(`Underdelta self-map missing semantic node '${expected}'`);
   } else {
     pass(`self-map has '${expected}'`);
   }
+}
+
+const artifact = selfGraph.nodes.find(
+  (node) =>
+    node.label === "architecture.json" && node.metadata?.role === "artifact",
+);
+if (!artifact) {
+  fail("missing architecture.json artifact node with role=artifact");
+} else {
+  pass("architecture.json artifact node present");
+}
+
+const flowOrdered = selfGraph.nodes.filter(
+  (node) => typeof node.metadata?.flowOrder === "number",
+);
+if (flowOrdered.length < 5) {
+  fail(`expected flowOrder on self-map systems, found ${flowOrdered.length}`);
+} else {
+  const orderedLabels = [...flowOrdered]
+    .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder)
+    .map((node) => node.label);
+  pass(`self-map flowOrder: ${orderedLabels.join(" → ")}`);
+}
+
+const artifactFlow = selfGraph.edges.some(
+  (edge) =>
+    edge.kind === "flows-to" &&
+    (edge.source === artifact?.id || edge.target === artifact?.id),
+);
+if (!artifactFlow) {
+  fail("architecture.json artifact missing flows-to linkage");
+} else {
+  pass("architecture.json participates in product flow");
 }
 
 const fixtureSystems = fixtureGraph.nodes.filter(
