@@ -140,26 +140,27 @@ Update checkboxes + Next focus every tick (unless Idle protocol).
 - [x] Search enters cluster: `clusterRootFor` + `enterSearchMatch` (Enter/click); results list; calmOverview ignores query (no god-graph dump); verify floors  
 - [x] Persist last tier/focus in `sessionStorage` (`persistWalkState` / `restoreWalkState`, key per project root); stale ids fall back to Beginner; verify floor  
 - [x] Mini-stack + self-map pin spot-check recorded in Learning log (`npm run verify` floors as evidence)  
+- [x] Docs: short “How to read the map” blurb in README (tiers + search enters cluster + reload keeps walk)  
 
 ### In progress / next
 
 Keep **at least 3 unchecked items** here until LOOP COMPLETE (refill from Seed backlog).  
 These remaining items are the **mandatory** walkable slice — finishing them (with gates 1–8) is what completes the loop:
 
-- [ ] Docs: short “How to read the map” blurb in README (tiers + search enters cluster + reload keeps walk)  
 - [ ] Final LOOP COMPLETE gate pass (re-check gates 1–8 in one tick; set Loop status)  
-- [ ] *(slot kept for ≥3 until LOOP COMPLETE — seed empty; do not invent polish; README then completion tick)*  
+- [ ] *(slot — completion tick only; do not invent polish)*  
+- [ ] *(slot — completion tick only; do not invent polish)*  
 
 ### Seed backlog (optional — not required for LOOP COMPLETE)
 
 Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder freely.  
 **Do not** use this list to delay LOOP COMPLETE after gates 1–8 pass.
 
-- *(empty — do not invent polish; finish README then LOOP COMPLETE)*  
+- *(empty — do not invent polish; next tick is LOOP COMPLETE gate pass only)*  
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (mini-stack + self-map walkable pin spot-check via verify floors). Now README “How to read the map” blurb (tiers + search enters cluster + reload keeps walk) so LOOP COMPLETE gate pass can close the loop.
+> **Next focus:** This work is done (README “How to read the map” blurb). Now Final LOOP COMPLETE gate pass (re-check gates 1–8; set Loop status) so the idle protocol can stop push→wake loops.
 
 ### Learning log (append every tick)
 
@@ -180,6 +181,7 @@ Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder fr
 - 2026-08-02 14:25 UTC | Done: Search Enter/click → clusterRootFor + enterSearchMatch; results list; calmOverview ignores query; verify createCheckout/Order/Extractors floors | Next: sessionStorage tier/focus | Learned: query-driven visibleNodes was the god-graph; jump via cluster roots (function→module, table→system) keeps Find aligned with double-click walk  
 - 2026-08-02 14:28 UTC | Done: sessionStorage persistWalkState/restoreWalkState (tier+focus+history+selected; key per project root; stale ids → Beginner); verify floor | Next: mini-stack + real-repo pin spot-check in Learning log | Learned: restore must keep manual Advanced-without-focus (don’t always syncTierToFocus on hydrate) or reload fights the View cycle; validate every id against byId  
 - 2026-08-02 14:30 UTC | Done: spot-check — `npm run build` + `npm run verify` green; mini-stack Beginner 6 flow (Storefront→…→Catalog; no Order/Payment/queue leak); Checkout Intermediate 9 nodes (routes+collab, no tables); self-map Beginner 8 (CLI→…→index.html); Extractors Intermediate 16 / Advanced 13 modules (no function dump); typescript module Advanced 20 functions; search createCheckout→src/server.ts | Next: README “How to read the map” | Learned: verify walkable floors already pin both demo surfaces; a separate manual browser pass would only restate the same Beginner/focus/Advanced assertions  
+- 2026-08-02 14:35 UTC | Done: README “How to read the map” — Beginner/Intermediate/Advanced walk, Find→cluster, Back/Esc/Overview, reload keeps tab-session walk | Next: LOOP COMPLETE gate pass | Learned: keep the blurb under Try it so scan users hit tiers before the schema dump; mirror viewer chrome words (View / Find / Back / Esc) so docs and UI stay one vocabulary  
 
 ---
 

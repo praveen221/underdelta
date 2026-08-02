@@ -59,6 +59,16 @@ product rather than development scaffolding.
 npm run verify   # fixture + golden-lock suite
 ```
 
+## How to read the map
+
+The browser is a walk, not a dump of every function.
+
+1. **Beginner** (default) — Product Flow and top systems. Answers “what did I build?” without opening the parts bin.
+2. **Intermediate** — Double-click a system (or use **Find…** and press Enter / click a result) to enter that cluster’s neighborhood only.
+3. **Advanced** — Modules and functions appear **inside the current focus**, never as a whole-repo phonebook. Drill a module/api for functions.
+
+**Back** / **Esc** steps toward Intermediate, then Beginner; **Overview** jumps home. Reloading the same project keeps your last view, focus, and selection for the tab session.
+
 ## Core contract
 
 `architecture.json` contains typed nodes and relationships:
