@@ -59,22 +59,81 @@ Keep shipping ticks while any of these are true:
 - Verify/build broken, or self-map/mini-stack visually regressed  
 - Plan Status board Next focus empty while End goal unmet  
 
-When the End goal definition above is met, **stop inventing work**. Mark the plan **LOOP COMPLETE**, push, and leave a short “handoff” note under Learning log. Do **not** start query APIs, new languages, or infra editing on this branch.
+---
+
+## LOOP COMPLETE — soft stop (do not stop early)
+
+Automation may keep **waking** ticks (e.g. on every push). That is OK.  
+Once this section says **LOOP COMPLETE**, woken ticks must **idle without inventing** and **must not push** (push would retrigger forever).
+
+### Do not mark LOOP COMPLETE early
+
+Mark **LOOP COMPLETE** only when **every** acceptance gate below is true.  
+If even one gate fails → keep shipping ticks (refill backlog if needed).  
+Do **not** mark complete because: PR is mergeable, checklist looks long, “good enough”, or polish feels endless.
+
+#### Acceptance gates (all required)
+
+1. **Tier UX exists** — User-visible Beginner / Intermediate / Advanced (or equivalent plain-language controls). Not only a raw “Details on/off” that dumps the repo.  
+2. **Beginner cold open** — Default view is Product Flow + top systems; no whole-repo function/module phonebook; self-map answers “what did I build?” without drilling.  
+3. **Intermediate focus** — User can enter/focus a system (e.g. Extractors, Compile, mini-stack API) and see that system’s important neighborhood only.  
+4. **Advanced is cluster-scoped** — Functions/modules/dense edges appear only for the current focus; Advanced/Details must **not** fan out every function in the repository.  
+5. **Navigation** — Breadcrumb and/or Back returns to Intermediate then Beginner (Esc back is a plus, not a gate).  
+6. **Verify green** — `npm run build` and `npm run verify` pass; tier/focus behavior has golden floors where practical.  
+7. **Standing guarantee** — Self-map + mini-stack still demo-ready (no visual regression that makes Beginner worse than pre-loop).  
+8. **Status board** — All seven In-progress walkable items checked (or explicitly cancelled with Learning-log reason); Seed backlog items may remain unchecked forever — they are optional polish, **not** blockers for LOOP COMPLETE.
+
+Optional Seed backlog (edge restyle, search-enters-cluster, Esc, sessionStorage, README blurb) is **nice-to-have**. Prefer LOOP COMPLETE over infinite polish once gates 1–8 pass.
+
+### How to declare LOOP COMPLETE (one-time)
+
+When gates 1–8 all pass in a single tick:
+
+1. Set **Loop status** below to `LOOP COMPLETE`.  
+2. Rewrite Next focus to: `LOOP COMPLETE — idle. Do not invent work. Human should disable push-automation when convenient.`  
+3. Append Learning log handoff line.  
+4. Commit + push **once** (this final status push may wake one more tick — that next tick must follow Idle protocol and **not** push).  
+
+### Idle protocol (every tick while Loop status = LOOP COMPLETE)
+
+A woken agent must:
+
+1. Concurrency + sync/health check as usual.  
+2. Re-read acceptance gates.  
+3. **If any gate regressed** (verify fail, Beginner dumps functions again, focus broken): clear LOOP COMPLETE → set Loop status back to `ACTIVE`, put the regression in Next focus, fix it, then you may push.  
+4. **If all gates still pass:**  
+   - Do **not** invent features, polish, or backlog items  
+   - Do **not** refill In progress  
+   - Do **not** commit  
+   - Do **not** push (critical: avoids push→wake→push loops)  
+   - Exit the tick immediately with a one-line summary: `IDLE: LOOP COMPLETE — no push`  
+
+Human still turns off automation for a hard stop; Idle protocol stops the **runaway commit cycle**.
+
+### Loop status
+
+```text
+ACTIVE
+```
+
+*(Change the line above to `LOOP COMPLETE` only when acceptance gates 1–8 all pass.)*
 
 ---
 
 ## Status board
 
-Update checkboxes + Next focus every tick.
+Update checkboxes + Next focus every tick (unless Idle protocol).
 
 ### Done
 
 - [x] v0 on `master` (extractors, projection, viewer, verify, one-command scan) — prior work  
 - [x] This loop plan created  
+- [x] Soft-stop / LOOP COMPLETE idle protocol documented  
 
 ### In progress / next
 
-Keep **at least 3 unchecked items** here until LOOP COMPLETE (refill from Seed backlog).
+Keep **at least 3 unchecked items** here until LOOP COMPLETE (refill from Seed backlog).  
+These seven are the **mandatory** walkable slice — finishing them (with gates 1–8) is what completes the loop:
 
 - [ ] Define tier model in viewer UX: Beginner (default) / Intermediate / Advanced — labels a non-coder understands (not only “Details on/off”)  
 - [ ] Beginner cold open: Product Flow + systems; hide function/module hairballs by default on self-map + mini-stack  
@@ -84,9 +143,10 @@ Keep **at least 3 unchecked items** here until LOOP COMPLETE (refill from Seed b
 - [ ] Verify golden floors for tier/focus behavior (self-map and/or mini-stack)  
 - [ ] Polish pass: legend/inspector copy matches tiers; standing guarantee self-map cold-read  
 
-### Seed backlog (walkable-graph only)
+### Seed backlog (optional — not required for LOOP COMPLETE)
 
-Pull from here when In progress &lt; 3. Reorder freely.
+Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder freely.  
+**Do not** use this list to delay LOOP COMPLETE after gates 1–8 pass.
 
 - Collapse or restyle derived edge fans so Intermediate isn’t yellow spaghetti  
 - Search jumps to a node and **enters its cluster** (not only highlights in a god-graph)  
@@ -97,7 +157,7 @@ Pull from here when In progress &lt; 3. Reorder freely.
 
 ### Next focus (edit every tick)
 
-> **Next focus:** Plan armed. First implement a clear Beginner vs Intermediate vs Advanced model in the viewer (replace or wrap “Details: on/off”) so cold open stays Product-Flow-led and Details no longer means “show every function in the repo.”
+> **Next focus:** Plan armed (soft-stop documented). First implement a clear Beginner vs Intermediate vs Advanced model in the viewer (replace or wrap “Details: on/off”) so cold open stays Product-Flow-led and Details no longer means “show every function in the repo.”
 
 ### Learning log (append every tick)
 
@@ -106,6 +166,7 @@ Pull from here when In progress &lt; 3. Reorder freely.
 ```
 
 - 2026-08-02 | Plan created for walkable 3-tier graph on `walkable-graph-02082026` | Next: tier model in viewer | Learned: v0 Product Flow is strong; Details-on whole-repo dump is the failure mode to kill  
+- 2026-08-02 | Soft-stop hardened: acceptance gates 1–8, Loop status ACTIVE/COMPLETE, idle ticks must not push | Next: tier model in viewer | Learned: push-triggered automation only runs away if idle ticks still commit/push  
 
 ---
 
@@ -124,26 +185,32 @@ Pull from here when In progress &lt; 3. Reorder freely.
    - `npm run build` and `npm run verify` must pass (or fix failures first as the tick’s only job)  
    - Reconcile Status board with what actually landed (prior tick may have been cancelled mid-push)
 
-3. **Read this file.** Refill In progress to ≥ 3 if needed. Take **exactly one** Next focus increment.
+3. **LOOP COMPLETE gate (mandatory)**  
+   Read **Loop status**. If it is `LOOP COMPLETE`, follow **Idle protocol** above (re-check gates; fix regressions with push; otherwise **no commit, no push, exit**).  
+   Do not proceed to invent work.
 
-4. **Implement that increment only** (walkable graph > merge hygiene > docs).
+4. **Read this file.** While ACTIVE: refill In progress to ≥ 3 if needed (mandatory seven first; optional seed only to fill). Take **exactly one** Next focus increment.  
+   Do **not** declare LOOP COMPLETE until acceptance gates 1–8 all pass.
 
-5. **Verify:**
+5. **Implement that increment only** (walkable graph > merge hygiene > docs).
+
+6. **Verify:**
    - `npm run build`
    - `npm run verify`
    - Spot-check: Beginner cold open on self-map must not show whole-repo function lists  
 
-6. **Update this markdown** in the **same commit** as the code when possible:
+7. **Update this markdown** in the **same commit** as the code when possible:
    - check off Done  
    - keep ≥ 3 open next items until LOOP COMPLETE  
    - rewrite Next focus: `This work is done (X). Now do Y so we can reach Z.`  
    - append one Learning log line  
+   - if gates 1–8 now all pass → set Loop status to `LOOP COMPLETE` (see How to declare)
 
-7. **Commit + push** to `walkable-graph-02082026` only; update the existing draft PR for this branch.  
-   Prefer one commit = feature + plan update (avoids desync if a push-triggered rerun cancels the tick).
+8. **Commit + push** to `walkable-graph-02082026` only; update the existing draft PR for this branch.  
+   Prefer one commit = feature + plan update (avoids desync if a push-triggered rerun cancels the tick).  
+   **Exception:** Idle protocol after LOOP COMPLETE — no push.
 
-8. **Stop the tick.** Do not start a second major feature in the same tick.  
-   Stopping ≠ mission complete — unless End goal is met (then mark LOOP COMPLETE and stop inventing).
+9. **Stop the tick.** Do not start a second major feature in the same tick.
 
 ---
 
@@ -187,32 +254,34 @@ CANONICAL PLAN FILE (read + update every tick):
 MISSION:
 Make the architecture browser 3-tier and walkable (Beginner / Intermediate / Advanced).
 Advanced detail must be cluster-scoped. Do NOT dump whole-repo functions when Details is on.
-Do NOT idle just because the PR is mergeable. Do NOT invent new extractors or languages.
+Do NOT idle early (PR mergeable ≠ done). Do NOT invent new extractors or languages.
+When plan Loop status is LOOP COMPLETE: IDLE — no invent, no commit, no push (unless a gate regressed).
 
 HARD LOCKS:
 1) Work ONLY on branch `walkable-graph-02082026`. Never checkout master for feature work. Never open a second PR.
 2) Update the existing draft PR for this branch only.
-3) Commit + push small chunks; prefer feature + plan update in one commit.
+3) Commit + push small chunks while ACTIVE; prefer feature + plan update in one commit.
 4) CONCURRENCY: If a previous tick is still executing, SKIP.
-5) Every tick START: fetch, sync, resolve conflicts, build+verify green, reconcile Status board — then one Next focus item.
-6) Keep ≥ 3 items in “In progress / next” until End goal met; then mark LOOP COMPLETE and stop inventing.
-7) Out of scope: new stacks, MCP/query product, infra graph-edit, Greplica memory.
+5) Every tick START: fetch, sync, resolve conflicts, build+verify green, reconcile Status board.
+6) If Loop status is LOOP COMPLETE → Idle protocol (no push). If ACTIVE → one Next focus item.
+7) Mark LOOP COMPLETE only when acceptance gates 1–8 ALL pass. Optional seed backlog must not delay completion.
+8) Out of scope: new stacks, MCP/query product, infra graph-edit, Greplica memory.
 
 EACH TICK:
 A) Concurrency check → skip if busy
 B) Sync/conflict/health check
-C) Read plan → one Next focus increment
-D) Implement
-E) npm run build && npm run verify
-F) Update plan (Done / Next / Learning log)
-G) Commit + push to walkable-graph-02082026
-H) Stop tick
+C) If LOOP COMPLETE → Idle protocol → exit (no push)
+D) Read plan → one Next focus increment (ACTIVE only)
+E) Implement
+F) npm run build && npm run verify
+G) Update plan; if gates 1–8 pass set LOOP COMPLETE
+H) Commit + push to walkable-graph-02082026 (not when idling complete)
+I) Stop tick
 
 DONE LOOKS LIKE:
-- Beginner cold open is Product-Flow-led and calm
-- User can enter a system (Intermediate) and open Advanced only inside that focus
-- Breadcrumb/back works
-- verify green; plan shows LOOP COMPLETE
+- Acceptance gates 1–8 true; Loop status line is LOOP COMPLETE
+- Beginner calm; Intermediate focus; Advanced cluster-scoped; breadcrumb/back; verify green
+- Further woken ticks exit with IDLE: LOOP COMPLETE — no push
 ```
 
 ---
@@ -222,6 +291,8 @@ DONE LOOKS LIKE:
 ### Arming the loop
 
 This file steers **what** to build. The human turns on Autopilot / automation (e.g. push-retrigger or 15m ticks). If no ping arrives, the agent will not continue.
+
+When Loop status becomes `LOOP COMPLETE`, idle ticks should stop pushing (soft stop). For a hard stop, **disable the push/automation trigger** in Cursor.
 
 ### Morning / handoff checklist
 
