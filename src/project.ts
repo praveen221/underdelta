@@ -1578,6 +1578,67 @@ function quietKustomizeChrome(nodes: Map<string, ArchitectureNode>): void {
   }
 }
 
+/**
+ * Helm Chart.yaml with only `{{ .Values }}` template names is honest surface
+ * when charts are the deploy story — but beside kubernetes-manifests it restates
+ * packaging chrome (Online Boutique Chart/onlineboutique). Quiet those
+ * Chart-only nodes so Deploy stays manifests-led; searchable via Details.
+ */
+function quietHelmChartOnlyChrome(
+  nodes: Map<string, ArchitectureNode>,
+): void {
+  const hasKubernetesUnits = [...nodes.values()].some(
+    (node) => node.metadata?.kubernetesResource === true,
+  );
+  if (!hasKubernetesUnits) return;
+
+  const chartsWithConcreteResources = new Set<string>();
+  for (const node of nodes.values()) {
+    if (node.metadata?.helmResource !== true) continue;
+    const chartName = node.metadata?.chartName;
+    if (typeof chartName === "string" && chartName) {
+      chartsWithConcreteResources.add(chartName);
+    }
+  }
+
+  const quietChartNames = new Set<string>();
+  for (const node of nodes.values()) {
+    if (node.metadata?.helmChart !== true) continue;
+    const chartName =
+      typeof node.metadata?.chartName === "string"
+        ? node.metadata.chartName
+        : "";
+    if (chartName && chartsWithConcreteResources.has(chartName)) continue;
+    if (chartName) quietChartNames.add(chartName);
+    node.metadata = {
+      ...node.metadata,
+      helmChartOnlyChrome: true,
+      exampleChrome: true,
+      collapsedInOverview: true,
+    };
+    nodes.set(node.id, node);
+  }
+
+  if (quietChartNames.size === 0) return;
+
+  // Chart.yaml modules for Values-only charts are the same chrome.
+  for (const node of nodes.values()) {
+    if (node.kind !== "module" || node.metadata?.helm !== true) continue;
+    const chartName =
+      typeof node.metadata?.chartName === "string"
+        ? node.metadata.chartName
+        : "";
+    if (!chartName || !quietChartNames.has(chartName)) continue;
+    node.metadata = {
+      ...node.metadata,
+      helmChartOnlyChrome: true,
+      exampleChrome: true,
+      collapsedInOverview: true,
+    };
+    nodes.set(node.id, node);
+  }
+}
+
 /** Regression-fixture / GitHub-issue sample modules (`vpc_issue_44`, …). */
 function isTerraformIssueModuleName(name: string): boolean {
   return /_issue_/i.test(name);
@@ -3623,6 +3684,10 @@ export function projectSemanticArchitecture(
   // Kustomize overlay components (otel / shopping-assistant) sit beside the
   // primary kubernetes-manifests story — quiet like Terraform examples.
   quietKustomizeChrome(nodes);
+
+  // Chart.yaml-only Helm (every template name is `{{ .Values }}`) beside
+  // kubernetes-manifests is packaging chrome — quiet like kustomize overlays.
+  quietHelmChartOnlyChrome(nodes);
 
   assignFlowOrder(systems, preferredFlows);
 

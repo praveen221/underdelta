@@ -681,6 +681,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       // Helm Chart.yaml + templates — Chart/version + kind/name owned by Chart section.
       "helm", "helmChart", "helmResource", "helmModule", "helmChartYaml",
       "helmTemplate", "chartName", "chartVersion", "chartRoot", "appVersion",
+      "helmChartOnlyChrome",
       "exampleChrome", "labelSource", "pathRoleLabel", "collapsedInOverview",
       "overviewHub",
     ]);

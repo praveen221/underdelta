@@ -7380,8 +7380,56 @@ if (k8sRealRoot) {
       fail(
         "kubernetes-real-repo expected Helm Chart/onlineboutique from helm-chart/Chart.yaml",
       );
+    } else if (
+      boutiqueHelmChart.metadata?.exampleChrome !== true ||
+      boutiqueHelmChart.metadata?.helmChartOnlyChrome !== true ||
+      boutiqueHelmChart.metadata?.collapsedInOverview !== true
+    ) {
+      fail(
+        `kubernetes-real-repo Chart/onlineboutique should quiet as Chart-only chrome beside kubernetes-manifests; found exampleChrome=${boutiqueHelmChart.metadata?.exampleChrome} helmChartOnlyChrome=${boutiqueHelmChart.metadata?.helmChartOnlyChrome} collapsed=${boutiqueHelmChart.metadata?.collapsedInOverview}`,
+      );
     } else {
-      pass("kubernetes-real-repo surfaces Helm Chart/onlineboutique");
+      pass(
+        "kubernetes-real-repo Chart/onlineboutique quieted as Chart-only chrome beside kubernetes-manifests",
+      );
+    }
+
+    const boutiqueHelmChartModule = k8sRealGraph.nodes.find(
+      (node) =>
+        node.kind === "module" &&
+        node.metadata?.helm === true &&
+        node.metadata?.chartName === "onlineboutique" &&
+        /Chart\.yaml$/i.test(
+          String(node.evidence?.[0]?.file ?? node.metadata?.file ?? "").replaceAll(
+            "\\",
+            "/",
+          ),
+        ),
+    );
+    if (
+      boutiqueHelmChartModule &&
+      boutiqueHelmChartModule.metadata?.exampleChrome !== true
+    ) {
+      fail(
+        "kubernetes-real-repo helm-chart/Chart.yaml module should quiet as Chart-only chrome",
+      );
+    } else if (boutiqueHelmChartModule) {
+      pass(
+        "kubernetes-real-repo helm-chart/Chart.yaml module quieted as Chart-only chrome",
+      );
+    }
+
+    // Concrete Helm charts (mini-helm / helm-examples) must NOT inherit this
+    // quiet — only Values-only charts beside kubernetes-manifests.
+    const boutiqueConcreteHelmKept = k8sRealGraph.nodes.filter(
+      (node) =>
+        node.metadata?.helmResource === true &&
+        node.metadata?.exampleChrome === true,
+    );
+    if (boutiqueConcreteHelmKept.length > 0) {
+      fail(
+        "kubernetes-real-repo should not mark concrete helmResources as Chart-only chrome",
+      );
     }
   }
 }
@@ -7426,6 +7474,13 @@ if (
 ) {
   fail(
     `mini-helm missing Notes · Chart; found chartName=${miniHelmChart?.metadata?.chartName ?? "(missing)"} label=${miniHelmChart?.label ?? "(missing)"}`,
+  );
+} else if (
+  miniHelmChart.metadata?.exampleChrome === true ||
+  miniHelmChart.metadata?.helmChartOnlyChrome === true
+) {
+  fail(
+    "mini-helm Notes · Chart with concrete templates must not quiet as Chart-only chrome",
   );
 } else {
   pass("mini-helm has Notes · Chart from Chart.yaml");
@@ -7712,6 +7767,13 @@ if (helmRealRoot) {
     if (!helmRealChart || helmRealChart.label !== "Hello world · Chart") {
       fail(
         `helm-real-repo expected Hello world · Chart; found chartName=${helmRealChart?.metadata?.chartName ?? "(missing)"} label=${helmRealChart?.label ?? "(missing)"}`,
+      );
+    } else if (
+      helmRealChart.metadata?.exampleChrome === true ||
+      helmRealChart.metadata?.helmChartOnlyChrome === true
+    ) {
+      fail(
+        "helm-real-repo Hello world · Chart with concrete templates must not quiet as Chart-only chrome",
       );
     } else {
       pass("helm-real-repo has Hello world · Chart from Chart.yaml");
