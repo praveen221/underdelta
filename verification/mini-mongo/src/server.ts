@@ -18,6 +18,8 @@ const app = {
 // (mirrors sahat/hackathon-starter RAG_CHUNKS / LLM_SEMANTIC_CACHE).
 const SEARCH_CHUNKS = "search_chunks";
 const QUERY_CACHE = "query_cache";
+// Vector-search collection only reached via helper wrap (no bare .collection).
+const VECTOR_DOCS = "vector_docs";
 
 const db = {
   collection(name: string) {
@@ -25,13 +27,41 @@ const db = {
       name,
       find: async () => [],
       aggregate: async (_pipeline: unknown[]) => [],
+      createIndex: async (_spec: unknown) => undefined,
     };
   },
+  listCollections(_filter: { name: string }) {
+    return { toArray: async () => [] as { name: string }[] };
+  },
+  createCollection(name: string) {
+    return db.collection(name);
+  },
 };
+
+/**
+ * Mirrors sahat/hackathon-starter createCollectionForVectorSearch —
+ * wraps db.collection so extractors must see the helper call site.
+ */
+async function createCollectionForVectorSearch(
+  database: typeof db,
+  collectionName: string,
+  indexes: Record<string, number>[],
+) {
+  const collection = database.collection(collectionName);
+  for (const index of indexes) {
+    await collection.createIndex(index);
+  }
+  return collection;
+}
 
 export async function warmSearchIndex() {
   void db.collection(SEARCH_CHUNKS);
   void db.collection(QUERY_CACHE);
+}
+
+/** Atlas-style vector collection setup — CONST only via helper. */
+export async function setupVectorDocs() {
+  await createCollectionForVectorSearch(db, VECTOR_DOCS, [{ topic: 1 }]);
 }
 
 /** RAG ranking via native driver aggregate on SEARCH_CHUNKS. */

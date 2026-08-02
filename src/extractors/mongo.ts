@@ -216,7 +216,7 @@ function readAggregateStages(
 
 export const mongoExtractor: ArchitectureExtractor = {
   id: "mongo",
-  version: "0.1.2",
+  version: "0.1.3",
   extensions,
 
   async extract(context) {
@@ -258,6 +258,7 @@ export const mongoExtractor: ArchitectureExtractor = {
         bindingName?: string;
         discoveredFromUsage?: boolean;
         detail?: string;
+        vectorSearchHelper?: boolean;
       } = {},
     ): string {
       const key = label.toLowerCase();
@@ -272,7 +273,27 @@ export const mongoExtractor: ArchitectureExtractor = {
           if (extras.bindingName && !next.bindingName) {
             next.bindingName = extras.bindingName;
           }
+          if (extras.vectorSearchHelper) {
+            next.vectorSearchHelper = true;
+          }
           existing.metadata = next;
+          // Append distinct helper/usage evidence so wrapped .collection
+          // call sites remain clickable when the node already exists.
+          if (extras.detail) {
+            const ev = evidence(file, source, offset, extras.detail);
+            const evLine = ev.range?.startLine ?? -1;
+            const already = (existing.evidence ?? []).some((item) => {
+              const itemLine = item.range?.startLine ?? -1;
+              return (
+                item.file === ev.file &&
+                itemLine === evLine &&
+                item.detail === ev.detail
+              );
+            });
+            if (!already) {
+              existing.evidence = [...(existing.evidence ?? []), ev];
+            }
+          }
         }
         return collectionId;
       }
@@ -282,6 +303,7 @@ export const mongoExtractor: ArchitectureExtractor = {
       if (extras.collectionName) metadata.collectionName = extras.collectionName;
       if (extras.bindingName) metadata.bindingName = extras.bindingName;
       if (extras.discoveredFromUsage) metadata.discoveredFromUsage = true;
+      if (extras.vectorSearchHelper) metadata.vectorSearchHelper = true;
       nodes.push({
         id: collectionId,
         kind: "collection",
@@ -404,7 +426,8 @@ export const mongoExtractor: ArchitectureExtractor = {
       const mentionsMongoDriver =
         /\bmongodb\b/.test(code) ||
         /MongoClient/.test(code) ||
-        /\.collection\s*\(/.test(code);
+        /\.collection\s*\(/.test(code) ||
+        /\bcreateCollectionForVectorSearch\b/.test(code);
 
       if (!mentionsMongoose && !mentionsMongoDriver) continue;
 
@@ -473,6 +496,9 @@ export const mongoExtractor: ArchitectureExtractor = {
       // Native driver: db.collection("notes") / db.collection(RAG_CHUNKS)
       // when RAG_CHUNKS = 'rag_chunks' is a same-file string binding.
       const stringBindings = collectStringBindings(code);
+      const technologyHint: "mongoose" | "mongodb" = mentionsMongoose
+        ? "mongoose"
+        : "mongodb";
       const nativeCollectionPattern =
         /\.collection\s*\(\s*(?:(['"])([^'"\n]+)\1|([A-Za-z_$][\w$]*))/g;
       for (const match of code.matchAll(nativeCollectionPattern)) {
@@ -493,7 +519,7 @@ export const mongoExtractor: ArchitectureExtractor = {
           source,
           match.index,
           collectionName,
-          mentionsMongoose ? "mongoose" : "mongodb",
+          technologyHint,
           {
             collectionName,
             ...(bindingName ? { bindingName } : {}),
@@ -505,11 +531,39 @@ export const mongoExtractor: ArchitectureExtractor = {
         );
       }
 
+      // Atlas vector-search helpers that wrap db.collection(name):
+      //   createCollectionForVectorSearch(db, RAG_CHUNKS, [...indexes])
+      // Without this, collections only created via the helper stay invisible
+      // when product code never calls .collection(CONST) directly.
+      const vectorHelperPattern =
+        /\bcreateCollectionForVectorSearch\s*\(\s*[^,)\n]+,\s*(?:(['"])([^'"\n]+)\1|([A-Za-z_$][\w$]*))/g;
+      for (const match of code.matchAll(vectorHelperPattern)) {
+        if (match.index === undefined) continue;
+        const literal = cleanName(match[2] ?? "");
+        const identifier = match[3] ?? "";
+        let collectionName = literal;
+        let bindingName: string | undefined;
+        if (!collectionName && identifier) {
+          const resolved = stringBindings.get(identifier);
+          if (!resolved) continue;
+          collectionName = resolved;
+          bindingName = identifier;
+        }
+        if (!collectionName) continue;
+        ensureCollection(file, source, match.index, collectionName, technologyHint, {
+          collectionName,
+          ...(bindingName ? { bindingName } : {}),
+          discoveredFromUsage: true,
+          vectorSearchHelper: true,
+          detail: bindingName
+            ? `createCollectionForVectorSearch(db, ${bindingName} → ${JSON.stringify(collectionName)})`
+            : `createCollectionForVectorSearch(db, ${JSON.stringify(collectionName)})`,
+        });
+      }
+
       // Aggregation pipelines: Model.aggregate([...]) and
       // db.collection(X).aggregate([...]) → pipeline + stage steps.
-      const technology: "mongoose" | "mongodb" = mentionsMongoose
-        ? "mongoose"
-        : "mongodb";
+      const technology = technologyHint;
 
       // Chained native: .collection(...).aggregate(
       const chainedAggregatePattern =

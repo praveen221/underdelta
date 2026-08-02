@@ -175,6 +175,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 4: pin `sahat/hackathon-starter` @ `d20161b9e81e817d38b3633e08349f327b01d974`; clone into gitignored `.underdelta-real/hackathon-starter`; golden-lock User/Session/Ai agent checkpoint under Data access + HTTP API→Data flow/uses; skip FAQ/HTML README heading pollution (`http://` in `<img src>` must not rename API)
 - [x] Rung 4: resolve `.collection(CONST)` same-file string bindings — Rag chunks / Llm semantic cache on hackathon-starter + Search chunks / Query cache on mini-mongo; SCREAMING_SNAKE consts → humanized labels; golden-lock
 - [x] Rung 4: Mongo `.aggregate([...])` → pipeline nodes (stages as Filter/Group/Sort… steps); nest under Data as overview hubs; mini-mongo Search chunks + Note pipelines golden-locked (hackathon-starter only documents aggregate in README)
+- [x] Rung 4: surface `createCollectionForVectorSearch(db, CONST, …)` helper wrappers as collection evidence (mini-mongo Vector docs helper-only; hackathon-starter RAG_CHUNKS + LLM_SEMANTIC_CACHE append helper evidence)
 
 ### Real-repo pins (Capability ladder)
 
@@ -189,8 +190,7 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 4: surface `createCollectionForVectorSearch(db, CONST, …)` helpers as collection evidence when `.collection` is wrapped
-- [ ] Rung 4 polish pass: North-star legibility on mini-mongo + hackathon-starter (aggregate hubs beside collections; quiet any remaining chrome) before calling the rung locked
+- [ ] Rung 4 polish pass: North-star legibility on mini-mongo + hackathon-starter (aggregate hubs + Vector docs beside collections; quiet any remaining chrome) before calling the rung locked
 - [ ] Standing polish: inspector metadata hygiene (hide projection/systemKey/flowOrder pills) on self-map + RealWorld
 - [ ] Standing guarantee: spot-check Underdelta self-map + mini-stack still demo-ready after Mongo ladder work
 
@@ -204,7 +204,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Mongo `.aggregate` → Search chunks / Note pipeline hubs under Catalog data). Now surface `createCollectionForVectorSearch(db, CONST, …)` helper wrappers as collection evidence so vector-search collections are not invisible when `.collection` is wrapped.
+> **Next focus:** This work is done (`createCollectionForVectorSearch` → Vector docs on mini-mongo + RAG/cache helper evidence on hackathon-starter). Now do the Rung 4 polish pass so mini-mongo + hackathon-starter default browsers are North-star legible before locking the rung.
 
 ### Learning log (append every tick)
 
@@ -256,6 +256,7 @@ Append short bullets like:
 - 2026-08-02 05:35 UTC | Done: Rung 4 pin+golden — `sahat/hackathon-starter` @ `d20161b9e81e` gitignored; User/Session/Ai agent checkpoint under Data; HTTP API→Data flow/uses; skip FAQ/`?` headings + strip HTML `<img src="http://…">` so README chrome cannot rename API; golden-lock | Next: `.collection(CONST)` identifier resolution for RAG/cache collections | Learned: after FAQ skip, the next false API label was a Date Cheatsheet whose raw HTML `src="http://…"` matched `\bhttp\b` — sanitize must strip HTML before system-key inference; well-known mongoose apps still hide collections behind `const NAME = '…'; db.collection(NAME)`
 - 2026-08-02 05:45 UTC | Done: `.collection(CONST)` same-file string bindings — Rag chunks / Llm semantic cache + mini-mongo Search chunks / Query cache; SCREAMING_SNAKE → humanizeIdentifierLabel; golden-lock | Next: Mongo `.aggregate` pipelines | Learned: resolve identifier→literal in-extractor and keep `collectionName` for dedupe keys; prefer binding names for labels because `rag_chunks` singularizes to "Rag chunk" while `RAG_CHUNKS` keeps the product plural
 - 2026-08-02 05:55 UTC | Done: Mongo `.aggregate` → pipeline + humanized stage steps; nest under Data as overviewHub (never invent Pipelines system — Checkout gate); mask comments so JSDoc cannot invent call sites; mini-mongo golden-lock Search chunks + Note pipelines | Next: createCollectionForVectorSearch helpers | Learned: sahat/hackathon-starter only shows aggregate in README (fixture carries the rung); `$sum` accumulators must not become stages — whitelist known stage ops; comment masking is mandatory for regex extractors
+- 2026-08-02 05:25 UTC | Done: `createCollectionForVectorSearch(db, CONST)` → collections (+ append evidence on already-seen nodes); mini-mongo Vector docs helper-only golden-lock; hackathon-starter RAG_CHUNKS/LLM_SEMANTIC_CACHE helper evidence | Next: Rung 4 polish pass then lock | Learned: helper body `db.collection(collectionName)` is a param and correctly skipped — call sites carry the product CONST; fixture must omit bare `.collection(VECTOR_DOCS)` or the helper path is never proven
 
 ---
 

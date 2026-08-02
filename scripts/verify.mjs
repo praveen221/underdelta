@@ -2932,6 +2932,8 @@ for (const expected of [
   // `.collection(CONST)` same-file string bindings → product labels.
   "Search chunks",
   "Query cache",
+  // createCollectionForVectorSearch(db, VECTOR_DOCS) — no bare .collection.
+  "Vector docs",
 ]) {
   if (!miniMongoCollectionLabels.has(expected)) {
     fail(
@@ -2957,12 +2959,58 @@ if (miniMongoConstCollections.length < 2) {
   );
 }
 
+const miniMongoVectorHelperCollections = miniMongoCollections.filter((node) =>
+  node.evidence?.some((item) =>
+    /createCollectionForVectorSearch\(db,/.test(item.detail ?? ""),
+  ),
+);
+if (miniMongoVectorHelperCollections.length < 1) {
+  fail(
+    `mini-mongo expected ≥1 createCollectionForVectorSearch collection, found ${miniMongoVectorHelperCollections.length}`,
+  );
+} else {
+  pass(
+    `mini-mongo ${miniMongoVectorHelperCollections.length} collections from createCollectionForVectorSearch`,
+  );
+}
+
+const miniMongoVectorDocs = miniMongoCollections.find(
+  (node) => node.label === "Vector docs",
+);
+if (
+  !miniMongoVectorDocs?.evidence?.some((item) =>
+    /createCollectionForVectorSearch\(db, VECTOR_DOCS → "vector_docs"\)/.test(
+      item.detail ?? "",
+    ),
+  )
+) {
+  fail(
+    `mini-mongo Vector docs should evidence createCollectionForVectorSearch(db, VECTOR_DOCS → "vector_docs"); got ${JSON.stringify(
+      miniMongoVectorDocs?.evidence?.map((item) => item.detail) ?? [],
+    )}`,
+  );
+} else {
+  pass("mini-mongo Vector docs evidenced via createCollectionForVectorSearch helper");
+}
+
+if (
+  miniMongoVectorDocs?.evidence?.some((item) =>
+    /\.collection\(VECTOR_DOCS →/.test(item.detail ?? ""),
+  )
+) {
+  fail(
+    "mini-mongo Vector docs must come from the helper only (no bare .collection(VECTOR_DOCS))",
+  );
+} else {
+  pass("mini-mongo Vector docs has no bare .collection(CONST) evidence");
+}
+
 const miniMongoCollectionsUnderData = miniMongoCollections.filter(
   (node) => node.parentId === miniMongoData?.id,
 );
-if (miniMongoCollectionsUnderData.length < 5) {
+if (miniMongoCollectionsUnderData.length < 6) {
   fail(
-    `mini-mongo expected ≥5 collections nested under Catalog data, found ${miniMongoCollectionsUnderData.length}`,
+    `mini-mongo expected ≥6 collections nested under Catalog data, found ${miniMongoCollectionsUnderData.length}`,
   );
 } else {
   pass(
@@ -3672,6 +3720,31 @@ if (mongoRealRoot) {
     } else {
       pass(
         `mongo-real-repo ${mongoConstCollections.length} collections from .collection(CONST)`,
+      );
+    }
+
+    const mongoVectorHelperCollections = mongoCollections.filter((node) =>
+      node.evidence?.some((item) =>
+        /createCollectionForVectorSearch\(db, (?:RAG_CHUNKS|LLM_SEMANTIC_CACHE) →/.test(
+          item.detail ?? "",
+        ),
+      ),
+    );
+    if (mongoVectorHelperCollections.length < 2) {
+      fail(
+        `mongo-real-repo expected RAG_CHUNKS + LLM_SEMANTIC_CACHE via createCollectionForVectorSearch, found ${mongoVectorHelperCollections.length}; details=${JSON.stringify(
+          mongoCollections.flatMap((node) =>
+            (node.evidence ?? [])
+              .map((item) => item.detail)
+              .filter((detail) =>
+                String(detail).includes("createCollectionForVectorSearch"),
+              ),
+          ),
+        )}`,
+      );
+    } else {
+      pass(
+        `mongo-real-repo ${mongoVectorHelperCollections.length} collections from createCollectionForVectorSearch`,
       );
     }
 
