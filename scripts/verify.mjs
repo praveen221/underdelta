@@ -1,0 +1,105 @@
+#!/usr/bin/env node
+
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { compileRepository } from "../dist/compile.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, "..");
+const fixtureRoot = path.join(repoRoot, "verification", "mini-stack");
+
+function fail(message) {
+  console.error(`VERIFY FAIL: ${message}`);
+  process.exitCode = 1;
+}
+
+function pass(message) {
+  console.log(`VERIFY OK: ${message}`);
+}
+
+function countByKind(nodes) {
+  const counts = new Map();
+  for (const node of nodes) {
+    counts.set(node.kind, (counts.get(node.kind) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function requireKind(counts, kind, minimum = 1) {
+  const actual = counts.get(kind) ?? 0;
+  if (actual < minimum) {
+    fail(`expected at least ${minimum} '${kind}' node(s), found ${actual}`);
+    return;
+  }
+  pass(`found ${actual} '${kind}' node(s)`);
+}
+
+function requireEdge(edges, kind, minimum = 1) {
+  const actual = edges.filter((edge) => edge.kind === kind).length;
+  if (actual < minimum) {
+    fail(`expected at least ${minimum} '${kind}' edge(s), found ${actual}`);
+    return;
+  }
+  pass(`found ${actual} '${kind}' edge(s)`);
+}
+
+const fixtureGraph = await compileRepository(fixtureRoot);
+const fixtureCounts = countByKind(fixtureGraph.nodes);
+
+console.log(
+  `Fixture graph: ${fixtureGraph.nodes.length} nodes, ${fixtureGraph.edges.length} edges`,
+);
+
+requireKind(fixtureCounts, "route", 2);
+requireKind(fixtureCounts, "cron", 1);
+requireKind(fixtureCounts, "queue", 1);
+requireKind(fixtureCounts, "pipeline", 1);
+requireKind(fixtureCounts, "pipeline-step", 3);
+requireKind(fixtureCounts, "database", 1);
+requireKind(fixtureCounts, "table", 2);
+requireKind(fixtureCounts, "schema", 1);
+requireKind(fixtureCounts, "component", 1);
+requireEdge(fixtureGraph.edges, "schedules", 1);
+requireEdge(fixtureGraph.edges, "routes-to", 1);
+requireEdge(fixtureGraph.edges, "flows-to", 2);
+requireEdge(fixtureGraph.edges, "reads", 1);
+requireEdge(fixtureGraph.edges, "writes", 1);
+
+const routeLabels = new Set(
+  fixtureGraph.nodes.filter((node) => node.kind === "route").map((node) => node.label),
+);
+if (!routeLabels.has("POST /checkout") || !routeLabels.has("GET /health")) {
+  fail(`missing expected routes; found ${[...routeLabels].join(", ") || "(none)"}`);
+} else {
+  pass("checkout and health routes present");
+}
+
+const productGraph = await compileRepository(repoRoot);
+const leaked = productGraph.nodes.flatMap((node) =>
+  node.evidence
+    .filter((item) => {
+      const file = item.file.replaceAll("\\", "/");
+      return (
+        file === "verification" ||
+        file.startsWith("verification/") ||
+        file.includes("/verification/") ||
+        file.includes("mini-stack/")
+      );
+    })
+    .map((item) => `${node.kind}:${node.label} <- ${item.file}`),
+);
+
+if (leaked.length > 0) {
+  fail(
+    `default product scan leaked verification evidence:\n  ${leaked.slice(0, 20).join("\n  ")}`,
+  );
+} else {
+  pass("default product scan excludes verification/");
+}
+
+if (process.exitCode) {
+  console.error("Verification suite failed.");
+  process.exit(process.exitCode);
+}
+
+console.log("Verification suite passed.");

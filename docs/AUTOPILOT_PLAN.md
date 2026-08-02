@@ -37,18 +37,21 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Navigable viewer (lanes, pan/zoom, search, kind shapes)
 - [x] Scan excludes tests/fixtures/build artifacts from default map
 - [x] Autopilot plan file created (`docs/AUTOPILOT_PLAN.md`)
+- [x] Side verification mini-system (`verification/mini-stack`) with pipeline + cron + queue + routes + Prisma/SQL + UI
+- [x] `npm run verify` asserts fixture kinds/edges and that default `scan .` excludes `verification/`
+- [x] Minimal `Pipeline` / step extraction in TypeScript extractor
+- [x] Ignore `verification` and `.underdelta-verify` in product discovery
 
 ### In progress / next
 
-- [ ] Side verification mini-system (pipeline + cron + schema coverage), excluded from default scan
-- [ ] `npm run verify` (or equivalent) that can be re-run every tick in cloud
 - [ ] Semantic projection layer for product-level nodes/lanes
 - [ ] Full self-diagram of Underdelta: CLI → extractors → compile → graph → viewer → `architecture.json`
 - [ ] Full diagram quality pass for one concrete TS/JS stack fixture (verification only)
+- [ ] Expand verify assertions as new architectural kinds become extractable
 
 ### Next focus (edit every tick)
 
-> **Next focus:** Create the isolated verification mini-system + `npm run verify`, ensure default `scan .` does not include it, then improve semantic self-map of Underdelta.
+> **Next focus:** This work is done (verification mini-system + `npm run verify` green). Now build a semantic projection layer that collapses Underdelta’s raw modules/functions into product nodes: CLI → extractors → compile → graph → viewer → `architecture.json`, so the default self-diagram reads as a system map rather than a symbol hairball.
 
 ### Learning log (append every tick)
 
@@ -59,6 +62,7 @@ Append short bullets like:
 ```
 
 - 2026-08-02 | Done: created living autopilot plan | Next: verification mini-system | Learned: loop needs explicit non-interrupt + plan-file updates to stay coherent overnight
+- 2026-08-02 02:10 UTC | Done: verification/mini-stack + npm run verify + Pipeline extraction + ignore verification/ | Next: semantic projection for Underdelta self-map | Learned: fixture must be scanned as its own root; directory-name ignores keep product diagrams clean without deleting the suite
 
 ---
 

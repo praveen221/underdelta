@@ -9,6 +9,7 @@ const ignoredDirectories = new Set([
   ".output",
   ".turbo",
   ".underdelta",
+  ".underdelta-verify",
   "build",
   "coverage",
   "dist",
@@ -20,6 +21,7 @@ const ignoredDirectories = new Set([
   "__tests__",
   "fixtures",
   "__fixtures__",
+  "verification",
   "vendor",
 ]);
 

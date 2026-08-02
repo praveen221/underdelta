@@ -1,0 +1,13 @@
+CREATE TABLE orders (
+  id TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE payments (
+  id TEXT PRIMARY KEY,
+  order_id TEXT NOT NULL REFERENCES orders(id),
+  amount INTEGER NOT NULL
+);
+
+ALTER TABLE payments ADD COLUMN currency TEXT NOT NULL DEFAULT 'usd';

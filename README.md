@@ -53,6 +53,15 @@ During development:
 npm run dev -- scan /path/to/repository
 ```
 
+Cloud / loop verification (isolated mini-stack; not part of the product diagram):
+
+```bash
+npm run verify
+```
+
+The suite compiles `verification/mini-stack`, asserts architecture kinds/edges, then
+confirms a normal scan of this repository excludes that tree.
+
 ## Core contract
 
 `architecture.json` contains typed nodes and relationships:

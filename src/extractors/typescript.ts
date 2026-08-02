@@ -473,6 +473,84 @@ export const typescriptExtractor: ArchitectureExtractor = {
           }
         }
 
+        if (
+          ts.isNewExpression(node) &&
+          ts.isIdentifier(node.expression) &&
+          node.expression.text === "Pipeline"
+        ) {
+          const pipelineName = stringValue(node.arguments?.[0]);
+          if (pipelineName) {
+            const pipelineId = stableId("pipeline", pipelineName);
+            nodes.push({
+              id: pipelineId,
+              kind: "pipeline",
+              label: pipelineName,
+              technology: "pipeline",
+              metadata: {},
+              evidence: [evidenceFor(file, node, "derived")],
+            });
+            edges.push(
+              edgeFrom(
+                "uses",
+                ownerId,
+                pipelineId,
+                evidenceFor(file, node, "derived"),
+              ),
+            );
+
+            let previousStepId: string | undefined;
+            const setup = node.arguments?.[1];
+            if (setup && ts.isArrowFunction(setup) && ts.isBlock(setup.body)) {
+              for (const statement of setup.body.statements) {
+                if (
+                  !ts.isExpressionStatement(statement) ||
+                  !ts.isCallExpression(statement.expression)
+                ) {
+                  continue;
+                }
+                const stepCall = statement.expression;
+                const stepChain = propertyChain(stepCall.expression);
+                if (stepChain.at(-1) !== "step") continue;
+                const stepName = stringValue(stepCall.arguments[0]);
+                if (!stepName) continue;
+                const stepId = stableId(
+                  "pipeline-step",
+                  pipelineName,
+                  stepName,
+                );
+                nodes.push({
+                  id: stepId,
+                  kind: "pipeline-step",
+                  label: stepName,
+                  parentId: pipelineId,
+                  technology: "pipeline",
+                  metadata: { pipeline: pipelineName },
+                  evidence: [evidenceFor(file, stepCall, "derived")],
+                });
+                edges.push(
+                  edgeFrom(
+                    "contains",
+                    pipelineId,
+                    stepId,
+                    evidenceFor(file, stepCall, "derived"),
+                  ),
+                );
+                if (previousStepId) {
+                  edges.push(
+                    edgeFrom(
+                      "flows-to",
+                      previousStepId,
+                      stepId,
+                      evidenceFor(file, stepCall, "derived"),
+                    ),
+                  );
+                }
+                previousStepId = stepId;
+              }
+            }
+          }
+        }
+
         ts.forEachChild(node, (child) => visit(child, nextOwner));
       };
       visit(file.source);
