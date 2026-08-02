@@ -2446,20 +2446,18 @@ if (!miniPythonProduct || miniPythonProduct.label !== "Mini Python notes") {
 }
 
 const requiredMiniPythonRoutes = [
-  "GET /health",
-  "GET /ping",
-  "HEAD /ping",
-  "GET /notes",
-  "POST /notes",
-  "GET /notes/{note_id}",
-  "ANY /articles",
-  "ANY /articles/<int:pk>",
-  "ANY /health",
+  "GET Health",
+  "GET Ping",
+  "HEAD Ping",
+  "GET Notes",
+  "POST Notes",
+  "ANY Articles",
+  "ANY Health",
 ];
 for (const expected of requiredMiniPythonRoutes) {
   if (!miniPythonLabels.has(expected)) {
     fail(
-      `mini-python missing route ${expected}; found ${[...miniPythonLabels].join(", ") || "(none)"}`,
+      `mini-python missing humanized route ${expected}; found ${[...miniPythonLabels].join(", ") || "(none)"}`,
     );
   } else {
     pass(`mini-python has route ${expected}`);
@@ -2717,37 +2715,37 @@ if (fastapiRealRoot) {
       pass("fastapi-real-repo data system labeled 'Data access'");
     }
 
+    // Humanized /api routes for the North star non-coder (params + /api stripped).
     const expectedFastapiRoutes = [
-      "POST /api/users/login",
-      "POST /api/users",
-      "GET /api/user",
-      "PUT /api/user",
-      "GET /api/profiles/{username}",
-      "POST /api/profiles/{username}/follow",
-      "DELETE /api/profiles/{username}/follow",
-      "GET /api/articles",
-      "POST /api/articles",
-      "GET /api/articles/feed",
-      "GET /api/articles/{slug}",
-      "PUT /api/articles/{slug}",
-      "DELETE /api/articles/{slug}",
-      "POST /api/articles/{slug}/favorite",
-      "DELETE /api/articles/{slug}/favorite",
-      "GET /api/articles/{slug}/comments",
-      "POST /api/articles/{slug}/comments",
-      "DELETE /api/articles/{slug}/comments/{comment_id}",
-      "GET /api/tags",
+      "POST Users login",
+      "POST Users",
+      "GET User",
+      "PUT User",
+      "GET Profiles",
+      "POST Profiles follow",
+      "DELETE Profiles follow",
+      "GET Articles",
+      "POST Articles",
+      "GET Articles feed",
+      "PUT Articles",
+      "DELETE Articles",
+      "POST Articles favorite",
+      "DELETE Articles favorite",
+      "GET Articles comments",
+      "POST Articles comments",
+      "DELETE Articles comments",
+      "GET Tags",
     ];
     const missingFastapiRoutes = expectedFastapiRoutes.filter(
       (label) => !fastapiLabels.has(label),
     );
     if (missingFastapiRoutes.length) {
       fail(
-        `fastapi-real-repo missing include_router-resolved routes: ${missingFastapiRoutes.join(", ")}; found ${[...fastapiLabels].join(", ") || "(none)"}`,
+        `fastapi-real-repo missing humanized routes: ${missingFastapiRoutes.join(", ")}; found ${[...fastapiLabels].join(", ") || "(none)"}`,
       );
     } else {
       pass(
-        `fastapi-real-repo include_router routes: ${expectedFastapiRoutes.length} RealWorld paths`,
+        `fastapi-real-repo humanized routes: ${expectedFastapiRoutes.length} RealWorld labels`,
       );
     }
 
@@ -2848,7 +2846,7 @@ if (fastapiRealRoot) {
       })}`,
     );
 
-    const expectedFastapiTables = ["User", "Article", "Tag", "Commentary"];
+    const expectedFastapiTables = ["User", "Article", "Tag", "Comment"];
     const missingFastapiTables = expectedFastapiTables.filter(
       (label) => !fastapiTableLabels.has(label),
     );
@@ -2856,6 +2854,8 @@ if (fastapiRealRoot) {
       fail(
         `fastapi-real-repo missing Alembic tables: ${missingFastapiTables.join(", ")}; found ${[...fastapiTableLabels].join(", ") || "(none)"}`,
       );
+    } else if (fastapiTableLabels.has("Commentary")) {
+      fail("fastapi-real-repo should humanize Commentary → Comment");
     } else {
       pass(
         `fastapi-real-repo product tables: ${expectedFastapiTables.join(", ")}`,
@@ -2909,6 +2909,93 @@ if (fastapiRealRoot) {
       pass(
         `fastapi-real-repo Alembic migrates → ${fastapiMigrates.length} product tables`,
       );
+    }
+
+    // Quiet module chrome: overview should be API + Data + product tables only.
+    const fastapiVisibleChrome = fastapiRealGraph.nodes.filter(
+      (node) =>
+        node.kind === "module" && node.metadata?.collapsedInOverview !== true,
+    );
+    if (fastapiVisibleChrome.length > 0) {
+      fail(
+        `fastapi-real-repo modules should collapse on overview, still visible: ${fastapiVisibleChrome
+          .slice(0, 8)
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass("fastapi-real-repo module chrome collapsed on overview");
+    }
+
+    // Relation story from Alembic joins + FK humanization.
+    const fastapiTableById = new Map(
+      fastapiTables.map((node) => [node.id, node]),
+    );
+    const fastapiProductRelations = fastapiRealGraph.edges.filter(
+      (edge) =>
+        edge.kind === "depends-on" &&
+        fastapiTableById.has(edge.source) &&
+        fastapiTableById.has(edge.target) &&
+        !fastapiTableById.get(edge.source)?.metadata?.joinTable &&
+        !fastapiTableById.get(edge.target)?.metadata?.joinTable,
+    );
+    const fastapiRelationSummary = (sourceLabel, targetLabel) =>
+      fastapiProductRelations
+        .filter(
+          (edge) =>
+            fastapiTableById.get(edge.source)?.label === sourceLabel &&
+            fastapiTableById.get(edge.target)?.label === targetLabel,
+        )
+        .map((edge) => String(edge.label ?? ""));
+    const fastapiUserArticle = fastapiRelationSummary("User", "Article");
+    const fastapiArticleUser = fastapiRelationSummary("Article", "User");
+    const fastapiUserFollow = fastapiRelationSummary("User", "User");
+    const fastapiArticleTag = fastapiRelationSummary("Article", "Tag");
+    const fastapiCommentArticle = fastapiRelationSummary("Comment", "Article");
+    if (
+      !fastapiUserArticle.some((label) => /\bfavorites\b/i.test(label)) ||
+      !fastapiUserArticle.some((label) => /\bauthored\b/i.test(label))
+    ) {
+      fail(
+        `fastapi-real-repo missing User→Article authored/favorites, got ${JSON.stringify(fastapiUserArticle)}`,
+      );
+    } else {
+      pass(
+        `fastapi-real-repo User→Article data story: ${fastapiUserArticle.join(", ")}`,
+      );
+    }
+    if (
+      !fastapiArticleUser.some((label) => /\bfavorited by\b/i.test(label)) ||
+      !fastapiArticleUser.some((label) => /\bauthor\b/i.test(label))
+    ) {
+      fail(
+        `fastapi-real-repo missing Article→User author/favorited by, got ${JSON.stringify(fastapiArticleUser)}`,
+      );
+    } else {
+      pass(
+        `fastapi-real-repo Article→User data story: ${fastapiArticleUser.join(", ")}`,
+      );
+    }
+    if (!fastapiUserFollow.some((label) => /\bfollows\b/i.test(label))) {
+      fail(
+        `fastapi-real-repo missing User→User follows, got ${JSON.stringify(fastapiUserFollow)}`,
+      );
+    } else {
+      pass(`fastapi-real-repo User→User follows: ${fastapiUserFollow.join(", ")}`);
+    }
+    if (!fastapiArticleTag.some((label) => /\btags\b/i.test(label))) {
+      fail(
+        `fastapi-real-repo missing Article→Tag tags, got ${JSON.stringify(fastapiArticleTag)}`,
+      );
+    } else {
+      pass("fastapi-real-repo Article→Tag humanized to tags");
+    }
+    if (!fastapiCommentArticle.some((label) => /\bon\b/i.test(label))) {
+      fail(
+        `fastapi-real-repo missing Comment→Article on, got ${JSON.stringify(fastapiCommentArticle)}`,
+      );
+    } else {
+      pass("fastapi-real-repo Comment→Article relation: on");
     }
   }
 }

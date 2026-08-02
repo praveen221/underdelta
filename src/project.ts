@@ -751,17 +751,19 @@ export function humanizeAppPathLabel(path: string): string {
 }
 
 /**
- * Next.js App Router route handlers → calm API labels.
- * Parent system is already "HTTP API", so drop the redundant `/api` prefix:
- * `GET` + `/api/stripe/checkout` → `GET Stripe checkout`.
+ * HTTP route labels for the North star non-coder.
+ * Parent system is already "HTTP API", so drop the redundant `/api` prefix and
+ * path params: `GET` + `/api/articles/{slug}/comments` → `GET Articles comments`.
  */
-export function humanizeNextRouteLabel(method: string, path: string): string {
+export function humanizeHttpRouteLabel(method: string, path: string): string {
   const verb = method.trim() || "GET";
   let segments = path
     .trim()
     .split("/")
     .filter(Boolean)
-    .filter((segment) => !segment.startsWith("(") && !segment.startsWith("@"));
+    .filter((segment) => !segment.startsWith("(") && !segment.startsWith("@"))
+    // Drop `{slug}`, `:id`, `<int:pk>` — params are noise beside the product noun.
+    .filter((segment) => !/^[:{<]/.test(segment) && !segment.includes(":"));
   if (segments[0]?.toLowerCase() === "api") {
     segments = segments.slice(1);
   }
@@ -775,6 +777,11 @@ export function humanizeNextRouteLabel(method: string, path: string): string {
     })
     .join(" ");
   return `${verb} ${humanPath}`;
+}
+
+/** @deprecated Prefer humanizeHttpRouteLabel — kept as a stable Next.js alias. */
+export function humanizeNextRouteLabel(method: string, path: string): string {
+  return humanizeHttpRouteLabel(method, path);
 }
 
 /**
@@ -813,7 +820,10 @@ function preferredTableLabel(bucket: ArchitectureNode[]): string {
     }
     // Keep Alembic junction names (`articles_to_tags`) recognizable for collapse.
     if (/_to_/i.test(raw)) return raw;
-    return titleCaseSingular(best.label);
+    const titled = titleCaseSingular(best.label);
+    // commentaries → Commentary via plural strip; product word is Comment.
+    if (normalizeTableKey(titled) === "commentary") return "Comment";
+    return titled;
   }
   return best.label;
 }
@@ -851,9 +861,19 @@ function humanizeRelationField(label: string): string {
 function mergeRelationLabels(labels: Iterable<string>): string | undefined {
   const set = new Set<string>();
   for (const label of labels) {
-    const trimmed = label.trim();
-    if (!trimmed || trimmed === "depends-on") continue;
-    set.add(trimmed);
+    // Prior merges join with ` / ` — split so re-merge does not duplicate parts.
+    for (const part of label.split(/\s*\/\s*/)) {
+      const trimmed = part.trim();
+      // Drop ORM/SQL chrome words — only product vocabulary stays.
+      if (
+        !trimmed ||
+        trimmed === "depends-on" ||
+        trimmed === "references"
+      ) {
+        continue;
+      }
+      set.add(trimmed);
+    }
   }
   if (set.has("followedBy") && set.has("following")) {
     set.delete("followedBy");
@@ -1345,8 +1365,22 @@ export function projectSemanticArchitecture(
     nodes.set(node.id, node);
   }
 
-  // Humanize Next.js App Router chrome so the default browser reads as a
-  // product story (Dashboard, Sign in, Create post) instead of paths/camelCase.
+  // Quiet Python/JS file-module chrome once product systems exist — API + Data
+  // (and UI) tell the story; modules stay available via Details/search.
+  if (systems.size > 0) {
+    for (const node of nodes.values()) {
+      if (node.kind !== "module") continue;
+      if (node.metadata?.projection === "semantic") continue;
+      node.metadata = {
+        ...node.metadata,
+        collapsedInOverview: true,
+      };
+      nodes.set(node.id, node);
+    }
+  }
+
+  // Humanize route/page/component chrome so the default browser reads as a
+  // product story (Dashboard, Sign in, GET Articles) instead of paths/camelCase.
   for (const node of nodes.values()) {
     if (node.metadata?.projection === "semantic") continue;
     let nextLabel: string | undefined;
@@ -1367,13 +1401,17 @@ export function projectSemanticArchitecture(
           : `${humanizeAppPathLabel(node.metadata.path)} layout`;
     } else if (
       node.kind === "route" &&
-      node.metadata?.next === "route" &&
-      typeof node.metadata.path === "string"
+      typeof node.metadata?.path === "string" &&
+      (node.metadata?.next === "route" ||
+        node.metadata?.framework === "fastapi" ||
+        node.metadata?.framework === "django" ||
+        node.metadata.path.startsWith("/api/") ||
+        node.metadata.path === "/api")
     ) {
-      // Stripe checkout/webhook etc.: GET /api/stripe/checkout → GET Stripe checkout.
+      // Next/FastAPI/Django (+ /api/*): GET /api/articles/{slug} → GET Articles.
       const method =
         typeof node.metadata.method === "string" ? node.metadata.method : "GET";
-      nextLabel = humanizeNextRouteLabel(method, node.metadata.path);
+      nextLabel = humanizeHttpRouteLabel(method, node.metadata.path);
     } else if (node.metadata?.serverAction === true) {
       // checkoutAction → Checkout (drop trailing Action factory chrome).
       nextLabel = humanizeServerActionLabel(node.label);
@@ -1713,13 +1751,248 @@ export function projectSemanticArchitecture(
       nodes.set(child.id, child);
     }
   }
-  // Drop FK edges into/out of collapsed join tables — product models already
-  // carry favorites/follows/tagList; join "references" edges only confuse.
+
+  // Lift Alembic/SQL M2M join tables into product relations before dropping
+  // their FK edges — otherwise favorites/follows/tags vanish from the story.
   if (joinTableIds.size > 0) {
+    const productTables = [...nodes.values()].filter(
+      (node) => node.kind === "table" && !joinTableIds.has(node.id),
+    );
+    const tableByNorm = new Map<string, ArchitectureNode>();
+    for (const table of productTables) {
+      tableByNorm.set(normalizeTableKey(table.label), table);
+      const sqlName = table.metadata?.sqlName;
+      if (typeof sqlName === "string" && sqlName.trim()) {
+        tableByNorm.set(normalizeTableKey(sqlName), table);
+      }
+    }
+    const resolveFkTable = (raw: string): ArchitectureNode | undefined =>
+      tableByNorm.get(normalizeTableKey(raw));
+
+    const addProductRelation = (
+      source: ArchitectureNode,
+      target: ArchitectureNode,
+      label: string,
+      evidence: Evidence,
+    ) => {
+      const liftEvidence: Evidence = {
+        ...evidence,
+        extractor: "projection",
+        certainty: "derived",
+        detail: `Lifted join relation: ${label}`,
+      };
+      // Merge into any existing directed pair so Prisma favorites/follows are
+      // not duplicated when the SQL join table is also collapsed.
+      for (const existing of [...edges.values()]) {
+        if (existing.kind !== "depends-on") continue;
+        if (existing.source !== source.id || existing.target !== target.id) {
+          continue;
+        }
+        const merged =
+          mergeRelationLabels([existing.label ?? "", label]) ?? label;
+        if (merged !== existing.label) {
+          edges.delete(existing.id);
+          const relabeled = edgeFrom(
+            existing.kind,
+            existing.source,
+            existing.target,
+            existing.evidence[0] ?? liftEvidence,
+            merged,
+          );
+          relabeled.evidence = dedupeEvidence([
+            ...existing.evidence,
+            liftEvidence,
+          ]);
+          edges.set(relabeled.id, relabeled);
+        } else {
+          existing.evidence = dedupeEvidence([
+            ...existing.evidence,
+            liftEvidence,
+          ]);
+          edges.set(existing.id, existing);
+        }
+        return;
+      }
+      const edge = edgeFrom(
+        "depends-on",
+        source.id,
+        target.id,
+        liftEvidence,
+        label,
+      );
+      edges.set(edge.id, edge);
+    };
+
+    for (const joinId of joinTableIds) {
+      const join = nodes.get(joinId);
+      if (!join) continue;
+      const joinName = String(join.metadata?.sqlName ?? join.label);
+      const joinKey = normalizeTableKey(joinName);
+      const evidence = join.evidence[0] ?? projectionEvidence(".");
+      const fkTargets = [...nodes.values()]
+        .filter(
+          (node) =>
+            node.parentId === joinId &&
+            node.kind === "column" &&
+            typeof node.metadata?.foreignKeyTable === "string",
+        )
+        .map((node) => ({
+          column: node.label,
+          table: resolveFkTable(String(node.metadata?.foreignKeyTable)),
+        }))
+        .filter(
+          (item): item is { column: string; table: ArchitectureNode } =>
+            Boolean(item.table),
+        );
+
+      if (/favorite/i.test(joinKey) || /favorite/i.test(join.label)) {
+        const user = fkTargets.find(
+          (item) => normalizeTableKey(item.table.label) === "user",
+        )?.table;
+        const article = fkTargets.find(
+          (item) => normalizeTableKey(item.table.label) === "article",
+        )?.table;
+        if (user && article) {
+          addProductRelation(user, article, "favorites", evidence);
+          addProductRelation(article, user, "favorited by", evidence);
+        }
+        continue;
+      }
+
+      if (/follow/i.test(joinKey) || /follow/i.test(join.label)) {
+        const user = tableByNorm.get("user");
+        if (user) {
+          addProductRelation(user, user, "follows", evidence);
+        }
+        continue;
+      }
+
+      if (/tag/i.test(joinKey) || /tag/i.test(join.label)) {
+        const article = fkTargets.find(
+          (item) => normalizeTableKey(item.table.label) === "article",
+        )?.table;
+        const tag = fkTargets.find(
+          (item) => normalizeTableKey(item.table.label) === "tag",
+        )?.table;
+        if (article && tag) {
+          addProductRelation(article, tag, "tags", evidence);
+        }
+      }
+    }
+
+    // Drop FK edges into/out of collapsed join tables — product models now
+    // carry favorites/follows/tags; join "references" edges only confuse.
     for (const [edgeId, edge] of [...edges.entries()]) {
       if (edge.kind !== "depends-on") continue;
       if (joinTableIds.has(edge.source) || joinTableIds.has(edge.target)) {
         edges.delete(edgeId);
+      }
+    }
+  }
+
+  // Humanize remaining SQL FK "references" into product words + reverse
+  // authored edges so Article↔User reads like the Express RealWorld map.
+  {
+    const productTableById = new Map(
+      [...nodes.values()]
+        .filter(
+          (node) => node.kind === "table" && node.metadata?.joinTable !== true,
+        )
+        .map((node) => [node.id, node] as const),
+    );
+    const fkColumnFromDetail = (edge: ArchitectureEdge): string => {
+      for (const item of edge.evidence) {
+        const match = /FOREIGN KEY\s+(\w+)/i.exec(item.detail ?? "");
+        if (match?.[1]) return match[1];
+      }
+      return "";
+    };
+    for (const edge of [...edges.values()]) {
+      if (edge.kind !== "depends-on") continue;
+      const source = productTableById.get(edge.source);
+      const target = productTableById.get(edge.target);
+      if (!source || !target) continue;
+      const column = fkColumnFromDetail(edge);
+      let productWord: string | undefined;
+      if (column === "author_id") {
+        productWord = "author";
+      } else if (column === "article_id" && /comment/i.test(source.label)) {
+        productWord = "on";
+      } else if (
+        (!edge.label ||
+          edge.label === "references" ||
+          edge.label === "depends-on") &&
+        column.endsWith("_id")
+      ) {
+        productWord = humanizeIdentifierLabel(column.slice(0, -3));
+      }
+      let label = edge.label;
+      if (productWord) {
+        label =
+          mergeRelationLabels([edge.label ?? "", productWord]) ?? productWord;
+      }
+      if (label && label !== edge.label) {
+        edges.delete(edge.id);
+        const relabeled = edgeFrom(
+          edge.kind,
+          edge.source,
+          edge.target,
+          edge.evidence[0]!,
+          label,
+        );
+        relabeled.evidence = dedupeEvidence(edge.evidence);
+        edges.set(relabeled.id, relabeled);
+      }
+      // Article -author→ User also implies User -authored→ Article.
+      if (
+        label &&
+        /\bauthor\b/i.test(label) &&
+        normalizeTableKey(source.label) === "article" &&
+        normalizeTableKey(target.label) === "user"
+      ) {
+        const reverseEvidence: Evidence = {
+          ...(edge.evidence[0] ?? projectionEvidence(".")),
+          extractor: "projection",
+          certainty: "derived",
+          detail: "Reverse of author FK for product story",
+        };
+        let mergedIntoExisting = false;
+        for (const existing of [...edges.values()]) {
+          if (existing.kind !== "depends-on") continue;
+          if (existing.source !== target.id || existing.target !== source.id) {
+            continue;
+          }
+          const merged =
+            mergeRelationLabels([existing.label ?? "", "authored"]) ??
+            "authored";
+          if (merged !== existing.label) {
+            edges.delete(existing.id);
+            const relabeled = edgeFrom(
+              existing.kind,
+              existing.source,
+              existing.target,
+              existing.evidence[0] ?? reverseEvidence,
+              merged,
+            );
+            relabeled.evidence = dedupeEvidence([
+              ...existing.evidence,
+              reverseEvidence,
+            ]);
+            edges.set(relabeled.id, relabeled);
+          }
+          mergedIntoExisting = true;
+          break;
+        }
+        if (!mergedIntoExisting) {
+          const authored = edgeFrom(
+            "depends-on",
+            target.id,
+            source.id,
+            reverseEvidence,
+            "authored",
+          );
+          edges.set(authored.id, authored);
+        }
       }
     }
   }
