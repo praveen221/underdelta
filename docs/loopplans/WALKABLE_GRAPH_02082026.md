@@ -9,10 +9,13 @@ Living plan for a **scoped** Autopilot / cloud-agent loop.
 **This file:** read at the start of every tick; update at the end of every successful tick  
 **Created:** 2026-08-02  
 
-Related context (do not expand scope into these yet):
+Related context:
 
+- [`docs/WALKABLE_GRAPH_CONTEXT.md`](../WALKABLE_GRAPH_CONTEXT.md) — **stable handoff doc** for what this loop shipped (keep this loop plan as archaeology)  
 - [`docs/V0_BUILD_CONTEXT.md`](../V0_BUILD_CONTEXT.md) — what v0 already shipped  
-- Broader roadmap (query API, more stacks, graph→infra) is **out of scope** for this loop  
+- Broader roadmap (query API, more stacks, graph→infra) was **out of scope** for this loop  
+
+**Status:** `LOOP COMPLETE` — this file is retained under `docs/loopplans/` as the executed plan; prefer the context doc above for humans/PR description.
 
 ---
 
