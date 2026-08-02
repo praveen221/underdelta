@@ -11,10 +11,13 @@ const ignoredDirectories = new Set([
   ".underdelta",
   ".underdelta-verify",
   ".underdelta-real",
+  ".venv",
+  "__pycache__",
   "build",
   "coverage",
   "dist",
   "node_modules",
+  "site-packages",
   "spec",
   "specs",
   "test",
@@ -24,6 +27,7 @@ const ignoredDirectories = new Set([
   "__fixtures__",
   "verification",
   "vendor",
+  "venv",
 ]);
 
 const ignoredFilePattern = /\.(?:test|spec)\.[^.]+$/i;

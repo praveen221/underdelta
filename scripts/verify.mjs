@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { compileRepository } from "../dist/compile.js";
@@ -462,7 +464,7 @@ const extractorsSystem = selfGraph.nodes.find(
 const extractorRoster = Array.isArray(extractorsSystem?.metadata?.extractorRoster)
   ? extractorsSystem.metadata.extractorRoster
   : [];
-const requiredExtractors = ["prisma", "sql", "typescript"];
+const requiredExtractors = ["prisma", "python", "sql", "typescript"];
 const missingExtractors = requiredExtractors.filter(
   (id) => !extractorRoster.includes(id),
 );
@@ -479,6 +481,7 @@ const extractorKeyFiles = Array.isArray(extractorsSystem?.metadata?.keyFiles)
   : [];
 const requiredExtractorFiles = [
   "src/extractors/prisma.ts",
+  "src/extractors/python.ts",
   "src/extractors/sql.ts",
   "src/extractors/typescript.ts",
 ];
@@ -2413,6 +2416,149 @@ if (nextRealRoot) {
     } else {
       pass("next-real-repo has no Checkout/orders commerce collaboration noise");
     }
+  }
+}
+
+// Capability ladder rung 3 prep: Python extractor surface smoke
+// (FastAPI decorators + Django urlpatterns). Full mini-python fixture comes next.
+{
+  const smokeRoot = await mkdtemp(path.join(os.tmpdir(), "underdelta-python-"));
+  try {
+    await mkdir(path.join(smokeRoot, "routers"), { recursive: true });
+    await writeFile(
+      path.join(smokeRoot, "main.py"),
+      [
+        "from fastapi import FastAPI",
+        "from routers import items",
+        "",
+        "app = FastAPI()",
+        "app.include_router(items.router)",
+        "",
+        '@app.get("/health")',
+        "async def health():",
+        '    return {"ok": True}',
+        "",
+        '@app.api_route("/ping", methods=["GET", "HEAD"])',
+        "async def ping():",
+        '    return {"pong": True}',
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      path.join(smokeRoot, "routers", "items.py"),
+      [
+        "from fastapi import APIRouter",
+        "",
+        "router = APIRouter(prefix=\"/items\")",
+        "",
+        '@router.get("/")',
+        "async def list_items():",
+        "    return []",
+        "",
+        '@router.post("/")',
+        "async def create_item():",
+        '    return {"id": 1}',
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      path.join(smokeRoot, "urls.py"),
+      [
+        "from django.urls import path, re_path",
+        "from . import views",
+        "",
+        "urlpatterns = [",
+        '    path("articles/", views.list_articles),',
+        '    path("articles/<int:pk>/", views.article_detail),',
+        '    re_path(r"^health/$", views.health),',
+        "]",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      path.join(smokeRoot, "README.md"),
+      "# Python Route Sketch\n\n## HTTP API\n",
+      "utf8",
+    );
+
+    const pythonGraph = await compileRepository(smokeRoot);
+    const pythonRoutes = pythonGraph.nodes.filter((node) => node.kind === "route");
+    const pythonLabels = new Set(pythonRoutes.map((node) => node.label));
+    console.log(
+      `Python extractor smoke: ${pythonRoutes.length} routes → ${[...pythonLabels].sort().join(", ")}`,
+    );
+
+    const requiredPythonRoutes = [
+      "GET /health",
+      "GET /ping",
+      "HEAD /ping",
+      "GET /",
+      "POST /",
+      "ANY /articles",
+      "ANY /articles/<int:pk>",
+      "ANY /health",
+    ];
+    for (const expected of requiredPythonRoutes) {
+      if (!pythonLabels.has(expected)) {
+        fail(
+          `python smoke missing route ${expected}; found ${[...pythonLabels].join(", ") || "(none)"}`,
+        );
+      } else {
+        pass(`python smoke has route ${expected}`);
+      }
+    }
+
+    const fastapiCount = pythonRoutes.filter(
+      (node) => node.technology === "fastapi",
+    ).length;
+    const djangoCount = pythonRoutes.filter(
+      (node) => node.technology === "django",
+    ).length;
+    if (fastapiCount < 5) {
+      fail(`python smoke expected >=5 FastAPI routes, found ${fastapiCount}`);
+    } else {
+      pass(`python smoke FastAPI routes: ${fastapiCount}`);
+    }
+    if (djangoCount < 3) {
+      fail(`python smoke expected >=3 Django routes, found ${djangoCount}`);
+    } else {
+      pass(`python smoke Django routes: ${djangoCount}`);
+    }
+
+    const pythonExtractors = pythonGraph.extractors.map((item) => item.id);
+    if (!pythonExtractors.includes("python")) {
+      fail(
+        `python smoke graph.extractors missing python; found ${JSON.stringify(pythonExtractors)}`,
+      );
+    } else {
+      pass("python smoke registers python extractor");
+    }
+
+    // urls.py + routers/ should project an HTTP API system with nested routes.
+    const pythonApi = pythonGraph.nodes.find(
+      (node) =>
+        node.metadata?.projection === "semantic" &&
+        (node.metadata?.systemKey === "api" || node.label === "HTTP API"),
+    );
+    if (!pythonApi) {
+      fail("python smoke expected HTTP API semantic system from urls.py/routers/");
+    } else {
+      const nested = pythonRoutes.filter((node) => node.parentId === pythonApi.id);
+      if (nested.length < 3) {
+        fail(
+          `python smoke expected routes nested under HTTP API, found ${nested.length}`,
+        );
+      } else {
+        pass(
+          `python smoke ${nested.length} routes nested under ${pythonApi.label}`,
+        );
+      }
+    }
+  } finally {
+    await rm(smokeRoot, { recursive: true, force: true });
   }
 }
 

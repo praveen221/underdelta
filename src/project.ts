@@ -488,7 +488,9 @@ function normalizePath(value: string): string {
 function isFileModule(node: ArchitectureNode): boolean {
   return (
     node.kind === "module" &&
-    /\.[cm]?[jt]sx?$/i.test(normalizePath(node.qualifiedName ?? node.label))
+    /\.(?:[cm]?[jt]sx?|py)$/i.test(
+      normalizePath(node.qualifiedName ?? node.label),
+    )
   );
 }
 
@@ -543,7 +545,10 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
   if (
     /(^|\/)(server|app|routes?)\.[cm]?[jt]sx?$/.test(file) ||
     file.includes("/routes/") ||
-    file.includes("/api/")
+    file.includes("/api/") ||
+    // Python servers: Django urlpatterns + FastAPI APIRouter modules.
+    /(^|\/)urls\.py$/.test(file) ||
+    file.includes("/routers/")
   ) {
     return { key: "api", label: "HTTP API", kind: "api" };
   }

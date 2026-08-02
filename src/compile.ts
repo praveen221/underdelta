@@ -9,6 +9,7 @@ import {
 } from "./extractor.js";
 import { GraphBuilder, edgeFrom, stableId } from "./graph.js";
 import { prismaExtractor } from "./extractors/prisma.js";
+import { pythonExtractor } from "./extractors/python.js";
 import { sqlExtractor } from "./extractors/sql.js";
 import { typescriptExtractor } from "./extractors/typescript.js";
 import {
@@ -91,6 +92,7 @@ export async function compileRepository(
   const files = await discoverFiles(root);
   const extractors = options.extractors ?? [
     typescriptExtractor,
+    pythonExtractor,
     prismaExtractor,
     sqlExtractor,
   ];
