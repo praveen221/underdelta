@@ -100,28 +100,124 @@ if (leaked.length > 0) {
 }
 
 const selfGraph = productGraph;
-const selfLabels = new Set(
-  selfGraph.nodes
-    .filter((node) =>
-      ["system", "pipeline", "ui", "api", "config"].includes(node.kind),
-    )
-    .map((node) => node.label),
+
+// Golden summary for `scan .` on Underdelta itself: counts + required labels.
+// Floors catch product-story regressions without freezing exact graph size.
+const SELF_GOLDEN = {
+  requiredLabels: [
+    "CLI",
+    "Compile pipeline",
+    "Extractors",
+    "Graph assembly",
+    "Schema contract",
+    "Viewer",
+    "architecture.json",
+    "index.html",
+  ],
+  min: {
+    nodes: 40,
+    edges: 80,
+    semantic: 8,
+    flowOrdered: 8,
+    product: 1,
+    system: 4,
+    pipeline: 1,
+    ui: 1,
+    config: 2,
+    "flows-to": 8,
+    contains: 40,
+  },
+};
+
+const selfCounts = countByKind(selfGraph.nodes);
+const selfEdgeCounts = countByKind(selfGraph.edges);
+const selfSemantic = selfGraph.nodes.filter(
+  (node) => node.metadata?.projection === "semantic",
 );
-for (const expected of [
-  "CLI",
-  "Compile pipeline",
-  "Extractors",
-  "Graph assembly",
-  "Schema contract",
-  "Viewer",
-  "architecture.json",
-  "index.html",
-]) {
+const selfFlowOrdered = selfGraph.nodes
+  .filter((node) => typeof node.metadata?.flowOrder === "number")
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+const selfProduct = selfGraph.nodes.find((node) => node.kind === "product");
+const goldenSummary = {
+  product: selfProduct?.label ?? "(missing)",
+  nodes: selfGraph.nodes.length,
+  edges: selfGraph.edges.length,
+  semantic: selfSemantic.length,
+  flowOrder: selfFlowOrdered.map((node) => node.label),
+  labels: [...new Set(selfSemantic.map((node) => node.label))].sort(),
+  kinds: Object.fromEntries(
+    [...selfCounts.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+  ),
+  edgeKinds: Object.fromEntries(
+    [...selfEdgeCounts.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+  ),
+};
+console.log(`Underdelta golden summary: ${JSON.stringify(goldenSummary)}`);
+
+if (goldenSummary.nodes < SELF_GOLDEN.min.nodes) {
+  fail(
+    `golden nodes below floor: ${goldenSummary.nodes} < ${SELF_GOLDEN.min.nodes}`,
+  );
+} else {
+  pass(`golden nodes: ${goldenSummary.nodes}`);
+}
+if (goldenSummary.edges < SELF_GOLDEN.min.edges) {
+  fail(
+    `golden edges below floor: ${goldenSummary.edges} < ${SELF_GOLDEN.min.edges}`,
+  );
+} else {
+  pass(`golden edges: ${goldenSummary.edges}`);
+}
+if (goldenSummary.semantic < SELF_GOLDEN.min.semantic) {
+  fail(
+    `golden semantic systems below floor: ${goldenSummary.semantic} < ${SELF_GOLDEN.min.semantic}`,
+  );
+} else {
+  pass(`golden semantic systems: ${goldenSummary.semantic}`);
+}
+if (selfFlowOrdered.length < SELF_GOLDEN.min.flowOrdered) {
+  fail(
+    `golden flowOrdered below floor: ${selfFlowOrdered.length} < ${SELF_GOLDEN.min.flowOrdered}`,
+  );
+} else {
+  pass(`golden flowOrdered: ${selfFlowOrdered.length}`);
+}
+if (goldenSummary.product !== "underdelta") {
+  fail(`golden product label expected 'underdelta', found '${goldenSummary.product}'`);
+} else {
+  pass("golden product label: underdelta");
+}
+
+for (const [kind, minimum] of Object.entries(SELF_GOLDEN.min)) {
+  if (["nodes", "edges", "semantic", "flowOrdered"].includes(kind)) continue;
+  const actual =
+    kind === "flows-to" || kind === "contains"
+      ? (selfEdgeCounts.get(kind) ?? 0)
+      : (selfCounts.get(kind) ?? 0);
+  if (actual < minimum) {
+    fail(`golden '${kind}' below floor: ${actual} < ${minimum}`);
+  } else {
+    pass(`golden '${kind}': ${actual}`);
+  }
+}
+
+const selfLabels = new Set(goldenSummary.labels);
+for (const expected of SELF_GOLDEN.requiredLabels) {
   if (!selfLabels.has(expected)) {
     fail(`Underdelta self-map missing semantic node '${expected}'`);
   } else {
     pass(`self-map has '${expected}'`);
   }
+}
+const missingFlowLabels = SELF_GOLDEN.requiredLabels.filter(
+  (label) => !goldenSummary.flowOrder.includes(label),
+);
+if (missingFlowLabels.length) {
+  fail(
+    `golden flowOrder missing labels: ${missingFlowLabels.join(", ")} (got ${goldenSummary.flowOrder.join(" → ")})`,
+  );
+} else {
+  pass(`golden flowOrder: ${goldenSummary.flowOrder.join(" → ")}`);
 }
 
 const artifact = selfGraph.nodes.find(
