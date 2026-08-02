@@ -708,6 +708,41 @@ export function humanizeAppPathLabel(path: string): string {
   return segments.map((segment) => humanizeIdentifierLabel(segment)).join(" · ");
 }
 
+/**
+ * Next.js App Router route handlers → calm API labels.
+ * Parent system is already "HTTP API", so drop the redundant `/api` prefix:
+ * `GET` + `/api/stripe/checkout` → `GET Stripe checkout`.
+ */
+export function humanizeNextRouteLabel(method: string, path: string): string {
+  const verb = method.trim() || "GET";
+  let segments = path
+    .trim()
+    .split("/")
+    .filter(Boolean)
+    .filter((segment) => !segment.startsWith("(") && !segment.startsWith("@"));
+  if (segments[0]?.toLowerCase() === "api") {
+    segments = segments.slice(1);
+  }
+  if (!segments.length) return verb;
+  // Sentence-case the path: Stripe checkout (not Stripe Checkout).
+  const humanPath = segments
+    .map((segment, index) => {
+      const human = humanizeIdentifierLabel(segment);
+      if (index === 0) return human;
+      return human.charAt(0).toLowerCase() + human.slice(1);
+    })
+    .join(" ");
+  return `${verb} ${humanPath}`;
+}
+
+/**
+ * Server-action export names → product mutations.
+ * `checkoutAction` → `Checkout` (drop trailing factory `Action` chrome).
+ */
+export function humanizeServerActionLabel(label: string): string {
+  return humanizeIdentifierLabel(label).replace(/\s+action$/i, "");
+}
+
 function preferredTableLabel(bucket: ArchitectureNode[]): string {
   const ranked = [...bucket].sort((a, b) => {
     const rankDiff = tableRank(b) - tableRank(a);
@@ -1254,16 +1289,20 @@ export function projectSemanticArchitecture(
         node.metadata.path === "/"
           ? "App layout"
           : `${humanizeAppPathLabel(node.metadata.path)} layout`;
-    } else if (node.metadata?.serverAction === true) {
-      nextLabel = humanizeIdentifierLabel(node.label);
     } else if (
-      node.kind === "component" &&
-      (node.metadata?.clientComponent === true ||
-        node.metadata?.runtime === "client" ||
-        node.metadata?.next === "page" ||
-        node.metadata?.next === "layout")
+      node.kind === "route" &&
+      node.metadata?.next === "route" &&
+      typeof node.metadata.path === "string"
     ) {
-      // Client widgets + page/layout default exports: PostList → Post list.
+      // Stripe checkout/webhook etc.: GET /api/stripe/checkout → GET Stripe checkout.
+      const method =
+        typeof node.metadata.method === "string" ? node.metadata.method : "GET";
+      nextLabel = humanizeNextRouteLabel(method, node.metadata.path);
+    } else if (node.metadata?.serverAction === true) {
+      // checkoutAction → Checkout (drop trailing Action factory chrome).
+      nextLabel = humanizeServerActionLabel(node.label);
+    } else if (node.kind === "component") {
+      // All components (client + server): tame PascalCase Card*/skeletons too.
       nextLabel = humanizeIdentifierLabel(node.label);
     }
 

@@ -1287,10 +1287,10 @@ const miniNextRouteLabels = new Set(
     .filter((node) => node.kind === "route")
     .map((node) => node.label),
 );
-for (const expected of ["GET /api/posts", "POST /api/posts", "GET /api/health"]) {
+for (const expected of ["GET Posts", "POST Posts", "GET Health"]) {
   if (!miniNextRouteLabels.has(expected)) {
     fail(
-      `mini-next missing route ${expected}; found ${[...miniNextRouteLabels].join(", ") || "(none)"}`,
+      `mini-next missing humanized route ${expected}; found ${[...miniNextRouteLabels].join(", ") || "(none)"}`,
     );
   } else {
     pass(`mini-next has route ${expected}`);
@@ -2063,10 +2063,10 @@ if (nextRealRoot) {
     }
 
     const expectedNextRoutes = [
-      "GET /api/user",
-      "GET /api/team",
-      "GET /api/stripe/checkout",
-      "POST /api/stripe/webhook",
+      "GET User",
+      "GET Team",
+      "GET Stripe checkout",
+      "POST Stripe webhook",
     ];
     const nextRouteLabels = new Set(nextRoutes.map((node) => node.label));
     const missingNextRoutes = expectedNextRoutes.filter(
@@ -2074,7 +2074,7 @@ if (nextRealRoot) {
     );
     if (missingNextRoutes.length) {
       fail(
-        `next-real-repo missing App Router route handlers: ${missingNextRoutes.join(", ")}; found ${[...nextRouteLabels].join(", ") || "(none)"}`,
+        `next-real-repo missing humanized App Router routes: ${missingNextRoutes.join(", ")}; found ${[...nextRouteLabels].join(", ") || "(none)"}`,
       );
     } else {
       pass(
@@ -2151,8 +2151,8 @@ if (nextRealRoot) {
       "Update account",
       "Remove team member",
       "Invite team member",
-      "Checkout action",
-      "Customer portal action",
+      "Checkout",
+      "Customer portal",
     ];
     const missingNextActions = expectedNextActions.filter(
       (label) => !nextActionLabels.has(label),
