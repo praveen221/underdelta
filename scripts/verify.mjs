@@ -8555,15 +8555,57 @@ if (kustomizeRealRoot) {
     const kustomizeRealFlow = kustomizeRealSemantic
       .filter((node) => typeof node.metadata?.flowOrder === "number")
       .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+    // North-star overlay-led cold-read: Deploy only (OpenAPI HTTP API quieted).
     if (
-      !kustomizeRealFlow.some((node) => node.metadata?.systemKey === "deploy")
+      kustomizeRealFlow.length !== 1 ||
+      kustomizeRealFlow[0]?.metadata?.systemKey !== "deploy"
     ) {
       fail(
-        `kustomize-real-repo flowOrder should include Deploy, got ${kustomizeRealFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+        `kustomize-real-repo flowOrder expected Deploy-only, got ${kustomizeRealFlow.map((node) => node.label).join(" → ") || "(none)"}`,
       );
     } else {
       pass(
-        `kustomize-real-repo flowOrder includes Deploy: ${kustomizeRealFlow.map((node) => node.label).join(" → ")}`,
+        `kustomize-real-repo flowOrder Deploy-only: ${kustomizeRealFlow.map((node) => node.label).join(" → ")}`,
+      );
+    }
+
+    const kustomizeRealApi = kustomizeRealByKey.get("api");
+    if (
+      !kustomizeRealApi ||
+      kustomizeRealApi.metadata?.collapsedInOverview !== true
+    ) {
+      fail(
+        `kustomize-real-repo OpenAPI HTTP API should collapse beside Deploy/Overlays; found collapsed=${kustomizeRealApi?.metadata?.collapsedInOverview}`,
+      );
+    } else {
+      pass("kustomize-real-repo OpenAPI HTTP API quieted beside Deploy/Overlays");
+    }
+
+    const helmBesideOverlays = kustomizeRealGraph.nodes.filter(
+      (node) =>
+        node.metadata?.helmChart === true ||
+        node.metadata?.helmResource === true,
+    );
+    if (helmBesideOverlays.length < 3) {
+      fail(
+        `kustomize-real-repo expected Helm Chart/resources beside overlays to quiet, found ${helmBesideOverlays.length}`,
+      );
+    }
+    const loudHelmHubs = helmBesideOverlays.filter(
+      (node) =>
+        node.metadata?.exampleChrome !== true ||
+        node.metadata?.collapsedInOverview !== true ||
+        node.metadata?.overviewHub === true,
+    );
+    if (loudHelmHubs.length > 0) {
+      fail(
+        `kustomize-real-repo Helm hubs should quiet beside Overlays, still loud: ${loudHelmHubs
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass(
+        `kustomize-real-repo ${helmBesideOverlays.length} Helm Chart/resources quieted beside Overlays`,
       );
     }
 

@@ -207,6 +207,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 10 polish/lock: helm/examples North-star — Hello world Chart/Deployment/Service `overviewHub` beside Deploy; quiet Chart.yaml + template module twins as `helmModuleTwinChrome`; same-name Service→Deployment needs when selectors are `include "chart.selectorLabels"`; golden-lock unique hubs — **Rung 10 locked**
 - [x] Rung 11 prep: Kustomize product overlays — `kustomization.yaml` → Overlay Deploy hubs; path-role `kustomize/`/`overlays/`/`bases/`; README Overlays; `verification/mini-kustomize` smoke floors + Extractors roster `kustomize`; Boutique `kustomize/` + manifests-index Overlay quiet beside kubernetes-manifests
 - [x] Rung 11: pin `stefanprodan/podinfo` @ `eec06d1ea459af4cb4e10e806f8be7c7bd58b361`; clone into gitignored `.underdelta-real/podinfo`; humanize lowercase README brand (`podinfo` → Podinfo); golden-lock 7 Overlay hubs (Backend/Cache/Database/Frontend + Dev/Staging/Production) nested under Deploy + quiet `kustomize/` chrome + namespaces + flowOrder includes Deploy
+- [x] Rung 11 polish: North-star podinfo cold-read — quiet Helm chart hubs + OpenAPI HTTP API when Deploy/Overlays are the product story (Deploy-led flowOrder)
 
 ### Real-repo pins (Capability ladder)
 
@@ -228,8 +229,8 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 11 polish: North-star podinfo cold-read — quiet Helm chart hubs + OpenAPI HTTP API when Deploy/Overlays are the product story (Deploy-led flowOrder)
 - [ ] Rung 11 polish: label `deploy/bases/*` as · Base (not · Overlay); wire overlay→base needs / nest resources under Overlay hubs
+- [ ] Rung 11 lock: legacy `bases:` key + namePrefix story on Overlay hubs; then golden-lock + promote next ladder rung
 - [ ] GraphQL `schema { query: Root }` / non-Query root types (SWAPI-style) if a later pin needs it
 - [ ] Standing polish: Underdelta self-map cold-read pass — leftover jargon labels or weak hierarchy
 
@@ -237,7 +238,7 @@ Keep **at least 3 unchecked items** here at all times (refill from Self-renewing
 
 Not a full roadmap — a menu the agent may reorder. Pick what most improves the **Capability ladder** now.
 
-- Rung 11+: legacy `bases:` key + namePrefix story; then lock Rung 11
+- Rung 11+: nest kubernetes resources under owning Overlay hubs when path-linked
 - GraphQL `extend type Query` / schema stitching if a real-repo pin needs it
 - OAS3 `servers` / `$ref` path-item resolution if a later OpenAPI pin needs it
 - Performance pass only if scanning a real repo becomes painfully slow
@@ -245,7 +246,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Rung 11 pin — podinfo Overlay hubs golden-locked). Now polish the podinfo North-star cold-read so Deploy/Overlays lead (quiet Helm + OpenAPI API competition) and bases read as · Base.
+> **Next focus:** This work is done (Rung 11 Deploy-led podinfo polish — Helm + OpenAPI quieted). Now label `deploy/bases/*` as · Base and wire overlay→base needs so the Overlay story reads as bases + env overlays.
 
 ### Learning log (append every tick)
 

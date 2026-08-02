@@ -682,7 +682,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       // Helm Chart.yaml + templates — Chart/version + kind/name owned by Chart section.
       "helm", "helmChart", "helmResource", "helmModule", "helmChartYaml",
       "helmTemplate", "chartName", "chartVersion", "chartRoot", "appVersion",
-      "helmChartOnlyChrome", "helmModuleTwinChrome",
+      "helmChartOnlyChrome", "helmModuleTwinChrome", "helmBesideOverlayChrome",
       // Kustomize overlays — Overlay/namespace owned by Overlay inspector section.
       "kustomize", "kustomization", "kustomizeModule", "kustomizationYaml",
       "overlayName", "overlayRoot", "namePrefix", "nameSuffix", "resources",

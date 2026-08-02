@@ -823,13 +823,16 @@ function quietNonCompilerProductChrome(
             node.metadata?.helmResource === true),
       ),
   );
+  // Product Overlay hubs only — Boutique kustomize/components stay chrome and
+  // must not drive Deploy-led API quieting.
   const hasKustomizeUnits = Boolean(
     deploy &&
       [...nodes.values()].some(
         (node) =>
           node.parentId === deploy.id &&
           node.metadata?.kustomization === true &&
-          node.metadata?.exampleChrome !== true,
+          node.metadata?.exampleChrome !== true &&
+          node.metadata?.kustomizeChrome !== true,
       ),
   );
   if (
@@ -845,7 +848,15 @@ function quietNonCompilerProductChrome(
     const thinOrEmptyApi =
       apiRoutes.length === 0 ||
       apiRoutes.every((route) => isThinHttpRoutePath(route.metadata?.path));
-    if (thinOrEmptyApi) {
+    // Overlay-led apps (podinfo) ship a fat OpenAPI contract beside deploy/
+    // bases+overlays — that HTTP API steals the cold-read from Deploy.
+    const openApiBesideOverlays =
+      hasKustomizeUnits &&
+      apiRoutes.length > 0 &&
+      apiRoutes.every((route) =>
+        (route.evidence ?? []).some((item) => item.extractor === "openapi"),
+      );
+    if (thinOrEmptyApi || openApiBesideOverlays) {
       api.metadata = {
         ...api.metadata,
         collapsedInOverview: true,
@@ -1897,6 +1908,41 @@ function promoteHelmOverviewHubs(
       ...node.metadata,
       overviewHub: true,
       collapsedInOverview: false,
+    };
+    nodes.set(node.id, node);
+  }
+}
+
+/**
+ * Product Kustomize Overlay hubs (deploy/bases + overlays) own the cold-read
+ * for overlay-led repos (podinfo). Concrete Helm Chart/Deployments beside those
+ * overlays restate packaging — quiet them like Chart-only chrome beside
+ * kubernetes-manifests. Chart-led maps without product overlays keep Helm hubs.
+ */
+function quietHelmBesideKustomizeOverlays(
+  nodes: Map<string, ArchitectureNode>,
+): void {
+  const hasProductOverlays = [...nodes.values()].some(
+    (node) =>
+      node.metadata?.kustomization === true &&
+      node.metadata?.exampleChrome !== true &&
+      node.metadata?.kustomizeChrome !== true,
+  );
+  if (!hasProductOverlays) return;
+
+  for (const node of nodes.values()) {
+    const isHelmSurface =
+      node.metadata?.helmChart === true ||
+      node.metadata?.helmResource === true ||
+      (node.kind === "module" && node.metadata?.helm === true);
+    if (!isHelmSurface) continue;
+    if (node.metadata?.exampleChrome === true) continue;
+    node.metadata = {
+      ...node.metadata,
+      helmBesideOverlayChrome: true,
+      exampleChrome: true,
+      collapsedInOverview: true,
+      overviewHub: false,
     };
     nodes.set(node.id, node);
   }
@@ -3982,6 +4028,10 @@ export function projectSemanticArchitecture(
   // Concrete Kustomize Overlay hubs stay visible beside Deploy (overlay-led
   // North-star story). Skips exampleChrome Boutique kustomize/components.
   promoteKustomizeOverviewHubs(nodes);
+
+  // Overlay-led maps (podinfo deploy/bases+overlays): quiet Helm Chart hubs so
+  // Overlays own the cold-read. Chart-led repos without product overlays keep hubs.
+  quietHelmBesideKustomizeOverlays(nodes);
 
   assignFlowOrder(systems, preferredFlows);
 
