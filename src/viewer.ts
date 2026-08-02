@@ -141,7 +141,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       <span class="meta" id="counts"></span>
       <button id="back" hidden>Back</button>
       <button id="overview">Overview</button>
-      <button id="implementation">Details: off</button>
+      <button id="tier" title="Beginner: product story · Intermediate: hubs &amp; routes · Advanced: code inside current focus">View: Beginner</button>
       <input id="search" type="search" placeholder="Find a route, table, job, component…" />
     </header>
     <div id="workspace">
@@ -191,15 +191,46 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       }
       return null;
     }
-    // Default view prefers product systems over raw modules/functions/steps.
-    const hiddenByDefault = new Set(["function", "column", "module", "pipeline-step"]);
+    // Code-level kinds — Beginner/Intermediate hide these; Advanced shows them
+    // only inside the current focus (never a whole-repo dump).
+    const advancedKinds = new Set(["function", "column", "module", "pipeline-step"]);
     // Product-story edges — canvas + inspector treat these apart from imports/calls.
     const collaborationKinds = new Set([
       "uses", "renders", "exposes", "triggers", "configures", "reads", "flows-to",
     ]);
     // Messaging + schema lineage — labeled badges on the default overview.
     const narrativeKinds = new Set(["publishes", "consumes", "migrates"]);
-    const state = { scale: 1, x: 36, y: 40, dragging: false, startX: 0, startY: 0, focus: null, selected: null, implementation: false, history: [] };
+    // Beginner = product flow · Intermediate = hubs/routes/tables · Advanced = code in focus
+    const tierOrder = ["beginner", "intermediate", "advanced"];
+    const tierLabels = {
+      beginner: "View: Beginner",
+      intermediate: "View: Intermediate",
+      advanced: "View: Advanced",
+    };
+    const state = {
+      scale: 1,
+      x: 36,
+      y: 40,
+      dragging: false,
+      startX: 0,
+      startY: 0,
+      focus: null,
+      selected: null,
+      tier: "beginner",
+      history: [],
+    };
+    function isAdvancedTier() {
+      return state.tier === "advanced";
+    }
+    function isIntermediateOrAbove() {
+      return state.tier === "intermediate" || state.tier === "advanced";
+    }
+    function syncTierButton() {
+      const button = document.getElementById("tier");
+      if (!button) return;
+      button.textContent = tierLabels[state.tier] || tierLabels.beginner;
+      button.dataset.tier = state.tier;
+    }
     const viewport = document.getElementById("viewport");
     const world = document.getElementById("world");
     const nodesLayer = document.getElementById("nodes");
@@ -245,16 +276,15 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         }
         // overviewHub (auth/billing actions, Helm Chart/resources, mongo
         // aggregates) bypasses kind/collapse hides so product hubs stay on
-        // the default map beside their parent system.
-        if (
-          !state.implementation &&
-          hiddenByDefault.has(node.kind) &&
-          !(node.metadata && node.metadata.overviewHub)
-        ) {
-          return false;
+        // Beginner/Intermediate beside their parent system.
+        const isOverviewHub = node.metadata && node.metadata.overviewHub;
+        if (advancedKinds.has(node.kind) && !isOverviewHub) {
+          // Advanced code kinds only when Advanced + a focused cluster.
+          // Without focus, Advanced must not dump every function in the repo.
+          if (!isAdvancedTier() || !state.focus) return false;
         }
         if (
-          !state.implementation &&
+          !isIntermediateOrAbove() &&
           !state.focus &&
           !query &&
           node.metadata &&
@@ -341,7 +371,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       positionsScratch = new Map();
       const positions = positionsScratch;
       nodesLayer.innerHTML = "";
-      const activeLanes = lanes.filter((lane) => state.implementation || lane.name !== "Details");
+      const activeLanes = lanes.filter(
+        (lane) => (isAdvancedTier() && state.focus) || lane.name !== "Details",
+      );
       const laneWidth = 240;
       const flowGap = 220;
       let maxHeight = 0;
@@ -1082,7 +1114,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       state.focus = null;
       state.history = [];
       state.selected = null;
+      state.tier = "beginner";
       state.x = 36; state.y = 40; state.scale = 1;
+      syncTierButton();
       inspector.innerHTML = '<div class="empty">Select a component to inspect its connections and source evidence.</div>';
       render(); applyTransform();
     };
@@ -1091,11 +1125,16 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       state.selected = state.focus;
       render();
     };
-    document.getElementById("implementation").onclick = (event) => {
-      state.implementation = !state.implementation;
-      event.currentTarget.textContent = "Details: " + (state.implementation ? "on" : "off");
+    document.getElementById("tier").onclick = () => {
+      const index = tierOrder.indexOf(state.tier);
+      state.tier = tierOrder[(index + 1) % tierOrder.length];
+      // Advanced without a focus cannot show a whole-repo code dump — keep the
+      // tier label but visibility stays Intermediate until the user double-clicks
+      // into a system (focus). Searching still reveals matches at any tier.
+      syncTierButton();
       render();
     };
+    syncTierButton();
     search.oninput = render;
     viewport.onclick = () => {
       state.selected = null;

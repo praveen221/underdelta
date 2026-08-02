@@ -129,19 +129,19 @@ Update checkboxes + Next focus every tick (unless Idle protocol).
 - [x] v0 on `master` (extractors, projection, viewer, verify, one-command scan) — prior work  
 - [x] This loop plan created  
 - [x] Soft-stop / LOOP COMPLETE idle protocol documented  
+- [x] Tier model in viewer UX: `View: Beginner | Intermediate | Advanced` (replaces Details on/off); Advanced kinds require focus (no whole-repo dump); verify golden floor  
 
 ### In progress / next
 
 Keep **at least 3 unchecked items** here until LOOP COMPLETE (refill from Seed backlog).  
-These seven are the **mandatory** walkable slice — finishing them (with gates 1–8) is what completes the loop:
+These remaining items are the **mandatory** walkable slice — finishing them (with gates 1–8) is what completes the loop:
 
-- [ ] Define tier model in viewer UX: Beginner (default) / Intermediate / Advanced — labels a non-coder understands (not only “Details on/off”)  
-- [ ] Beginner cold open: Product Flow + systems; hide function/module hairballs by default on self-map + mini-stack  
+- [ ] Beginner cold open polish: ensure Product Flow + systems stay calm on self-map + mini-stack (no leaked advanced kinds)  
 - [ ] Focus / enter a system: Intermediate neighborhood (hubs + important children + key collab edges only)  
-- [ ] Advanced only for current focus: functions/edges scoped to cluster; no whole-repo Details dump  
-- [ ] Navigation: breadcrumb + back to Beginner (and Intermediate if nested)  
-- [ ] Verify golden floors for tier/focus behavior (self-map and/or mini-stack)  
-- [ ] Polish pass: legend/inspector copy matches tiers; standing guarantee self-map cold-read  
+- [ ] Advanced inside focus: when focused + Advanced, show that cluster’s functions/modules; breadcrumb/tier copy clarifies “code in focus”  
+- [ ] Navigation: breadcrumb + back to Beginner (and Intermediate if nested); tier label stays in sync when Overview resets  
+- [ ] Verify golden floors for focus + Intermediate/Advanced visibility (self-map and/or mini-stack)  
+- [ ] Polish pass: legend/inspector/empty-state copy matches tiers; standing guarantee self-map cold-read  
 
 ### Seed backlog (optional — not required for LOOP COMPLETE)
 
@@ -157,7 +157,7 @@ Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder fr
 
 ### Next focus (edit every tick)
 
-> **Next focus:** Plan armed (soft-stop documented). First implement a clear Beginner vs Intermediate vs Advanced model in the viewer (replace or wrap “Details: on/off”) so cold open stays Product-Flow-led and Details no longer means “show every function in the repo.”
+> **Next focus:** This work is done (Beginner/Intermediate/Advanced tier control; Advanced requires focus). Now polish Beginner cold open on self-map + mini-stack so no advanced kinds leak, then strengthen Intermediate neighborhood when a system is focused.
 
 ### Learning log (append every tick)
 
@@ -167,6 +167,7 @@ Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder fr
 
 - 2026-08-02 | Plan created for walkable 3-tier graph on `walkable-graph-02082026` | Next: tier model in viewer | Learned: v0 Product Flow is strong; Details-on whole-repo dump is the failure mode to kill  
 - 2026-08-02 | Soft-stop hardened: acceptance gates 1–8, Loop status ACTIVE/COMPLETE, idle ticks must not push | Next: tier model in viewer | Learned: push-triggered automation only runs away if idle ticks still commit/push  
+- 2026-08-02 | Done: replaced Details on/off with View: Beginner/Intermediate/Advanced; advancedKinds only when Advanced+focus; verify locks tier control | Next: Beginner cold-open polish + Intermediate focus neighborhood | Learned: Intermediate = reveal collapsedInOverview hubs/routes; Advanced without focus must stay non-dumping or the old failure mode returns under a new label  
 
 ---
 

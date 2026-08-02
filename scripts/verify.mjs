@@ -1083,6 +1083,30 @@ if (!fulfillmentPublishers.includes("Checkout API")) {
 // Inspector: collaboration edges (uses/renders/exposes/…) before raw imports,
 // with human detail text (not just kind · label).
 const viewerHtml = renderArchitectureHtml(selfGraph);
+
+// Walkable graph: Beginner / Intermediate / Advanced tier control (not Details on/off).
+if (
+  !viewerHtml.includes('id="tier"') ||
+  !viewerHtml.includes("View: Beginner") ||
+  !viewerHtml.includes('tierOrder = ["beginner", "intermediate", "advanced"]') ||
+  viewerHtml.includes("Details: off") ||
+  viewerHtml.includes('id="implementation"')
+) {
+  fail(
+    "viewer should expose Beginner/Intermediate/Advanced tier control (id=tier), not Details on/off",
+  );
+} else if (
+  !viewerHtml.includes("isAdvancedTier()") ||
+  !viewerHtml.includes("!isAdvancedTier() || !state.focus")
+) {
+  fail(
+    "viewer Advanced tier must require focus so whole-repo function dumps stay impossible",
+  );
+} else {
+  pass("viewer Walkable tiers: Beginner / Intermediate / Advanced (cluster-scoped Advanced)");
+}
+
+
 const collaborationHeading = viewerHtml.indexOf("<h3>Collaboration</h3>");
 const importsHeading = viewerHtml.indexOf("Imports &amp; calls");
 const collaborationKindsDecl = viewerHtml.indexOf(
