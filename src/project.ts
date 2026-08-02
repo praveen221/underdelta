@@ -276,6 +276,8 @@ const collaborationEdges: Array<{
   detail: string;
   /** When set, only emit if at least one of these system keys exists (gates commerce copy off bare API+Data maps). */
   requiresAny?: string[];
+  /** When set, skip if any of these system keys exist (keeps neutral UI→API off commerce maps). */
+  requiresNone?: string[];
 }> = [
   {
     from: "cli",
@@ -369,14 +371,15 @@ const collaborationEdges: Array<{
     detail: "Viewer emits the index.html browser artifact",
   },
   // Mini-stack / commerce product systems — collaboration beyond flows-to.
-  // requiresAny keeps Checkout/orders copy off RealWorld-style API+Data-only maps.
+  // Gate on commerce-only systems so bare UI+API (Next) / API+Data (RealWorld)
+  // maps never inherit Checkout/orders copy.
   {
     from: "ui",
     to: "api",
     kind: "uses",
     label: "checkout",
     detail: "Storefront UI uses Checkout API for order status and checkout",
-    requiresAny: ["ui", "pipelines", "workers", "jobs"],
+    requiresAny: ["pipelines", "workers", "jobs"],
   },
   {
     from: "api",
@@ -384,7 +387,7 @@ const collaborationEdges: Array<{
     kind: "triggers",
     label: "checkout",
     detail: "Checkout API triggers the Order pipeline after an order is accepted",
-    requiresAny: ["ui", "pipelines", "workers", "jobs"],
+    requiresAny: ["pipelines", "workers", "jobs"],
   },
   {
     from: "api",
@@ -392,7 +395,7 @@ const collaborationEdges: Array<{
     kind: "triggers",
     label: "fulfill",
     detail: "Checkout API triggers Fulfillment workers via the fulfillment queue",
-    requiresAny: ["ui", "pipelines", "workers", "jobs"],
+    requiresAny: ["pipelines", "workers", "jobs"],
   },
   {
     from: "api",
@@ -400,7 +403,7 @@ const collaborationEdges: Array<{
     kind: "reads",
     label: "orders",
     detail: "Checkout API reads Catalog data when fulfilling orders",
-    requiresAny: ["ui", "pipelines", "workers", "jobs"],
+    requiresAny: ["pipelines", "workers", "jobs"],
   },
   {
     from: "jobs",
@@ -408,7 +411,16 @@ const collaborationEdges: Array<{
     kind: "uses",
     label: "payments",
     detail: "Reconciliation jobs use Catalog data for payment reconciliation",
-    requiresAny: ["ui", "pipelines", "workers", "jobs"],
+    requiresAny: ["pipelines", "workers", "jobs"],
+  },
+  // Neutral UI→API collaboration for App Router / non-commerce products.
+  {
+    from: "ui",
+    to: "api",
+    kind: "uses",
+    label: "fetch",
+    detail: "UI calls the HTTP API and server actions",
+    requiresNone: ["pipelines", "workers", "jobs"],
   },
 ];
 
@@ -498,6 +510,23 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
   }
   if (/(^|\/)graph\.[cm]?[jt]sx?$/.test(file)) {
     return { key: "graph", label: "Graph assembly", kind: "system" };
+  }
+  // Next.js App Router: route handlers + server actions are the API surface.
+  if (
+    file.includes("/app/api/") ||
+    /(?:^|\/)(?:src\/)?app\/api\//.test(file) ||
+    /(?:^|\/)(?:src\/)?app\/.*\/route\.[cm]?[jt]sx?$/.test(file) ||
+    /(?:^|\/)(?:src\/)?app\/actions?\//.test(file)
+  ) {
+    return { key: "api", label: "HTTP API", kind: "api" };
+  }
+  // Next.js App Router pages/layouts are the product UI (before generic /api/).
+  if (
+    /(?:^|\/)(?:src\/)?app\/(?:.+\/)?(page|layout|loading|error|template|default)\.[cm]?[jt]sx?$/.test(
+      file,
+    )
+  ) {
+    return { key: "ui", label: "UI", kind: "ui" };
   }
   if (
     /(^|\/)(server|app|routes?)\.[cm]?[jt]sx?$/.test(file) ||
@@ -1511,6 +1540,12 @@ export function projectSemanticArchitecture(
     if (
       collab.requiresAny &&
       !collab.requiresAny.some((key) => systemsByKey.has(key))
+    ) {
+      continue;
+    }
+    if (
+      collab.requiresNone &&
+      collab.requiresNone.some((key) => systemsByKey.has(key))
     ) {
       continue;
     }

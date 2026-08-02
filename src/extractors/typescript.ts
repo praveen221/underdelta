@@ -114,6 +114,81 @@ function looksLikeHttpRoutePath(value: string): boolean {
   return value.startsWith("/") || value.startsWith("*");
 }
 
+const nextHttpExports = new Set([
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS",
+]);
+
+const nextAppSpecialFiles = new Set([
+  "page",
+  "layout",
+  "route",
+  "loading",
+  "error",
+  "template",
+  "default",
+]);
+
+interface NextAppFile {
+  type: string;
+  urlPath: string;
+}
+
+/** Parse Next.js App Router special files under `app/` or `src/app/`. */
+function parseNextAppFile(relative: string): NextAppFile | undefined {
+  const file = relative.replaceAll("\\", "/");
+  const match = file.match(
+    /(?:^|\/)(?:src\/)?app\/(?:(.+)\/)?(page|layout|route|loading|error|template|default)\.[cm]?[jt]sx?$/i,
+  );
+  if (!match) return undefined;
+  const rawSegments = (match[1] ?? "").split("/").filter(Boolean);
+  const urlSegments = rawSegments.filter(
+    (segment) =>
+      !(segment.startsWith("(") && segment.endsWith(")")) &&
+      !segment.startsWith("@") &&
+      !segment.startsWith("_"),
+  );
+  const urlPath =
+    urlSegments.length === 0 ? "/" : `/${urlSegments.join("/")}`;
+  return {
+    type: match[2]!.toLowerCase(),
+    urlPath,
+  };
+}
+
+/** Leading `"use client"` / `"use server"` directive, if present. */
+function readUseDirective(
+  source: ts.SourceFile,
+): "client" | "server" | undefined {
+  for (const statement of source.statements) {
+    if (
+      ts.isExpressionStatement(statement) &&
+      ts.isStringLiteral(statement.expression)
+    ) {
+      const value = statement.expression.text;
+      if (value === "use client") return "client";
+      if (value === "use server") return "server";
+      continue;
+    }
+    break;
+  }
+  return undefined;
+}
+
+function isExportedFunctionLike(
+  node: ts.FunctionDeclaration | ts.VariableStatement,
+): boolean {
+  const modifiers = ts.canHaveModifiers(node)
+    ? ts.getModifiers(node)
+    : undefined;
+  return Boolean(modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword));
+}
+
 function propertyChain(node: ts.Expression): string[] {
   if (ts.isIdentifier(node)) return [node.text];
   if (ts.isPropertyAccessExpression(node)) {
@@ -649,6 +724,237 @@ export const typescriptExtractor: ArchitectureExtractor = {
         ts.forEachChild(node, (child) => visit(child, nextOwner));
       };
       visit(file.source);
+    }
+
+    // Next.js App Router: pages/layouts + route handlers + client/server split.
+    for (const file of parsed) {
+      const directive = readUseDirective(file.source);
+      const localDeclarations =
+        declarationsByFile.get(file.relative) ?? new Map<string, string>();
+      const nextFile = parseNextAppFile(file.relative);
+
+      if (directive) {
+        for (const node of nodes) {
+          if (
+            node.evidence.some((item) => item.file === file.relative) &&
+            (node.kind === "component" ||
+              node.kind === "page" ||
+              node.kind === "function" ||
+              node.kind === "hook" ||
+              node.kind === "module")
+          ) {
+            node.metadata = {
+              ...node.metadata,
+              runtime: directive,
+              ...(directive === "client" ? { clientComponent: true } : {}),
+              ...(directive === "server" ? { serverModule: true } : {}),
+            };
+          }
+        }
+      }
+
+      if (directive === "server" || /(?:^|\/)app\/actions?\//i.test(file.relative.replaceAll("\\", "/"))) {
+        for (const statement of file.source.statements) {
+          if (ts.isFunctionDeclaration(statement) && statement.name) {
+            if (!isExportedFunctionLike(statement)) continue;
+            const id = localDeclarations.get(statement.name.text);
+            const node = id ? nodes.find((item) => item.id === id) : undefined;
+            if (!node) continue;
+            node.metadata = {
+              ...node.metadata,
+              serverAction: true,
+              runtime: node.metadata?.runtime ?? "server",
+            };
+            if (!node.technology) node.technology = "next-server-action";
+          } else if (ts.isVariableStatement(statement) && isExportedFunctionLike(statement)) {
+            for (const declaration of statement.declarationList.declarations) {
+              if (!ts.isIdentifier(declaration.name)) continue;
+              if (
+                !declaration.initializer ||
+                !(
+                  ts.isArrowFunction(declaration.initializer) ||
+                  ts.isFunctionExpression(declaration.initializer)
+                )
+              ) {
+                continue;
+              }
+              const id = localDeclarations.get(declaration.name.text);
+              const node = id ? nodes.find((item) => item.id === id) : undefined;
+              if (!node) continue;
+              node.metadata = {
+                ...node.metadata,
+                serverAction: true,
+                runtime: node.metadata?.runtime ?? "server",
+              };
+              if (!node.technology) node.technology = "next-server-action";
+            }
+          }
+        }
+      }
+
+      if (!nextFile || !nextAppSpecialFiles.has(nextFile.type)) continue;
+
+      if (nextFile.type === "route") {
+        for (const statement of file.source.statements) {
+          let method: string | undefined;
+          let at: ts.Node | undefined;
+          let handlerName: string | undefined;
+          if (
+            ts.isFunctionDeclaration(statement) &&
+            statement.name &&
+            nextHttpExports.has(statement.name.text)
+          ) {
+            method = statement.name.text;
+            at = statement;
+            handlerName = statement.name.text;
+          } else if (ts.isVariableStatement(statement)) {
+            for (const declaration of statement.declarationList.declarations) {
+              if (
+                ts.isIdentifier(declaration.name) &&
+                nextHttpExports.has(declaration.name.text) &&
+                declaration.initializer &&
+                (ts.isArrowFunction(declaration.initializer) ||
+                  ts.isFunctionExpression(declaration.initializer))
+              ) {
+                method = declaration.name.text;
+                at = declaration;
+                handlerName = declaration.name.text;
+              }
+            }
+          }
+          if (!method || !at) continue;
+          const routePath = nextFile.urlPath;
+          const routeId = stableId(
+            "route",
+            file.relative,
+            method,
+            routePath,
+          );
+          nodes.push({
+            id: routeId,
+            kind: "route",
+            label: `${method} ${routePath}`,
+            parentId: file.moduleId,
+            technology: "next-app-router",
+            metadata: {
+              method,
+              path: routePath,
+              next: "route",
+              framework: "next",
+            },
+            evidence: [evidenceFor(file, at, "observed", "Next.js App Router route handler")],
+          });
+          edges.push(
+            edgeFrom(
+              "contains",
+              file.moduleId,
+              routeId,
+              evidenceFor(file, at, "observed", "Next.js App Router route handler"),
+            ),
+          );
+          if (handlerName) {
+            const target = localDeclarations.get(handlerName);
+            if (target) {
+              edges.push(
+                edgeFrom(
+                  "routes-to",
+                  routeId,
+                  target,
+                  evidenceFor(file, at, "derived", "Next.js exported route handler"),
+                ),
+              );
+            }
+          }
+        }
+        continue;
+      }
+
+      if (nextFile.type === "page" || nextFile.type === "layout") {
+        const kind = nextFile.type === "page" ? "page" : "component";
+        const label =
+          nextFile.type === "layout"
+            ? nextFile.urlPath === "/"
+              ? "Root layout"
+              : `Layout ${nextFile.urlPath}`
+            : nextFile.urlPath === "/"
+              ? "Home"
+              : nextFile.urlPath;
+        const nodeId = stableId(
+          kind,
+          file.relative,
+          nextFile.type,
+          nextFile.urlPath,
+        );
+        nodes.push({
+          id: nodeId,
+          kind,
+          label,
+          qualifiedName: `${file.relative}#${nextFile.type}`,
+          parentId: file.moduleId,
+          technology: "next-app-router",
+          metadata: {
+            next: nextFile.type,
+            path: nextFile.urlPath,
+            framework: "next",
+            runtime: directive ?? "server",
+            ...(directive === "client" ? { clientComponent: true } : {}),
+          },
+          evidence: [
+            {
+              file: file.relative,
+              extractor: "typescript",
+              certainty: "observed",
+              detail:
+                nextFile.type === "page"
+                  ? "Next.js App Router page"
+                  : "Next.js App Router layout",
+            },
+          ],
+        });
+        edges.push(
+          edgeFrom("contains", file.moduleId, nodeId, {
+            file: file.relative,
+            extractor: "typescript",
+            certainty: "observed",
+            detail: `Next.js App Router ${nextFile.type}`,
+          }),
+        );
+
+        // Prefer the convention node as parent for default-export page/layout fns.
+        for (const node of nodes) {
+          if (
+            node.parentId === file.moduleId &&
+            (node.kind === "component" || node.kind === "function") &&
+            node.id !== nodeId &&
+            node.evidence.some((item) => item.file === file.relative)
+          ) {
+            const isLikelyDefaultView =
+              node.kind === "component" ||
+              /page|layout|home|dashboard/i.test(node.label);
+            if (!isLikelyDefaultView) continue;
+            node.parentId = nodeId;
+            node.metadata = {
+              ...node.metadata,
+              runtime: node.metadata?.runtime ?? directive ?? "server",
+              next: nextFile.type,
+            };
+            for (const [edgeIndex, edge] of edges.entries()) {
+              if (
+                edge.kind === "contains" &&
+                edge.source === file.moduleId &&
+                edge.target === node.id
+              ) {
+                edges[edgeIndex] = edgeFrom(
+                  "contains",
+                  nodeId,
+                  node.id,
+                  edge.evidence[0]!,
+                );
+              }
+            }
+          }
+        }
+      }
     }
 
     return {

@@ -12,6 +12,7 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const fixtureRoot = path.join(repoRoot, "verification", "mini-stack");
+const miniNextRoot = path.join(repoRoot, "verification", "mini-next");
 
 function fail(message) {
   console.error(`VERIFY FAIL: ${message}`);
@@ -91,6 +92,7 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file.startsWith("verification/") ||
         file.includes("/verification/") ||
         file.includes("mini-stack/") ||
+        file.includes("mini-next/") ||
         file === ".underdelta-real" ||
         file.startsWith(".underdelta-real/") ||
         file.includes("/.underdelta-real/")
@@ -1262,6 +1264,184 @@ if (messagingRolesFn < 0 || messagingHeading < 0) {
   );
 } else {
   pass("viewer inspector surfaces queue publisher/consumer lists on messaging hubs");
+}
+
+// ---------------------------------------------------------------------------
+// Capability ladder rung 2: Next.js App Router fixture (verification/mini-next).
+// Smoke + golden floors: pages/layouts, route handlers, client/server split,
+// server actions, UI→API flow — excluded from default product scan.
+// ---------------------------------------------------------------------------
+const miniNextGraph = await compileRepository(miniNextRoot);
+const miniNextCounts = countByKind(miniNextGraph.nodes);
+console.log(
+  `Mini-next graph: ${miniNextGraph.nodes.length} nodes, ${miniNextGraph.edges.length} edges`,
+);
+
+requireKind(miniNextCounts, "page", 2);
+requireKind(miniNextCounts, "route", 3);
+requireKind(miniNextCounts, "component", 2);
+
+const miniNextRouteLabels = new Set(
+  miniNextGraph.nodes
+    .filter((node) => node.kind === "route")
+    .map((node) => node.label),
+);
+for (const expected of ["GET /api/posts", "POST /api/posts", "GET /api/health"]) {
+  if (!miniNextRouteLabels.has(expected)) {
+    fail(
+      `mini-next missing route ${expected}; found ${[...miniNextRouteLabels].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-next has route ${expected}`);
+  }
+}
+
+const miniNextPages = miniNextGraph.nodes.filter((node) => node.kind === "page");
+const miniNextPageLabels = new Set(miniNextPages.map((node) => node.label));
+if (!miniNextPageLabels.has("Home") || !miniNextPageLabels.has("/dashboard")) {
+  fail(
+    `mini-next expected Home + /dashboard pages, found ${[...miniNextPageLabels].join(", ") || "(none)"}`,
+  );
+} else {
+  pass("mini-next App Router pages: Home, /dashboard");
+}
+
+const miniNextClientComponents = miniNextGraph.nodes.filter(
+  (node) =>
+    node.kind === "component" &&
+    (node.metadata?.clientComponent === true || node.metadata?.runtime === "client"),
+);
+if (miniNextClientComponents.length < 2) {
+  fail(
+    `mini-next expected >=2 client components (use client), found ${miniNextClientComponents.length}`,
+  );
+} else {
+  pass(
+    `mini-next client components: ${miniNextClientComponents.map((node) => node.label).sort().join(", ")}`,
+  );
+}
+
+const miniNextServerActions = miniNextGraph.nodes.filter(
+  (node) => node.metadata?.serverAction === true,
+);
+const miniNextServerActionLabels = new Set(
+  miniNextServerActions.map((node) => node.label),
+);
+if (
+  !miniNextServerActionLabels.has("createPost") ||
+  !miniNextServerActionLabels.has("deletePost")
+) {
+  fail(
+    `mini-next missing server actions createPost/deletePost; found ${[...miniNextServerActionLabels].join(", ") || "(none)"}`,
+  );
+} else {
+  pass("mini-next server actions: createPost, deletePost");
+}
+
+const miniNextSystems = miniNextGraph.nodes.filter(
+  (node) => node.metadata?.projection === "semantic",
+);
+const miniNextByKey = new Map(
+  miniNextSystems
+    .filter((node) => typeof node.metadata?.systemKey === "string")
+    .map((node) => [node.metadata.systemKey, node]),
+);
+if (miniNextByKey.get("ui")?.label !== "Journal UI") {
+  fail(
+    `mini-next UI label expected 'Journal UI' from README, found '${miniNextByKey.get("ui")?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-next UI labeled Journal UI");
+}
+if (miniNextByKey.get("api")?.label !== "Posts API") {
+  fail(
+    `mini-next API label expected 'Posts API' from README, found '${miniNextByKey.get("api")?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-next API labeled Posts API");
+}
+
+const miniNextFlow = miniNextSystems
+  .filter((node) => typeof node.metadata?.flowOrder === "number")
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+const miniNextFlowKeys = miniNextFlow.map((node) => node.metadata.systemKey);
+if (
+  miniNextFlowKeys.indexOf("ui") < 0 ||
+  miniNextFlowKeys.indexOf("api") < 0 ||
+  miniNextFlowKeys.indexOf("ui") > miniNextFlowKeys.indexOf("api")
+) {
+  fail(
+    `mini-next flowOrder expected UI → API, got ${miniNextFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `mini-next flowOrder: ${miniNextFlow.map((node) => node.label).join(" → ")}`,
+  );
+}
+
+const miniNextUi = miniNextByKey.get("ui");
+const miniNextApi = miniNextByKey.get("api");
+const miniNextUiUsesApi = miniNextGraph.edges.some(
+  (edge) =>
+    edge.kind === "uses" &&
+    edge.source === miniNextUi?.id &&
+    edge.target === miniNextApi?.id,
+);
+if (!miniNextUiUsesApi) {
+  fail("mini-next missing Journal UI -[uses]-> Posts API collaboration");
+} else {
+  pass("mini-next collaboration: Journal UI -[uses]-> Posts API");
+}
+
+const miniNextCommerceNoise = miniNextGraph.edges.some((edge) =>
+  (edge.evidence || []).some(
+    (item) =>
+      typeof item.detail === "string" &&
+      (item.detail.includes("Checkout") || item.detail.includes("orders")),
+  ),
+);
+if (miniNextCommerceNoise) {
+  fail("mini-next should not inherit Checkout/orders commerce collaboration copy");
+} else {
+  pass("mini-next has no Checkout/orders commerce collaboration noise");
+}
+
+const miniNextRoutesUnderApi = miniNextGraph.nodes.filter(
+  (node) =>
+    node.kind === "route" &&
+    node.parentId === miniNextApi?.id,
+);
+if (miniNextRoutesUnderApi.length < 3) {
+  fail(
+    `mini-next expected >=3 routes nested under Posts API, found ${miniNextRoutesUnderApi.length}`,
+  );
+} else {
+  pass(`mini-next ${miniNextRoutesUnderApi.length} routes nested under Posts API`);
+}
+
+const miniNextPagesUnderUi = miniNextPages.filter(
+  (node) => node.parentId === miniNextUi?.id,
+);
+if (miniNextPagesUnderUi.length < 2) {
+  fail(
+    `mini-next expected pages nested under Journal UI, found ${miniNextPagesUnderUi.length}`,
+  );
+} else {
+  pass(`mini-next ${miniNextPagesUnderUi.length} pages nested under Journal UI`);
+}
+
+const miniNextCollapsedRoutes = miniNextRoutesUnderApi.filter(
+  (node) => node.metadata?.collapsedInOverview === true,
+);
+const miniNextCollapsedPages = miniNextPagesUnderUi.filter(
+  (node) => node.metadata?.collapsedInOverview === true,
+);
+if (miniNextCollapsedRoutes.length < 3 || miniNextCollapsedPages.length < 2) {
+  fail(
+    `mini-next overview should collapse routes/pages under systems (routes=${miniNextCollapsedRoutes.length}, pages=${miniNextCollapsedPages.length})`,
+  );
+} else {
+  pass("mini-next overview collapses App Router pages + route handlers under systems");
 }
 
 // ---------------------------------------------------------------------------

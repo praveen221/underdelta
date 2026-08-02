@@ -152,6 +152,8 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 1: golden-lock real-repo summary in verify (product title, systems/labels, 20 nested routes, 4 visible tables, flowOrder + flows-to, join collapse)
 - [x] Rung 1: surface User↔Article favorites + clean User↔User follows (merge multi-field Prisma labels; drop join-table FK edges; fix SQL ALTER TABLE FK source)
 - [x] Rung 1 polish: RealWorld default browser — humanize relation labels (authored/favorites, favorited by, tags), always-on green table-relation badges, 2-column table constellation, gate Checkout/orders collab off API+Data-only maps
+- [x] Rung 2 prep: Next.js App Router extraction — `app/**/page|layout|route`, `"use client"` / `"use server"`, server actions; path-role UI vs API; neutral UI→API collab (commerce gated to pipelines/workers/jobs)
+- [x] Rung 2: `verification/mini-next` fixture (app router pages/layouts, route handlers, server actions, client components) + verify golden floors (Journal UI → Posts API)
 
 ### Real-repo pins (Capability ladder)
 
@@ -163,10 +165,10 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 2 prep: multi-file route frameworks / Next-style app router hints
-- [ ] Rung 2: `verification/mini-next` fixture (app router, server actions, API routes, client/server components)
 - [ ] Rung 2: pinned real Next.js OSS repo as scan target + golden lock
+- [ ] Rung 2 polish: mini-next default browser — humanize page/layout/client/server-action labels so a non-coder reads the journal story
 - [ ] Standing polish: inspector metadata hygiene (hide projection/systemKey/flowOrder pills) on self-map + RealWorld
+- [ ] Rung 3 prep: sketch Python extractor surface (FastAPI/Django route shapes) once Rung 2 is locked
 
 ### Seed backlog (pull from here when In progress < 3)
 
@@ -180,7 +182,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (RealWorld default-browser polish: humanized favorites/follows/tags, always-on relation badges, table constellation, no Checkout noise). Now start Rung 2 — add `verification/mini-next` (app router / server actions / API routes / client vs server) so we can golden-lock Next.js semantics next.
+> **Next focus:** This work is done (`verification/mini-next` + App Router extraction golden-locked: pages, route handlers, client components, server actions, Journal UI → Posts API). Now pin a real Next.js OSS repo (commit SHA + gitignored clone + verify smoke/golden) so Rung 2 generalizes beyond our fixture.
 
 ### Learning log (append every tick)
 
@@ -213,6 +215,7 @@ Append short bullets like:
 - 2026-08-02 04:15 UTC | Done: nest all RealWorld routes under HTTP API (entrypoint `GET /` from `main.ts` was leaking); golden-lock API+Data nesting, overview route collapse, visible product tables, flowOrder API→Data + flows-to | Next: User↔Article favorites / follows relation edges | Learned: path-role owningSystem lift misses routes defined outside `/routes/`/`/api/`; when an API system exists, attach every `route` node to it before overview collapse
 - 2026-08-02 04:22 UTC | Done: merge multi-field Prisma relation labels (articles/favorites, author/favoritedBy); humanize followedBy+following→follows; drop join-table depends-on; fix SQL ALTER TABLE FK source attribution; golden-lock | Next: RealWorld polish pass | Learned: one-edge-per-pair dedupe silently drops M2M field names when a 1:n edge already owns the directed pair; Prisma migration ALTER FKs were all attributed to the last CREATE TABLE
 - 2026-08-02 04:30 UTC | Done: RealWorld polish — authored/favorites + favorited by + tags labels; always-on `.edge.relation` badges; 2-col table constellation; gate commerce collab behind requiresAny; verify | Next: Rung 2 mini-next fixture | Learned: selection-only relation badges hid the whole data story from cold readers; hardcoded Checkout api→data collab fired on any API+Data map and poisoned RealWorld until gated
+- 2026-08-02 04:35 UTC | Done: Rung 2 mini-next — App Router page/layout/route extraction, use client/server + serverAction metadata, path-role UI vs API, `verification/mini-next` journal fixture, verify golden floors, commerce collab gated to pipelines/workers/jobs + neutral UI→API fetch | Next: pin real Next.js OSS repo | Learned: Express-style `app.get` never sees `app/**/route.ts` exports; convention nodes + HTTP-method exports are required; commerce `requiresAny` must not include bare `ui` or Next UI+API maps inherit Checkout copy
 
 ---
 
