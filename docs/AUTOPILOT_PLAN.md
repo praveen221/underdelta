@@ -100,30 +100,35 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Collapse relation-only Prisma fields on overview while keeping table↔table edges
 - [x] Inspector: show collaboration edge detail text (not just kind · label)
 - [x] Canvas: style collaboration edges differently from imports/calls
+- [x] Inspector: show table↔table relation labels beside Data access nodes
+- [x] Mini-stack: labeled publish/consume/migrates narrative edges on the default browser
+- [x] Overview: selection badges for collaboration + table relation edges
+- [x] Cron schedule hubs stay visible on overview (like messaging hubs)
+- [x] Filter Map.get-style false-positive HTTP routes from TypeScript extractor
 
 ### In progress / next
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Inspector: show table↔table relation labels beside Data access nodes
+- [ ] Mini-stack: collaboration edges (uses/triggers/reads) between product systems, not only flows-to
+- [ ] Overview: collapse database/schema leaves under Catalog data when tables already tell the story
+- [ ] Inspector: surface queue publisher/consumer lists on messaging hubs
 - [ ] Multi-file route frameworks / Next-style app router hints (only if it helps the chosen stack)
-- [ ] Overview: optional edge labels for selected collaboration/relation on hover or focus
-- [ ] Mini-stack: ensure publish/consume/migrates edges read clearly in the default browser
 
 ### Seed backlog (pull from here when In progress < 3)
 
 Not a full roadmap — a menu the agent may reorder. Pick what most improves the end goal now.
 
-- Inspector: show table↔table relation labels beside Data access nodes
+- Mini-stack: collaboration edges (uses/triggers/reads) between product systems, not only flows-to
+- Overview: collapse database/schema leaves under Catalog data when tables already tell the story
+- Inspector: surface queue publisher/consumer lists on messaging hubs
 - Multi-file route frameworks / Next-style app router hints (only if it helps the chosen stack)
-- Overview: optional edge labels for selected collaboration/relation on hover or focus
-- Mini-stack: ensure publish/consume/migrates edges read clearly in the default browser
 - Performance pass only if scan becomes painful on mini-stack / self repo
 - Docs only when CLI/behavior changed
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (reconciled collaboration detail + canvas collab edge styling). Now show table↔table relation labels beside Data access nodes in the inspector so founders see *how* Order relates to Payment, not just that an edge exists.
+> **Next focus:** This work is done (false-positive Map.get routes removed from the self-map). Now add mini-stack collaboration edges between product systems so the commerce slice reads like Underdelta’s uses/triggers story, not only left-to-right flows-to.
 
 ### Learning log (append every tick)
 
@@ -148,6 +153,7 @@ Append short bullets like:
 - 2026-08-02 03:40 UTC | Done: reconciled README heading hints on Status board; inspector Collaboration section (uses/renders/exposes/triggers/configures/flows-to) before Imports & calls + verify | Next: inspector migration/sqlName/prismaName on unified tables | Learned: prior tick can land a feature without updating the plan—reconcile Done first; product-story edges must outrank module imports in the inspector or founders still see a dependency dump
 - 2026-08-02 03:45 UTC | Done: reconciled Prisma/SQL inspector on Status board; collapse relation-only Prisma fields (order/payments) with relationOnly + viewer hide; keep Payment↔Order edges + verify | Next: inspector collaboration edge detail text | Learned: ORM navigation fields restate table↔table edges as fake columns once Details is on; collapse them at projection time and hide unless searched so Data access stays schema-true
 - 2026-08-02 03:50 UTC | Done: reconciled collaboration inspector detail on Status board; canvas `.edge.collab` / `.flows-to` styling + legend + verify | Next: inspector table↔table relation labels | Learned: prior tick can land inspector detail without plan update—reconcile first; collaboration edges were inferred-purple like noise until given a dedicated canvas class apart from import/call hairlines
+- 2026-08-02 03:48 UTC | Done: reconciled table-relation inspector + narrative publish/consume/migrate badges + selection collab/relation labels + cron scheduleHub on Status board; reject Map.get-style false HTTP routes (path must look like `/…` + handler arg) + tighten narrative badge verify | Next: mini-stack system collaboration edges | Learned: `systems.get("cli")` was polluting Application with GET cli/data/…; Express extraction needs HTTP-shaped paths, and string-presence verifies must match setAttribute output not imagined static HTML
 
 ---
 
