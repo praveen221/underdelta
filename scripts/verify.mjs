@@ -459,6 +459,63 @@ for (const expected of [
   }
 }
 
+const fixtureFlowOrdered = fixtureSystems
+  .filter((node) => typeof node.metadata?.flowOrder === "number")
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+const fixtureFlowLabels = fixtureFlowOrdered.map((node) => node.label);
+const expectedFixtureFlow = [
+  "UI",
+  "HTTP API",
+  "Pipelines",
+  "Queue workers",
+  "Scheduled jobs",
+  "Data access",
+];
+if (fixtureFlowOrdered.length < expectedFixtureFlow.length) {
+  fail(
+    `expected fixture Product flow band (>=${expectedFixtureFlow.length}), found ${fixtureFlowOrdered.length}`,
+  );
+} else {
+  pass(`fixture flowOrdered: ${fixtureFlowOrdered.length}`);
+}
+const missingFixtureFlow = expectedFixtureFlow.filter(
+  (label) => !fixtureFlowLabels.includes(label),
+);
+if (missingFixtureFlow.length) {
+  fail(
+    `fixture flowOrder missing labels: ${missingFixtureFlow.join(", ")} (got ${fixtureFlowLabels.join(" → ")})`,
+  );
+} else {
+  const positions = expectedFixtureFlow.map((label) =>
+    fixtureFlowLabels.indexOf(label),
+  );
+  const inOrder = positions.every(
+    (pos, index) => index === 0 || pos > positions[index - 1],
+  );
+  if (!inOrder) {
+    fail(
+      `fixture flowOrder not left-to-right product story: ${fixtureFlowLabels.join(" → ")} (want ${expectedFixtureFlow.join(" → ")})`,
+    );
+  } else {
+    pass(`fixture flowOrder: ${fixtureFlowLabels.join(" → ")}`);
+  }
+}
+
+const apiToJobsFlow = fixtureGraph.edges.some((edge) => {
+  const source = fixtureGraph.nodes.find((node) => node.id === edge.source);
+  const target = fixtureGraph.nodes.find((node) => node.id === edge.target);
+  return (
+    edge.kind === "flows-to" &&
+    source?.label === "HTTP API" &&
+    target?.label === "Scheduled jobs"
+  );
+});
+if (!apiToJobsFlow) {
+  fail("expected HTTP API → Scheduled jobs flows-to for fixture Product flow");
+} else {
+  pass("HTTP API flows-to Scheduled jobs");
+}
+
 const fixtureTables = fixtureGraph.nodes.filter((node) => node.kind === "table");
 // After projection, Order/order/orders and Payment/payment/payments collapse.
 if (fixtureTables.length > 4) {

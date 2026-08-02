@@ -39,12 +39,40 @@ const preferredFlows: Array<[string, string]> = [
   ["ui", "api"],
   ["api", "pipelines"],
   ["api", "workers"],
+  ["api", "jobs"],
   ["api", "data"],
   ["jobs", "data"],
   ["pipelines", "data"],
   ["workers", "data"],
   ["viewer", "api"],
 ];
+
+/**
+ * Stable left-to-right Product flow preference when several systems become
+ * ready in the same topological wave (e.g. pipelines/workers/jobs after API).
+ * Underdelta compiler keys first; product-stack keys after.
+ */
+const flowOrderPreference: string[] = [
+  "cli",
+  "compile",
+  "schema",
+  "extractors",
+  "graph",
+  "artifact",
+  "viewer",
+  "browser",
+  "ui",
+  "api",
+  "pipelines",
+  "workers",
+  "jobs",
+  "data",
+];
+
+function flowOrderRank(key: string): number {
+  const index = flowOrderPreference.indexOf(key);
+  return index === -1 ? flowOrderPreference.length : index;
+}
 
 /** How product systems collaborate beyond the left-to-right flow band. */
 const collaborationEdges: Array<{
@@ -163,7 +191,7 @@ function assignFlowOrder(
 
   const queue = keys
     .filter((key) => (indegree.get(key) ?? 0) === 0)
-    .sort((a, b) => a.localeCompare(b));
+    .sort((a, b) => flowOrderRank(a) - flowOrderRank(b) || a.localeCompare(b));
   const ordered: string[] = [];
 
   while (queue.length) {
@@ -174,7 +202,9 @@ function assignFlowOrder(
       indegree.set(next, nextDegree);
       if (nextDegree === 0) {
         queue.push(next);
-        queue.sort((a, b) => a.localeCompare(b));
+        queue.sort(
+          (a, b) => flowOrderRank(a) - flowOrderRank(b) || a.localeCompare(b),
+        );
       }
     }
   }
