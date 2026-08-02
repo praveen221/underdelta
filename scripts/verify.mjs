@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { compileRepository } from "../dist/compile.js";
@@ -16,6 +14,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const fixtureRoot = path.join(repoRoot, "verification", "mini-stack");
 const miniNextRoot = path.join(repoRoot, "verification", "mini-next");
+const miniPythonRoot = path.join(repoRoot, "verification", "mini-python");
 
 function fail(message) {
   console.error(`VERIFY FAIL: ${message}`);
@@ -96,6 +95,7 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file.includes("/verification/") ||
         file.includes("mini-stack/") ||
         file.includes("mini-next/") ||
+        file.includes("mini-python/") ||
         file === ".underdelta-real" ||
         file.startsWith(".underdelta-real/") ||
         file.includes("/.underdelta-real/")
@@ -2419,147 +2419,144 @@ if (nextRealRoot) {
   }
 }
 
-// Capability ladder rung 3 prep: Python extractor surface smoke
-// (FastAPI decorators + Django urlpatterns). Full mini-python fixture comes next.
-{
-  const smokeRoot = await mkdtemp(path.join(os.tmpdir(), "underdelta-python-"));
-  try {
-    await mkdir(path.join(smokeRoot, "routers"), { recursive: true });
-    await writeFile(
-      path.join(smokeRoot, "main.py"),
-      [
-        "from fastapi import FastAPI",
-        "from routers import items",
-        "",
-        "app = FastAPI()",
-        "app.include_router(items.router)",
-        "",
-        '@app.get("/health")',
-        "async def health():",
-        '    return {"ok": True}',
-        "",
-        '@app.api_route("/ping", methods=["GET", "HEAD"])',
-        "async def ping():",
-        '    return {"pong": True}',
-        "",
-      ].join("\n"),
-      "utf8",
-    );
-    await writeFile(
-      path.join(smokeRoot, "routers", "items.py"),
-      [
-        "from fastapi import APIRouter",
-        "",
-        "router = APIRouter(prefix=\"/items\")",
-        "",
-        '@router.get("/")',
-        "async def list_items():",
-        "    return []",
-        "",
-        '@router.post("/")',
-        "async def create_item():",
-        '    return {"id": 1}',
-        "",
-      ].join("\n"),
-      "utf8",
-    );
-    await writeFile(
-      path.join(smokeRoot, "urls.py"),
-      [
-        "from django.urls import path, re_path",
-        "from . import views",
-        "",
-        "urlpatterns = [",
-        '    path("articles/", views.list_articles),',
-        '    path("articles/<int:pk>/", views.article_detail),',
-        '    re_path(r"^health/$", views.health),',
-        "]",
-        "",
-      ].join("\n"),
-      "utf8",
-    );
-    await writeFile(
-      path.join(smokeRoot, "README.md"),
-      "# Python Route Sketch\n\n## HTTP API\n",
-      "utf8",
-    );
+// ---------------------------------------------------------------------------
+// Capability ladder rung 3: Python servers fixture (verification/mini-python).
+// Golden floors: FastAPI + Django routes, Notes API projection, nesting,
+// overview collapse — excluded from default product scan.
+// ---------------------------------------------------------------------------
+const miniPythonGraph = await compileRepository(miniPythonRoot);
+const miniPythonRoutes = miniPythonGraph.nodes.filter(
+  (node) => node.kind === "route",
+);
+const miniPythonLabels = new Set(miniPythonRoutes.map((node) => node.label));
+console.log(
+  `Mini-python graph: ${miniPythonGraph.nodes.length} nodes, ${miniPythonGraph.edges.length} edges → routes ${[...miniPythonLabels].sort().join(", ")}`,
+);
 
-    const pythonGraph = await compileRepository(smokeRoot);
-    const pythonRoutes = pythonGraph.nodes.filter((node) => node.kind === "route");
-    const pythonLabels = new Set(pythonRoutes.map((node) => node.label));
-    console.log(
-      `Python extractor smoke: ${pythonRoutes.length} routes → ${[...pythonLabels].sort().join(", ")}`,
+const miniPythonProduct = miniPythonGraph.nodes.find(
+  (node) => node.kind === "product",
+);
+if (!miniPythonProduct || miniPythonProduct.label !== "Mini Python notes") {
+  fail(
+    `mini-python product label expected 'Mini Python notes', found '${miniPythonProduct?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-python product labeled Mini Python notes");
+}
+
+const requiredMiniPythonRoutes = [
+  "GET /health",
+  "GET /ping",
+  "HEAD /ping",
+  "GET /notes",
+  "POST /notes",
+  "GET /notes/{note_id}",
+  "ANY /articles",
+  "ANY /articles/<int:pk>",
+  "ANY /health",
+];
+for (const expected of requiredMiniPythonRoutes) {
+  if (!miniPythonLabels.has(expected)) {
+    fail(
+      `mini-python missing route ${expected}; found ${[...miniPythonLabels].join(", ") || "(none)"}`,
     );
-
-    const requiredPythonRoutes = [
-      "GET /health",
-      "GET /ping",
-      "HEAD /ping",
-      "GET /",
-      "POST /",
-      "ANY /articles",
-      "ANY /articles/<int:pk>",
-      "ANY /health",
-    ];
-    for (const expected of requiredPythonRoutes) {
-      if (!pythonLabels.has(expected)) {
-        fail(
-          `python smoke missing route ${expected}; found ${[...pythonLabels].join(", ") || "(none)"}`,
-        );
-      } else {
-        pass(`python smoke has route ${expected}`);
-      }
-    }
-
-    const fastapiCount = pythonRoutes.filter(
-      (node) => node.technology === "fastapi",
-    ).length;
-    const djangoCount = pythonRoutes.filter(
-      (node) => node.technology === "django",
-    ).length;
-    if (fastapiCount < 5) {
-      fail(`python smoke expected >=5 FastAPI routes, found ${fastapiCount}`);
-    } else {
-      pass(`python smoke FastAPI routes: ${fastapiCount}`);
-    }
-    if (djangoCount < 3) {
-      fail(`python smoke expected >=3 Django routes, found ${djangoCount}`);
-    } else {
-      pass(`python smoke Django routes: ${djangoCount}`);
-    }
-
-    const pythonExtractors = pythonGraph.extractors.map((item) => item.id);
-    if (!pythonExtractors.includes("python")) {
-      fail(
-        `python smoke graph.extractors missing python; found ${JSON.stringify(pythonExtractors)}`,
-      );
-    } else {
-      pass("python smoke registers python extractor");
-    }
-
-    // urls.py + routers/ should project an HTTP API system with nested routes.
-    const pythonApi = pythonGraph.nodes.find(
-      (node) =>
-        node.metadata?.projection === "semantic" &&
-        (node.metadata?.systemKey === "api" || node.label === "HTTP API"),
-    );
-    if (!pythonApi) {
-      fail("python smoke expected HTTP API semantic system from urls.py/routers/");
-    } else {
-      const nested = pythonRoutes.filter((node) => node.parentId === pythonApi.id);
-      if (nested.length < 3) {
-        fail(
-          `python smoke expected routes nested under HTTP API, found ${nested.length}`,
-        );
-      } else {
-        pass(
-          `python smoke ${nested.length} routes nested under ${pythonApi.label}`,
-        );
-      }
-    }
-  } finally {
-    await rm(smokeRoot, { recursive: true, force: true });
+  } else {
+    pass(`mini-python has route ${expected}`);
   }
+}
+
+const miniPythonFastapi = miniPythonRoutes.filter(
+  (node) => node.technology === "fastapi",
+).length;
+const miniPythonDjango = miniPythonRoutes.filter(
+  (node) => node.technology === "django",
+).length;
+if (miniPythonFastapi < 6) {
+  fail(`mini-python expected >=6 FastAPI routes, found ${miniPythonFastapi}`);
+} else {
+  pass(`mini-python FastAPI routes: ${miniPythonFastapi}`);
+}
+if (miniPythonDjango < 3) {
+  fail(`mini-python expected >=3 Django routes, found ${miniPythonDjango}`);
+} else {
+  pass(`mini-python Django routes: ${miniPythonDjango}`);
+}
+
+const miniPythonExtractors = miniPythonGraph.extractors.map((item) => item.id);
+if (!miniPythonExtractors.includes("python")) {
+  fail(
+    `mini-python graph.extractors missing python; found ${JSON.stringify(miniPythonExtractors)}`,
+  );
+} else {
+  pass("mini-python registers python extractor");
+}
+
+const miniPythonSystems = miniPythonGraph.nodes.filter(
+  (node) => node.metadata?.projection === "semantic",
+);
+const miniPythonByKey = new Map(
+  miniPythonSystems
+    .filter((node) => typeof node.metadata?.systemKey === "string")
+    .map((node) => [node.metadata.systemKey, node]),
+);
+const miniPythonApi = miniPythonByKey.get("api");
+if (!miniPythonApi || miniPythonApi.label !== "Notes API") {
+  fail(
+    `mini-python API label expected 'Notes API' from README, found '${miniPythonApi?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-python API labeled Notes API");
+}
+
+const miniPythonFlow = miniPythonSystems
+  .filter((node) => typeof node.metadata?.flowOrder === "number")
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+const miniPythonFlowKeys = miniPythonFlow.map((node) => node.metadata.systemKey);
+if (!miniPythonFlowKeys.includes("api")) {
+  fail(
+    `mini-python flowOrder expected Notes API, got ${miniPythonFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `mini-python flowOrder includes Notes API (${miniPythonFlow.map((node) => node.label).join(" → ")})`,
+  );
+}
+
+const miniPythonRoutesUnderApi = miniPythonRoutes.filter(
+  (node) => node.parentId === miniPythonApi?.id,
+);
+if (miniPythonRoutesUnderApi.length < 9) {
+  fail(
+    `mini-python expected >=9 routes nested under Notes API, found ${miniPythonRoutesUnderApi.length}`,
+  );
+} else {
+  pass(
+    `mini-python ${miniPythonRoutesUnderApi.length} routes nested under Notes API`,
+  );
+}
+
+const miniPythonCollapsedRoutes = miniPythonRoutesUnderApi.filter(
+  (node) => node.metadata?.collapsedInOverview === true,
+);
+if (miniPythonCollapsedRoutes.length < 9) {
+  fail(
+    `mini-python overview should collapse routes under Notes API (collapsed=${miniPythonCollapsedRoutes.length})`,
+  );
+} else {
+  pass("mini-python overview collapses FastAPI + Django routes under Notes API");
+}
+
+const miniPythonCommerceNoise = miniPythonGraph.edges.some((edge) =>
+  (edge.evidence || []).some(
+    (item) =>
+      typeof item.detail === "string" &&
+      (item.detail.includes("Checkout") || item.detail.includes("orders")),
+  ),
+);
+if (miniPythonCommerceNoise) {
+  fail("mini-python should not inherit Checkout/orders commerce collaboration copy");
+} else {
+  pass("mini-python has no Checkout/orders commerce collaboration noise");
 }
 
 if (process.exitCode) {

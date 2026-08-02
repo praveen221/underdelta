@@ -162,6 +162,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 2 polish: saas-starter billing/API chrome — humanize Stripe/User/Team route labels (`GET Stripe checkout`), drop trailing `Action` on Checkout/Customer portal, tame remaining PascalCase components
 - [x] Rung 2 polish pass: saas-starter default browser — auth/billing `overviewHub` actions (Sign in/up/out, Checkout, Customer portal) visible beside UI→API→Data; collapse all UI component chrome on overview; viewer lets overviewHub bypass function hide — **Rung 2 locked**
 - [x] Rung 3 prep: Python extractor surface — FastAPI `@app/@router.(get|post|…)` + `api_route(methods=…)`, Django `path`/`re_path`/`url`; `.py` modules project; `urls.py` + `/routers/` → HTTP API; verify tempfile smoke + Extractors roster includes `python`
+- [x] Rung 3: `verification/mini-python` fixture (FastAPI + Django routes, README Notes API) + golden floors in verify (product title, 6 FastAPI + 3 Django routes nested/collapsed under Notes API)
 
 ### Real-repo pins (Capability ladder)
 
@@ -174,9 +175,9 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 3: `verification/mini-python` fixture (FastAPI + Django routes, README systems) + golden floors in verify
 - [ ] Rung 3: pin a real Python OSS repo (FastAPI or Django) + golden-lock product map
-- [ ] Rung 3: SQLAlchemy models + Celery tasks/schedules once mini-python routes land
+- [ ] Rung 3: SQLAlchemy models + Celery tasks/schedules once real-repo routes land
+- [ ] Rung 3: resolve FastAPI `include_router` prefixes onto child decorator paths
 - [ ] Standing polish: inspector metadata hygiene (hide projection/systemKey/flowOrder pills) on self-map + RealWorld
 
 ### Seed backlog (pull from here when In progress < 3)
@@ -184,14 +185,13 @@ Keep **at least 3 unchecked items** here at all times (refill from Self-renewing
 Not a full roadmap — a menu the agent may reorder. Pick what most improves the **Capability ladder** now.
 
 - Rung 3 polish: mini-python + real Python map for the North star non-coder
-- Rung 3: resolve FastAPI `include_router` prefixes onto child decorator paths
 - Rung 4+: promote next README-roadmap capability (Mongo, GraphQL, OpenAPI, Docker/monorepos, …)
 - Performance pass only if scanning a real repo becomes painfully slow
 - Docs only when CLI/behavior changed
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Rung 3 prep: Python extractor recognizes FastAPI/Django routes and projects them under HTTP API). Now add `verification/mini-python` with golden floors so we can pin a real Python OSS repo next.
+> **Next focus:** This work is done (Rung 3: `verification/mini-python` golden-locks FastAPI+Django Notes API). Now pin a real Python OSS repo (FastAPI or Django) at an exact SHA into `.underdelta-real/` and golden-lock its product map so we can climb toward SQLAlchemy/Celery next.
 
 ### Learning log (append every tick)
 
@@ -232,6 +232,7 @@ Append short bullets like:
 - 2026-08-02 05:00 UTC | Done: saas-starter billing/API chrome — `humanizeNextRouteLabel` (strip `/api`, sentence-case path), `humanizeServerActionLabel` drops trailing Action, humanize all components (not only client); golden-lock GET Stripe checkout / Checkout / Customer portal | Next: Rung 2 final polish pass then lock | Learned: per-segment Title Case yields shouty `Stripe Checkout`; sentence-case after the first path segment; Action suffix is factory chrome (`checkoutAction`) not product vocabulary
 - 2026-08-02 04:41 UTC | Done: Rung 2 locked — collapse all component chrome on overview; auth/billing server actions as `overviewHub` (Sign in/up/out, Checkout, Customer portal) stay visible; viewer bypasses function hide for overviewHub; golden-lock | Next: Rung 3 Python extractor sketch | Learned: page children sit under convention pages not semantic UI so leaf-collapse never quieted them; server actions are `function` kind so collapsedInOverview=false is not enough without a viewer overviewHub exception
 - 2026-08-02 04:50 UTC | Done: Rung 3 prep — `src/extractors/python.ts` FastAPI decorators + api_route methods + Django path/re_path/url; wire into compile; `.py` isFileModule; urls.py+/routers/ path-role; ignore venv/__pycache__; Extractors roster+tempfile smoke in verify | Next: verification/mini-python fixture + golden floors | Learned: isFileModule was JS/TS-only so Python modules never got path-role systems until `\.py` was added; Django `<int:pk>` needs `:` in the path heuristic; include_router prefixes still unresolved (seed backlog)
+- 2026-08-02 04:55 UTC | Done: Rung 3 mini-python — `verification/mini-python` FastAPI main+routers/notes + Django blog/urls; README Notes API; verify golden floors (product title, 9 routes nested/collapsed, no commerce noise); replaced tempfile smoke | Next: pin real Python OSS repo | Learned: fixture routes need absolute decorator paths until include_router prefixes resolve; product label lives on the `product` node not `graph.product`; routers/+urls.py alone are enough to project Notes API without a `main.py` path-role
 
 ---
 
