@@ -1,0 +1,98 @@
+#!/usr/bin/env node
+
+/**
+ * Ensure a pinned third-party repo is shallow-cloned into a gitignored path
+ * for isolated real-repo verification. Never vendors source into git.
+ */
+
+import { spawnSync } from "node:child_process";
+import { access, mkdir, rm } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, "..");
+
+/** @typedef {{ name: string, url: string, sha: string, dirname: string }} RealRepoPin */
+
+/** @type {RealRepoPin} */
+export const REALWORLD_EXPRESS = {
+  name: "gothinkster/node-express-realworld-example-app",
+  url: "https://github.com/gothinkster/node-express-realworld-example-app.git",
+  // Pinned 2026-08-02 — tip of master at plan rung-1 kickoff.
+  sha: "30b68e1e881462b2f4164ea09ab4c4f5699c7b0b",
+  dirname: "node-express-realworld",
+};
+
+export const REAL_REPO_ROOT = path.join(repoRoot, ".underdelta-real");
+
+function git(args, cwd, opts = {}) {
+  const result = spawnSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    ...opts,
+  });
+  if (result.status !== 0) {
+    const stderr = (result.stderr || "").trim();
+    const stdout = (result.stdout || "").trim();
+    throw new Error(
+      `git ${args.join(" ")} failed (exit ${result.status}): ${stderr || stdout || "(no output)"}`,
+    );
+  }
+  return (result.stdout || "").trim();
+}
+
+async function exists(target) {
+  try {
+    await access(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * @param {RealRepoPin} pin
+ * @returns {Promise<string>} absolute path to the checked-out clone
+ */
+export async function ensureRealRepo(pin) {
+  await mkdir(REAL_REPO_ROOT, { recursive: true });
+  const dest = path.join(REAL_REPO_ROOT, pin.dirname);
+
+  if (await exists(path.join(dest, ".git"))) {
+    try {
+      const head = git(["rev-parse", "HEAD"], dest);
+      if (head === pin.sha) {
+        return dest;
+      }
+    } catch {
+      // Corrupt / incomplete clone — recreate below.
+    }
+    await rm(dest, { recursive: true, force: true });
+  } else if (await exists(dest)) {
+    await rm(dest, { recursive: true, force: true });
+  }
+
+  await mkdir(dest, { recursive: true });
+  git(["init"], dest);
+  git(["remote", "add", "origin", pin.url], dest);
+  // Depth-1 fetch of the exact pin keeps the cache small and stable.
+  git(["fetch", "--depth", "1", "origin", pin.sha], dest);
+  git(["checkout", "--force", "FETCH_HEAD"], dest);
+  const head = git(["rev-parse", "HEAD"], dest);
+  if (head !== pin.sha) {
+    throw new Error(
+      `expected ${pin.name} at ${pin.sha}, checked out ${head}`,
+    );
+  }
+  return dest;
+}
+
+const isMain =
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+if (isMain) {
+  const dest = await ensureRealRepo(REALWORLD_EXPRESS);
+  console.log(`Real repo ready: ${dest} @ ${REALWORLD_EXPRESS.sha}`);
+}

@@ -4,6 +4,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { compileRepository } from "../dist/compile.js";
 import { renderArchitectureHtml } from "../dist/viewer.js";
+import {
+  ensureRealRepo,
+  REALWORLD_EXPRESS,
+} from "./ensure-real-repo.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -86,7 +90,10 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file === "verification" ||
         file.startsWith("verification/") ||
         file.includes("/verification/") ||
-        file.includes("mini-stack/")
+        file.includes("mini-stack/") ||
+        file === ".underdelta-real" ||
+        file.startsWith(".underdelta-real/") ||
+        file.includes("/.underdelta-real/")
       );
     })
     .map((item) => `${node.kind}:${node.label} <- ${item.file}`),
@@ -94,10 +101,10 @@ const leaked = productGraph.nodes.flatMap((node) =>
 
 if (leaked.length > 0) {
   fail(
-    `default product scan leaked verification evidence:\n  ${leaked.slice(0, 20).join("\n  ")}`,
+    `default product scan leaked verification/real-repo evidence:\n  ${leaked.slice(0, 20).join("\n  ")}`,
   );
 } else {
-  pass("default product scan excludes verification/");
+  pass("default product scan excludes verification/ and .underdelta-real/");
 }
 
 const selfGraph = productGraph;
@@ -1233,6 +1240,104 @@ if (messagingRolesFn < 0 || messagingHeading < 0) {
   );
 } else {
   pass("viewer inspector surfaces queue publisher/consumer lists on messaging hubs");
+}
+
+// ---------------------------------------------------------------------------
+// Capability ladder rung 1: real Node/Express repo (pinned SHA, gitignored).
+// This tick locks "scan completes + basic product map shape". Fuller golden
+// floors / required systems land in a follow-up tick after projection fixes.
+// ---------------------------------------------------------------------------
+let realRepoRoot;
+try {
+  realRepoRoot = await ensureRealRepo(REALWORLD_EXPRESS);
+  pass(
+    `real repo ${REALWORLD_EXPRESS.name} ready @ ${REALWORLD_EXPRESS.sha.slice(0, 12)}`,
+  );
+} catch (error) {
+  fail(
+    `could not ensure real repo ${REALWORLD_EXPRESS.name}@${REALWORLD_EXPRESS.sha}: ${error instanceof Error ? error.message : error}`,
+  );
+}
+
+if (realRepoRoot) {
+  let realGraph;
+  try {
+    realGraph = await compileRepository(realRepoRoot);
+    pass(
+      `real-repo scan completed: ${realGraph.nodes.length} nodes, ${realGraph.edges.length} edges`,
+    );
+  } catch (error) {
+    fail(
+      `real-repo scan crashed on ${REALWORLD_EXPRESS.name}: ${error instanceof Error ? error.message : error}`,
+    );
+  }
+
+  if (realGraph) {
+    const realCounts = countByKind(realGraph.nodes);
+    const realRoutes = realGraph.nodes.filter((node) => node.kind === "route");
+    const realTables = realGraph.nodes.filter((node) => node.kind === "table");
+    const realSemantic = realGraph.nodes.filter(
+      (node) => node.metadata?.projection === "semantic",
+    );
+    const realSummary = {
+      pin: `${REALWORLD_EXPRESS.name}@${REALWORLD_EXPRESS.sha}`,
+      nodes: realGraph.nodes.length,
+      edges: realGraph.edges.length,
+      routes: realRoutes.length,
+      tables: realTables.length,
+      semantic: realSemantic.map((node) => node.label),
+      kinds: Object.fromEntries(
+        [...realCounts.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+      ),
+    };
+    console.log(`Real-repo scan summary: ${JSON.stringify(realSummary)}`);
+
+    // Smoke floors only — prove the compiler maps a foreign Express+Prisma app.
+    if (realGraph.nodes.length < 20) {
+      fail(
+        `real-repo node floor: ${realGraph.nodes.length} < 20 (map looks empty)`,
+      );
+    } else {
+      pass(`real-repo nodes: ${realGraph.nodes.length}`);
+    }
+    if (realRoutes.length < 5) {
+      fail(
+        `real-repo route floor: ${realRoutes.length} < 5 (Express routes missing)`,
+      );
+    } else {
+      pass(`real-repo routes: ${realRoutes.length}`);
+    }
+    if (realTables.length < 3) {
+      fail(
+        `real-repo table floor: ${realTables.length} < 3 (Prisma models missing)`,
+      );
+    } else {
+      pass(`real-repo tables: ${realTables.length}`);
+    }
+    const expectedRouteSnippets = [
+      "POST /users/login",
+      "GET /articles",
+      "GET /tags",
+    ];
+    const realRouteLabels = new Set(realRoutes.map((node) => node.label));
+    const missingRoutes = expectedRouteSnippets.filter(
+      (label) => !realRouteLabels.has(label),
+    );
+    if (missingRoutes.length) {
+      fail(
+        `real-repo missing expected Express routes: ${missingRoutes.join(", ")}`,
+      );
+    } else {
+      pass(
+        `real-repo has core RealWorld routes (${expectedRouteSnippets.join(", ")})`,
+      );
+    }
+    if (realSemantic.length < 1) {
+      fail("real-repo produced no semantic projection nodes");
+    } else {
+      pass(`real-repo semantic nodes: ${realSemantic.length}`);
+    }
+  }
 }
 
 if (process.exitCode) {

@@ -10,6 +10,7 @@ const ignoredDirectories = new Set([
   ".turbo",
   ".underdelta",
   ".underdelta-verify",
+  ".underdelta-real",
   "build",
   "coverage",
   "dist",

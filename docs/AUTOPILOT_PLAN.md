@@ -126,14 +126,21 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Overview: selection badges for collaboration + table relation edges
 - [x] Cron schedule hubs stay visible on overview (like messaging hubs)
 - [x] Filter Map.get-style false-positive HTTP routes from TypeScript extractor
+- [x] Rung 1: pin `gothinkster/node-express-realworld-example-app` @ `30b68e1e881462b2f4164ea09ab4c4f5699c7b0b`; clone into gitignored `.underdelta-real/`; wire isolated scan into `npm run verify` (smoke floors: routes/tables/core RealWorld paths)
+
+### Real-repo pins (Capability ladder)
+
+| Rung | Repo | SHA | Local cache (gitignored) |
+|------|------|-----|--------------------------|
+| 1 | `gothinkster/node-express-realworld-example-app` | `30b68e1e881462b2f4164ea09ab4c4f5699c7b0b` | `.underdelta-real/node-express-realworld` |
 
 ### In progress / next
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 1: choose + pin (commit SHA in this file) a real Node/Express/React OSS repo; wire it into `npm run verify` as an isolated gitignored scan target
-- [ ] Rung 1: fix every extractor/projection breakage the real repo exposes until its default map is legible
-- [ ] Rung 1: golden-lock the real repo summary in verify (floors + required systems)
+- [ ] Rung 1: fix real-repo projection breakage — README markdown-image hijacks product label (`![Node/Express/Prisma…](project-logo.png)`); join-table alias noise (`_articletotag` / `Articletag`)
+- [ ] Rung 1: make RealWorld default map legible (API + Data systems, routes nested, flowOrder) without Details
+- [ ] Rung 1: golden-lock the real repo summary in verify (floors + required systems/labels)
 - [ ] Rung 2 prep: multi-file route frameworks / Next-style app router hints
 
 ### Seed backlog (pull from here when In progress < 3)
@@ -150,7 +157,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** Human directive landed — climb the Capability ladder before more polish. Rung 1: pick a well-known real Node/Express/React repository this loop did not write, pin its commit SHA in this file, wire it into `npm run verify` as an isolated gitignored scan target, and make `scan` complete on it end-to-end. Then fix whatever breaks until the default map is legible, and golden-lock it.
+> **Next focus:** This work is done (RealWorld Express pinned @ `30b68e1` and wired into `npm run verify` via `.underdelta-real/`). Now strip markdown-image README titles from product/system labels and clean Prisma join-table aliases so the real-repo default map is legible, then golden-lock it.
 
 ### Learning log (append every tick)
 
@@ -177,6 +184,7 @@ Append short bullets like:
 - 2026-08-02 03:50 UTC | Done: reconciled collaboration inspector detail on Status board; canvas `.edge.collab` / `.flows-to` styling + legend + verify | Next: inspector table↔table relation labels | Learned: prior tick can land inspector detail without plan update—reconcile first; collaboration edges were inferred-purple like noise until given a dedicated canvas class apart from import/call hairlines
 - 2026-08-02 03:48 UTC | Done: reconciled table-relation inspector + narrative publish/consume/migrate badges + selection collab/relation labels + cron scheduleHub on Status board; reject Map.get-style false HTTP routes (path must look like `/…` + handler arg) + tighten narrative badge verify | Next: mini-stack system collaboration edges | Learned: `systems.get("cli")` was polluting Application with GET cli/data/…; Express extraction needs HTTP-shaped paths, and string-presence verifies must match setAttribute output not imagined static HTML
 - 2026-08-02 03:56 UTC | Human directive: Capability ladder added (real Node/React repo → Next.js → Python servers → self-renewal); polish deprioritized below capability rungs; tick-start health check added because push-triggered reruns cancel in-flight ticks | Next: rung 1 — pin a real Node/Express/React repo and wire it into verify | Learned: the loop had locally optimized its two self-authored targets; the frontier is generalization to repos it did not write
+- 2026-08-02 03:59 UTC | Done: rung 1 pin+wire — `gothinkster/node-express-realworld-example-app` @ `30b68e1e8814` cloned to `.underdelta-real/`, ignored by product discovery, `npm run verify` smoke-scans it (20 routes / 8 tables / core RealWorld paths) | Next: fix README markdown-image product label + join-table aliases; legible API+Data map; golden-lock | Learned: foreign Express+Prisma already extracts routes/tables; first real-repo breakage is projection (README `![…](img)` becomes the product title; implicit M2M join tables double-count)
 
 ---
 
