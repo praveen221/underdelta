@@ -1539,6 +1539,83 @@ if (realRepoRoot) {
         `real-repo core Prisma models visible: ${expectedModels.join(", ")}`,
       );
     }
+
+    // Data story: favorites + follows must surface without opening join tables.
+    const tableById = new Map(realTables.map((node) => [node.id, node]));
+    const productTableRelations = realGraph.edges.filter(
+      (edge) =>
+        edge.kind === "depends-on" &&
+        tableById.has(edge.source) &&
+        tableById.has(edge.target) &&
+        !tableById.get(edge.source)?.metadata?.joinTable &&
+        !tableById.get(edge.target)?.metadata?.joinTable,
+    );
+    const relationSummary = (sourceLabel, targetLabel) =>
+      productTableRelations
+        .filter(
+          (edge) =>
+            tableById.get(edge.source)?.label === sourceLabel &&
+            tableById.get(edge.target)?.label === targetLabel,
+        )
+        .map((edge) => String(edge.label ?? ""));
+    const userArticleLabels = relationSummary("User", "Article");
+    const articleUserLabels = relationSummary("Article", "User");
+    const userFollowLabels = relationSummary("User", "User");
+    const favoritesOnUserArticle = userArticleLabels.some((label) =>
+      /\bfavorites\b/i.test(label),
+    );
+    const favoritedByOnArticleUser = articleUserLabels.some((label) =>
+      /\bfavoritedBy\b/i.test(label),
+    );
+    const followsOnUser = userFollowLabels.some(
+      (label) =>
+        /\bfollows\b/i.test(label) ||
+        (/\bfollowing\b/i.test(label) && /\bfollowedBy\b/i.test(label)),
+    );
+    if (!favoritesOnUserArticle) {
+      fail(
+        `real-repo missing User→Article favorites relation, got ${JSON.stringify(userArticleLabels)}`,
+      );
+    } else {
+      pass(
+        `real-repo User→Article favorites: ${userArticleLabels.join(", ")}`,
+      );
+    }
+    if (!favoritedByOnArticleUser) {
+      fail(
+        `real-repo missing Article→User favoritedBy relation, got ${JSON.stringify(articleUserLabels)}`,
+      );
+    } else {
+      pass(
+        `real-repo Article→User favoritedBy: ${articleUserLabels.join(", ")}`,
+      );
+    }
+    if (!followsOnUser) {
+      fail(
+        `real-repo missing clean User→User follows relation, got ${JSON.stringify(userFollowLabels)}`,
+      );
+    } else {
+      pass(`real-repo User→User follows: ${userFollowLabels.join(", ")}`);
+    }
+    const joinRelationNoise = realGraph.edges.filter(
+      (edge) =>
+        edge.kind === "depends-on" &&
+        ((tableById.get(edge.source)?.metadata?.joinTable ?? false) ||
+          (tableById.get(edge.target)?.metadata?.joinTable ?? false)),
+    );
+    if (joinRelationNoise.length) {
+      fail(
+        `real-repo join tables still expose depends-on edges: ${joinRelationNoise
+          .map((edge) => {
+            const source = tableById.get(edge.source)?.label ?? edge.source;
+            const target = tableById.get(edge.target)?.label ?? edge.target;
+            return `${source}→${target}`;
+          })
+          .join(", ")}`,
+      );
+    } else {
+      pass("real-repo join tables carry no depends-on edges (favorites/follows on models)");
+    }
   }
 }
 

@@ -150,6 +150,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 1: strip README markdown-image / how-to heading pollution from product + system labels; collapse Prisma/SQL join-table aliases (`_ArticleToTag`, `ArticleTags`, …) on the default map
 - [x] Rung 1: RealWorld default map legible — HTTP API + Data access, all routes nested under API (incl. `GET /` from `main.ts`), product tables under Data, flowOrder API→Data, routes collapsed on overview
 - [x] Rung 1: golden-lock real-repo summary in verify (product title, systems/labels, 20 nested routes, 4 visible tables, flowOrder + flows-to, join collapse)
+- [x] Rung 1: surface User↔Article favorites + clean User↔User follows (merge multi-field Prisma labels; drop join-table FK edges; fix SQL ALTER TABLE FK source)
 
 ### Real-repo pins (Capability ladder)
 
@@ -161,16 +162,15 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 1: surface User↔Article favorites (and clean User↔User follows) relation edges on the RealWorld data story — Article↔Tag already projects via `tagList`
-- [ ] Rung 1 polish: RealWorld default browser pass for the North star non-coder (hierarchy/spacing/labels once the data story edges are true)
+- [ ] Rung 1 polish: RealWorld default browser pass for the North star non-coder (hierarchy/spacing/labels now that favorites/follows edges are true)
 - [ ] Rung 2 prep: multi-file route frameworks / Next-style app router hints
 - [ ] Rung 2: `verification/mini-next` fixture (app router, server actions, API routes, client/server components)
+- [ ] Rung 2: pinned real Next.js OSS repo as scan target + golden lock
 
 ### Seed backlog (pull from here when In progress < 3)
 
 Not a full roadmap — a menu the agent may reorder. Pick what most improves the **Capability ladder** now.
 
-- Rung 2: pinned real Next.js OSS repo as scan target + golden lock
 - Rung 3: Python extractor family (FastAPI/Django routes, SQLAlchemy models, Celery tasks) + `verification/mini-python`
 - Rung 3: pinned real Python OSS repo as scan target + golden lock
 - Rung 4+: promote next README-roadmap capability (Mongo, GraphQL, OpenAPI, Docker/monorepos, …)
@@ -179,7 +179,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (RealWorld routes nested under HTTP API incl. `GET /`, tables under Data, flowOrder+flows-to golden-locked). Now surface User↔Article favorites (+ clean follows) relation edges so the RealWorld data story reads without opening join tables.
+> **Next focus:** This work is done (User↔Article favorites + User↔User follows on the RealWorld data story; join-table FK noise removed). Now do a RealWorld default-browser polish pass for the North star non-coder so the rung-1 map is beautiful before climbing to Next.js.
 
 ### Learning log (append every tick)
 
@@ -210,6 +210,7 @@ Append short bullets like:
 - 2026-08-02 04:10 UTC | Done: sanitize README image titles → product label; H2/H3-only system hints; skip how-to headings; collapse `_ArticleToTag`/`ArticleTags`/favorites/follows join tables; verify locks clean labels + 4 Prisma models | Next: nest RealWorld routes/tables + flowOrder; golden-lock | Learned: scoped package names (`@api/source`) need README H1; bare `\bprisma\b`/`\bdatabase\b` in how-to headings will rename Data access unless imperatives are filtered; length-based README refine is unsafe
 - 2026-08-02 04:12 UTC | Human directive #2: polish restored as first-class twin engine (North star user = non-coder vibe-builders; the browser IS the product); ladder now only forbids polish-only stalls, and each rung ends with a polish pass; standing guarantee added — self-map + mini-stack always demo-ready | Next: continue rung 1 (README image label + join-table aliases) | Learned: steering must not swing the pendulum — deprioritizing polish would rot the exact surface the product is judged on
 - 2026-08-02 04:15 UTC | Done: nest all RealWorld routes under HTTP API (entrypoint `GET /` from `main.ts` was leaking); golden-lock API+Data nesting, overview route collapse, visible product tables, flowOrder API→Data + flows-to | Next: User↔Article favorites / follows relation edges | Learned: path-role owningSystem lift misses routes defined outside `/routes/`/`/api/`; when an API system exists, attach every `route` node to it before overview collapse
+- 2026-08-02 04:22 UTC | Done: merge multi-field Prisma relation labels (articles/favorites, author/favoritedBy); humanize followedBy+following→follows; drop join-table depends-on; fix SQL ALTER TABLE FK source attribution; golden-lock | Next: RealWorld polish pass | Learned: one-edge-per-pair dedupe silently drops M2M field names when a 1:n edge already owns the directed pair; Prisma migration ALTER FKs were all attributed to the last CREATE TABLE
 
 ---
 

@@ -128,6 +128,9 @@ export const sqlExtractor: ArchitectureExtractor = {
       }
 
       // Column-level and table-level FOREIGN KEY → table relations.
+      // Prefer ALTER TABLE <source> … REFERENCES <target> (Prisma migrations)
+      // over guessing the enclosing CREATE TABLE — otherwise every late FK is
+      // mis-attributed to the last created table (e.g. _UserFollows).
       const fkPattern =
         /\b(?:FOREIGN\s+KEY\s*\([^)]+\)\s*)?REFERENCES\s+([A-Za-z0-9_."`[\]]+)\s*(?:\([^)]*\))?/gi;
       const createTableHeaders =
@@ -145,9 +148,17 @@ export const sqlExtractor: ArchitectureExtractor = {
         if (!rawTarget || match.index === undefined) continue;
         const targetTable = cleanIdentifier(rawTarget);
         let sourceTable: string | undefined;
-        for (const start of tableStarts) {
-          if (start.index <= match.index) sourceTable = start.table;
-          else break;
+        const statementStart = source.lastIndexOf(";", match.index) + 1;
+        const statementPrefix = source.slice(statementStart, match.index);
+        const alterHeader =
+          /^\s*ALTER\s+TABLE\s+([A-Za-z0-9_."`[\]]+)/i.exec(statementPrefix);
+        if (alterHeader?.[1]) {
+          sourceTable = cleanIdentifier(alterHeader[1]);
+        } else {
+          for (const start of tableStarts) {
+            if (start.index <= match.index) sourceTable = start.table;
+            else break;
+          }
         }
         if (!sourceTable || sourceTable === targetTable) continue;
         const fkEvidence = evidence(file, source, match.index);

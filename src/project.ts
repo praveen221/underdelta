@@ -623,6 +623,27 @@ function tableRank(node: ArchitectureNode): number {
 }
 
 /**
+ * Merge multiple Prisma field names on the same directed table pair into one
+ * human label. `followedBy` + `following` → `follows` so User↔User reads as a
+ * product story instead of ORM navigation chrome.
+ */
+function mergeRelationLabels(labels: Iterable<string>): string | undefined {
+  const set = new Set<string>();
+  for (const label of labels) {
+    const trimmed = label.trim();
+    if (!trimmed || trimmed === "depends-on") continue;
+    set.add(trimmed);
+  }
+  if (set.has("followedBy") && set.has("following")) {
+    set.delete("followedBy");
+    set.delete("following");
+    set.add("follows");
+  }
+  if (set.size === 0) return undefined;
+  return [...set].sort((a, b) => a.localeCompare(b)).join(" / ");
+}
+
+/**
  * Prisma M2M join tables (`_ArticleToTag`, `_UserFavorites`) and dropped
  * explicit join aliases (`ArticleTags` → articletag) that only restate two
  * already-known Prisma models.
@@ -1227,15 +1248,21 @@ export function projectSemanticArchitecture(
     edges.set(retargeted.id, retargeted);
   }
 
-  // Keep one table↔table relation edge per pair; prefer named Prisma relations.
+  // Keep one table↔table relation edge per directed pair. When Prisma exposes
+  // multiple field names (articles + favorites), merge labels so favorites /
+  // follows stay on the data story instead of being dropped by dedupe.
   const tableIds = new Set(
     [...nodes.values()].filter((node) => node.kind === "table").map((n) => n.id),
   );
   const relationBest = new Map<string, ArchitectureEdge>();
+  const relationLabels = new Map<string, Set<string>>();
   for (const [edgeId, edge] of [...edges.entries()]) {
     if (edge.kind !== "depends-on") continue;
     if (!tableIds.has(edge.source) || !tableIds.has(edge.target)) continue;
     const pairKey = `${edge.source}->${edge.target}`;
+    const labels = relationLabels.get(pairKey) ?? new Set<string>();
+    if (edge.label) labels.add(edge.label);
+    relationLabels.set(pairKey, labels);
     const existing = relationBest.get(pairKey);
     const score =
       (edge.label && edge.label !== "references" ? 2 : 0) +
@@ -1250,6 +1277,27 @@ export function projectSemanticArchitecture(
     } else {
       edges.delete(edgeId);
     }
+  }
+  for (const [pairKey, edge] of relationBest) {
+    const merged = mergeRelationLabels(relationLabels.get(pairKey) ?? []);
+    if (!merged || merged === edge.label) continue;
+    edges.delete(edge.id);
+    const relabeled = edgeFrom(
+      edge.kind,
+      edge.source,
+      edge.target,
+      edge.evidence[0]!,
+      merged,
+    );
+    relabeled.evidence = dedupeEvidence([
+      ...edge.evidence,
+      projectionEvidence(
+        edge.evidence[0]?.file ?? ".",
+        `Merged relation labels: ${merged}`,
+      ),
+    ]);
+    edges.set(relabeled.id, relabeled);
+    relationBest.set(pairKey, relabeled);
   }
 
   // Relation-only Prisma fields (order / payments) are ORM navigation, not
@@ -1278,9 +1326,11 @@ export function projectSemanticArchitecture(
       )
       .map((node) => normalizeTableKey(String(node.metadata?.prismaName ?? node.label))),
   );
+  const joinTableIds = new Set<string>();
   for (const node of [...nodes.values()]) {
     if (node.kind !== "table") continue;
     if (!isJoinTableNoise(node, prismaTableKeys)) continue;
+    joinTableIds.add(node.id);
     node.metadata = {
       ...node.metadata,
       joinTable: true,
@@ -1295,6 +1345,16 @@ export function projectSemanticArchitecture(
         collapsedInOverview: true,
       };
       nodes.set(child.id, child);
+    }
+  }
+  // Drop FK edges into/out of collapsed join tables — product models already
+  // carry favorites/follows/tagList; join "references" edges only confuse.
+  if (joinTableIds.size > 0) {
+    for (const [edgeId, edge] of [...edges.entries()]) {
+      if (edge.kind !== "depends-on") continue;
+      if (joinTableIds.has(edge.source) || joinTableIds.has(edge.target)) {
+        edges.delete(edgeId);
+      }
     }
   }
 
