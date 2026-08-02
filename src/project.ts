@@ -581,6 +581,24 @@ function assignFlowOrder(
 }
 
 /**
+ * Root / health / readiness probes — not enough HTTP surface to lead a
+ * Compose-deployed product story on the overview.
+ */
+function isThinHttpRoutePath(path: unknown): boolean {
+  if (typeof path !== "string") return false;
+  const trimmed = path.trim();
+  if (!trimmed) return false;
+  const normalized =
+    trimmed.replace(/\/+$/, "").replace(/^\//, "").toLowerCase() || "";
+  // Empty after strip → "/" root. Also accept /api and common probes.
+  return (
+    normalized === "" ||
+    normalized === "api" ||
+    /^(healthz?|readyz?|livez?|ping|status|favicon\.ico)$/.test(normalized)
+  );
+}
+
+/**
  * On product apps (not Underdelta itself), path-role chrome can invent systems
  * that steal the North-star cold-read: bare `schema.ts` → "Schema contract",
  * package.json `bin` → empty "CLI", `db.ts` → empty "Data access". Fold or
@@ -697,12 +715,15 @@ function quietNonCompilerProductChrome(
   // product story (RealWorld/Petstore ships a Dockerfile). Keep Deploy visible
   // when Compose services exist — those are real deployable units.
   const deploy = systems.get("deploy");
+  const hasComposeServices = Boolean(
+    deploy &&
+      [...nodes.values()].some(
+        (node) =>
+          node.parentId === deploy.id &&
+          node.metadata?.dockerService === true,
+      ),
+  );
   if (deploy) {
-    const hasComposeServices = [...nodes.values()].some(
-      (node) =>
-        node.parentId === deploy.id &&
-        node.metadata?.dockerService === true,
-    );
     const hasProductSurface =
       systems.has("api") || systems.has("ui") || systems.has("data");
     if (hasProductSurface && !hasComposeServices) {
@@ -711,6 +732,25 @@ function quietNonCompilerProductChrome(
         collapsedInOverview: true,
       };
       nodes.set(deploy.id, deploy);
+    }
+  }
+
+  // Compose-led apps (example-voting-app) often pick up a single root GET /
+  // from a result UI server. That thin HTTP API steals the cold-read from
+  // Deploy — collapse it so containers lead the overview.
+  if (api && hasComposeServices) {
+    const apiRoutes = [...nodes.values()].filter(
+      (node) => node.parentId === api.id && node.kind === "route",
+    );
+    const thinApi =
+      apiRoutes.length > 0 &&
+      apiRoutes.every((route) => isThinHttpRoutePath(route.metadata?.path));
+    if (thinApi) {
+      api.metadata = {
+        ...api.metadata,
+        collapsedInOverview: true,
+      };
+      nodes.set(api.id, api);
     }
   }
 
@@ -3114,8 +3154,9 @@ export function projectSemanticArchitecture(
     nodes.set(node.id, node);
   }
 
-  // Quiet empty CLI / Schema-contract / table-less Data chrome on product apps
-  // (GraphQL example servers, etc.) so the overview stays HTTP API–led.
+  // Quiet empty CLI / Schema-contract / table-less Data chrome, Dockerfile-only
+  // Deploy, and thin HTTP API beside Compose Deploy so product overviews stay
+  // story-led (API for GraphQL/OpenAPI; Deploy for voting-app containers).
   quietNonCompilerProductChrome(
     systems,
     nodes,

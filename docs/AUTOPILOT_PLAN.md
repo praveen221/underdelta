@@ -192,6 +192,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 7: pin `dockersamples/example-voting-app` @ `63e9150ca17af4ed05880d4245e486481f73fcb4`; clone into gitignored `.underdelta-real/example-voting-app`; golden-lock Vote/Result/Worker/Redis/DB/Seed under Deploy + flowOrder + compose evidence
 - [x] Rung 7 polish: Compose service story — depends_on / ports / image labels as North-star canvas vocabulary; quiet duplicate Dockerfile App image when Compose `build:` already owns the service
 - [x] Rung 7 polish: dedupe compose overlay twins (`docker-compose.yml` + `docker-compose.images.yml`) into one service node; prefer build+image metadata; golden-lock mini-docker + voting app (exactly 6 Deploy services)
+- [x] Rung 7 polish/lock: quiet thin HTTP API (`GET /` from result/server.js) beside Compose Deploy; North-star overview Deploy-only + flowOrder Deploy-only; golden-lock — **Rung 7 locked**
 
 ### Real-repo pins (Capability ladder)
 
@@ -209,16 +210,16 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 7 polish/lock: North-star Deploy-led overview for voting app (quiet thin HTTP API chrome if it steals the cold-read) then lock Rung 7
-- [ ] GraphQL `schema { query: Root }` / non-Query root types (SWAPI-style) if a later pin needs it
+- [ ] Rung 8 prep: Terraform extractor sketch — `*.tf` `resource`/`module` blocks → Deploy (or Infra) nodes; path-role; `verification/mini-terraform` smoke + Extractors roster `terraform`
+- [ ] Rung 8: pin a small real Terraform OSS repo (SHA + gitignored clone) + golden-lock Deploy/Infra nesting once fixture lands
 - [ ] Standing polish: hide remaining compiler chrome pills (`labelSource`, `pathRoleLabel`, `collapsedInOverview`, `overviewHub`) if they still dump in inspector
-- [ ] Rung 8 prep: Terraform / Kubernetes extractor sketch (README roadmap after Docker) once Rung 7 locks
+- [ ] GraphQL `schema { query: Root }` / non-Query root types (SWAPI-style) if a later pin needs it
 
 ### Seed backlog (pull from here when In progress < 3)
 
 Not a full roadmap — a menu the agent may reorder. Pick what most improves the **Capability ladder** now.
 
-- Rung 8+: deepen K8s Deploy story after Terraform/K8s prep
+- Rung 8+: Kubernetes manifests after Terraform fixture/pin
 - GraphQL `extend type Query` / schema stitching if a real-repo pin needs it
 - OAS3 `servers` / `$ref` path-item resolution if a later OpenAPI pin needs it
 - Standing polish: Underdelta self-map cold-read pass — leftover jargon labels or weak hierarchy
@@ -227,7 +228,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Rung 7 compose overlay twin dedupe + build+image merge). Now quiet thin HTTP API chrome on the voting-app overview so Deploy leads the North-star cold-read, then lock Rung 7.
+> **Next focus:** This work is done (Rung 7 locked — Deploy-led voting-app overview, thin HTTP API quieted). Now sketch the Terraform extractor + `verification/mini-terraform` smoke so Rung 8 can climb the README roadmap.
 
 ### Learning log (append every tick)
 
@@ -296,6 +297,7 @@ Append short bullets like:
 - 2026-08-02 06:10 UTC | Done: Rung 7 pin+golden — `dockersamples/example-voting-app` @ `63e9150` gitignored; Vote/Result/Worker/Redis/DB/Seed nested/collapsed under Deploy; primary `docker-compose.yml` evidence; flowOrder includes Deploy; golden-lock | Next: Compose depends_on/ports/image polish + quiet Dockerfile App twins | Learned: voting app ships `docker-compose.yml` + `docker-compose.images.yml` so the same serviceName appears twice until overlay dedupe; README has no Containers heading so Deploy stays the system label; thin `GET /` HTTP API from result/server.js competes with Deploy on overview and needs a later quiet pass before lock
 - 2026-08-02 06:20 UTC | Done: Rung 7 Compose polish — parse ports/depends_on/build.context; Vote · 8080 canvas labels; needs edges; Container inspector; quiet App image when Compose build owns Dockerfile dir; golden-lock mini-docker + voting app | Next: dedupe compose overlay twins | Learned: multiline `build:` must read `context:` or vote/worker falsely own `.` and miss per-service Dockerfiles; `condition:` under depends_on map is not a service — only accept immediate children of the block key
 - 2026-08-02 06:14 UTC | Done: Rung 7 overlay twin dedupe — merge same `serviceName` across compose files (primary first); gap-fill image onto build services; stableId by name only; composeFiles metadata; mini-docker images overlay + voting-app golden-lock (exactly 6 Deploy services, Vote build+image) | Next: Deploy-led North-star lock (quiet thin HTTP API) | Learned: service identity must drop the compose filename or `docker-compose.images.yml` restates Vote/Result; prefer primary evidence[0] so verify/inspector stay on docker-compose.yml while overlays only fill gaps
+- 2026-08-02 06:16 UTC | Done: Rung 7 locked — quiet thin HTTP API (`GET /` / health probes) when Compose Deploy exists; voting-app overview + flowOrder Deploy-only; golden-lock; promote Terraform as Rung 8 | Next: Rung 8 Terraform extractor + mini-terraform fixture | Learned: Compose-led cold-reads fail when a single result-server `GET /` invents an HTTP API band ahead of Deploy — reuse collapsedInOverview + assignFlowOrder skip (same chrome pattern as empty CLI/Schema) rather than deleting the API system
 
 ---
 

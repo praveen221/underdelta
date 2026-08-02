@@ -6050,6 +6050,67 @@ if (dockerRealRoot) {
     } else {
       pass("docker-real-repo Deploy stays visible on overview (Compose story)");
     }
+
+    // North-star lock: thin GET / from result/server.js must not lead the
+    // overview — Deploy owns the cold-read (HTTP API collapsed chrome).
+    const dockerRealApi = dockerRealByKey.get("api");
+    const dockerRealRoutes = dockerRealGraph.nodes.filter(
+      (node) => node.kind === "route",
+    );
+    if (
+      !dockerRealApi ||
+      dockerRealApi.metadata?.collapsedInOverview !== true
+    ) {
+      fail(
+        `docker-real-repo thin HTTP API should collapse on overview beside Compose Deploy, found collapsed=${dockerRealApi?.metadata?.collapsedInOverview}`,
+      );
+    } else {
+      pass("docker-real-repo thin HTTP API collapsed on overview (Deploy-led)");
+    }
+    if (
+      dockerRealRoutes.length < 1 ||
+      !dockerRealRoutes.every(
+        (node) =>
+          node.metadata?.path === "/" ||
+          node.label === "GET /" ||
+          node.label === "GET API",
+      )
+    ) {
+      fail(
+        `docker-real-repo expected only thin root routes under HTTP API, found ${dockerRealRoutes
+          .map((node) => node.label)
+          .join(", ") || "(none)"}`,
+      );
+    } else {
+      pass(
+        `docker-real-repo HTTP API is thin root chrome (${dockerRealRoutes.length} route)`,
+      );
+    }
+    if (
+      dockerRealFlow.length !== 1 ||
+      dockerRealFlow[0]?.metadata?.systemKey !== "deploy"
+    ) {
+      fail(
+        `docker-real-repo flowOrder expected Deploy-only North-star band, got ${dockerRealFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+      );
+    } else {
+      pass("docker-real-repo flowOrder is Deploy-only (North-star lock)");
+    }
+    const dockerRealOverviewSystems = dockerRealSemantic.filter(
+      (node) => node.metadata?.collapsedInOverview !== true,
+    );
+    if (
+      dockerRealOverviewSystems.length !== 1 ||
+      dockerRealOverviewSystems[0]?.metadata?.systemKey !== "deploy"
+    ) {
+      fail(
+        `docker-real-repo overview systems expected Deploy only, found ${dockerRealOverviewSystems
+          .map((node) => node.label)
+          .join(", ") || "(none)"}`,
+      );
+    } else {
+      pass("docker-real-repo overview systems: Deploy only (Rung 7 locked)");
+    }
   }
 }
 
