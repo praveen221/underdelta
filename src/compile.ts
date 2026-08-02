@@ -8,6 +8,7 @@ import {
   type ArchitectureExtractor,
 } from "./extractor.js";
 import { GraphBuilder, edgeFrom, stableId } from "./graph.js";
+import { graphqlExtractor } from "./extractors/graphql.js";
 import { mongoExtractor } from "./extractors/mongo.js";
 import { openapiExtractor } from "./extractors/openapi.js";
 import { prismaExtractor } from "./extractors/prisma.js";
@@ -118,6 +119,7 @@ export async function compileRepository(
     pythonExtractor,
     mongoExtractor,
     openapiExtractor,
+    graphqlExtractor,
     prismaExtractor,
     sqlExtractor,
   ];

@@ -22,6 +22,7 @@ const miniNextRoot = path.join(repoRoot, "verification", "mini-next");
 const miniPythonRoot = path.join(repoRoot, "verification", "mini-python");
 const miniMongoRoot = path.join(repoRoot, "verification", "mini-mongo");
 const miniOpenapiRoot = path.join(repoRoot, "verification", "mini-openapi");
+const miniGraphqlRoot = path.join(repoRoot, "verification", "mini-graphql");
 
 function fail(message) {
   console.error(`VERIFY FAIL: ${message}`);
@@ -105,6 +106,7 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file.includes("mini-python/") ||
         file.includes("mini-mongo/") ||
         file.includes("mini-openapi/") ||
+        file.includes("mini-graphql/") ||
         file === ".underdelta-real" ||
         file.startsWith(".underdelta-real/") ||
         file.includes("/.underdelta-real/")
@@ -496,6 +498,7 @@ const extractorRoster = Array.isArray(extractorsSystem?.metadata?.extractorRoste
   ? extractorsSystem.metadata.extractorRoster
   : [];
 const requiredExtractors = [
+  "graphql",
   "mongo",
   "openapi",
   "prisma",
@@ -518,6 +521,7 @@ const extractorKeyFiles = Array.isArray(extractorsSystem?.metadata?.keyFiles)
   ? extractorsSystem.metadata.keyFiles
   : [];
 const requiredExtractorFiles = [
+  "src/extractors/graphql.ts",
   "src/extractors/mongo.ts",
   "src/extractors/openapi.ts",
   "src/extractors/prisma.ts",
@@ -4738,6 +4742,203 @@ if (openapiRealRoot) {
   } finally {
     await fs.rm(dualRoot, { recursive: true, force: true });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Capability ladder rung 6 prep: GraphQL extractor + verification/mini-graphql.
+// Smoke floors — SDL Query/Mutation fields + gql tagged documents.
+// ---------------------------------------------------------------------------
+const miniGraphqlGraph = await compileRepository(miniGraphqlRoot);
+const miniGraphqlRoutes = miniGraphqlGraph.nodes.filter(
+  (node) => node.kind === "route" && node.metadata?.graphql === true,
+);
+const miniGraphqlRouteLabels = miniGraphqlRoutes.map((node) => node.label);
+console.log(
+  `Mini-graphql graph: ${miniGraphqlGraph.nodes.length} nodes, ${miniGraphqlGraph.edges.length} edges → ops ${[...new Set(miniGraphqlRouteLabels)].sort().join(", ")}`,
+);
+
+const miniGraphqlProduct = miniGraphqlGraph.nodes.find(
+  (node) => node.kind === "product",
+);
+if (!miniGraphqlProduct || miniGraphqlProduct.label !== "Mini GraphQL notes") {
+  fail(
+    `mini-graphql product label expected 'Mini GraphQL notes', found '${miniGraphqlProduct?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-graphql product labeled Mini GraphQL notes");
+}
+
+const miniGraphqlExtractors = miniGraphqlGraph.extractors.map(
+  (item) => item.id,
+);
+if (!miniGraphqlExtractors.includes("graphql")) {
+  fail(
+    `mini-graphql graph.extractors missing graphql; found ${JSON.stringify(miniGraphqlExtractors)}`,
+  );
+} else {
+  pass("mini-graphql registers graphql extractor");
+}
+
+const miniGraphqlFields = new Set(
+  miniGraphqlRoutes
+    .filter((node) => node.metadata?.sourceKind === "sdl")
+    .map((node) => `${node.metadata?.operationType}:${node.metadata?.field}`),
+);
+for (const expected of [
+  "query:notes",
+  "query:note",
+  "query:tags",
+  "mutation:createNote",
+  "mutation:deleteNote",
+]) {
+  if (!miniGraphqlFields.has(expected)) {
+    fail(
+      `mini-graphql missing SDL field ${expected}; found ${[...miniGraphqlFields].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-graphql has SDL field ${expected}`);
+  }
+}
+
+const miniGraphqlDocs = new Set(
+  miniGraphqlRoutes
+    .filter((node) => node.metadata?.sourceKind === "gql")
+    .map(
+      (node) =>
+        `${node.metadata?.operationType}:${node.metadata?.operationName ?? node.metadata?.field}`,
+    ),
+);
+for (const expected of [
+  "query:ListNotes",
+  "query:GetNote",
+  "mutation:CreateNote",
+  "mutation:DeleteNote",
+]) {
+  if (!miniGraphqlDocs.has(expected)) {
+    fail(
+      `mini-graphql missing gql document ${expected}; found ${[...miniGraphqlDocs].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-graphql has gql document ${expected}`);
+  }
+}
+
+for (const expected of [
+  "Query Notes",
+  "Query Note",
+  "Query Tags",
+  "Mutation Create note",
+  "Mutation Delete note",
+  "Query List notes",
+  "Query Get note",
+  "Mutation Create note",
+  "Mutation Delete note",
+]) {
+  // Create/Delete note appear from both SDL field and named document — label may collide.
+  if (!miniGraphqlRouteLabels.includes(expected)) {
+    fail(
+      `mini-graphql missing label ${expected}; found ${miniGraphqlRouteLabels.join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-graphql label ${expected}`);
+  }
+}
+
+const miniGraphqlSemantic = miniGraphqlGraph.nodes.filter(
+  (node) => node.metadata?.projection === "semantic",
+);
+const miniGraphqlByKey = new Map(
+  miniGraphqlSemantic
+    .filter((node) => typeof node.metadata?.systemKey === "string")
+    .map((node) => [node.metadata.systemKey, node]),
+);
+const miniGraphqlApi = miniGraphqlByKey.get("api");
+if (!miniGraphqlApi || miniGraphqlApi.label !== "Notes API") {
+  fail(
+    `mini-graphql API label expected 'Notes API' from README, found '${miniGraphqlApi?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-graphql API labeled Notes API");
+}
+
+const nestedGraphqlRoutes = miniGraphqlRoutes.filter(
+  (node) => node.parentId === miniGraphqlApi?.id,
+);
+if (nestedGraphqlRoutes.length < 9) {
+  fail(
+    `mini-graphql expected ≥9 ops nested under Notes API, found ${nestedGraphqlRoutes.length}`,
+  );
+} else {
+  pass(
+    `mini-graphql ${nestedGraphqlRoutes.length} ops nested under Notes API`,
+  );
+}
+
+const graphqlOverviewLeaves = nestedGraphqlRoutes.filter(
+  (node) => node.metadata?.collapsedInOverview !== true,
+);
+if (graphqlOverviewLeaves.length > 0) {
+  fail(
+    `mini-graphql overview should collapse ops under Notes API, still visible: ${graphqlOverviewLeaves
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-graphql overview collapses ops under Notes API");
+}
+
+const miniGraphqlFlow = miniGraphqlSemantic
+  .filter((node) => typeof node.metadata?.flowOrder === "number")
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+if (
+  miniGraphqlFlow.length < 1 ||
+  miniGraphqlFlow[0]?.label !== "Notes API"
+) {
+  fail(
+    `mini-graphql flowOrder expected Notes API, got ${miniGraphqlFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `mini-graphql flowOrder: ${miniGraphqlFlow.map((node) => node.label).join(" → ")}`,
+  );
+}
+
+const miniGraphqlSpecModules = miniGraphqlGraph.nodes.filter(
+  (node) =>
+    node.kind === "module" &&
+    (node.metadata?.graphqlSpec === true ||
+      /\.(?:graphql|gql)$/i.test(node.label)),
+);
+if (!miniGraphqlSpecModules.some((node) => /schema\.graphql$/i.test(node.label))) {
+  fail("mini-graphql missing schema.graphql module");
+} else {
+  pass("mini-graphql has schema.graphql module");
+}
+
+const graphqlModuleChrome = miniGraphqlSpecModules.filter(
+  (node) => node.metadata?.collapsedInOverview !== true,
+);
+if (graphqlModuleChrome.length > 0) {
+  fail(
+    `mini-graphql overview should collapse schema modules, still visible: ${graphqlModuleChrome
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-graphql overview collapses GraphQL schema modules");
+}
+
+const graphqlCommerceNoise = miniGraphqlGraph.edges.some((edge) =>
+  /checkout|orders?/i.test(
+    `${edge.label ?? ""} ${JSON.stringify(edge.metadata ?? {})}`,
+  ),
+);
+if (graphqlCommerceNoise) {
+  fail(
+    "mini-graphql should not inherit Checkout/orders commerce collaboration copy",
+  );
+} else {
+  pass("mini-graphql has no Checkout/orders commerce collaboration noise");
 }
 
 if (process.exitCode) {

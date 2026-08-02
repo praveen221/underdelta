@@ -579,11 +579,22 @@ function isOpenApiSpecModulePath(file: string): boolean {
   );
 }
 
+/** GraphQL SDL / document paths — modules even though they are not JS/TS/Py. */
+function isGraphqlSchemaModulePath(file: string): boolean {
+  const normalized = normalizePath(file).toLowerCase();
+  return (
+    /\.(?:graphql|gql)$/.test(normalized) ||
+    /(?:^|\/)graphql\//.test(normalized)
+  );
+}
+
 function isFileModule(node: ArchitectureNode): boolean {
   if (node.kind !== "module") return false;
   const file = normalizePath(node.qualifiedName ?? node.label);
   return (
-    /\.(?:[cm]?[jt]sx?|py)$/i.test(file) || isOpenApiSpecModulePath(file)
+    /\.(?:[cm]?[jt]sx?|py)$/i.test(file) ||
+    isOpenApiSpecModulePath(file) ||
+    isGraphqlSchemaModulePath(file)
   );
 }
 
@@ -644,7 +655,9 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
     file.includes("/routers/") ||
     // OpenAPI / Swagger specs are the HTTP API contract surface.
     isOpenApiSpecModulePath(file) ||
-    file.includes("/openapi/")
+    file.includes("/openapi/") ||
+    // GraphQL SDL / documents are the API contract surface.
+    isGraphqlSchemaModulePath(file)
   ) {
     return { key: "api", label: "HTTP API", kind: "api" };
   }
@@ -920,6 +933,22 @@ export function humanizeIdentifierLabel(label: string): string {
     .split(" ")
     .map((part, index) => formatProductWord(part, index))
     .join(" ");
+}
+
+/**
+ * GraphQL Query/Mutation/Subscription fields → canvas labels.
+ * `createNote` → `Mutation Create note`; keeps the operation kind for clarity.
+ */
+export function humanizeGraphqlOperationLabel(
+  operationType: string,
+  field: string,
+): string {
+  const kind = operationType.trim().toLowerCase();
+  const titled =
+    kind === "query" || kind === "mutation" || kind === "subscription"
+      ? kind.charAt(0).toUpperCase() + kind.slice(1)
+      : "Query";
+  return `${titled} ${humanizeIdentifierLabel(field)}`;
 }
 
 /**
@@ -1720,6 +1749,20 @@ export function projectSemanticArchitecture(
       // Prefer them over path-derived labels so list vs detail stay distinct;
       // strip trailing periods so canvas labels aren't sentence chrome.
       nextLabel = humanizeOpenApiSummaryLabel(node.metadata.summary);
+    } else if (
+      node.kind === "route" &&
+      node.metadata?.graphql === true &&
+      typeof node.metadata?.operationType === "string" &&
+      typeof node.metadata?.field === "string"
+    ) {
+      // GraphQL: Query createNote → Query Create note (keep kind + product words).
+      nextLabel = humanizeGraphqlOperationLabel(
+        node.metadata.operationType,
+        // Prefer named document ops (ListNotes) when present.
+        typeof node.metadata.operationName === "string"
+          ? node.metadata.operationName
+          : node.metadata.field,
+      );
     } else if (
       node.kind === "route" &&
       typeof node.metadata?.path === "string" &&
