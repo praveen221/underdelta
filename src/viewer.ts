@@ -153,7 +153,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     <header>
       <strong>${title}</strong>
       <span class="meta" id="counts"></span>
-      <button id="back" hidden title="Back one step (Intermediate, then Beginner)">Back</button>
+      <button id="back" hidden title="Back one step (Esc) — Intermediate, then Beginner">Back</button>
       <button id="overview" title="Return to Beginner overview">Overview</button>
       <button id="tier" title="Beginner: product story · Intermediate: enter a system’s neighborhood · Advanced: code in focus (modules; functions inside a module/api)">View: Beginner</button>
       <nav class="meta" id="focus-crumb" hidden aria-label="Focus path"></nav>
@@ -297,7 +297,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       }
       if (state.focus) {
         const label = byId.get(state.focus)?.label || "focus";
-        return "Intermediate · neighborhood of " + label + " — Back returns toward Beginner";
+        return "Intermediate · neighborhood of " + label + " — Back / Esc returns toward Beginner";
       }
       if (state.tier === "intermediate") {
         return "Intermediate · still overview-calm — double-click a Product Flow system to enter";
@@ -309,7 +309,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         if (!state.focus) {
           return "Advanced shows code in focus — double-click a system (then a module/api) to open its cluster. No whole-repo function dump.";
         }
-        return "Advanced · code in this focus. Select a module or function here. Back returns to Intermediate, then Beginner.";
+        return "Advanced · code in this focus. Select a module or function here. Back / Esc returns to Intermediate, then Beginner.";
       }
       if (state.focus) {
         return "Intermediate neighborhood — select a neighbor, or double-click a module/api for Advanced code in focus.";
@@ -365,7 +365,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       render();
       applyTransform();
     }
-    // Breadcrumb / Back: jump to stack index (-1 = Beginner overview).
+    // Breadcrumb / Back / Esc: jump to stack index (-1 = Beginner overview).
     function navigateFocusStack(index) {
       const stack = focusStack();
       if (index < 0) {
@@ -380,6 +380,39 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       resetCamera();
       render();
       applyTransform();
+    }
+    // One step back: nested Advanced → Intermediate parent, then Beginner.
+    function goBack() {
+      const stack = focusStack();
+      if (stack.length === 0) return false;
+      navigateFocusStack(stack.length - 2);
+      return true;
+    }
+    // Esc = back one tier without the mouse (search clear first when typing).
+    function handleEscapeKey(event) {
+      if (event.key !== "Escape") return;
+      const searchEl = document.getElementById("search");
+      if (searchEl && document.activeElement === searchEl) {
+        if (searchEl.value) {
+          searchEl.value = "";
+          render();
+          event.preventDefault();
+          return;
+        }
+        searchEl.blur();
+        event.preventDefault();
+        return;
+      }
+      if (goBack()) {
+        event.preventDefault();
+        return;
+      }
+      if (state.selected) {
+        state.selected = null;
+        inspector.innerHTML = emptyInspectorHtml();
+        render();
+        event.preventDefault();
+      }
     }
     const viewport = document.getElementById("viewport");
     const world = document.getElementById("world");
@@ -1387,10 +1420,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
 
     document.getElementById("overview").onclick = () => goOverview();
     document.getElementById("back").onclick = () => {
-      // One step back: nested Advanced → Intermediate parent, then Beginner.
-      const stack = focusStack();
-      navigateFocusStack(stack.length - 2);
+      goBack();
     };
+    document.addEventListener("keydown", handleEscapeKey);
     document.getElementById("tier").onclick = () => {
       const index = tierOrder.indexOf(state.tier);
       state.tier = tierOrder[(index + 1) % tierOrder.length];

@@ -1150,11 +1150,23 @@ if (
     "viewer navigation must expose Overview › focus breadcrumb + navigateFocusStack (Back → Intermediate then Beginner)",
   );
 } else if (
+  !viewerHtml.includes("function goBack()") ||
   !viewerHtml.includes("navigateFocusStack(stack.length - 2)") ||
-  !viewerHtml.includes("document.getElementById(\"overview\").onclick = () => goOverview()")
+  !viewerHtml.includes("document.getElementById(\"overview\").onclick = () => goOverview()") ||
+  !viewerHtml.includes('document.getElementById("back").onclick = () =>')
 ) {
   fail(
-    "viewer Back/Overview must use navigateFocusStack / goOverview so tier stays in sync",
+    "viewer Back/Overview must use goBack / navigateFocusStack / goOverview so tier stays in sync",
+  );
+} else if (
+  !viewerHtml.includes("function handleEscapeKey(event)") ||
+  !viewerHtml.includes('event.key !== "Escape"') ||
+  !viewerHtml.includes('document.addEventListener("keydown", handleEscapeKey)') ||
+  !viewerHtml.includes("if (goBack())") ||
+  !viewerHtml.includes("Back / Esc returns")
+) {
+  fail(
+    "viewer Esc must call goBack (one focus-stack step) after clearing search when typing",
   );
 } else if (
   !viewerHtml.includes("function emptyInspectorMessage()") ||
@@ -1182,7 +1194,7 @@ if (
   );
 } else {
   pass("viewer Walkable tiers: Beginner / Intermediate / Advanced (cluster-scoped Advanced)");
-  pass("viewer navigation: breadcrumb + Back/Overview tier sync");
+  pass("viewer navigation: breadcrumb + Back/Overview + Esc tier sync");
   pass("viewer tier copy: walk-hint + emptyInspectorMessage + Code lane");
   pass("viewer Intermediate edge calm: ownership fans collapsed + structural hairlines gated");
 }
