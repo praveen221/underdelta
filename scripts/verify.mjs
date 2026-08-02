@@ -971,14 +971,16 @@ if (
 
 if (!cron || cron.metadata?.scheduleHub !== true) {
   fail(
-    `expected cron scheduleHub=true so jobs stay on the overview, found ${JSON.stringify(
+    `expected cron scheduleHub=true so jobs stay available at Intermediate, found ${JSON.stringify(
       cron?.metadata ?? null,
     )}`,
   );
 } else if (cron.metadata?.collapsedInOverview === true) {
-  fail("cron schedule hub should stay visible on overview (like messaging hubs)");
+  fail(
+    "cron schedule hub should not be collapsedInOverview (Intermediate reveals it; Beginner hides via intermediateKinds)",
+  );
 } else {
-  pass("cron schedule hub visible on overview");
+  pass("cron schedule hub available at Intermediate (not collapsedInOverview)");
 }
 
 const pipelines = fixtureByKey.get("pipelines");
@@ -1025,9 +1027,11 @@ if (!fulfillmentQueue || fulfillmentQueue.metadata?.messagingHub !== true) {
 }
 
 if (fulfillmentQueue?.metadata?.collapsedInOverview === true) {
-  fail("messaging hub queue should stay visible on overview");
+  fail(
+    "messaging hub queue should not be collapsedInOverview (Intermediate reveals it; Beginner hides via intermediateKinds)",
+  );
 } else {
-  pass("fulfillment queue visible on overview");
+  pass("fulfillment queue available at Intermediate (not collapsedInOverview)");
 }
 
 const workers = fixtureByKey.get("workers");
@@ -1102,8 +1106,108 @@ if (
   fail(
     "viewer Advanced tier must require focus so whole-repo function dumps stay impossible",
   );
+} else if (
+  !viewerHtml.includes("const intermediateKinds = new Set([") ||
+  !viewerHtml.includes("intermediateKinds.has(node.kind)") ||
+  !viewerHtml.includes("hasProductFlow")
+) {
+  fail(
+    "viewer Beginner cold open must hide intermediateKinds and gate on Product Flow",
+  );
 } else {
   pass("viewer Walkable tiers: Beginner / Intermediate / Advanced (cluster-scoped Advanced)");
+}
+
+// Beginner cold-open floor: Product Flow + top systems; no advanced or intermediate leaf kinds.
+const beginnerAdvancedKinds = new Set(["function", "column", "module", "pipeline-step"]);
+const beginnerIntermediateKinds = new Set([
+  "table",
+  "collection",
+  "queue",
+  "cron",
+  "route",
+  "page",
+  "component",
+  "hook",
+  "job",
+  "database",
+  "schema",
+]);
+function beginnerColdOpenNodes(graph) {
+  const hasProductFlow = graph.nodes.some(
+    (node) => typeof node.metadata?.flowOrder === "number",
+  );
+  return graph.nodes.filter((node) => {
+    if (node.kind === "product") return false;
+    if (
+      node.metadata?.relationOnly ||
+      node.metadata?.joinTable ||
+      node.metadata?.exampleChrome
+    ) {
+      return false;
+    }
+    const isOverviewHub = node.metadata?.overviewHub === true;
+    if (beginnerAdvancedKinds.has(node.kind) && !isOverviewHub) return false;
+    if (beginnerIntermediateKinds.has(node.kind)) return false;
+    if (node.metadata?.collapsedInOverview === true) return false;
+    if (hasProductFlow && typeof node.metadata?.flowOrder !== "number") {
+      return false;
+    }
+    return true;
+  });
+}
+const selfBeginner = beginnerColdOpenNodes(selfGraph);
+const fixtureBeginner = beginnerColdOpenNodes(fixtureGraph);
+const selfBeginnerLeak = selfBeginner.filter(
+  (node) =>
+    beginnerAdvancedKinds.has(node.kind) || beginnerIntermediateKinds.has(node.kind),
+);
+const fixtureBeginnerLeak = fixtureBeginner.filter(
+  (node) =>
+    beginnerAdvancedKinds.has(node.kind) || beginnerIntermediateKinds.has(node.kind),
+);
+const fixtureBeginnerHasFlow = fixtureBeginner.every(
+  (node) => typeof node.metadata?.flowOrder === "number",
+);
+const selfBeginnerHasFlow = selfBeginner.every(
+  (node) => typeof node.metadata?.flowOrder === "number",
+);
+if (selfBeginner.length < 6) {
+  fail(
+    `self-map Beginner cold open should keep Product Flow systems, found ${selfBeginner.length}`,
+  );
+} else if (selfBeginnerLeak.length > 0) {
+  fail(
+    `self-map Beginner leaked advanced/intermediate kinds: ${selfBeginnerLeak
+      .map((node) => `${node.kind}:${node.label}`)
+      .join(", ")}`,
+  );
+} else if (!selfBeginnerHasFlow) {
+  fail("self-map Beginner cold open should be Product Flow–led (every node has flowOrder)");
+} else if (fixtureBeginner.length < 4) {
+  fail(
+    `mini-stack Beginner cold open should keep Product Flow systems, found ${fixtureBeginner.length}`,
+  );
+} else if (fixtureBeginnerLeak.length > 0) {
+  fail(
+    `mini-stack Beginner leaked advanced/intermediate kinds: ${fixtureBeginnerLeak
+      .map((node) => `${node.kind}:${node.label}`)
+      .join(", ")}`,
+  );
+} else if (!fixtureBeginnerHasFlow) {
+  fail(
+    "mini-stack Beginner cold open should be Product Flow–led (every node has flowOrder)",
+  );
+} else if (
+  fixtureBeginner.some((node) =>
+    ["Order", "Payment", "fulfillment"].includes(String(node.label)),
+  )
+) {
+  fail("mini-stack Beginner must not show Order/Payment tables or fulfillment queue");
+} else {
+  pass(
+    `Beginner cold open calm: self-map ${selfBeginner.length} flow nodes, mini-stack ${fixtureBeginner.length} flow nodes (no intermediate/advanced leaks)`,
+  );
 }
 
 

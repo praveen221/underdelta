@@ -194,6 +194,12 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     // Code-level kinds — Beginner/Intermediate hide these; Advanced shows them
     // only inside the current focus (never a whole-repo dump).
     const advancedKinds = new Set(["function", "column", "module", "pipeline-step"]);
+    // Hub / leaf kinds that belong on Intermediate (and Advanced-in-focus), not
+    // Beginner cold open. Beginner stays Product Flow + top systems only.
+    const intermediateKinds = new Set([
+      "table", "collection", "queue", "cron", "route", "page",
+      "component", "hook", "job", "database", "schema",
+    ]);
     // Product-story edges — canvas + inspector treat these apart from imports/calls.
     const collaborationKinds = new Set([
       "uses", "renders", "exposes", "triggers", "configures", "reads", "flows-to",
@@ -260,6 +266,15 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     function visibleNodes() {
       let allowed = state.focus ? descendants(state.focus) : new Set(graph.nodes.map((node) => node.id));
       const query = search.value.trim().toLowerCase();
+      const beginnerColdOpen =
+        !isIntermediateOrAbove() && !state.focus && !query;
+      // When a Product Flow exists, Beginner is that band only — not every
+      // uncollapsed hub/leaf that Intermediate will later reveal.
+      const hasProductFlow =
+        beginnerColdOpen &&
+        graph.nodes.some(
+          (node) => node.metadata && typeof node.metadata.flowOrder === "number",
+        );
       return graph.nodes.filter((node) => {
         if (!allowed.has(node.id)) return false;
         // ORM relation fields + M2M join-table aliases stay collapsed;
@@ -275,20 +290,30 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           return false;
         }
         // overviewHub (auth/billing actions, Helm Chart/resources, mongo
-        // aggregates) bypasses kind/collapse hides so product hubs stay on
-        // Beginner/Intermediate beside their parent system.
+        // aggregates) bypasses advanced-kind hides so hubs can appear once the
+        // user is on Intermediate (or focused). Beginner cold open still hides
+        // them via intermediateKinds / Product Flow gate below.
         const isOverviewHub = node.metadata && node.metadata.overviewHub;
         if (advancedKinds.has(node.kind) && !isOverviewHub) {
           // Advanced code kinds only when Advanced + a focused cluster.
           // Without focus, Advanced must not dump every function in the repo.
           if (!isAdvancedTier() || !state.focus) return false;
         }
+        // Beginner cold open: Product Flow + top systems only. Tables, queues,
+        // crons, routes, etc. wait for Intermediate (or a focused drill-in).
+        if (beginnerColdOpen && intermediateKinds.has(node.kind)) {
+          return false;
+        }
         if (
-          !isIntermediateOrAbove() &&
-          !state.focus &&
-          !query &&
+          beginnerColdOpen &&
           node.metadata &&
           node.metadata.collapsedInOverview
+        ) {
+          return false;
+        }
+        if (
+          hasProductFlow &&
+          !(node.metadata && typeof node.metadata.flowOrder === "number")
         ) {
           return false;
         }
