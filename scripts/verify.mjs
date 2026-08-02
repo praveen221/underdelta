@@ -304,7 +304,7 @@ if (!browserFromArtifact || !browserFromViewer) {
   pass("index.html flows from architecture.json and Viewer");
 }
 
-function requireCollab(kind, fromLabel, toLabel) {
+function requireCollab(kind, fromLabel, toLabel, detailSnippet) {
   const from = selfGraph.nodes.find(
     (node) =>
       node.label === fromLabel && node.metadata?.projection === "semantic",
@@ -313,29 +313,84 @@ function requireCollab(kind, fromLabel, toLabel) {
     (node) =>
       node.label === toLabel && node.metadata?.projection === "semantic",
   );
-  const found =
+  const edge =
     from &&
     to &&
-    selfGraph.edges.some(
-      (edge) =>
-        edge.kind === kind && edge.source === from.id && edge.target === to.id,
+    selfGraph.edges.find(
+      (item) =>
+        item.kind === kind && item.source === from.id && item.target === to.id,
     );
-  if (!found) {
+  if (!edge) {
     fail(`missing collaboration edge ${fromLabel} -[${kind}]-> ${toLabel}`);
-  } else {
-    pass(`collaboration: ${fromLabel} -[${kind}]-> ${toLabel}`);
+    return;
   }
+  if (detailSnippet) {
+    const detail =
+      (edge.evidence || []).find((item) => item.detail)?.detail || "";
+    if (!detail.includes(detailSnippet)) {
+      fail(
+        `collaboration ${fromLabel} -[${kind}]-> ${toLabel} missing detail ${JSON.stringify(detailSnippet)} (got ${JSON.stringify(detail)})`,
+      );
+      return;
+    }
+  }
+  pass(`collaboration: ${fromLabel} -[${kind}]-> ${toLabel}`);
 }
 
-requireCollab("uses", "Compile pipeline", "Extractors");
-requireCollab("uses", "Compile pipeline", "Graph assembly");
-requireCollab("uses", "Compile pipeline", "Schema contract");
-requireCollab("renders", "Viewer", "Graph assembly");
-requireCollab("renders", "Viewer", "architecture.json");
-requireCollab("exposes", "CLI", "architecture.json");
-requireCollab("exposes", "CLI", "index.html");
-requireCollab("triggers", "CLI", "Compile pipeline");
-requireCollab("configures", "Schema contract", "Extractors");
+requireCollab(
+  "uses",
+  "Compile pipeline",
+  "Extractors",
+  "Compile pipeline uses language extractors",
+);
+requireCollab(
+  "uses",
+  "Compile pipeline",
+  "Graph assembly",
+  "Compile pipeline uses graph assembly",
+);
+requireCollab(
+  "uses",
+  "Compile pipeline",
+  "Schema contract",
+  "validates against the schema contract",
+);
+requireCollab(
+  "renders",
+  "Viewer",
+  "Graph assembly",
+  "Viewer renders the assembled architecture graph",
+);
+requireCollab(
+  "renders",
+  "Viewer",
+  "architecture.json",
+  "Viewer renders architecture.json into the browser",
+);
+requireCollab(
+  "exposes",
+  "CLI",
+  "architecture.json",
+  "CLI scan writes the architecture IR artifact",
+);
+requireCollab(
+  "exposes",
+  "CLI",
+  "index.html",
+  "CLI scan writes the self-contained browser artifact",
+);
+requireCollab(
+  "triggers",
+  "CLI",
+  "Compile pipeline",
+  "CLI scan command triggers the compile pipeline",
+);
+requireCollab(
+  "configures",
+  "Schema contract",
+  "Extractors",
+  "Schema contract configures extractor output shape",
+);
 
 const cli = selfGraph.nodes.find(
   (node) => node.label === "CLI" && node.metadata?.projection === "semantic",
@@ -783,7 +838,8 @@ if (!workersConsume) {
   pass("Fulfillment workers consume fulfillment");
 }
 
-// Inspector: collaboration edges (uses/renders/exposes/…) before raw imports.
+// Inspector: collaboration edges (uses/renders/exposes/…) before raw imports,
+// with human detail text (not just kind · label).
 const viewerHtml = renderArchitectureHtml(selfGraph);
 const collaborationHeading = viewerHtml.indexOf("<h3>Collaboration</h3>");
 const importsHeading = viewerHtml.indexOf("Imports &amp; calls");
@@ -796,6 +852,12 @@ const exposesInKinds = viewerHtml.indexOf('"exposes"', collaborationKindsDecl);
 const importsFilter = viewerHtml.indexOf(
   "importsAndCalls = connections.filter",
 );
+const collaborationItemFn = viewerHtml.indexOf("function collaborationItem");
+const edgeDetailTextFn = viewerHtml.indexOf("function edgeDetailText");
+const collabDetailClass = viewerHtml.indexOf('class="collab-detail"');
+const collabUsesCollaborationItem = viewerHtml.includes(
+  "collaboration.slice(0, 16).map((edge) => collaborationItem(edge, id))",
+);
 if (collaborationKindsDecl < 0 || usesInKinds < 0 || rendersInKinds < 0 || exposesInKinds < 0) {
   fail("viewer missing collaborationKinds set for inspector (uses/renders/exposes)");
 } else if (importsFilter < 0 || importsFilter < collaborationKindsDecl) {
@@ -805,8 +867,17 @@ if (collaborationKindsDecl < 0 || usesInKinds < 0 || rendersInKinds < 0 || expos
   fail(
     `viewer inspector should render Collaboration before Imports & calls (collab=${collaborationHeading}, imports=${importsHeading})`,
   );
+} else if (
+  collaborationItemFn < 0 ||
+  edgeDetailTextFn < 0 ||
+  collabDetailClass < 0 ||
+  !collabUsesCollaborationItem
+) {
+  fail(
+    "viewer inspector should render collaboration edge detail text via collaborationItem/collab-detail",
+  );
 } else {
-  pass("viewer inspector surfaces Collaboration before Imports & calls");
+  pass("viewer inspector surfaces Collaboration detail text before Imports & calls");
 }
 
 // Inspector: unified tables surface prismaName/sqlName + migration lineage.

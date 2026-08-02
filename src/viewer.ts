@@ -82,6 +82,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     aside h3 { margin: 20px 0 8px; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
     aside p { color: var(--muted); margin: 4px 0 12px; overflow-wrap: anywhere; }
     .pill { display: inline-block; border: 1px solid var(--line); border-radius: 999px; padding: 2px 7px; margin: 2px 4px 2px 0; font-size: 11px; color: var(--muted); }
+    .collab-edge { margin: 0 0 10px; }
+    .collab-edge .pill { margin-bottom: 2px; }
+    .collab-detail { margin: 2px 0 0; font-size: 12px; line-height: 1.35; color: var(--text); }
     .evidence { border-top: 1px solid var(--line); padding: 9px 0; }
     .evidence a { color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
     .evidence a:hover { color: var(--accent); }
@@ -367,6 +370,24 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       return '<button class="pill connection" data-id="' + (other?.id || "") + '">' + edge.kind + " · " + (other?.label || "unknown") + "</button>";
     }
 
+    // Collaboration edges carry human detail on evidence (how systems connect).
+    function edgeDetailText(edge) {
+      for (const item of edge.evidence || []) {
+        if (item.detail) return item.detail;
+      }
+      return edge.label || "";
+    }
+
+    function collaborationItem(edge, id) {
+      const other = byId.get(edge.source === id ? edge.target : edge.source);
+      const detail = edgeDetailText(edge);
+      const button = '<button class="pill connection" data-id="' + (other?.id || "") + '">' + edge.kind + " · " + (other?.label || "unknown") + "</button>";
+      const detailHtml = detail
+        ? '<p class="collab-detail">' + detail + "</p>"
+        : "";
+      return '<div class="collab-edge">' + button + detailHtml + "</div>";
+    }
+
     // Unified tables: explain Prisma/SQL dual identity + migration lineage.
     function tableSourcesHtml(node, incomingEdges) {
       if (node.kind !== "table") return "";
@@ -409,7 +430,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const metadataEntries = Object.entries(node.metadata || {}).filter(([key]) => !structuredMetaKeys.has(key));
       const metadata = metadataEntries.map(([key, value]) => '<span class="pill">' + key + ": " + String(value) + "</span>").join("");
       const tableSources = tableSourcesHtml(node, incomingEdges);
-      const collabLinks = collaboration.slice(0, 16).map((edge) => connectionButton(edge, id)).join("");
+      const collabLinks = collaboration.slice(0, 16).map((edge) => collaborationItem(edge, id)).join("");
       const otherLinks = importsAndCalls.slice(0, 20).map((edge) => connectionButton(edge, id)).join("");
       const collaborationHtml = collabLinks
         ? "<h3>Collaboration</h3>" + collabLinks
