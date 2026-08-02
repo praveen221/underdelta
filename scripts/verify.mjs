@@ -615,6 +615,68 @@ if (!apiToJobsFlow) {
   pass("Checkout API flows-to Reconciliation jobs");
 }
 
+function requireFixtureCollab(kind, fromKey, toKey, detailSnippet) {
+  const from = fixtureByKey.get(fromKey);
+  const to = fixtureByKey.get(toKey);
+  const edge =
+    from &&
+    to &&
+    fixtureGraph.edges.find(
+      (item) =>
+        item.kind === kind && item.source === from.id && item.target === to.id,
+    );
+  if (!edge) {
+    fail(
+      `missing fixture collaboration ${from?.label ?? fromKey} -[${kind}]-> ${to?.label ?? toKey}`,
+    );
+    return;
+  }
+  if (detailSnippet) {
+    const detail =
+      (edge.evidence || []).find((item) => item.detail)?.detail || "";
+    if (!detail.includes(detailSnippet)) {
+      fail(
+        `fixture collaboration ${from.label} -[${kind}]-> ${to.label} missing detail ${JSON.stringify(detailSnippet)} (got ${JSON.stringify(detail)})`,
+      );
+      return;
+    }
+  }
+  pass(
+    `fixture collaboration: ${from.label} -[${kind}]-> ${to.label}`,
+  );
+}
+
+requireFixtureCollab(
+  "uses",
+  "ui",
+  "api",
+  "Storefront UI uses Checkout API",
+);
+requireFixtureCollab(
+  "triggers",
+  "api",
+  "pipelines",
+  "Checkout API triggers the Order pipeline",
+);
+requireFixtureCollab(
+  "triggers",
+  "api",
+  "workers",
+  "Checkout API triggers Fulfillment workers",
+);
+requireFixtureCollab(
+  "reads",
+  "api",
+  "data",
+  "Checkout API reads Catalog data",
+);
+requireFixtureCollab(
+  "uses",
+  "jobs",
+  "data",
+  "Reconciliation jobs use Catalog data",
+);
+
 const fixtureTables = fixtureGraph.nodes.filter((node) => node.kind === "table");
 // After projection, Order/order/orders and Payment/payment/payments collapse.
 if (fixtureTables.length !== 2) {
@@ -890,6 +952,8 @@ const collaborationKindsDecl = viewerHtml.indexOf(
 const usesInKinds = viewerHtml.indexOf('"uses"', collaborationKindsDecl);
 const rendersInKinds = viewerHtml.indexOf('"renders"', collaborationKindsDecl);
 const exposesInKinds = viewerHtml.indexOf('"exposes"', collaborationKindsDecl);
+const readsInKinds = viewerHtml.indexOf('"reads"', collaborationKindsDecl);
+const triggersInKinds = viewerHtml.indexOf('"triggers"', collaborationKindsDecl);
 const importsFilter = viewerHtml.indexOf(
   "importsAndCalls = connections.filter",
 );
@@ -899,8 +963,15 @@ const collabDetailClass = viewerHtml.indexOf('class="collab-detail"');
 const collabUsesCollaborationItem = viewerHtml.includes(
   "collaboration.slice(0, 16).map((edge) => collaborationItem(edge, id))",
 );
-if (collaborationKindsDecl < 0 || usesInKinds < 0 || rendersInKinds < 0 || exposesInKinds < 0) {
-  fail("viewer missing collaborationKinds set for inspector (uses/renders/exposes)");
+if (
+  collaborationKindsDecl < 0 ||
+  usesInKinds < 0 ||
+  rendersInKinds < 0 ||
+  exposesInKinds < 0 ||
+  readsInKinds < 0 ||
+  triggersInKinds < 0
+) {
+  fail("viewer missing collaborationKinds set for inspector (uses/renders/exposes/triggers/reads)");
 } else if (importsFilter < 0 || importsFilter < collaborationKindsDecl) {
   fail("viewer inspector should split importsAndCalls after collaborationKinds");
 } else if (collaborationHeading < 0 || importsHeading < 0 || collaborationHeading > importsHeading) {

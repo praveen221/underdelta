@@ -291,6 +291,42 @@ const collaborationEdges: Array<{
     label: "index.html",
     detail: "Viewer emits the index.html browser artifact",
   },
+  // Mini-stack / commerce product systems — collaboration beyond flows-to.
+  {
+    from: "ui",
+    to: "api",
+    kind: "uses",
+    label: "checkout",
+    detail: "Storefront UI uses Checkout API for order status and checkout",
+  },
+  {
+    from: "api",
+    to: "pipelines",
+    kind: "triggers",
+    label: "checkout",
+    detail: "Checkout API triggers the Order pipeline after an order is accepted",
+  },
+  {
+    from: "api",
+    to: "workers",
+    kind: "triggers",
+    label: "fulfill",
+    detail: "Checkout API triggers Fulfillment workers via the fulfillment queue",
+  },
+  {
+    from: "api",
+    to: "data",
+    kind: "reads",
+    label: "orders",
+    detail: "Checkout API reads Catalog data when fulfilling orders",
+  },
+  {
+    from: "jobs",
+    to: "data",
+    kind: "uses",
+    label: "payments",
+    detail: "Reconciliation jobs use Catalog data for payment reconciliation",
+  },
 ];
 
 function assignFlowOrder(

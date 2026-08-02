@@ -170,7 +170,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     const hiddenByDefault = new Set(["function", "column", "module", "pipeline-step"]);
     // Product-story edges — canvas + inspector treat these apart from imports/calls.
     const collaborationKinds = new Set([
-      "uses", "renders", "exposes", "triggers", "configures", "flows-to",
+      "uses", "renders", "exposes", "triggers", "configures", "reads", "flows-to",
     ]);
     // Messaging + schema lineage — labeled badges on the default overview.
     const narrativeKinds = new Set(["publishes", "consumes", "migrates"]);
