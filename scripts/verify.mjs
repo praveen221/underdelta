@@ -604,6 +604,37 @@ if (!tableRelation) {
   );
 }
 
+const relationOnlyColumns = fixtureGraph.nodes.filter(
+  (node) => node.kind === "column" && node.metadata?.relation === true,
+);
+const collapsedRelationFields = relationOnlyColumns.filter(
+  (node) =>
+    node.metadata?.relationOnly === true &&
+    node.metadata?.collapsedInOverview === true,
+);
+const relationFieldLabels = new Set(
+  relationOnlyColumns.map((node) => String(node.label)),
+);
+if (relationOnlyColumns.length < 2) {
+  fail(
+    `expected Prisma relation fields (order/payments) on fixture columns, found ${relationOnlyColumns.length}`,
+  );
+} else if (collapsedRelationFields.length !== relationOnlyColumns.length) {
+  fail(
+    "relation-only Prisma fields should be marked relationOnly + collapsedInOverview",
+  );
+} else if (!relationFieldLabels.has("order") || !relationFieldLabels.has("payments")) {
+  fail(
+    `expected order + payments relation fields, found ${[...relationFieldLabels].join(", ")}`,
+  );
+} else if (!tableRelation) {
+  fail("collapsing relation fields must keep Payment↔Order table edges");
+} else {
+  pass(
+    `relation-only Prisma fields collapsed (${collapsedRelationFields.length}); table↔table edges kept`,
+  );
+}
+
 const dataAccess = fixtureByKey.get("data");
 const tablesUnderProduct = fixtureGraph.edges.filter((edge) => {
   const product = fixtureGraph.nodes.find(
@@ -797,6 +828,16 @@ if (tableSourcesFn < 0 || prismaSqlHeading < 0) {
   );
 } else {
   pass("viewer inspector surfaces migration + sqlName/prismaName on unified tables");
+}
+
+// Viewer keeps relation-only Prisma fields collapsed unless searched.
+const relationOnlyHide = fixtureViewerHtml.indexOf(
+  "node.metadata.relationOnly",
+);
+if (relationOnlyHide < 0) {
+  fail("viewer should hide metadata.relationOnly columns on the default map");
+} else {
+  pass("viewer hides relation-only Prisma fields unless searched");
 }
 
 if (process.exitCode) {

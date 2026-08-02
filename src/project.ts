@@ -1030,6 +1030,18 @@ export function projectSemanticArchitecture(
     }
   }
 
+  // Relation-only Prisma fields (order / payments) are ORM navigation, not
+  // schema columns. Collapse them on the default map; table↔table edges remain.
+  for (const node of nodes.values()) {
+    if (node.kind !== "column" || !node.metadata?.relation) continue;
+    node.metadata = {
+      ...node.metadata,
+      relationOnly: true,
+      collapsedInOverview: true,
+    };
+    nodes.set(node.id, node);
+  }
+
   // Lift cross-system imports/calls into system dependencies.
   for (const edge of graph.edges) {
     if (edge.kind !== "imports" && edge.kind !== "calls") continue;
