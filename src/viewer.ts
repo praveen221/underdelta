@@ -243,8 +243,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         ) {
           return false;
         }
-        // overviewHub (auth/billing server actions) bypasses the function hide —
-        // those hubs carry the SaaS story beside UI→API→Data on the default map.
+        // overviewHub (auth/billing actions, Helm Chart/resources, mongo
+        // aggregates) bypasses kind/collapse hides so product hubs stay on
+        // the default map beside their parent system.
         if (
           !state.implementation &&
           hiddenByDefault.has(node.kind) &&
@@ -681,7 +682,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       // Helm Chart.yaml + templates — Chart/version + kind/name owned by Chart section.
       "helm", "helmChart", "helmResource", "helmModule", "helmChartYaml",
       "helmTemplate", "chartName", "chartVersion", "chartRoot", "appVersion",
-      "helmChartOnlyChrome",
+      "helmChartOnlyChrome", "helmModuleTwinChrome",
       "exampleChrome", "labelSource", "pathRoleLabel", "collapsedInOverview",
       "overviewHub",
     ]);

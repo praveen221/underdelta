@@ -1639,6 +1639,87 @@ function quietHelmChartOnlyChrome(
   }
 }
 
+/**
+ * Chart.yaml / templates/*.yaml modules restate Chart + Deployment/Service
+ * service nodes. Mark them exampleChrome so the North-star cold-read shows
+ * product labels (Hello world · Chart) without Chart twin module chrome.
+ */
+function quietHelmModuleTwinChrome(
+  nodes: Map<string, ArchitectureNode>,
+): void {
+  const chartNamesWithChartNode = new Set<string>();
+  const templateFilesWithResource = new Set<string>();
+  for (const node of nodes.values()) {
+    if (node.kind !== "service" || node.metadata?.helm !== true) continue;
+    if (node.metadata?.exampleChrome === true) continue;
+    const chartName =
+      typeof node.metadata?.chartName === "string"
+        ? node.metadata.chartName
+        : "";
+    if (node.metadata?.helmChart === true && chartName) {
+      chartNamesWithChartNode.add(chartName);
+    }
+    if (node.metadata?.helmResource === true) {
+      const file = normalizePath(
+        String(node.evidence?.[0]?.file ?? node.metadata?.file ?? ""),
+      );
+      if (file) templateFilesWithResource.add(file);
+    }
+  }
+
+  for (const node of nodes.values()) {
+    if (node.kind !== "module" || node.metadata?.helm !== true) continue;
+    if (node.metadata?.exampleChrome === true) continue;
+    const file = normalizePath(
+      String(node.metadata?.file ?? node.evidence?.[0]?.file ?? ""),
+    );
+    const chartName =
+      typeof node.metadata?.chartName === "string"
+        ? node.metadata.chartName
+        : "";
+    const isChartYamlTwin =
+      Boolean(chartName) &&
+      chartNamesWithChartNode.has(chartName) &&
+      /\/chart\.ya?ml$/i.test(file);
+    const isTemplateTwin =
+      Boolean(file) && templateFilesWithResource.has(file);
+    if (!isChartYamlTwin && !isTemplateTwin) continue;
+    node.metadata = {
+      ...node.metadata,
+      helmModuleTwinChrome: true,
+      exampleChrome: true,
+      collapsedInOverview: true,
+    };
+    nodes.set(node.id, node);
+  }
+}
+
+/**
+ * Concrete Helm Chart + template resources are the Deploy story for chart-led
+ * repos (helm/examples Hello world). Keep them as overview hubs beside Deploy
+ * — Chart-only chrome beside kubernetes-manifests stays quiet via exampleChrome.
+ */
+function promoteHelmOverviewHubs(
+  nodes: Map<string, ArchitectureNode>,
+): void {
+  for (const node of nodes.values()) {
+    if (node.kind !== "service" || node.metadata?.helm !== true) continue;
+    if (node.metadata?.exampleChrome === true) continue;
+    if (
+      node.metadata?.helmChart !== true &&
+      node.metadata?.helmResource !== true
+    ) {
+      continue;
+    }
+    node.metadata = {
+      ...node.metadata,
+      overviewHub: true,
+      collapsedInOverview: false,
+    };
+    nodes.set(node.id, node);
+  }
+}
+
 /** Regression-fixture / GitHub-issue sample modules (`vpc_issue_44`, …). */
 function isTerraformIssueModuleName(name: string): boolean {
   return /_issue_/i.test(name);
@@ -3688,6 +3769,14 @@ export function projectSemanticArchitecture(
   // Chart.yaml-only Helm (every template name is `{{ .Values }}`) beside
   // kubernetes-manifests is packaging chrome — quiet like kustomize overlays.
   quietHelmChartOnlyChrome(nodes);
+
+  // Chart.yaml + templates/*.yaml modules twin the Chart/Deployment/Service
+  // product nodes — quiet so Hello world labels own the cold-read.
+  quietHelmModuleTwinChrome(nodes);
+
+  // Concrete Helm Chart + resources stay visible beside Deploy (chart-led
+  // North-star story). Skips exampleChrome Chart-only Boutique packaging.
+  promoteHelmOverviewHubs(nodes);
 
   assignFlowOrder(systems, preferredFlows);
 

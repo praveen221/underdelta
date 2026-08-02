@@ -438,6 +438,32 @@ export const helmExtractor: ArchitectureExtractor = {
     const services = [...resourcesById.values()].filter(
       (resource) => resource.kind === "Service",
     );
+    const needsPairs = new Set<string>();
+    const pushNeeds = (
+      sourceId: string,
+      targetId: string,
+      file: string,
+      detail: string,
+    ): void => {
+      const pairKey = `${sourceId}->${targetId}`;
+      if (needsPairs.has(pairKey)) return;
+      needsPairs.add(pairKey);
+      const realEvidence = nodes.find((node) => node.id === sourceId)
+        ?.evidence[0];
+      edges.push(
+        edgeFrom(
+          "depends-on",
+          sourceId,
+          targetId,
+          {
+            ...(realEvidence ?? evidence(file, "", 0, detail)),
+            detail,
+          },
+          "needs",
+        ),
+      );
+    };
+
     for (const service of services) {
       if (!service.selector) continue;
       for (const workload of workloads) {
@@ -451,25 +477,34 @@ export const helmExtractor: ArchitectureExtractor = {
           continue;
         }
         if (!labelsMatch(service.selector, workload.matchLabels)) continue;
-        const realEvidence = nodes.find((node) => node.id === service.id)
-          ?.evidence[0];
-        edges.push(
-          edgeFrom(
-            "depends-on",
-            service.id,
-            workload.id,
-            {
-              ...(realEvidence ??
-                evidence(
-                  service.file,
-                  "",
-                  0,
-                  `needs ${workload.kind}/${workload.name}`,
-                )),
-              detail: `needs ${workload.kind}/${workload.name}`,
-            },
-            "needs",
-          ),
+        pushNeeds(
+          service.id,
+          workload.id,
+          service.file,
+          `needs ${workload.kind}/${workload.name}`,
+        );
+      }
+    }
+
+    // Scaffold charts wire Service→Deployment via `include "chart.selectorLabels"`
+    // with no concrete label map. When both resolve to the same fullname in the
+    // same chart, treat that as a needs edge so Hello world still tells a story.
+    for (const service of services) {
+      for (const workload of workloads) {
+        if (service.chartName !== workload.chartName) continue;
+        if (service.name !== workload.name) continue;
+        if (
+          service.namespace &&
+          workload.namespace &&
+          service.namespace !== workload.namespace
+        ) {
+          continue;
+        }
+        pushNeeds(
+          service.id,
+          workload.id,
+          service.file,
+          `needs ${workload.kind}/${workload.name}`,
         );
       }
     }

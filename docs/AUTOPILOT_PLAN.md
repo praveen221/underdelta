@@ -204,6 +204,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 10 prep: Helm charts extractor — `Chart.yaml` + `templates/` Deploy units; path-role `charts/`/`helm/`/`helm-chart/`; README Charts; `verification/mini-helm` smoke floors + Extractors roster `helm`; keep Boutique `{{` template skip honest (Chart/onlineboutique only, zero concrete helmResources)
 - [x] Rung 10: pin `helm/examples` @ `4888ba8fb8180dd0c36d1e84c1fcafc6efd81532`; resolve `include|template "chart.fullname"` (+ `.Chart.Name`/`.Release.Name`/`$fullName`) → chart name; fix metadata.name quote-cut + `spec:` window so ports/`name: http` cannot steal identity; keep Boutique `{{ .Values }}` skipped; golden-lock Hello world Chart/Deployment/Service under Deploy
 - [x] Rung 10 polish: quiet Chart-only chrome beside kubernetes-manifests when every template name is `{{ .Values }}` (Boutique Chart/onlineboutique + Chart.yaml module → `helmChartOnlyChrome`/`exampleChrome`; concrete mini-helm + helm/examples Charts stay)
+- [x] Rung 10 polish/lock: helm/examples North-star — Hello world Chart/Deployment/Service `overviewHub` beside Deploy; quiet Chart.yaml + template module twins as `helmModuleTwinChrome`; same-name Service→Deployment needs when selectors are `include "chart.selectorLabels"`; golden-lock unique hubs — **Rung 10 locked**
 
 ### Real-repo pins (Capability ladder)
 
@@ -224,8 +225,8 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 10 polish/lock: helm/examples North-star cold-read — Deploy-led overview, Hello world labels, no leftover Chart twin chrome; then lock Rung 10
-- [ ] Rung 11 prep: promote next capability from README roadmap after Helm lock (Kustomize product overlays, or next popular stack)
+- [ ] Rung 11 prep: Kustomize product overlays as first-class Deploy story (not only `exampleChrome` quiet) — fixture + path-role; keep Boutique overlays quiet unless they carry concrete product units
+- [ ] Rung 11: pin a real Kustomize-led OSS repo (or promote next popular stack if blocked) + golden-lock Deploy story
 - [ ] GraphQL `schema { query: Root }` / non-Query root types (SWAPI-style) if a later pin needs it
 - [ ] Standing polish: Underdelta self-map cold-read pass — leftover jargon labels or weak hierarchy
 
@@ -233,7 +234,7 @@ Keep **at least 3 unchecked items** here at all times (refill from Self-renewing
 
 Not a full roadmap — a menu the agent may reorder. Pick what most improves the **Capability ladder** now.
 
-- Rung 10+: richer Kustomize product overlays (non-chrome) after Helm lock
+- Rung 11+: richer Kustomize product overlays / overlay→base wiring after fixture+pin
 - GraphQL `extend type Query` / schema stitching if a real-repo pin needs it
 - OAS3 `servers` / `$ref` path-item resolution if a later OpenAPI pin needs it
 - Performance pass only if scanning a real repo becomes painfully slow
@@ -241,7 +242,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Boutique Chart-only chrome quieted beside kubernetes-manifests). Now North-star polish/lock helm/examples Deploy-led overview so Rung 10 can lock.
+> **Next focus:** This work is done (Rung 10 locked — helm/examples Hello world hubs + Chart twin chrome quiet). Now Rung 11 prep: Kustomize product overlays as a real Deploy story (fixture + extractor surface) so overlay-led apps map beyond chrome-quiet.
 
 ### Learning log (append every tick)
 
@@ -325,6 +326,8 @@ Append short bullets like:
 - 2026-08-02 06:55 UTC | Done: Rung 10 pin+golden — `helm/examples` @ `4888ba8` gitignored; `resolveHelmResourceName` for include/template fullname helpers (+ Chart/Release/$fullName); metadata.name no longer quote-cuts Go templates or leaks ports `name: http`; Boutique Values still zero helmResources; golden-lock Hello world Chart/Deployment/Service under Deploy | Next: quiet Boutique Chart-only chrome then Rung 10 polish/lock | Learned: almost every real chart uses `{{ include "chart.fullname" . }}` — treating all `{{` as skip made the rung Chart-only forever; resolve name helpers without rendering, but never invent `.Values` names; metadata window must end at `spec:` or Service ports steal the identity
 
 - 2026-08-02 06:54 UTC | Done: quiet Chart-only Helm chrome — when kubernetes-manifests exist and a chart has zero concrete helmResources, mark Chart + Chart.yaml module `helmChartOnlyChrome`/`exampleChrome` (Boutique Chart/onlineboutique); mini-helm + helm/examples Charts with templates stay; golden-lock | Next: Rung 10 North-star polish/lock on helm/examples | Learned: Chart.yaml-only surface is honest when charts are the story, but beside kubernetes-manifests it restates packaging — reuse `exampleChrome` (searchable, hidden from cold-read) like kustomize overlays rather than deleting the Chart node
+
+- 2026-08-02 06:57 UTC | Done: Rung 10 locked — Helm Chart/resources as `overviewHub` beside Deploy (Hello world cold-read); quiet Chart.yaml + template modules as `helmModuleTwinChrome`; same-chart same-name Service→Deployment needs when selectors are `include "chart.selectorLabels"`; golden-lock mini-helm + helm/examples; promote Kustomize as Rung 11 | Next: Rung 11 prep — Kustomize product overlays fixture + extractor surface | Learned: collapsing every chart unit left helm/examples as a bare Deploy box — North-star chart-led maps need hubs like mongo aggregates; Chart.yaml modules twin the Chart service and must go `exampleChrome` or Details restates packaging; scaffold charts rarely ship concrete selector maps so fullname equality is the honest needs fallback
 
 ---
 

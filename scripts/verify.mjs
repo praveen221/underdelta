@@ -7577,17 +7577,22 @@ if (nestedHelmServices.length < 5) {
   pass(`mini-helm ${nestedHelmServices.length} units nested under Charts`);
 }
 
-const helmOverviewLeaves = nestedHelmServices.filter(
-  (node) => node.metadata?.collapsedInOverview !== true,
+const miniHelmOverviewHubs = nestedHelmServices.filter(
+  (node) =>
+    node.metadata?.overviewHub === true &&
+    node.metadata?.collapsedInOverview !== true &&
+    node.metadata?.exampleChrome !== true,
 );
-if (helmOverviewLeaves.length > 0) {
+if (miniHelmOverviewHubs.length < 5) {
   fail(
-    `mini-helm overview should collapse Chart/Deployments/Services/Ingress under Charts, still visible: ${helmOverviewLeaves
+    `mini-helm overview should keep Chart/Deployments/Services/Ingress as hubs beside Charts, found ${miniHelmOverviewHubs
       .map((node) => node.label)
-      .join(", ")}`,
+      .join(", ") || "(none)"}`,
   );
 } else {
-  pass("mini-helm overview collapses resources under Charts");
+  pass(
+    `mini-helm ${miniHelmOverviewHubs.length} Chart/resource hubs visible beside Charts`,
+  );
 }
 
 const miniHelmFlow = miniHelmSemantic
@@ -7617,13 +7622,14 @@ const miniHelmChartModule = miniHelmModules.find((node) =>
 if (
   !miniHelmChartModule ||
   miniHelmChartModule.parentId !== miniHelmDeploy?.id ||
-  miniHelmChartModule.metadata?.collapsedInOverview !== true
+  miniHelmChartModule.metadata?.exampleChrome !== true ||
+  miniHelmChartModule.metadata?.helmModuleTwinChrome !== true
 ) {
   fail(
-    `mini-helm charts/notes/Chart.yaml should nest+collapse under Charts, found parent=${miniHelmChartModule?.parentId ?? "(missing)"} collapsed=${miniHelmChartModule?.metadata?.collapsedInOverview}`,
+    `mini-helm charts/notes/Chart.yaml should nest under Charts as Chart twin chrome; found parent=${miniHelmChartModule?.parentId ?? "(missing)"} exampleChrome=${miniHelmChartModule?.metadata?.exampleChrome} twin=${miniHelmChartModule?.metadata?.helmModuleTwinChrome}`,
   );
 } else {
-  pass("mini-helm charts/notes/Chart.yaml nested+collapsed under Charts");
+  pass("mini-helm charts/notes/Chart.yaml quieted as Chart twin chrome");
 }
 
 const helmEvidenceGaps = miniHelmResources.filter((node) => {
@@ -7840,17 +7846,36 @@ if (helmRealRoot) {
       );
     }
 
-    const helmOverviewLeaves = nestedHelmUnits.filter(
-      (node) => node.metadata?.collapsedInOverview !== true,
+    // North-star cold-read: Deploy + Hello world Chart/Deployment/Service hubs
+    // (not a bare Deploy box; not Chart.yaml module twin chrome).
+    const helmRealOverviewHubs = nestedHelmUnits.filter(
+      (node) =>
+        node.metadata?.overviewHub === true &&
+        node.metadata?.collapsedInOverview !== true &&
+        node.metadata?.exampleChrome !== true,
     );
-    if (helmOverviewLeaves.length > 0) {
+    const helmRealOverviewLabels = new Set(
+      helmRealOverviewHubs.map((node) => node.label),
+    );
+    for (const expected of [
+      "Hello world · Chart",
+      "Hello world · Deployment",
+      "Hello world · Service",
+    ]) {
+      if (!helmRealOverviewLabels.has(expected)) {
+        fail(
+          `helm-real-repo North-star overview missing hub ${expected}; found ${[...helmRealOverviewLabels].join(", ") || "(none)"}`,
+        );
+      } else {
+        pass(`helm-real-repo overview hub ${expected}`);
+      }
+    }
+    if (helmRealOverviewHubs.length !== 3) {
       fail(
-        `helm-real-repo overview should collapse Chart/Deployment/Service under Deploy, still visible: ${helmOverviewLeaves
-          .map((node) => node.label)
-          .join(", ")}`,
+        `helm-real-repo North-star overview expected exactly 3 Hello world hubs, found ${helmRealOverviewHubs.length}: ${[...helmRealOverviewLabels].join(", ")}`,
       );
     } else {
-      pass("helm-real-repo overview collapses resources under Deploy");
+      pass("helm-real-repo North-star overview has exactly 3 Hello world hubs");
     }
 
     if (helmRealDeploy?.metadata?.collapsedInOverview === true) {
@@ -7888,14 +7913,73 @@ if (helmRealRoot) {
     if (
       !helmRealChartModule ||
       helmRealChartModule.parentId !== helmRealDeploy?.id ||
-      helmRealChartModule.metadata?.collapsedInOverview !== true
+      helmRealChartModule.metadata?.exampleChrome !== true ||
+      helmRealChartModule.metadata?.helmModuleTwinChrome !== true
     ) {
       fail(
-        `helm-real-repo charts/hello-world/Chart.yaml should nest+collapse under Deploy, found parent=${helmRealChartModule?.parentId ?? "(missing)"} collapsed=${helmRealChartModule?.metadata?.collapsedInOverview}`,
+        `helm-real-repo charts/hello-world/Chart.yaml should nest under Deploy as Chart twin chrome; found parent=${helmRealChartModule?.parentId ?? "(missing)"} exampleChrome=${helmRealChartModule?.metadata?.exampleChrome} twin=${helmRealChartModule?.metadata?.helmModuleTwinChrome}`,
       );
     } else {
       pass(
-        "helm-real-repo charts/hello-world/Chart.yaml nested+collapsed under Deploy",
+        "helm-real-repo charts/hello-world/Chart.yaml quieted as Chart twin chrome",
+      );
+    }
+
+    const helmRealTemplateTwins = helmRealGraph.nodes.filter(
+      (node) =>
+        node.kind === "module" &&
+        node.metadata?.helmModule === true &&
+        /templates\/(deployment|service)\.yaml$/i.test(
+          String(node.metadata?.file ?? ""),
+        ),
+    );
+    const helmRealTemplateTwinGaps = helmRealTemplateTwins.filter(
+      (node) =>
+        node.metadata?.exampleChrome !== true ||
+        node.metadata?.helmModuleTwinChrome !== true,
+    );
+    if (
+      helmRealTemplateTwins.length < 2 ||
+      helmRealTemplateTwinGaps.length > 0
+    ) {
+      fail(
+        `helm-real-repo template modules should quiet as twin chrome; found ${helmRealTemplateTwins
+          .map(
+            (node) =>
+              `${node.metadata?.file}:chrome=${node.metadata?.exampleChrome}`,
+          )
+          .join(", ") || "(none)"}`,
+      );
+    } else {
+      pass(
+        `helm-real-repo ${helmRealTemplateTwins.length} template modules quieted as twin chrome`,
+      );
+    }
+
+    const helmRealNeedsPairs = new Set(
+      helmRealGraph.edges
+        .filter(
+          (edge) => edge.kind === "depends-on" && edge.label === "needs",
+        )
+        .map((edge) => {
+          const source = helmRealServices.find(
+            (node) => node.id === edge.source,
+          );
+          const target = helmRealServices.find(
+            (node) => node.id === edge.target,
+          );
+          return `${source?.metadata?.k8sKind}/${source?.metadata?.resourceName}→${target?.metadata?.k8sKind}/${target?.metadata?.resourceName}`;
+        }),
+    );
+    if (
+      !helmRealNeedsPairs.has("Service/hello-world→Deployment/hello-world")
+    ) {
+      fail(
+        `helm-real-repo missing same-name needs Service/hello-world→Deployment/hello-world; found ${[...helmRealNeedsPairs].join(", ") || "(none)"}`,
+      );
+    } else {
+      pass(
+        "helm-real-repo needs Service/hello-world→Deployment/hello-world (fullname scaffold)",
       );
     }
 
@@ -7924,6 +8008,32 @@ if (helmRealRoot) {
       );
     } else {
       pass("helm-real-repo has no Checkout/orders commerce collaboration noise");
+    }
+
+    // Unique Hello world canvas labels — no Chart twin restating the story.
+    const helmRealVisibleLabels = helmRealGraph.nodes
+      .filter(
+        (node) =>
+          node.kind !== "product" &&
+          node.metadata?.collapsedInOverview !== true &&
+          node.metadata?.exampleChrome !== true,
+      )
+      .map((node) => node.label);
+    const helmRealLabelCounts = new Map();
+    for (const label of helmRealVisibleLabels) {
+      helmRealLabelCounts.set(label, (helmRealLabelCounts.get(label) ?? 0) + 1);
+    }
+    const helmRealTwinLabels = [...helmRealLabelCounts.entries()].filter(
+      ([, count]) => count > 1,
+    );
+    if (helmRealTwinLabels.length > 0) {
+      fail(
+        `helm-real-repo North-star overview has duplicate labels: ${helmRealTwinLabels
+          .map(([label, count]) => `${label}×${count}`)
+          .join(", ")}`,
+      );
+    } else {
+      pass("helm-real-repo North-star overview has unique Hello world labels");
     }
   }
 }
