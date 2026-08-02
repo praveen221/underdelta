@@ -1355,6 +1355,31 @@ export function projectSemanticArchitecture(
   // from docs. Never invent systems from README alone.
   applyReadmeHeadingHints(systems, options.readmeHints);
 
+  // Queue publisher/consumer lists were snapshotted before README rename.
+  // Rebuild labels from lifted publishes/consumes so Messaging shows
+  // "Checkout API" / "Fulfillment workers", not thin path-role defaults.
+  for (const node of nodes.values()) {
+    if (node.kind !== "queue" && node.kind !== "topic") continue;
+    const publishers = new Set<string>();
+    const consumers = new Set<string>();
+    for (const edge of edges.values()) {
+      if (edge.target !== node.id) continue;
+      if (edge.kind !== "publishes" && edge.kind !== "consumes") continue;
+      const source = nodes.get(edge.source);
+      if (!source || source.metadata?.projection !== "semantic") continue;
+      if (edge.kind === "publishes") publishers.add(source.label);
+      else consumers.add(source.label);
+    }
+    if (!publishers.size && !consumers.size) continue;
+    node.metadata = {
+      ...node.metadata,
+      publishers: [...publishers].sort((a, b) => a.localeCompare(b)),
+      consumers: [...consumers].sort((a, b) => a.localeCompare(b)),
+      messagingHub: publishers.size > 0 && consumers.size > 0,
+    };
+    nodes.set(node.id, node);
+  }
+
   assignFlowOrder(systems, preferredFlows);
 
   // Surface the language-extractor roster on the Extractors system so the
