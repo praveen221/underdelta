@@ -972,6 +972,43 @@ if (tableRelationsFn < 0 || isTableRelationEdgeFn < 0 || relationsHeading < 0) {
   );
 }
 
+// Canvas: labeled narrative badges for publishes / consumes / migrates on overview.
+const narrativeKindsDecl = fixtureViewerHtml.indexOf(
+  'const narrativeKinds = new Set(["publishes", "consumes", "migrates"])',
+);
+const narrativeBadgeFn = fixtureViewerHtml.indexOf("function narrativeBadgeLabel");
+const narrativeCss = fixtureViewerHtml.indexOf(".edge.narrative");
+const narrativePublishesCss = fixtureViewerHtml.indexOf(".edge.narrative.publishes");
+const narrativeMigratesCss = fixtureViewerHtml.indexOf(".edge.narrative.migrates");
+const edgeBadgeClass = fixtureViewerHtml.indexOf('class="edge-badge"');
+const narrativeLegend = fixtureViewerHtml.indexOf('class="narrative">publishes / migrates');
+const suppressContainsNearNarrative = fixtureViewerHtml.includes(
+  'edge.kind === "contains" &&',
+) && fixtureViewerHtml.includes("narrativePairs.has");
+const dataNarrativeAttr = fixtureViewerHtml.indexOf('data-narrative", "true"');
+if (
+  narrativeKindsDecl < 0 ||
+  narrativeBadgeFn < 0 ||
+  narrativeCss < 0 ||
+  narrativePublishesCss < 0 ||
+  narrativeMigratesCss < 0 ||
+  edgeBadgeClass < 0 ||
+  narrativeLegend < 0 ||
+  dataNarrativeAttr < 0
+) {
+  fail(
+    "viewer canvas should label publishes/consumes/migrates with narrative edge badges",
+  );
+} else if (!suppressContainsNearNarrative) {
+  fail(
+    "viewer should suppress contains edges that restated a labeled publish/consume/migrate pair",
+  );
+} else {
+  pass(
+    "viewer canvas labels publish/consume/migrates edges so mini-stack messaging + migrations read clearly",
+  );
+}
+
 if (process.exitCode) {
   console.error("Verification suite failed.");
   process.exit(process.exitCode);

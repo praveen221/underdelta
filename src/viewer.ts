@@ -51,8 +51,18 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     .edge.collab.derived { stroke-dasharray: 8 5; stroke: #6e8fe0; }
     .edge.collab.inferred { stroke-dasharray: 3 4; stroke: #6e8fe0; }
     .edge.collab.flows-to { stroke: #8aa6f0; stroke-width: 1.75; opacity: .72; }
+    /* Messaging + migration story edges — labeled on the canvas */
+    .edge.narrative { stroke-width: 1.75; opacity: .82; stroke-dasharray: none; }
+    .edge.narrative.derived, .edge.narrative.inferred { stroke-dasharray: none; }
+    .edge.narrative.publishes { stroke: #d17f54; }
+    .edge.narrative.consumes { stroke: #c48a5a; }
+    .edge.narrative.migrates { stroke: #52a976; }
+    .edge.narrative.publishes.consumes { stroke: #d09a45; }
+    .edge.narrative.active { stroke: var(--accent); stroke-width: 2.4; opacity: .96; }
     .edge.active { stroke: var(--accent); stroke-width: 2.3; opacity: .95; }
     .edge.collab.active { stroke: var(--accent); stroke-width: 2.45; opacity: .96; }
+    .edge-badge-bg { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+    .edge-badge { fill: var(--text); font: 650 10px/1 Inter, ui-sans-serif, system-ui, sans-serif; }
     #nodes { position: absolute; inset: 0; }
     .lane-label { position: absolute; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
     .node { --kind-color: #77808d; position: absolute; width: 190px; min-height: 58px; background: var(--panel); border: 1px solid var(--kind-color); border-radius: 9px; padding: 9px 10px; cursor: pointer; user-select: none; transition: opacity .12s, border-color .12s, background .12s; }
@@ -107,6 +117,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     #legend .derived::before { border-color: var(--derived); border-top-style: dashed; }
     #legend .inferred::before { border-color: var(--inferred); border-top-style: dotted; }
     #legend .collab::before { border-color: #6e8fe0; border-top-width: 2.5px; }
+    #legend .narrative::before { border-color: #d17f54; border-top-width: 2.5px; }
     @media (max-width: 760px) {
       #workspace { grid-template-columns: 1fr; }
       aside { display: none; }
@@ -130,7 +141,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           <svg id="edges"></svg>
           <div id="nodes"></div>
         </div>
-        <div id="legend"><span>observed</span><span class="derived">derived</span><span class="inferred">inferred</span><span class="collab">collaboration</span></div>
+        <div id="legend"><span>observed</span><span class="derived">derived</span><span class="inferred">inferred</span><span class="collab">collaboration</span><span class="narrative">publishes / migrates</span></div>
       </main>
       <aside id="inspector"><div class="empty">Select a component to inspect its connections and source evidence.</div></aside>
     </div>
@@ -161,6 +172,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     const collaborationKinds = new Set([
       "uses", "renders", "exposes", "triggers", "configures", "flows-to",
     ]);
+    // Messaging + schema lineage — labeled badges on the default overview.
+    const narrativeKinds = new Set(["publishes", "consumes", "migrates"]);
     const state = { scale: 1, x: 36, y: 40, dragging: false, startX: 0, startY: 0, focus: null, selected: null, implementation: false, history: [] };
     const viewport = document.getElementById("viewport");
     const world = document.getElementById("world");
@@ -339,18 +352,150 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       edgesLayer.innerHTML = "";
       edgesLayer.setAttribute("width", String(maxWidth));
       edgesLayer.setAttribute("height", String(maxHeight + 100));
+      const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+      for (const [id, color] of [
+        ["arrow-publishes", "#d17f54"],
+        ["arrow-consumes", "#c48a5a"],
+        ["arrow-migrates", "#52a976"],
+        ["arrow-narrative", "#d09a45"],
+        ["arrow-active", "#7c9cff"],
+      ]) {
+        const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+        marker.setAttribute("id", id);
+        marker.setAttribute("viewBox", "0 0 10 10");
+        marker.setAttribute("refX", "9");
+        marker.setAttribute("refY", "5");
+        marker.setAttribute("markerWidth", "7");
+        marker.setAttribute("markerHeight", "7");
+        marker.setAttribute("orient", "auto-start-reverse");
+        const tip = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        tip.setAttribute("d", "M 0 0 L 10 5 L 0 10 z");
+        tip.setAttribute("fill", color);
+        marker.appendChild(tip);
+        defs.appendChild(marker);
+      }
+      edgesLayer.appendChild(defs);
+
+      // Group publishes/consumes/migrates by directed pair → one labeled path.
+      const narrativeGroups = new Map();
+      const narrativeEdgeIds = new Set();
+      const narrativePairs = new Set();
+      for (const edge of graph.edges) {
+        if (!narrativeKinds.has(edge.kind)) continue;
+        if (!visibleIds.has(edge.source) || !visibleIds.has(edge.target)) continue;
+        if (!positions.get(edge.source) || !positions.get(edge.target)) continue;
+        const key = edge.source + "|" + edge.target;
+        if (!narrativeGroups.has(key)) narrativeGroups.set(key, []);
+        narrativeGroups.get(key).push(edge);
+        narrativeEdgeIds.add(edge.id);
+        narrativePairs.add(key);
+      }
+
+      function narrativeBadgeLabel(edges) {
+        const kinds = [...new Set(edges.map((edge) => edge.kind))];
+        if (kinds.length === 1 && kinds[0] === "migrates") {
+          const labels = [...new Set(edges.map((edge) => edge.label || "migrates"))];
+          return labels.join(" · ");
+        }
+        const order = ["publishes", "consumes", "migrates"];
+        return kinds
+          .sort((a, b) => order.indexOf(a) - order.indexOf(b))
+          .join(" · ");
+      }
+
+      function edgeGeometry(source, target) {
+        const sy = source.y + 29;
+        const ty = target.y + 29;
+        const sameColumn = Math.abs(source.x - target.x) < 48;
+        if (sameColumn) {
+          const sx = source.x + source.width;
+          const tx = target.x + target.width;
+          const midX = Math.max(sx, tx) + 56;
+          return {
+            d: "M " + sx + " " + sy + " C " + midX + " " + sy + ", " + midX + " " + ty + ", " + tx + " " + ty,
+            mx: midX,
+            my: (sy + ty) / 2,
+          };
+        }
+        const sx = source.x + source.width;
+        const tx = target.x;
+        const bend = Math.max(35, Math.abs(tx - sx) * 0.45);
+        return {
+          d: "M " + sx + " " + sy + " C " + (sx + bend) + " " + sy + ", " + (tx - bend) + " " + ty + ", " + tx + " " + ty,
+          mx: (sx + tx) / 2,
+          my: (sy + ty) / 2,
+        };
+      }
+
+      function appendEdgeBadge(mx, my, label) {
+        const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        group.setAttribute("class", "edge-badge-group");
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.setAttribute("class", "edge-badge");
+        text.setAttribute("x", String(mx));
+        text.setAttribute("y", String(my));
+        text.setAttribute("text-anchor", "middle");
+        text.setAttribute("dominant-baseline", "middle");
+        text.textContent = label;
+        // Measure after attach; approximate width from label length first.
+        const width = Math.max(42, label.length * 6.2 + 12);
+        const height = 16;
+        const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        bg.setAttribute("class", "edge-badge-bg");
+        bg.setAttribute("x", String(mx - width / 2));
+        bg.setAttribute("y", String(my - height / 2));
+        bg.setAttribute("width", String(width));
+        bg.setAttribute("height", String(height));
+        bg.setAttribute("rx", "4");
+        group.appendChild(bg);
+        group.appendChild(text);
+        edgesLayer.appendChild(group);
+      }
+
+      for (const [key, edges] of narrativeGroups) {
+        const sourceId = key.slice(0, key.indexOf("|"));
+        const targetId = key.slice(key.indexOf("|") + 1);
+        const source = positions.get(sourceId);
+        const target = positions.get(targetId);
+        if (!source || !target) continue;
+        const geom = edgeGeometry(source, target);
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", geom.d);
+        const kinds = [...new Set(edges.map((edge) => edge.kind))];
+        const classes = ["edge", "narrative", ...kinds];
+        if (edges.some((edge) => certaintyOf(edge) === "inferred")) classes.push("inferred");
+        else if (edges.some((edge) => certaintyOf(edge) === "derived")) classes.push("derived");
+        const active = state.selected === sourceId || state.selected === targetId;
+        if (active) classes.push("active");
+        path.setAttribute("class", classes.join(" "));
+        path.setAttribute("data-kind", kinds.join(" "));
+        path.setAttribute("data-narrative", "true");
+        let marker = "arrow-narrative";
+        if (active) marker = "arrow-active";
+        else if (kinds.length === 1 && kinds[0] === "publishes") marker = "arrow-publishes";
+        else if (kinds.length === 1 && kinds[0] === "consumes") marker = "arrow-consumes";
+        else if (kinds.length === 1 && kinds[0] === "migrates") marker = "arrow-migrates";
+        path.setAttribute("marker-end", "url(#" + marker + ")");
+        edgesLayer.appendChild(path);
+        appendEdgeBadge(geom.mx, geom.my, narrativeBadgeLabel(edges));
+      }
+
       for (const edge of graph.edges) {
         if (!visibleIds.has(edge.source) || !visibleIds.has(edge.target)) continue;
+        if (narrativeEdgeIds.has(edge.id)) continue;
+        // contains under a labeled messaging/migration story just restates ownership.
+        if (
+          edge.kind === "contains" &&
+          narrativePairs.has(edge.source + "|" + edge.target)
+        ) {
+          continue;
+        }
         const source = positions.get(edge.source);
         const target = positions.get(edge.target);
         if (!source || !target) continue;
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        const sx = source.x + source.width;
-        const sy = source.y + 29;
-        const tx = target.x;
-        const ty = target.y + 29;
-        const bend = Math.max(35, Math.abs(tx - sx) * .45);
-        path.setAttribute("d", "M " + sx + " " + sy + " C " + (sx + bend) + " " + sy + ", " + (tx - bend) + " " + ty + ", " + tx + " " + ty);
+        const geom = edgeGeometry(source, target);
+        path.setAttribute("d", geom.d);
         const classes = ["edge", certaintyOf(edge)];
         if (collaborationKinds.has(edge.kind)) {
           classes.push("collab");
