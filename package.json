@@ -1,0 +1,32 @@
+{
+  "name": "underdelta",
+  "version": "0.1.0",
+  "description": "Compile software repositories into evidence-backed visual system models.",
+  "type": "module",
+  "bin": {
+    "underdelta": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^15.0.0",
+    "typescript": "^7.0.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "tsx": "^4.23.1",
+    "vitest": "^4.1.10"
+  }
+}
