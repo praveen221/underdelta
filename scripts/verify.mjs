@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { compileRepository } from "../dist/compile.js";
@@ -4210,6 +4212,25 @@ if (openapiCommerceNoise) {
   pass("mini-openapi has no Checkout/orders commerce collaboration noise");
 }
 
+// Summary-first labels must stay unique so list/detail path-param twins never
+// collide on the canvas (e.g. bare "GET Notes" for both /notes and /notes/{id}).
+{
+  const miniOpenapiDupLabels = miniOpenapiRouteLabels.filter(
+    (label, index) => miniOpenapiRouteLabels.indexOf(label) !== index,
+  );
+  if (miniOpenapiDupLabels.length > 0) {
+    fail(
+      `mini-openapi OpenAPI summary labels must be unique (no path-param twin chrome), duplicates: ${[
+        ...new Set(miniOpenapiDupLabels),
+      ].join(" | ")}`,
+    );
+  } else {
+    pass(
+      `mini-openapi ${miniOpenapiRouteLabels.length} summary labels are unique (no twin chrome)`,
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Capability ladder rung 5: real OpenAPI-bearing repo (pinned SHA, gitignored).
 // Golden-lock swagger-api/swagger-petstore ops under HTTP API + summary labels.
@@ -4533,6 +4554,189 @@ if (openapiRealRoot) {
     } else {
       pass("openapi-real-repo ignores CI/release-script module chrome");
     }
+
+    // North-star lock: summary preference keeps every Petstore op distinct —
+    // list/detail path params must not collapse into twin canvas labels.
+    const petstoreLabelList = openapiRealRoutes.map((node) => node.label);
+    const petstoreDupLabels = petstoreLabelList.filter(
+      (label, index) => petstoreLabelList.indexOf(label) !== index,
+    );
+    if (petstoreDupLabels.length > 0) {
+      fail(
+        `openapi-real-repo OpenAPI summary labels must be unique (no path-param twin chrome), duplicates: ${[
+          ...new Set(petstoreDupLabels),
+        ].join(" | ")}`,
+      );
+    } else if (new Set(petstoreLabelList).size !== openapiRealRoutes.length) {
+      fail(
+        `openapi-real-repo expected ${openapiRealRoutes.length} unique labels, found ${new Set(petstoreLabelList).size}`,
+      );
+    } else {
+      pass(
+        `openapi-real-repo ${openapiRealRoutes.length} summary labels are unique (no twin chrome)`,
+      );
+    }
+
+    // Cold-read: overview should tell "Swagger Petstore → HTTP API" with no
+    // competing chrome beside the Product flow band.
+    const petstoreOverviewChrome = openapiRealGraph.nodes.filter(
+      (node) =>
+        node.kind !== "product" &&
+        node.metadata?.collapsedInOverview !== true &&
+        node.metadata?.systemKey !== "api",
+    );
+    if (petstoreOverviewChrome.length > 0) {
+      fail(
+        `openapi-real-repo North-star overview should only show HTTP API, still: ${petstoreOverviewChrome
+          .map((node) => `${node.kind}:${node.label}`)
+          .join(", ")}`,
+      );
+    } else {
+      pass(
+        "openapi-real-repo North-star overview is HTTP API only (Petstore story)",
+      );
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Rung 5 lock: Express + OpenAPI dual-source nest under one HTTP API system.
+// (Petstore pin is contract-only/Java; this tempfile proves dual extractors.)
+// ---------------------------------------------------------------------------
+{
+  const dualRoot = await fs.mkdtemp(
+    path.join(os.tmpdir(), "underdelta-dual-openapi-"),
+  );
+  try {
+    await fs.writeFile(
+      path.join(dualRoot, "README.md"),
+      "# Dual Source Notes\n\n## Notes API\n\nExpress handlers plus an OpenAPI contract.\n",
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(dualRoot, "server.js"),
+      [
+        "const express = require('express');",
+        "const app = express();",
+        "app.get('/health', (req, res) => res.send('ok'));",
+        "app.post('/notes', (req, res) => res.status(201).send('created'));",
+        "module.exports = app;",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(dualRoot, "openapi.yaml"),
+      [
+        "openapi: 3.0.3",
+        "info:",
+        "  title: Dual Source Notes",
+        "  version: 1.0.0",
+        "paths:",
+        "  /pets:",
+        "    get:",
+        "      summary: List pets",
+        "      operationId: listPets",
+        "      responses:",
+        '        "200":',
+        "          description: pets",
+        "  /pets/{id}:",
+        "    get:",
+        "      summary: Get pet",
+        "      operationId: getPet",
+        "      responses:",
+        '        "200":',
+        "          description: pet",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const dualGraph = await compileRepository(dualRoot);
+    const dualApiSystems = dualGraph.nodes.filter(
+      (node) =>
+        node.metadata?.projection === "semantic" &&
+        node.metadata?.systemKey === "api",
+    );
+    const dualApi = dualApiSystems[0];
+    const dualRoutes = dualGraph.nodes.filter((node) => node.kind === "route");
+    const dualOpenapiRoutes = dualRoutes.filter(
+      (node) => node.metadata?.openapi === true,
+    );
+    const dualExpressRoutes = dualRoutes.filter(
+      (node) => node.metadata?.openapi !== true,
+    );
+    const dualNested = dualRoutes.filter(
+      (node) => node.parentId === dualApi?.id,
+    );
+    const dualExtractorIds = (dualGraph.extractors ?? []).map(
+      (item) => item.id,
+    );
+
+    if (dualApiSystems.length !== 1) {
+      fail(
+        `dual-source Express+OpenAPI expected exactly 1 API system, found ${dualApiSystems.length}: ${dualApiSystems
+          .map((node) => node.label)
+          .join(", ") || "(none)"}`,
+      );
+    } else {
+      pass(
+        `dual-source Express+OpenAPI nests under one API system (${dualApi.label})`,
+      );
+    }
+
+    if (
+      !dualExtractorIds.includes("typescript") ||
+      !dualExtractorIds.includes("openapi")
+    ) {
+      fail(
+        `dual-source expected typescript+openapi extractors, found ${JSON.stringify(dualExtractorIds)}`,
+      );
+    } else {
+      pass("dual-source registers typescript + openapi extractors");
+    }
+
+    if (dualExpressRoutes.length < 2) {
+      fail(
+        `dual-source expected ≥2 Express routes, found ${dualExpressRoutes.length}`,
+      );
+    } else {
+      pass(`dual-source ${dualExpressRoutes.length} Express routes`);
+    }
+
+    if (dualOpenapiRoutes.length < 2) {
+      fail(
+        `dual-source expected ≥2 OpenAPI routes, found ${dualOpenapiRoutes.length}`,
+      );
+    } else {
+      pass(`dual-source ${dualOpenapiRoutes.length} OpenAPI routes`);
+    }
+
+    if (!dualApi || dualNested.length !== dualRoutes.length) {
+      fail(
+        `dual-source expected all ${dualRoutes.length} routes nested under one API, found ${dualNested.length}`,
+      );
+    } else {
+      pass(
+        `dual-source ${dualNested.length} Express+OpenAPI routes nested under ${dualApi.label}`,
+      );
+    }
+
+    const dualOpenapiLabels = dualOpenapiRoutes.map((node) => node.label);
+    if (
+      !dualOpenapiLabels.includes("List pets") ||
+      !dualOpenapiLabels.includes("Get pet")
+    ) {
+      fail(
+        `dual-source missing distinct OpenAPI summary labels List pets / Get pet; found ${dualOpenapiLabels.join(" | ") || "(none)"}`,
+      );
+    } else {
+      pass(
+        "dual-source OpenAPI list/detail keep distinct summary labels (no twin chrome)",
+      );
+    }
+  } finally {
+    await fs.rm(dualRoot, { recursive: true, force: true });
   }
 }
 
