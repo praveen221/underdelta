@@ -985,6 +985,27 @@ export function projectSemanticArchitecture(
         node.evidence[0] ?? projectionEvidence("."),
       );
     }
+
+    // Overview: when Catalog data already has tables, hide Prisma database /
+    // SQL migration schema leaves — tables tell the data story. (Attach to
+    // dataSystem happens after the general leaf-collapse pass, so mark here.)
+    const hasTables = [...nodes.values()].some(
+      (node) => node.kind === "table" && node.parentId === dataSystem.id,
+    );
+    if (hasTables) {
+      for (const node of nodes.values()) {
+        if (
+          (node.kind === "database" || node.kind === "schema") &&
+          node.parentId === dataSystem.id
+        ) {
+          node.metadata = {
+            ...node.metadata,
+            collapsedInOverview: true,
+          };
+          nodes.set(node.id, node);
+        }
+      }
+    }
   }
 
   // Collapse duplicate columns (created_at / createdAt, order_id / orderId).

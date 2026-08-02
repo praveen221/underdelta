@@ -805,6 +805,32 @@ if (!dataAccess) {
   }
 }
 
+const dataLeaves = fixtureGraph.nodes.filter(
+  (node) =>
+    (node.kind === "database" || node.kind === "schema") &&
+    node.parentId === dataAccess?.id,
+);
+const collapsedDataLeaves = dataLeaves.filter(
+  (node) => node.metadata?.collapsedInOverview === true,
+);
+if (!dataAccess || dataLeaves.length < 2) {
+  fail(
+    `expected Prisma database + SQL migration under Catalog data, found ${dataLeaves
+      .map((node) => `${node.kind}:${node.label}`)
+      .join(", ") || "(none)"}`,
+  );
+} else if (collapsedDataLeaves.length !== dataLeaves.length) {
+  fail(
+    "database/schema leaves under Catalog data should be collapsedInOverview when tables tell the story",
+  );
+} else if (fixtureTables.some((table) => table.metadata?.collapsedInOverview === true)) {
+  fail("unified tables should stay visible on overview under Catalog data");
+} else {
+  pass(
+    `Catalog data overview collapses ${collapsedDataLeaves.length} database/schema leaf(ves); tables stay visible`,
+  );
+}
+
 const fixtureColumns = fixtureGraph.nodes.filter((node) => node.kind === "column");
 const columnsByTableKey = new Map();
 for (const column of fixtureColumns) {
