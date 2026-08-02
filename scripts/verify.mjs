@@ -30,6 +30,7 @@ const miniGraphqlRoot = path.join(repoRoot, "verification", "mini-graphql");
 const miniDockerRoot = path.join(repoRoot, "verification", "mini-docker");
 const miniTerraformRoot = path.join(repoRoot, "verification", "mini-terraform");
 const miniK8sRoot = path.join(repoRoot, "verification", "mini-k8s");
+const miniHelmRoot = path.join(repoRoot, "verification", "mini-helm");
 
 function fail(message) {
   console.error(`VERIFY FAIL: ${message}`);
@@ -117,6 +118,7 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file.includes("mini-docker/") ||
         file.includes("mini-terraform/") ||
         file.includes("mini-k8s/") ||
+        file.includes("mini-helm/") ||
         file === ".underdelta-real" ||
         file.startsWith(".underdelta-real/") ||
         file.includes("/.underdelta-real/")
@@ -510,6 +512,7 @@ const extractorRoster = Array.isArray(extractorsSystem?.metadata?.extractorRoste
 const requiredExtractors = [
   "docker",
   "graphql",
+  "helm",
   "kubernetes",
   "mongo",
   "openapi",
@@ -536,6 +539,7 @@ const extractorKeyFiles = Array.isArray(extractorsSystem?.metadata?.keyFiles)
 const requiredExtractorFiles = [
   "src/extractors/docker.ts",
   "src/extractors/graphql.ts",
+  "src/extractors/helm.ts",
   "src/extractors/kubernetes.ts",
   "src/extractors/mongo.ts",
   "src/extractors/openapi.ts",
@@ -7335,7 +7339,274 @@ if (k8sRealRoot) {
         "kubernetes-real-repo has no Checkout/orders commerce collaboration noise",
       );
     }
+
+    // Helm extractor must stay honest on Boutique: Chart.yaml is real product
+    // surface, but Go-templated template names must never become Deploy units.
+    const boutiqueHelmResources = k8sRealGraph.nodes.filter(
+      (node) => node.metadata?.helmResource === true,
+    );
+    const boutiqueHelmTemplateChrome = boutiqueHelmResources.filter((node) =>
+      /\{\{/.test(
+        `${node.label ?? ""} ${node.metadata?.resourceName ?? ""} ${node.metadata?.address ?? ""}`,
+      ),
+    );
+    if (boutiqueHelmTemplateChrome.length > 0) {
+      fail(
+        `kubernetes-real-repo helm extractor should skip {{ template names; found ${boutiqueHelmTemplateChrome
+          .map((node) => node.label)
+          .slice(0, 8)
+          .join(", ")}`,
+      );
+    } else {
+      pass("kubernetes-real-repo helm extractor skips {{ template resource names");
+    }
+    if (boutiqueHelmResources.length > 0) {
+      fail(
+        `kubernetes-real-repo expected 0 concrete helm template resources (all names are {{ .Values }}), found ${boutiqueHelmResources.length}`,
+      );
+    } else {
+      pass("kubernetes-real-repo has no concrete helm template resources");
+    }
+    const boutiqueHelmChart = k8sRealGraph.nodes.find(
+      (node) =>
+        node.metadata?.helmChart === true &&
+        node.metadata?.chartName === "onlineboutique",
+    );
+    if (!boutiqueHelmChart) {
+      fail(
+        "kubernetes-real-repo expected Helm Chart/onlineboutique from helm-chart/Chart.yaml",
+      );
+    } else {
+      pass("kubernetes-real-repo surfaces Helm Chart/onlineboutique");
+    }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Capability ladder rung 10 prep: Helm charts extractor + mini-helm smoke.
+// ---------------------------------------------------------------------------
+const miniHelmGraph = await compileRepository(miniHelmRoot);
+const miniHelmServices = miniHelmGraph.nodes.filter(
+  (node) => node.kind === "service" && node.metadata?.helm === true,
+);
+const miniHelmServiceLabels = miniHelmServices.map((node) => node.label);
+console.log(
+  `Mini-helm graph: ${miniHelmGraph.nodes.length} nodes, ${miniHelmGraph.edges.length} edges → services ${[...new Set(miniHelmServiceLabels)].sort().join(", ")}`,
+);
+
+const miniHelmProduct = miniHelmGraph.nodes.find((node) => node.kind === "product");
+if (!miniHelmProduct || miniHelmProduct.label !== "Mini Helm notes") {
+  fail(
+    `mini-helm product label expected 'Mini Helm notes', found '${miniHelmProduct?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-helm product labeled Mini Helm notes");
+}
+
+const miniHelmExtractors = miniHelmGraph.extractors.map((item) => item.id);
+if (!miniHelmExtractors.includes("helm")) {
+  fail(
+    `mini-helm graph.extractors missing helm; found ${JSON.stringify(miniHelmExtractors)}`,
+  );
+} else {
+  pass("mini-helm registers helm extractor");
+}
+
+const miniHelmChart = miniHelmServices.find(
+  (node) => node.metadata?.helmChart === true,
+);
+if (
+  !miniHelmChart ||
+  miniHelmChart.metadata?.chartName !== "notes" ||
+  miniHelmChart.label !== "Notes · Chart"
+) {
+  fail(
+    `mini-helm missing Notes · Chart; found chartName=${miniHelmChart?.metadata?.chartName ?? "(missing)"} label=${miniHelmChart?.label ?? "(missing)"}`,
+  );
+} else {
+  pass("mini-helm has Notes · Chart from Chart.yaml");
+}
+
+const miniHelmResources = miniHelmServices.filter(
+  (node) => node.metadata?.helmResource === true,
+);
+const miniHelmAddresses = new Set(
+  miniHelmResources.map((node) => node.metadata?.address),
+);
+for (const expected of [
+  "Deployment/api",
+  "Service/api",
+  "Deployment/web",
+  "Ingress/notes",
+]) {
+  if (!miniHelmAddresses.has(expected)) {
+    fail(
+      `mini-helm missing resource ${expected}; found ${[...miniHelmAddresses].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-helm has resource ${expected}`);
+  }
+}
+
+for (const expected of [
+  "API · Deployment",
+  "API · Service",
+  "Web · Deployment",
+  "Notes · notes.example.com",
+]) {
+  if (!miniHelmServiceLabels.includes(expected)) {
+    fail(
+      `mini-helm missing humanized service label ${expected}; found ${miniHelmServiceLabels.join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-helm service label ${expected}`);
+  }
+}
+
+const miniHelmNeedsEdges = miniHelmGraph.edges.filter(
+  (edge) =>
+    edge.kind === "depends-on" &&
+    edge.label === "needs" &&
+    miniHelmServices.some((node) => node.id === edge.source) &&
+    miniHelmServices.some((node) => node.id === edge.target),
+);
+const miniHelmNeedsPairs = new Set(
+  miniHelmNeedsEdges.map((edge) => {
+    const from = miniHelmServices.find((node) => node.id === edge.source);
+    const to = miniHelmServices.find((node) => node.id === edge.target);
+    return `${from?.metadata?.k8sKind}/${from?.metadata?.resourceName}→${to?.metadata?.k8sKind}/${to?.metadata?.resourceName}`;
+  }),
+);
+for (const expected of [
+  "Service/api→Deployment/api",
+  "Ingress/notes→Service/api",
+]) {
+  if (!miniHelmNeedsPairs.has(expected)) {
+    fail(
+      `mini-helm missing selector/backend needs edge ${expected}; found ${[...miniHelmNeedsPairs].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-helm needs ${expected}`);
+  }
+}
+
+const miniHelmSemantic = miniHelmGraph.nodes.filter(
+  (node) => node.metadata?.projection === "semantic",
+);
+const miniHelmByKey = new Map(
+  miniHelmSemantic
+    .filter((node) => typeof node.metadata?.systemKey === "string")
+    .map((node) => [node.metadata.systemKey, node]),
+);
+const miniHelmDeploy = miniHelmByKey.get("deploy");
+if (!miniHelmDeploy || miniHelmDeploy.label !== "Charts") {
+  fail(
+    `mini-helm Deploy label expected 'Charts' from README, found '${miniHelmDeploy?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-helm Deploy labeled Charts");
+}
+
+const nestedHelmServices = miniHelmServices.filter(
+  (node) => node.parentId === miniHelmDeploy?.id,
+);
+if (nestedHelmServices.length < 5) {
+  fail(
+    `mini-helm expected ≥5 helm units (chart + 4 resources) nested under Charts, found ${nestedHelmServices.length}`,
+  );
+} else {
+  pass(`mini-helm ${nestedHelmServices.length} units nested under Charts`);
+}
+
+const helmOverviewLeaves = nestedHelmServices.filter(
+  (node) => node.metadata?.collapsedInOverview !== true,
+);
+if (helmOverviewLeaves.length > 0) {
+  fail(
+    `mini-helm overview should collapse Chart/Deployments/Services/Ingress under Charts, still visible: ${helmOverviewLeaves
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-helm overview collapses resources under Charts");
+}
+
+const miniHelmFlow = miniHelmSemantic
+  .filter((node) => typeof node.metadata?.flowOrder === "number")
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+if (
+  miniHelmFlow.length !== 1 ||
+  miniHelmFlow[0]?.metadata?.systemKey !== "deploy"
+) {
+  fail(
+    `mini-helm flowOrder expected Charts/Deploy, got ${miniHelmFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `mini-helm flowOrder: ${miniHelmFlow.map((node) => node.label).join(" → ")}`,
+  );
+}
+
+const miniHelmModules = miniHelmGraph.nodes.filter(
+  (node) => node.kind === "module" && node.metadata?.helmModule === true,
+);
+const miniHelmChartModule = miniHelmModules.find((node) =>
+  /(?:^|\/)charts\/notes\/Chart\.ya?ml$/i.test(
+    String(node.metadata?.file ?? node.label).replaceAll("\\", "/"),
+  ),
+);
+if (
+  !miniHelmChartModule ||
+  miniHelmChartModule.parentId !== miniHelmDeploy?.id ||
+  miniHelmChartModule.metadata?.collapsedInOverview !== true
+) {
+  fail(
+    `mini-helm charts/notes/Chart.yaml should nest+collapse under Charts, found parent=${miniHelmChartModule?.parentId ?? "(missing)"} collapsed=${miniHelmChartModule?.metadata?.collapsedInOverview}`,
+  );
+} else {
+  pass("mini-helm charts/notes/Chart.yaml nested+collapsed under Charts");
+}
+
+const helmEvidenceGaps = miniHelmResources.filter((node) => {
+  const detail = node.evidence?.[0]?.detail ?? "";
+  return !/^kind:/.test(detail);
+});
+if (helmEvidenceGaps.length > 0) {
+  fail(
+    `mini-helm evidence should cite kind: ${helmEvidenceGaps
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-helm evidence details cite kind:");
+}
+
+const helmTemplateChrome = miniHelmServices.filter((node) =>
+  /\{\{/.test(
+    `${node.label ?? ""} ${node.metadata?.resourceName ?? ""} ${node.metadata?.address ?? ""}`,
+  ),
+);
+if (helmTemplateChrome.length > 0) {
+  fail(
+    `mini-helm should not surface {{ template chrome; found ${helmTemplateChrome
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-helm has no {{ template chrome");
+}
+
+const helmCommerceNoise = miniHelmGraph.edges.some((edge) =>
+  /checkout|orders?/i.test(
+    `${edge.label ?? ""} ${JSON.stringify(edge.metadata ?? {})}`,
+  ),
+);
+if (helmCommerceNoise) {
+  fail(
+    "mini-helm should not inherit Checkout/orders commerce collaboration copy",
+  );
+} else {
+  pass("mini-helm has no Checkout/orders commerce collaboration noise");
 }
 
 if (process.exitCode) {

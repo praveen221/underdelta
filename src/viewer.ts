@@ -678,6 +678,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       "kubernetes", "kubernetesResource", "kubernetesModule",
       "k8sKind", "resourceName", "apiVersion", "namespace", "address",
       "selector", "matchLabels", "hosts", "backendServices", "kustomizeChrome",
+      // Helm Chart.yaml + templates — Chart/version + kind/name owned by Chart section.
+      "helm", "helmChart", "helmResource", "helmModule", "helmChartYaml",
+      "helmTemplate", "chartName", "chartVersion", "chartRoot", "appVersion",
       "exampleChrome", "labelSource", "pathRoleLabel", "collapsedInOverview",
       "overviewHub",
     ]);
@@ -795,6 +798,46 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       }).join("");
       if (!pills.length && !dependLinks) return "";
       return "<h3>Workload</h3>" + pills.join("") + (dependLinks ? '<p class="table-migrations">' + dependLinks + "</p>" : "");
+    }
+
+    // Helm charts: Chart.yaml identity + template kind/host/needs as product words.
+    function chartStoryHtml(node, connections) {
+      if (node.kind !== "service" || !(node.metadata && node.metadata.helm)) {
+        return "";
+      }
+      const meta = node.metadata || {};
+      const pills = [];
+      if (meta.helmChart) {
+        pills.push('<span class="pill">Chart</span>');
+        if (typeof meta.chartVersion === "string" && meta.chartVersion) {
+          pills.push('<span class="pill">Version: ' + meta.chartVersion + "</span>");
+        }
+        if (typeof meta.appVersion === "string" && meta.appVersion) {
+          pills.push('<span class="pill">App: ' + meta.appVersion + "</span>");
+        }
+      }
+      if (typeof meta.k8sKind === "string" && meta.k8sKind) {
+        pills.push('<span class="pill">Kind: ' + meta.k8sKind + "</span>");
+      }
+      if (typeof meta.chartName === "string" && meta.chartName && meta.helmResource) {
+        pills.push('<span class="pill">Chart: ' + meta.chartName + "</span>");
+      }
+      const hosts = Array.isArray(meta.hosts) ? meta.hosts.filter(Boolean) : [];
+      if (hosts.length) {
+        pills.push('<span class="pill">Host: ' + hosts.join(", ") + "</span>");
+      }
+      const depends = connections.filter((edge) => {
+        if (edge.kind !== "depends-on") return false;
+        if (edge.source !== node.id) return false;
+        const other = byId.get(edge.target);
+        return !!(other && other.kind === "service" && other.metadata && other.metadata.helm);
+      });
+      const dependLinks = depends.slice(0, 8).map((edge) => {
+        const other = byId.get(edge.target);
+        return '<button class="pill connection" data-id="' + (other?.id || "") + '">needs · ' + (other?.label || "chart unit") + "</button>";
+      }).join("");
+      if (!pills.length && !dependLinks) return "";
+      return "<h3>Chart</h3>" + pills.join("") + (dependLinks ? '<p class="table-migrations">' + dependLinks + "</p>" : "");
     }
 
     // Unified tables: explain Prisma/SQL dual identity + migration lineage.
@@ -927,6 +970,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const metadata = metadataEntries.map(([key, value]) => '<span class="pill">' + key + ": " + String(value) + "</span>").join("");
       const containerStory = containerStoryHtml(node, connections);
       const workloadStory = workloadStoryHtml(node, connections);
+      const chartStory = chartStoryHtml(node, connections);
       const tableSources = tableSourcesHtml(node, incomingEdges);
       const tableRelations = tableRelationsHtml(node, connections);
       const collabLinks = collaboration.slice(0, 16).map((edge) => collaborationItem(edge, id)).join("");
@@ -948,6 +992,14 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           ) {
             return false;
           }
+          if (
+            node.metadata &&
+            node.metadata.helm &&
+            other.metadata &&
+            other.metadata.helm
+          ) {
+            return false;
+          }
           return true;
         })
         .slice(0, 20)
@@ -956,7 +1008,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const collaborationHtml = collabLinks
         ? "<h3>Collaboration</h3>" + collabLinks
         : "";
-      const structuredSections = containerStory || workloadStory || tableSources || tableRelations || messaging || collabLinks;
+      const structuredSections = containerStory || workloadStory || chartStory || tableSources || tableRelations || messaging || collabLinks;
       const otherHtml = otherLinks
         ? "<h3>" + (collabLinks ? "Imports &amp; calls" : "Connections") + "</h3>" + otherLinks
         : (structuredSections ? "" : "<h3>Connections</h3><p>None visible</p>");
@@ -980,7 +1032,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         const href = "vscode://file/" + graph.project.root.replace(/\\/$/, "") + "/" + item.file + ":" + line;
         return '<div class="evidence"><a href="' + href + '">' + item.file + ":" + line + '</a><div class="certainty ' + item.certainty + '">' + item.certainty + " · " + item.extractor + "</div>" + (item.detail ? "<p>" + item.detail + "</p>" : "") + "</div>";
       }).join("");
-      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + containerStory + workloadStory + tableSources + tableRelations + messaging + binHtml + rosterHtml + keyFiles + collaborationHtml + otherHtml + "<h3>Source evidence</h3>" + evidence;
+      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + containerStory + workloadStory + chartStory + tableSources + tableRelations + messaging + binHtml + rosterHtml + keyFiles + collaborationHtml + otherHtml + "<h3>Source evidence</h3>" + evidence;
       inspector.querySelector("h2").textContent = node.label;
       inspector.querySelectorAll(".connection").forEach((button) => {
         button.onclick = () => selectNode(button.dataset.id);

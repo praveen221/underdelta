@@ -259,6 +259,12 @@ export function inferSystemKeyFromHeading(heading: string): string | undefined {
         /\bworkloads?\b|\bkubernetes\b|\bk8s\b|\bmanifests?\b/,
       weight: 7,
     },
+    // Helm charts — prefer "Charts"; avoid bare "helm upgrade" how-tos.
+    {
+      key: "deploy",
+      pattern: /\bhelm\s+charts?\b|\bcharts?\b/,
+      weight: 7,
+    },
   ];
 
   let best: { key: string; weight: number } | undefined;
@@ -746,7 +752,7 @@ function quietNonCompilerProductChrome(
 
   // Dockerfile-only Deploy beside API/UI/Data is packaging chrome, not the
   // product story (RealWorld/Petstore ships a Dockerfile). Keep Deploy visible
-  // when Compose / Terraform / Kubernetes units exist — those are real units.
+  // when Compose / Terraform / Kubernetes / Helm units exist — those are real.
   const deploy = systems.get("deploy");
   const hasDeployUnits = Boolean(
     deploy &&
@@ -756,7 +762,9 @@ function quietNonCompilerProductChrome(
           (node.metadata?.dockerService === true ||
             node.metadata?.terraformResource === true ||
             node.metadata?.terraformModuleBlock === true ||
-            node.metadata?.kubernetesResource === true),
+            node.metadata?.kubernetesResource === true ||
+            node.metadata?.helmChart === true ||
+            node.metadata?.helmResource === true),
       ),
   );
   if (deploy) {
@@ -791,7 +799,16 @@ function quietNonCompilerProductChrome(
           node.metadata?.kubernetesResource === true,
       ),
   );
-  if (api && (hasComposeServices || hasKubernetesUnits)) {
+  const hasHelmUnits = Boolean(
+    deploy &&
+      [...nodes.values()].some(
+        (node) =>
+          node.parentId === deploy.id &&
+          (node.metadata?.helmChart === true ||
+            node.metadata?.helmResource === true),
+      ),
+  );
+  if (api && (hasComposeServices || hasKubernetesUnits || hasHelmUnits)) {
     const apiRoutes = [...nodes.values()].filter(
       (node) => node.parentId === api.id && node.kind === "route",
     );
@@ -902,6 +919,20 @@ function isKubernetesModulePath(file: string): boolean {
   );
 }
 
+/** Helm Chart.yaml + templates under charts/helm trees. */
+function isHelmModulePath(file: string): boolean {
+  const normalized = normalizePath(file).toLowerCase();
+  const base = normalized.split("/").pop() ?? "";
+  if (base === "chart.yaml" || base === "chart.yml") return true;
+  if (
+    /(^|\/)charts?\//.test(normalized) ||
+    /(^|\/)helm(?:-?chart)?\//.test(normalized)
+  ) {
+    return /\.ya?ml$/.test(normalized);
+  }
+  return false;
+}
+
 function isFileModule(node: ArchitectureNode): boolean {
   if (node.kind !== "module") return false;
   const file = normalizePath(node.qualifiedName ?? node.label);
@@ -912,8 +943,11 @@ function isFileModule(node: ArchitectureNode): boolean {
     isDockerModulePath(file) ||
     isTerraformModulePath(file) ||
     isKubernetesModulePath(file) ||
+    isHelmModulePath(file) ||
     // Manifest modules emitted by the kubernetes extractor (scattered yaml).
-    (node.metadata?.kubernetesModule === true && /\.ya?ml$/i.test(file))
+    (node.metadata?.kubernetesModule === true && /\.ya?ml$/i.test(file)) ||
+    // Chart/template modules emitted by the helm extractor.
+    (node.metadata?.helmModule === true && /\.ya?ml$/i.test(file))
   );
 }
 
@@ -994,6 +1028,10 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
   }
   // Kubernetes manifests are workload deploy surface.
   if (isKubernetesModulePath(file)) {
+    return { key: "deploy", label: "Deploy", kind: "system" };
+  }
+  // Helm charts / templates are packaged workload deploy surface.
+  if (isHelmModulePath(file)) {
     return { key: "deploy", label: "Deploy", kind: "system" };
   }
   if (
@@ -2106,8 +2144,8 @@ export function projectSemanticArchitecture(
     }
   }
 
-  // Nest Docker / Terraform / Kubernetes units under Deploy so the overview
-  // tells a containers/infra/workloads story instead of a flat service dump.
+  // Nest Docker / Terraform / Kubernetes / Helm units under Deploy so the
+  // overview tells a containers/infra/workloads/charts story.
   const deploySystem = systems.get("deploy");
   if (deploySystem) {
     for (const node of [...nodes.values()]) {
@@ -2115,7 +2153,8 @@ export function projectSemanticArchitecture(
       if (
         node.metadata?.docker !== true &&
         node.metadata?.terraform !== true &&
-        node.metadata?.kubernetes !== true
+        node.metadata?.kubernetes !== true &&
+        node.metadata?.helm !== true
       ) {
         continue;
       }
@@ -2290,12 +2329,13 @@ export function projectSemanticArchitecture(
     if (node.kind === "function" && node.metadata?.serverAction !== true) {
       continue;
     }
-    // Only collapse Docker/Terraform/Kubernetes deployables — Extractor roster stays.
+    // Only collapse Docker/Terraform/Kubernetes/Helm deployables — Extractor roster stays.
     if (
       node.kind === "service" &&
       node.metadata?.docker !== true &&
       node.metadata?.terraform !== true &&
       node.metadata?.kubernetes !== true &&
+      node.metadata?.helm !== true &&
       node.metadata?.role !== "extractor"
     ) {
       continue;
@@ -2466,6 +2506,30 @@ export function projectSemanticArchitecture(
       typeof node.metadata?.resourceName === "string"
     ) {
       // Deployment/api → API · Deployment; Ingress/notes → Notes · host
+      const hosts = Array.isArray(node.metadata.hosts)
+        ? node.metadata.hosts.filter(
+            (host): host is string => typeof host === "string" && Boolean(host),
+          )
+        : undefined;
+      nextLabel = humanizeKubernetesLabel(
+        node.metadata.k8sKind,
+        node.metadata.resourceName,
+        hosts,
+      );
+    } else if (
+      node.kind === "service" &&
+      node.metadata?.helmChart === true &&
+      typeof node.metadata?.chartName === "string"
+    ) {
+      // Chart/notes → Notes · Chart
+      nextLabel = `${humanizeIdentifierLabel(node.metadata.chartName)} · Chart`;
+    } else if (
+      node.kind === "service" &&
+      node.metadata?.helmResource === true &&
+      typeof node.metadata?.k8sKind === "string" &&
+      typeof node.metadata?.resourceName === "string"
+    ) {
+      // Helm template Deployment/api → API · Deployment (same canvas vocabulary).
       const hosts = Array.isArray(node.metadata.hosts)
         ? node.metadata.hosts.filter(
             (host): host is string => typeof host === "string" && Boolean(host),
@@ -3541,8 +3605,9 @@ export function projectSemanticArchitecture(
   }
 
   // Quiet empty CLI / Schema-contract / table-less Data chrome, Dockerfile-only
-  // Deploy, and thin/empty HTTP API beside Compose/Kubernetes Deploy so product
-  // overviews stay story-led (API for GraphQL/OpenAPI; Deploy for containers/k8s).
+  // Deploy, and thin/empty HTTP API beside Compose/Kubernetes/Helm Deploy so
+  // product overviews stay story-led (API for GraphQL/OpenAPI; Deploy for
+  // containers/k8s/charts).
   quietNonCompilerProductChrome(
     systems,
     nodes,

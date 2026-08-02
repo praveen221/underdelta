@@ -10,6 +10,7 @@ import {
 import { GraphBuilder, edgeFrom, stableId } from "./graph.js";
 import { dockerExtractor } from "./extractors/docker.js";
 import { graphqlExtractor } from "./extractors/graphql.js";
+import { helmExtractor } from "./extractors/helm.js";
 import { kubernetesExtractor } from "./extractors/kubernetes.js";
 import { mongoExtractor } from "./extractors/mongo.js";
 import { openapiExtractor } from "./extractors/openapi.js";
@@ -126,6 +127,7 @@ export async function compileRepository(
     dockerExtractor,
     terraformExtractor,
     kubernetesExtractor,
+    helmExtractor,
     prismaExtractor,
     sqlExtractor,
   ];

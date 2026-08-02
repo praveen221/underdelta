@@ -201,6 +201,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 9: pin `GoogleCloudPlatform/microservices-demo` @ `9a4616e77f0f9cbcbecaf27d711c38890dda1404`; clone into gitignored `.underdelta-real/microservices-demo`; path-match `kubernetes-manifests/`; skip Helm/`{{` + `.github` CI chrome; bold-README product title Online Boutique; golden-lock 23+ Deployments/Services nested/collapsed under Deploy
 - [x] Rung 9 polish: Service→Deployment selector/needs edges + Ingress host labels; quiet thin/empty HTTP API + kustomize/ overlay chrome beside Deploy (Deploy-only flowOrder)
 - [x] Rung 9 polish/lock: Online Boutique compound-name humanize (`Product catalog service` / `Load generator` / `Shopping assistant service` / `OpenTelemetry collector`) via glued-name lexicon; golden-lock — **Rung 9 locked**
+- [x] Rung 10 prep: Helm charts extractor — `Chart.yaml` + `templates/` Deploy units; path-role `charts/`/`helm/`/`helm-chart/`; README Charts; `verification/mini-helm` smoke floors + Extractors roster `helm`; keep Boutique `{{` template skip honest (Chart/onlineboutique only, zero concrete helmResources)
 
 ### Real-repo pins (Capability ladder)
 
@@ -220,8 +221,8 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 10 prep: Helm charts extractor — `Chart.yaml` + `templates/` Deploy units (or richer Kustomize overlays that stay product-visible); `verification/mini-helm` smoke + Extractors roster; keep Boutique Helm `{{` skip honest
-- [ ] Rung 10: pin a real Helm-chart OSS repo (SHA + gitignored clone) and golden-lock Deploy story
+- [ ] Rung 10: pin a real Helm-chart OSS repo (SHA + gitignored clone) and golden-lock Deploy story (concrete template names — not Boutique-style `{{ .Values }}` only)
+- [ ] Rung 10 polish: quiet Chart-only chrome beside kubernetes-manifests when every template name is `{{` (Boutique Chart/onlineboutique should not compete with Deploy-led manifests)
 - [ ] GraphQL `schema { query: Root }` / non-Query root types (SWAPI-style) if a later pin needs it
 - [ ] Standing polish: Underdelta self-map cold-read pass — leftover jargon labels or weak hierarchy
 
@@ -229,7 +230,7 @@ Keep **at least 3 unchecked items** here at all times (refill from Self-renewing
 
 Not a full roadmap — a menu the agent may reorder. Pick what most improves the **Capability ladder** now.
 
-- Rung 10+: richer Kustomize product overlays (non-chrome) after Helm prep
+- Rung 10+: richer Kustomize product overlays (non-chrome) after Helm lock
 - GraphQL `extend type Query` / schema stitching if a real-repo pin needs it
 - OAS3 `servers` / `$ref` path-item resolution if a later OpenAPI pin needs it
 - Performance pass only if scanning a real repo becomes painfully slow
@@ -237,7 +238,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Rung 9 locked — Online Boutique compound-name humanize). Now start Rung 10 prep: Helm charts extractor + `verification/mini-helm` smoke so templated Deploy maps climb past skipped `{{` chrome.
+> **Next focus:** This work is done (Rung 10 prep — Helm `Chart.yaml` + concrete `templates/` Deploy units + mini-helm Charts smoke; Boutique `{{` stay skipped). Now pin a real Helm-chart OSS repo (SHA + gitignored clone) and golden-lock its Deploy story.
 
 ### Learning log (append every tick)
 
@@ -315,6 +316,8 @@ Append short bullets like:
 - 2026-08-02 06:39 UTC | Done: Rung 9 polish — Service selector→Deployment matchLabels + Ingress backend→Service `needs` edges; Ingress host canvas labels (`Notes · notes.example.com`); quiet empty path-role HTTP API (`server.js`) + `kustomize/` overlay chrome beside Deploy; golden-lock Deploy-only flowOrder + needs pairs | Next: Online Boutique compound-name polish then lock Rung 9 | Learned: Boutique invents HTTP API from bare `server.js` path-role modules with zero routes — thin-API quiet must treat empty route sets, not only `/`/`/health`; Ingress `host:` lives on list items (`- host:`) so the regex needs optional `-`; `kustomize/components` optional overlays should quiet like Terraform examples, not compete with kubernetes-manifests
 
 - 2026-08-02 06:45 UTC | Done: Rung 9 locked — lexicon `splitGluedKubernetesName` (`productcatalogservice` → Product catalog service, `loadgenerator` → Load generator, `shoppingassistantservice` → Shopping assistant service, `opentelemetrycollector` → OpenTelemetry collector); golden-lock primary + kustomize Details labels; promote Helm as Rung 10 | Next: Rung 10 Helm charts extractor + mini-helm fixture | Learned: trailing-`service` camelCase alone leaves Boutique compounds glued (`Productcatalog`); longest-first product lexicon → camelCase → humanizeIdentifierLabel reuses acronym/sentence casing; `opentelemetry` must be a MIXED_CASE product word or it becomes shouty OPENTELEMETRY / weak “Open telemetry”
+
+- 2026-08-02 06:47 UTC | Done: Rung 10 prep — `src/extractors/helm.ts` Chart.yaml + concrete `templates/` resources → Deploy; path-role charts/helm/helm-chart; README Charts; mini-helm Notes · Chart + API/Web/Ingress nested/collapsed; roster `helm`; Boutique keeps zero helmResources (all `{{ .Values }}`) while Chart/onlineboutique surfaces; golden-lock | Next: pin real Helm-chart OSS repo + golden-lock | Learned: kubernetes extractor must keep skipping charts/ so Helm owns templated trees; Chart.yaml is honest product surface even when every template name is Go-templated — next polish should quiet Chart-only chrome beside kubernetes-manifests; reuse parseKubernetesResources + `{{` name filter rather than rendering Helm
 
 ---
 
