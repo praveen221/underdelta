@@ -120,9 +120,8 @@ for (const expected of [
   }
 }
 
-const fixtureSystems = fixtureGraph.nodes.filter((node) =>
-  ["system", "pipeline", "api", "ui"].includes(node.kind) &&
-  node.metadata?.projection === "semantic",
+const fixtureSystems = fixtureGraph.nodes.filter(
+  (node) => node.metadata?.projection === "semantic",
 );
 if (fixtureSystems.length < 3) {
   fail(
@@ -130,6 +129,51 @@ if (fixtureSystems.length < 3) {
   );
 } else {
   pass(`fixture semantic systems: ${fixtureSystems.length}`);
+}
+
+const fixtureLabels = new Set(fixtureSystems.map((node) => node.label));
+for (const expected of [
+  "HTTP API",
+  "Scheduled jobs",
+  "Queue workers",
+  "Pipelines",
+  "Data access",
+  "UI",
+]) {
+  if (!fixtureLabels.has(expected)) {
+    fail(`fixture self-map missing semantic node '${expected}'`);
+  } else {
+    pass(`fixture has '${expected}'`);
+  }
+}
+
+const fixtureTables = fixtureGraph.nodes.filter((node) => node.kind === "table");
+// After projection, Order/order/orders and Payment/payment/payments collapse.
+if (fixtureTables.length > 4) {
+  fail(
+    `expected deduped tables (<=4), found ${fixtureTables.length}: ${fixtureTables
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass(`fixture tables deduped to ${fixtureTables.length}`);
+}
+
+const api = fixtureSystems.find((node) => node.label === "HTTP API");
+const routesUnderApi =
+  api &&
+  fixtureGraph.edges.filter(
+    (edge) =>
+      edge.kind === "contains" &&
+      edge.source === api.id &&
+      fixtureGraph.nodes.some(
+        (node) => node.id === edge.target && node.kind === "route",
+      ),
+  ).length;
+if (!routesUnderApi) {
+  fail("expected HTTP API system to contain route nodes");
+} else {
+  pass(`HTTP API contains ${routesUnderApi} route(s)`);
 }
 
 if (process.exitCode) {

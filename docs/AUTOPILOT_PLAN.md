@@ -45,17 +45,21 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Underdelta self-map projects CLI → Compile → Extractors → Graph → Viewer (+ Schema)
 - [x] Viewer defaults to Systems lane; modules/functions behind Details toggle
 - [x] `npm run verify` asserts self-map semantic nodes + fixture projection
+- [x] Diagram quality pass: nest routes/cron/queue/pipelines/UI under systems
+- [x] Dedupe Prisma/SQL/usage table aliases (Order/orders → one table)
+- [x] Distinguish Viewer vs UI projection labels; hide pipeline-steps by default
+- [x] Richer verify: fixture system labels, table dedupe, API contains routes
 
 ### In progress / next
 
-- [ ] Full diagram quality pass for mini-stack (richer edges, fewer noise nodes, lane clarity)
-- [ ] Stronger evidence linking from systems back to key source files in the inspector
+- [ ] Overview layout: rank/position systems by flows-to so the browser reads left-to-right
 - [ ] Expand projection heuristics beyond filename conventions (package exports, README roles)
+- [ ] Surface architecture.json / output artifact as an explicit node in Underdelta self-map
 - [ ] Expand verify assertions as new architectural kinds become extractable
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (semantic projection + self-map systems). Now improve full diagram quality for the mini-stack and Underdelta overview: tighter system flows, better lane placement for projected UI/API/pipeline nodes, and richer verify checks so the default browser reads as a complete product architecture.
+> **Next focus:** This work is done (diagram quality + table dedupe + richer verify). Now make the default browser layout follow product flow (systems ordered by flows-to / depends-on) and add an explicit `architecture.json` output artifact node to the Underdelta self-map so the compile → viewer story is complete.
 
 ### Learning log (append every tick)
 
@@ -68,6 +72,7 @@ Append short bullets like:
 - 2026-08-02 | Done: created living autopilot plan | Next: verification mini-system | Learned: loop needs explicit non-interrupt + plan-file updates to stay coherent overnight
 - 2026-08-02 02:10 UTC | Done: verification/mini-stack + npm run verify + Pipeline extraction + ignore verification/ | Next: semantic projection for Underdelta self-map | Learned: fixture must be scanned as its own root; directory-name ignores keep product diagrams clean without deleting the suite
 - 2026-08-02 02:28 UTC | Done: semantic projection + self-map systems + Details toggle | Next: diagram quality pass | Learned: Autopilot does not self-wake between ticks—each 15m iteration needs a new agent trigger; path-role projection is enough to turn a module hairball into CLI/Compile/Extractors/Graph/Viewer
+- 2026-08-02 02:32 UTC | Done: nest runtime nodes under systems, dedupe tables, UI vs Viewer, richer verify | Next: flow-ordered layout + architecture.json artifact node | Learned: Prisma+SQL+usage tables triple-count without normalization; high-signal nodes must be reparented onto systems or the overview still feels like a parts bin
 
 ---
 

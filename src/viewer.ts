@@ -139,10 +139,10 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       { name: "Application", kinds: ["route"] },
       { name: "Data & automation", kinds: ["database", "schema", "table", "collection", "cron", "job", "queue", "topic", "pipeline-step"] },
       { name: "External", kinds: ["external", "config", "unknown"] },
-      { name: "Details", kinds: ["module", "function", "column"] }
+      { name: "Details", kinds: ["module", "function", "column", "pipeline-step"] }
     ];
-    // Default view prefers product systems over raw modules/functions.
-    const hiddenByDefault = new Set(["function", "column", "module"]);
+    // Default view prefers product systems over raw modules/functions/steps.
+    const hiddenByDefault = new Set(["function", "column", "module", "pipeline-step"]);
     const state = { scale: 1, x: 36, y: 40, dragging: false, startX: 0, startY: 0, focus: null, selected: null, implementation: false, history: [] };
     const viewport = document.getElementById("viewport");
     const world = document.getElementById("world");
