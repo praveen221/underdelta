@@ -16,6 +16,7 @@ const repoRoot = path.resolve(__dirname, "..");
 const fixtureRoot = path.join(repoRoot, "verification", "mini-stack");
 const miniNextRoot = path.join(repoRoot, "verification", "mini-next");
 const miniPythonRoot = path.join(repoRoot, "verification", "mini-python");
+const miniMongoRoot = path.join(repoRoot, "verification", "mini-mongo");
 
 function fail(message) {
   console.error(`VERIFY FAIL: ${message}`);
@@ -97,6 +98,7 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file.includes("mini-stack/") ||
         file.includes("mini-next/") ||
         file.includes("mini-python/") ||
+        file.includes("mini-mongo/") ||
         file === ".underdelta-real" ||
         file.startsWith(".underdelta-real/") ||
         file.includes("/.underdelta-real/")
@@ -465,7 +467,7 @@ const extractorsSystem = selfGraph.nodes.find(
 const extractorRoster = Array.isArray(extractorsSystem?.metadata?.extractorRoster)
   ? extractorsSystem.metadata.extractorRoster
   : [];
-const requiredExtractors = ["prisma", "python", "sql", "typescript"];
+const requiredExtractors = ["mongo", "prisma", "python", "sql", "typescript"];
 const missingExtractors = requiredExtractors.filter(
   (id) => !extractorRoster.includes(id),
 );
@@ -481,6 +483,7 @@ const extractorKeyFiles = Array.isArray(extractorsSystem?.metadata?.keyFiles)
   ? extractorsSystem.metadata.keyFiles
   : [];
 const requiredExtractorFiles = [
+  "src/extractors/mongo.ts",
   "src/extractors/prisma.ts",
   "src/extractors/python.ts",
   "src/extractors/sql.ts",
@@ -2841,6 +2844,206 @@ if (miniPythonVisibleChrome.length > 0) {
   );
 } else {
   pass("mini-python module chrome collapsed on overview");
+}
+
+// ---------------------------------------------------------------------------
+// Capability ladder rung 4: MongoDB collections fixture (verification/mini-mongo).
+// Golden-lock mongoose.model + Schema collection → Data access collections,
+// Notes API routes, Catalog data README label, API→Data flow/uses:query.
+// ---------------------------------------------------------------------------
+const miniMongoGraph = await compileRepository(miniMongoRoot);
+const miniMongoRoutes = miniMongoGraph.nodes.filter(
+  (node) => node.kind === "route",
+);
+const miniMongoRouteLabels = new Set(
+  miniMongoRoutes.map((node) => node.label),
+);
+console.log(
+  `Mini-mongo graph: ${miniMongoGraph.nodes.length} nodes, ${miniMongoGraph.edges.length} edges → routes ${[...miniMongoRouteLabels].sort().join(", ")}`,
+);
+
+const miniMongoProduct = miniMongoGraph.nodes.find(
+  (node) => node.kind === "product",
+);
+if (!miniMongoProduct || miniMongoProduct.label !== "Mini Mongo notes") {
+  fail(
+    `mini-mongo product label expected 'Mini Mongo notes', found '${miniMongoProduct?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-mongo product labeled Mini Mongo notes");
+}
+
+for (const expected of ["GET /notes", "POST /notes", "GET /health"]) {
+  if (!miniMongoRouteLabels.has(expected)) {
+    fail(
+      `mini-mongo missing route ${expected}; found ${[...miniMongoRouteLabels].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-mongo has route ${expected}`);
+  }
+}
+
+const miniMongoExtractors = miniMongoGraph.extractors.map((item) => item.id);
+if (!miniMongoExtractors.includes("mongo")) {
+  fail(
+    `mini-mongo graph.extractors missing mongo; found ${JSON.stringify(miniMongoExtractors)}`,
+  );
+} else {
+  pass("mini-mongo registers mongo extractor");
+}
+
+const miniMongoSystems = miniMongoGraph.nodes.filter(
+  (node) => node.metadata?.projection === "semantic",
+);
+const miniMongoByKey = new Map(
+  miniMongoSystems
+    .filter((node) => typeof node.metadata?.systemKey === "string")
+    .map((node) => [node.metadata.systemKey, node]),
+);
+const miniMongoApi = miniMongoByKey.get("api");
+if (!miniMongoApi || miniMongoApi.label !== "Notes API") {
+  fail(
+    `mini-mongo API label expected 'Notes API' from README, found '${miniMongoApi?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-mongo API labeled Notes API");
+}
+
+const miniMongoData = miniMongoByKey.get("data");
+if (!miniMongoData || miniMongoData.label !== "Catalog data") {
+  fail(
+    `mini-mongo data system label expected 'Catalog data' from README, found '${miniMongoData?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-mongo data system labeled Catalog data");
+}
+
+const miniMongoCollections = miniMongoGraph.nodes.filter(
+  (node) => node.kind === "collection",
+);
+const miniMongoCollectionLabels = new Set(
+  miniMongoCollections.map((node) => node.label),
+);
+for (const expected of ["Note", "User", "Tag"]) {
+  if (!miniMongoCollectionLabels.has(expected)) {
+    fail(
+      `mini-mongo missing Mongoose collection ${expected}; found ${[...miniMongoCollectionLabels].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-mongo has collection ${expected}`);
+  }
+}
+
+const miniMongoCollectionsUnderData = miniMongoCollections.filter(
+  (node) => node.parentId === miniMongoData?.id,
+);
+if (miniMongoCollectionsUnderData.length < 3) {
+  fail(
+    `mini-mongo expected ≥3 collections nested under Catalog data, found ${miniMongoCollectionsUnderData.length}`,
+  );
+} else {
+  pass(
+    `mini-mongo ${miniMongoCollectionsUnderData.length} collections nested under Catalog data`,
+  );
+}
+
+if (
+  miniMongoCollectionsUnderData.some(
+    (node) => node.metadata?.collapsedInOverview === true,
+  )
+) {
+  fail("mini-mongo product collections should stay visible on overview");
+} else {
+  pass("mini-mongo product collections visible under Catalog data on overview");
+}
+
+const miniMongoRoutesUnderApi = miniMongoRoutes.filter(
+  (node) => node.parentId === miniMongoApi?.id,
+);
+if (miniMongoRoutesUnderApi.length < 3) {
+  fail(
+    `mini-mongo expected ≥3 routes nested under Notes API, found ${miniMongoRoutesUnderApi.length}`,
+  );
+} else {
+  pass(`mini-mongo ${miniMongoRoutesUnderApi.length} routes nested under Notes API`);
+}
+
+const miniMongoCollapsedRoutes = miniMongoRoutesUnderApi.filter(
+  (node) => node.metadata?.collapsedInOverview === true,
+);
+if (miniMongoCollapsedRoutes.length < 3) {
+  fail(
+    `mini-mongo overview should collapse routes under Notes API (collapsed=${miniMongoCollapsedRoutes.length})`,
+  );
+} else {
+  pass("mini-mongo overview collapses routes under Notes API");
+}
+
+const miniMongoFlow = miniMongoSystems
+  .filter((node) => typeof node.metadata?.flowOrder === "number")
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+const miniMongoFlowKeys = miniMongoFlow.map((node) => node.metadata.systemKey);
+if (
+  !miniMongoFlowKeys.includes("api") ||
+  !miniMongoFlowKeys.includes("data")
+) {
+  fail(
+    `mini-mongo flowOrder expected Notes API → Catalog data, got ${miniMongoFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `mini-mongo flowOrder: ${miniMongoFlow.map((node) => node.label).join(" → ")}`,
+  );
+}
+
+const miniMongoUsesQuery = miniMongoGraph.edges.some(
+  (edge) =>
+    edge.kind === "uses" &&
+    edge.label === "query" &&
+    edge.source === miniMongoApi?.id &&
+    edge.target === miniMongoData?.id,
+);
+if (!miniMongoUsesQuery) {
+  fail("mini-mongo expected Notes API -[uses:query]-> Catalog data");
+} else {
+  pass("mini-mongo collaboration: Notes API -[uses:query]-> Catalog data");
+}
+
+const miniMongoCommerceNoise = miniMongoGraph.edges.some((edge) =>
+  /checkout|orders?/i.test(
+    `${edge.label ?? ""} ${edge.metadata?.detail ?? ""}`,
+  ),
+);
+if (miniMongoCommerceNoise) {
+  fail("mini-mongo should not inherit Checkout/orders commerce collaboration copy");
+} else {
+  pass("mini-mongo has no Checkout/orders commerce collaboration noise");
+}
+
+const miniMongoMongooseTech = miniMongoCollections.filter(
+  (node) => node.technology === "mongoose",
+);
+if (miniMongoMongooseTech.length < 3) {
+  fail(
+    `mini-mongo expected ≥3 collections with technology=mongoose, found ${miniMongoMongooseTech.length}`,
+  );
+} else {
+  pass("mini-mongo collections technology=mongoose");
+}
+
+const miniMongoVisibleChrome = miniMongoGraph.nodes.filter(
+  (node) =>
+    node.kind === "module" && node.metadata?.collapsedInOverview !== true,
+);
+if (miniMongoVisibleChrome.length > 0) {
+  fail(
+    `mini-mongo modules should collapse on overview, still visible: ${miniMongoVisibleChrome
+      .slice(0, 8)
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-mongo module chrome collapsed on overview");
 }
 
 // ---------------------------------------------------------------------------

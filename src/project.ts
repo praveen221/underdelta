@@ -624,7 +624,10 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
     /(^|\/)(db|database|orders|reconcile)\.[cm]?[jt]sx?$/.test(file) ||
     file.includes("/prisma/") ||
     /(^|\/)db\//.test(file) ||
-    /(^|\/)database\//.test(file)
+    /(^|\/)database\//.test(file) ||
+    // Mongoose / Mongo model folders commonly live under models/.
+    /(^|\/)models\//.test(file) ||
+    /(^|\/)models\.[cm]?[jt]sx?$/.test(file)
   ) {
     return { key: "data", label: "Data access", kind: "system" };
   }
@@ -891,6 +894,46 @@ function isSqlFamilyTable(node: ArchitectureNode): boolean {
     node.technology === "alembic" ||
     node.technology === "sqlalchemy"
   );
+}
+
+function isMongoCollection(node: ArchitectureNode): boolean {
+  return (
+    node.kind === "collection" &&
+    (node.technology === "mongoose" || node.technology === "mongodb")
+  );
+}
+
+function preferredCollectionLabel(bucket: ArchitectureNode[]): string {
+  const ranked = [...bucket].sort((a, b) => {
+    const rankDiff = collectionRank(b) - collectionRank(a);
+    if (rankDiff !== 0) return rankDiff;
+    return a.id.localeCompare(b.id);
+  });
+  const best = ranked[0]!;
+  // mongoose.model("Note") already carries the product word.
+  if (
+    best.technology === "mongoose" &&
+    !best.metadata?.discoveredFromUsage &&
+    /^[A-Z]/.test(best.label)
+  ) {
+    return best.label;
+  }
+  const raw =
+    (typeof best.metadata?.collectionName === "string"
+      ? best.metadata.collectionName
+      : best.label) ?? best.label;
+  return titleCaseSingular(String(raw));
+}
+
+function collectionRank(node: ArchitectureNode): number {
+  if (node.technology === "mongoose" && !node.metadata?.discoveredFromUsage) {
+    return /^[A-Z]/.test(node.label) ? 3 : 2;
+  }
+  if (node.technology === "mongodb" && !node.metadata?.discoveredFromUsage) {
+    return 2;
+  }
+  if (node.metadata?.discoveredFromUsage) return 1;
+  return 0;
 }
 
 function preferredTableLabel(bucket: ArchitectureNode[]): string {
@@ -1696,6 +1739,124 @@ export function projectSemanticArchitecture(
       (node) => node.kind === "table" && node.parentId === dataSystem.id,
     );
     if (hasTables) {
+      for (const node of nodes.values()) {
+        if (
+          (node.kind === "database" || node.kind === "schema") &&
+          node.parentId === dataSystem.id
+        ) {
+          node.metadata = {
+            ...node.metadata,
+            collapsedInOverview: true,
+          };
+          nodes.set(node.id, node);
+        }
+      }
+    }
+  }
+
+  // Collapse duplicate Mongo collections (Note / notes) and nest under Data.
+  const collectionsByKey = new Map<string, ArchitectureNode[]>();
+  for (const node of nodes.values()) {
+    if (!isMongoCollection(node)) continue;
+    const key = normalizeTableKey(
+      typeof node.metadata?.collectionName === "string"
+        ? node.metadata.collectionName
+        : node.label,
+    );
+    const bucket = collectionsByKey.get(key) ?? [];
+    bucket.push(node);
+    collectionsByKey.set(key, bucket);
+  }
+
+  const collectionRedirect = new Map<string, string>();
+  for (const [key, bucket] of collectionsByKey) {
+    const ranked = [...bucket].sort((a, b) => {
+      const rankDiff = collectionRank(b) - collectionRank(a);
+      if (rankDiff !== 0) return rankDiff;
+      return a.id.localeCompare(b.id);
+    });
+    const canonical = ranked[0]!;
+    const aliases = [
+      ...new Set(
+        ranked
+          .map((node) => node.label)
+          .filter((label) => label !== preferredCollectionLabel(ranked)),
+      ),
+    ];
+    const collectionName =
+      ranked.find(
+        (node) => typeof node.metadata?.collectionName === "string",
+      )?.metadata?.collectionName ??
+      (typeof canonical.metadata?.collectionName === "string"
+        ? canonical.metadata.collectionName
+        : undefined);
+    const sources = [
+      ...new Set(
+        ranked
+          .map((node) => node.technology)
+          .filter((tech): tech is string => Boolean(tech)),
+      ),
+    ];
+    canonical.label = preferredCollectionLabel(ranked);
+    canonical.metadata = {
+      ...canonical.metadata,
+      aliases,
+      normalizedTable: key,
+      ...(collectionName ? { collectionName: String(collectionName) } : {}),
+      sources,
+    };
+    for (const duplicate of ranked.slice(1)) {
+      for (const child of nodes.values()) {
+        if (child.parentId === duplicate.id) {
+          child.parentId = canonical.id;
+          nodes.set(child.id, child);
+        }
+      }
+      collectionRedirect.set(duplicate.id, canonical.id);
+      canonical.evidence.push(...duplicate.evidence);
+      nodes.delete(duplicate.id);
+    }
+    canonical.evidence = dedupeEvidence(canonical.evidence);
+    nodes.set(canonical.id, canonical);
+  }
+
+  if (collectionRedirect.size > 0) {
+    for (const [edgeId, edge] of [...edges.entries()]) {
+      const source = collectionRedirect.get(edge.source) ?? edge.source;
+      const target = collectionRedirect.get(edge.target) ?? edge.target;
+      if (!nodes.has(source) || !nodes.has(target)) {
+        edges.delete(edgeId);
+        continue;
+      }
+      if (source === edge.source && target === edge.target) continue;
+      edges.delete(edgeId);
+      if (source === target) continue;
+      const retargeted = edgeFrom(
+        edge.kind,
+        source,
+        target,
+        edge.evidence[0]!,
+        edge.label,
+      );
+      edges.set(retargeted.id, retargeted);
+    }
+  }
+
+  if (dataSystem) {
+    for (const node of [...nodes.values()]) {
+      if (!isMongoCollection(node)) continue;
+      attachToSystem(
+        node.id,
+        dataSystem.id,
+        node.evidence[0] ?? projectionEvidence("."),
+      );
+    }
+
+    const hasCollections = [...nodes.values()].some(
+      (node) =>
+        isMongoCollection(node) && node.parentId === dataSystem.id,
+    );
+    if (hasCollections) {
       for (const node of nodes.values()) {
         if (
           (node.kind === "database" || node.kind === "schema") &&

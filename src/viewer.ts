@@ -365,9 +365,14 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           if (ao !== null || bo !== null) return (ao ?? 999) - (bo ?? 999) || a.label.localeCompare(b.label);
           return a.kind.localeCompare(b.kind) || a.label.localeCompare(b.label);
         });
-        // Tables: 2-column constellation so favorites/follows edges aren't same-column spaghetti.
-        const tables = laneNodes.filter((node) => node.kind === "table");
-        const nonTables = laneNodes.filter((node) => node.kind !== "table");
+        // Tables + Mongo collections: 2-column constellation so relation edges
+        // aren't same-column spaghetti.
+        const tables = laneNodes.filter(
+          (node) => node.kind === "table" || node.kind === "collection",
+        );
+        const nonTables = laneNodes.filter(
+          (node) => node.kind !== "table" && node.kind !== "collection",
+        );
         let nextY = laneTop + 34;
         if (tables.length >= 2) {
           const colGap = 210;

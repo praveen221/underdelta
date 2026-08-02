@@ -170,6 +170,8 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 3: Celery `@shared_task`/`@app.task` + `beat_schedule`/`add_periodic_task` → job/cron; path-role `tasks.py`/`celery*.py`; mini-python fixture schedules; commerce gate drops bare `jobs`; golden-lock API→Jobs→Data + uses:sync
 - [x] Rung 3 polish: mini-python data story parity — lift `notes_to_tags` → Note→Tag tags (any tagged entity, not Article-only); Note↔User author/authored; quiet module chrome golden-lock
 - [x] Rung 3 lock: North-star schedule hubs — `humanizeCronExpression` (`0 * * * *` → every hour, `*/15` → every 15 minutes); golden-lock mini-python + mini-stack cron phrases, Notes API/HTTP API `uses:query` → Data; **Rung 3 locked**
+- [x] Rung 4 prep: MongoDB collections extractor — `mongoose.model` / bare `model(` / Schema `{ collection }` / `.collection(`; `kind: collection` + technology mongoose|mongodb; nest/dedupe under Data access; `/models/` path-role; Extractors roster includes `mongo`
+- [x] Rung 4: `verification/mini-mongo` fixture (Express Notes API + Mongoose Note/User/Tag) + verify golden floors (Catalog data collections, API→Data uses:query, overview collapse)
 
 ### Real-repo pins (Capability ladder)
 
@@ -183,10 +185,11 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 4: MongoDB collections (+ aggregation pipelines) — extractor sketch, `verification/mini-mongo` fixture floors, then pin a real Mongo-backed OSS repo
+- [ ] Rung 4: pin a real Mongo-backed OSS repo (Mongoose or native driver) at an exact SHA under `.underdelta-real/`; golden-lock collections nested under Data access
+- [ ] Rung 4: Mongo aggregation pipelines (`.aggregate([...])`) → pipeline nodes when present in fixture/real repo
 - [ ] Standing polish: inspector metadata hygiene (hide projection/systemKey/flowOrder pills) on self-map + RealWorld
-- [ ] Standing guarantee: spot-check Underdelta self-map + mini-stack still demo-ready after Python ladder work
-- [ ] Rung 4 polish pass once mini-mongo / real Mongo maps scan (North-star legibility before calling the rung locked)
+- [ ] Standing guarantee: spot-check Underdelta self-map + mini-stack still demo-ready after Mongo ladder work
+- [ ] Rung 4 polish pass once real Mongo map scans (North-star legibility before calling the rung locked)
 
 ### Seed backlog (pull from here when In progress < 3)
 
@@ -198,7 +201,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Rung 3 locked — plain-English Celery schedule hubs + uses:query golden-locks). Now start Rung 4 MongoDB collections extractor + `verification/mini-mongo` fixture floors so we can map Mongo-backed products.
+> **Next focus:** This work is done (Rung 4 mini-mongo fixture + mongoose collection extractor golden-locked). Now pin a real Mongo-backed OSS repo at an exact SHA and golden-lock its Data access collections so Rung 4 generalizes beyond our fixture.
 
 ### Learning log (append every tick)
 
@@ -246,6 +249,7 @@ Append short bullets like:
 - 2026-08-02 05:00 UTC | Done: Celery `@shared_task`/`beat_schedule`/`add_periodic_task` → job+cron; path-role tasks/celery*.py; mini-python Send digest/Purge stale notes + schedule hubs; commerce gate no longer treats bare `jobs` as Checkout; neutral jobs→data uses:sync; golden-lock | Next: mini-python Note↔Tag polish then Rung 3 lock | Learned: nsidnev RealWorld has no Celery so fixture carries the rung; `requiresAny: jobs` on commerce poisoned notes apps — gate Checkout/payments on pipelines/workers only
 - 2026-08-02 05:05 UTC | Done: mini-python data story — generalize tag-join lift beyond Article (Note→Tag tags); author reverse for Note as well as Article; golden-lock tags/author/authored + quiet modules | Next: Rung 3 final North-star lock pass | Learned: `articles_to_tags` polish hardcoded Article so `notes_to_tags` collapsed silently with no product edge; tagged-entity lookup must be any non-tag FK on the junction
 - 2026-08-02 05:07 UTC | Done: Rung 3 locked — `humanizeCronExpression` for schedule hubs (every hour / every 15 minutes); golden-lock mini-python + mini-stack cron phrases + API uses:query→Data on FastAPI RealWorld/mini-python; promote Rung 4 MongoDB | Next: Rung 4 Mongo collections extractor + mini-mongo fixture | Learned: raw crontab glyphs on overview hubs (`0 * * * *`) are pure jargon for the North star user; keep expression in metadata, show plain English on the canvas; JSDoc must not contain `*/N` or it terminates the block comment
+- 2026-08-02 05:20 UTC | Done: Rung 4 prep+fixture — `src/extractors/mongo.ts` (mongoose.model / Schema collection / .collection), project nest+dedupe collections under Data, `/models/` path-role, `verification/mini-mongo` Notes API→Catalog data Note/User/Tag, verify golden + Extractors roster `mongo` | Next: pin real Mongo OSS repo + golden-lock | Learned: do not infer mongoose model names from nearby Schema calls in multi-model files (Tag Schema + later `model("Note")` mis-labels); emit raw collection names and let projection merge Note↔notes; unscoped package.json names beat README H1 in preferProductLabel — omit fixture package.json when the README title is the product name
 
 ---
 

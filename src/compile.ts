@@ -8,6 +8,7 @@ import {
   type ArchitectureExtractor,
 } from "./extractor.js";
 import { GraphBuilder, edgeFrom, stableId } from "./graph.js";
+import { mongoExtractor } from "./extractors/mongo.js";
 import { prismaExtractor } from "./extractors/prisma.js";
 import { pythonExtractor } from "./extractors/python.js";
 import { sqlExtractor } from "./extractors/sql.js";
@@ -114,6 +115,7 @@ export async function compileRepository(
   const extractors = options.extractors ?? [
     typescriptExtractor,
     pythonExtractor,
+    mongoExtractor,
     prismaExtractor,
     sqlExtractor,
   ];
