@@ -141,7 +141,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       <span class="meta" id="counts"></span>
       <button id="back" hidden>Back</button>
       <button id="overview">Overview</button>
-      <button id="tier" title="Beginner: product story · Intermediate: hubs &amp; routes · Advanced: code inside current focus">View: Beginner</button>
+      <button id="tier" title="Beginner: product story · Intermediate: enter a system’s neighborhood · Advanced: code inside current focus">View: Beginner</button>
+      <span class="meta" id="focus-crumb" hidden></span>
       <input id="search" type="search" placeholder="Find a route, table, job, component…" />
     </header>
     <div id="workspace">
@@ -206,7 +207,13 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     ]);
     // Messaging + schema lineage — labeled badges on the default overview.
     const narrativeKinds = new Set(["publishes", "consumes", "migrates"]);
-    // Beginner = product flow · Intermediate = hubs/routes/tables · Advanced = code in focus
+    // Focus neighborhood story edges (not calls / depends-on hairballs).
+    const neighborhoodEdgeKinds = new Set([
+      ...collaborationKinds,
+      ...narrativeKinds,
+      "writes", "schedules", "routes-to",
+    ]);
+    // Beginner = product flow · Intermediate = focused neighborhood · Advanced = code in focus
     const tierOrder = ["beginner", "intermediate", "advanced"];
     const tierLabels = {
       beginner: "View: Beginner",
@@ -227,9 +234,6 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     };
     function isAdvancedTier() {
       return state.tier === "advanced";
-    }
-    function isIntermediateOrAbove() {
-      return state.tier === "intermediate" || state.tier === "advanced";
     }
     function syncTierButton() {
       const button = document.getElementById("tier");
@@ -263,15 +267,46 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       return found;
     }
 
+    // Intermediate focus: contains-tree + key story neighbors of the focus and
+    // its important (non-advanced) children — never a whole-repo uncollapse.
+    function focusNeighborhood(rootId) {
+      const tree = descendants(rootId);
+      const found = new Set(tree);
+      const seeds = [];
+      for (const id of tree) {
+        if (id === rootId) {
+          seeds.push(id);
+          continue;
+        }
+        const node = byId.get(id);
+        if (!node) continue;
+        const isOverviewHub = node.metadata && node.metadata.overviewHub;
+        if (advancedKinds.has(node.kind) && !isOverviewHub) continue;
+        seeds.push(id);
+      }
+      for (const id of seeds) {
+        for (const edge of outgoing.get(id) || []) {
+          if (neighborhoodEdgeKinds.has(edge.kind)) found.add(edge.target);
+        }
+        for (const edge of incoming.get(id) || []) {
+          if (neighborhoodEdgeKinds.has(edge.kind)) found.add(edge.source);
+        }
+      }
+      return found;
+    }
+
     function visibleNodes() {
-      let allowed = state.focus ? descendants(state.focus) : new Set(graph.nodes.map((node) => node.id));
+      let allowed = state.focus
+        ? focusNeighborhood(state.focus)
+        : new Set(graph.nodes.map((node) => node.id));
       const query = search.value.trim().toLowerCase();
-      const beginnerColdOpen =
-        !isIntermediateOrAbove() && !state.focus && !query;
-      // When a Product Flow exists, Beginner is that band only — not every
-      // uncollapsed hub/leaf that Intermediate will later reveal.
+      // Without a focused system (and without search), stay Product Flow–calm.
+      // Intermediate/Advanced labels alone must not globally uncollapse hubs.
+      const calmOverview = !state.focus && !query;
+      // When a Product Flow exists, calm overview is that band only — drill in
+      // (double-click) to see a system’s Intermediate neighborhood.
       const hasProductFlow =
-        beginnerColdOpen &&
+        calmOverview &&
         graph.nodes.some(
           (node) => node.metadata && typeof node.metadata.flowOrder === "number",
         );
@@ -291,21 +326,20 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         }
         // overviewHub (auth/billing actions, Helm Chart/resources, mongo
         // aggregates) bypasses advanced-kind hides so hubs can appear once the
-        // user is on Intermediate (or focused). Beginner cold open still hides
-        // them via intermediateKinds / Product Flow gate below.
+        // user focuses a system (Intermediate neighborhood / Advanced-in-focus).
         const isOverviewHub = node.metadata && node.metadata.overviewHub;
         if (advancedKinds.has(node.kind) && !isOverviewHub) {
           // Advanced code kinds only when Advanced + a focused cluster.
           // Without focus, Advanced must not dump every function in the repo.
           if (!isAdvancedTier() || !state.focus) return false;
         }
-        // Beginner cold open: Product Flow + top systems only. Tables, queues,
-        // crons, routes, etc. wait for Intermediate (or a focused drill-in).
-        if (beginnerColdOpen && intermediateKinds.has(node.kind)) {
+        // Calm overview: Product Flow + top systems only. Tables, queues,
+        // crons, routes, etc. wait for a focused Intermediate neighborhood.
+        if (calmOverview && intermediateKinds.has(node.kind)) {
           return false;
         }
         if (
-          beginnerColdOpen &&
+          calmOverview &&
           node.metadata &&
           node.metadata.collapsedInOverview
         ) {
@@ -705,8 +739,21 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         }
       }
       highlightNeighborhood();
-      document.getElementById("counts").textContent = visible.length + " components · " + graph.edges.length + " relationships";
-      document.getElementById("back").hidden = state.history.length === 0;
+      const focused = state.focus ? byId.get(state.focus) : null;
+      const crumb = document.getElementById("focus-crumb");
+      if (crumb) {
+        if (focused) {
+          crumb.hidden = false;
+          crumb.textContent = "Focus: " + focused.label;
+        } else {
+          crumb.hidden = true;
+          crumb.textContent = "";
+        }
+      }
+      document.getElementById("counts").textContent = focused
+        ? visible.length + " in neighborhood · " + graph.edges.length + " relationships"
+        : visible.length + " components · " + graph.edges.length + " relationships";
+      document.getElementById("back").hidden = !state.focus && state.history.length === 0;
     }
 
     function highlightNeighborhood() {
@@ -1128,6 +1175,12 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       state.history.push(state.focus);
       state.focus = id;
       state.selected = id;
+      // Entering a system is the Intermediate walk — bump out of Beginner so the
+      // tier label matches the neighborhood the user just opened.
+      if (state.tier === "beginner") {
+        state.tier = "intermediate";
+        syncTierButton();
+      }
       state.x = 36;
       state.y = 40;
       state.scale = 1;
@@ -1142,20 +1195,26 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       state.tier = "beginner";
       state.x = 36; state.y = 40; state.scale = 1;
       syncTierButton();
-      inspector.innerHTML = '<div class="empty">Select a component to inspect its connections and source evidence.</div>';
+      inspector.innerHTML = '<div class="empty">Select a component to inspect its connections and source evidence. Double-click a system to enter its neighborhood.</div>';
       render(); applyTransform();
     };
     document.getElementById("back").onclick = () => {
       state.focus = state.history.pop() || null;
       state.selected = state.focus;
+      if (!state.focus && state.tier !== "beginner") {
+        // Leaving the last focus returns to calm overview; keep Intermediate/
+        // Advanced labels honest by resetting to Beginner.
+        state.tier = "beginner";
+        syncTierButton();
+      }
       render();
     };
     document.getElementById("tier").onclick = () => {
       const index = tierOrder.indexOf(state.tier);
       state.tier = tierOrder[(index + 1) % tierOrder.length];
-      // Advanced without a focus cannot show a whole-repo code dump — keep the
-      // tier label but visibility stays Intermediate until the user double-clicks
-      // into a system (focus). Searching still reveals matches at any tier.
+      // Without a focused system, Intermediate/Advanced stay Product Flow–calm
+      // (no global hub dump). Double-click a system to enter its neighborhood;
+      // Advanced code kinds still require Advanced + focus. Search reveals matches.
       syncTierButton();
       render();
     };
@@ -1196,6 +1255,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       viewport.classList.remove("dragging");
     };
 
+    inspector.innerHTML = '<div class="empty">Select a component to inspect its connections and source evidence. Double-click a system to enter its neighborhood.</div>';
     render();
     applyTransform();
   </script>

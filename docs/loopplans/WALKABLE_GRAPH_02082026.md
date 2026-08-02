@@ -131,16 +131,16 @@ Update checkboxes + Next focus every tick (unless Idle protocol).
 - [x] Soft-stop / LOOP COMPLETE idle protocol documented  
 - [x] Tier model in viewer UX: `View: Beginner | Intermediate | Advanced` (replaces Details on/off); Advanced kinds require focus (no whole-repo dump); verify golden floor  
 - [x] Beginner cold open polish: `intermediateKinds` + Product Flow gate; mini-stack/self-map stay flow-led; verify golden floor  
+- [x] Focus / enter a system: Intermediate neighborhood via `focusNeighborhood` (contains + story neighbors); calmOverview so Intermediate/Advanced without focus do not global-uncollapse; Focus crumb + auto-tier; verify floors  
 
 ### In progress / next
 
 Keep **at least 3 unchecked items** here until LOOP COMPLETE (refill from Seed backlog).  
 These remaining items are the **mandatory** walkable slice — finishing them (with gates 1–8) is what completes the loop:
 
-- [ ] Focus / enter a system: Intermediate neighborhood (hubs + important children + key collab edges only)  
 - [ ] Advanced inside focus: when focused + Advanced, show that cluster’s functions/modules; breadcrumb/tier copy clarifies “code in focus”  
 - [ ] Navigation: breadcrumb + back to Beginner (and Intermediate if nested); tier label stays in sync when Overview resets  
-- [ ] Verify golden floors for focus + Intermediate/Advanced visibility (self-map and/or mini-stack)  
+- [ ] Verify golden floors for Advanced-in-focus visibility (self-map and/or mini-stack)  
 - [ ] Polish pass: legend/inspector/empty-state copy matches tiers; standing guarantee self-map cold-read  
 - [ ] Collapse or restyle derived edge fans so Intermediate isn’t yellow spaghetti  
 
@@ -157,7 +157,7 @@ Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder fr
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Beginner cold open = Product Flow only via intermediateKinds + flowOrder gate). Now implement Focus / enter a system so Intermediate shows that system’s neighborhood only (hubs + important children + key collab edges), not a global uncollapse.
+> **Next focus:** This work is done (Focus → Intermediate neighborhood via focusNeighborhood + calmOverview; verify floors for Extractors + Checkout API). Now make Advanced inside focus show that cluster’s functions/modules with clear “code in focus” tier/crumb copy — still never a whole-repo dump.
 
 ### Learning log (append every tick)
 
@@ -168,7 +168,8 @@ Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder fr
 - 2026-08-02 | Plan created for walkable 3-tier graph on `walkable-graph-02082026` | Next: tier model in viewer | Learned: v0 Product Flow is strong; Details-on whole-repo dump is the failure mode to kill  
 - 2026-08-02 | Soft-stop hardened: acceptance gates 1–8, Loop status ACTIVE/COMPLETE, idle ticks must not push | Next: tier model in viewer | Learned: push-triggered automation only runs away if idle ticks still commit/push  
 - 2026-08-02 | Done: replaced Details on/off with View: Beginner/Intermediate/Advanced; advancedKinds only when Advanced+focus; verify locks tier control | Next: Beginner cold-open polish + Intermediate focus neighborhood | Learned: Intermediate = reveal collapsedInOverview hubs/routes; Advanced without focus must stay non-dumping or the old failure mode returns under a new label  
-- 2026-08-02 | Done: Beginner hides intermediateKinds + non-flowOrder when Product Flow exists; verify cold-open floors for self-map + mini-stack | Next: Focus → Intermediate neighborhood (not global uncollapse) | Learned: IR “visible on overview” for cron/queue hubs meant Intermediate availability; viewer Beginner must denylist those kinds or mini-stack stays a parts bin 
+- 2026-08-02 | Done: Beginner hides intermediateKinds + non-flowOrder when Product Flow exists; verify cold-open floors for self-map + mini-stack | Next: Focus → Intermediate neighborhood (not global uncollapse) | Learned: IR “visible on overview” for cron/queue hubs meant Intermediate availability; viewer Beginner must denylist those kinds or mini-stack stays a parts bin  
+- 2026-08-02 13:55 UTC | Done: focusNeighborhood (contains + story neighbors); calmOverview stops Intermediate global dump; focus auto-tiers + Focus crumb; verify Extractors/Checkout floors | Next: Advanced-in-focus modules/functions + “code in focus” copy | Learned: many Product Flow systems only contain modules — without collab/story neighbor expansion Intermediate focus would be empty; Intermediate-without-focus must stay calm or the parts-bin returns under a new label 
 
 ---
 
