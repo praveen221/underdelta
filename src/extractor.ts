@@ -13,8 +13,17 @@ const ignoredDirectories = new Set([
   "coverage",
   "dist",
   "node_modules",
+  "spec",
+  "specs",
+  "test",
+  "tests",
+  "__tests__",
+  "fixtures",
+  "__fixtures__",
   "vendor",
 ]);
+
+const ignoredFilePattern = /\.(?:test|spec)\.[^.]+$/i;
 
 export interface ExtractionContext {
   root: string;
@@ -41,7 +50,9 @@ export async function discoverFiles(root: string): Promise<string[]> {
           if (!ignoredDirectories.has(entry.name)) await walk(absolute);
           return;
         }
-        if (entry.isFile()) files.push(absolute);
+        if (entry.isFile() && !ignoredFilePattern.test(entry.name)) {
+          files.push(absolute);
+        }
       }),
     );
   }

@@ -43,6 +43,10 @@ Open:
 The same run writes the portable intermediate representation to
 `.underdelta/architecture.json`.
 
+Generated output, dependencies, build artifacts, fixtures, and conventional
+test/spec files are excluded from scans so the default map represents the
+product rather than development scaffolding.
+
 During development:
 
 ```bash

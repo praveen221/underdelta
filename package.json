@@ -12,7 +12,6 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli.ts",
-    "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "engines": {
@@ -27,7 +26,6 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
-    "tsx": "^4.23.1",
-    "vitest": "^4.1.10"
+    "tsx": "^4.23.1"
   }
 }

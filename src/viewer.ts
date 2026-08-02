@@ -49,16 +49,32 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     .edge.active { stroke: var(--accent); stroke-width: 2.3; opacity: .95; }
     #nodes { position: absolute; inset: 0; }
     .lane-label { position: absolute; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
-    .node { position: absolute; width: 190px; min-height: 58px; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 9px 10px; cursor: pointer; user-select: none; transition: opacity .12s, border-color .12s, background .12s; }
+    .node { --kind-color: #77808d; position: absolute; width: 190px; min-height: 58px; background: var(--panel); border: 1px solid var(--kind-color); border-radius: 9px; padding: 9px 10px; cursor: pointer; user-select: none; transition: opacity .12s, border-color .12s, background .12s; }
     .node:hover, .node.selected { border-color: var(--accent); background: #1c2230; }
     .node.dim { opacity: .16; }
     .node .top { display: flex; align-items: center; gap: 8px; }
-    .node .glyph { display: grid; place-items: center; width: 24px; height: 24px; flex: 0 0 24px; border-radius: 6px; background: #252b35; color: var(--accent); font-weight: 800; font-size: 10px; text-transform: uppercase; }
+    .node .glyph { display: grid; place-items: center; width: 26px; height: 26px; flex: 0 0 26px; color: var(--kind-color); }
+    .node .glyph svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .node .glyph .function-mark { font: 700 20px/1 Georgia, serif; }
     .node .label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 650; }
-    .node .kind { color: var(--muted); font-size: 11px; margin: 5px 0 0 32px; }
-    .node[data-kind="database"], .node[data-kind="table"], .node[data-kind="collection"] { border-color: #315942; }
-    .node[data-kind="route"], .node[data-kind="api"] { border-color: #334f75; }
-    .node[data-kind="cron"], .node[data-kind="job"], .node[data-kind="queue"], .node[data-kind="pipeline"] { border-color: #66522c; }
+    .node .kind { color: var(--muted); font-size: 11px; margin: 5px 0 0 34px; text-transform: capitalize; }
+    .node[data-kind="module"] { --kind-color: #77808d; border-radius: 4px 10px 10px; }
+    .node[data-kind="module"]::before { content: ""; position: absolute; width: 48px; height: 5px; left: -1px; top: -6px; border: 1px solid var(--kind-color); border-bottom: 0; border-radius: 5px 6px 0 0; background: var(--panel); }
+    .node[data-kind="service"] { --kind-color: #8b7cf6; min-height: 68px; outline: 1px solid color-mix(in srgb, var(--kind-color) 35%, transparent); outline-offset: 3px; }
+    .node[data-kind="component"], .node[data-kind="page"], .node[data-kind="ui"] { --kind-color: #63a8e8; border-radius: 5px 5px 14px 14px; border-top-width: 5px; }
+    .node[data-kind="hook"] { --kind-color: #5dbfc1; width: 176px; min-height: 48px; border-style: dashed; border-radius: 999px; }
+    .node[data-kind="hook"] .kind { margin-top: 2px; }
+    .node[data-kind="function"] { --kind-color: #9a81c8; width: 170px; min-height: 46px; border-radius: 999px; }
+    .node[data-kind="function"] .kind { margin-top: 1px; }
+    .node[data-kind="route"], .node[data-kind="api"] { --kind-color: #4d8ed5; border-left-width: 5px; border-radius: 4px 10px 10px 4px; }
+    .node[data-kind="database"] { --kind-color: #52a976; border-radius: 28px 28px 10px 10px; border-top-width: 3px; }
+    .node[data-kind="table"], .node[data-kind="collection"] { --kind-color: #52a976; border-radius: 3px; background-image: repeating-linear-gradient(0deg, transparent 0 16px, color-mix(in srgb, var(--kind-color) 12%, transparent) 16px 17px); }
+    .node[data-kind="column"] { --kind-color: #6d987d; width: 168px; min-height: 42px; border-radius: 3px; }
+    .node[data-kind="cron"], .node[data-kind="job"] { --kind-color: #d09a45; border-radius: 30px 9px 9px 30px; }
+    .node[data-kind="queue"], .node[data-kind="topic"] { --kind-color: #d17f54; border-style: double; border-width: 3px; border-radius: 4px; }
+    .node[data-kind="pipeline"], .node[data-kind="pipeline-step"] { --kind-color: #d09a45; clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 0 100%, 12px 50%); padding-left: 20px; }
+    .node[data-kind="external"] { --kind-color: #b16fc5; border-style: dotted; border-width: 2px; }
+    .node[data-kind="config"] { --kind-color: #9099a6; border-radius: 2px; }
     aside { min-width: 0; border-left: 1px solid var(--line); background: var(--panel); overflow: auto; padding: 16px; }
     aside h2 { margin: 0 0 4px; font-size: 17px; }
     aside h3 { margin: 20px 0 8px; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
@@ -163,10 +179,46 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       });
     }
 
+    function iconForKind(kind) {
+      const paths = {
+        module: '<path d="M3 6.5h6l2 2h10v10H3z"/><path d="M3 9h18"/>',
+        service: '<rect x="4" y="4" width="16" height="6" rx="2"/><rect x="4" y="14" width="16" height="6" rx="2"/><path d="M8 7h.01M8 17h.01"/>',
+        component: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 8h18M7 6h.01M10 6h.01"/>',
+        page: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 8h16M8 6h.01"/>',
+        ui: '<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/>',
+        hook: '<path d="M7 4v9a5 5 0 0 0 10 0V8"/><path d="M14 8h6V2"/>',
+        route: '<path d="M4 7h8a4 4 0 0 1 4 4v6"/><path d="m12 13 4 4 4-4"/>',
+        api: '<path d="M8 9 4 12l4 3M16 9l4 3-4 3M14 5l-4 14"/>',
+        database: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7"/>',
+        table: '<rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 9h18M9 4v16M15 4v16"/>',
+        column: '<rect x="7" y="3" width="10" height="18" rx="1"/><path d="M7 8h10M7 13h10M7 18h10"/>',
+        collection: '<circle cx="8" cy="8" r="4"/><circle cx="16" cy="8" r="4"/><circle cx="12" cy="16" r="4"/>',
+        cron: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6l4 2"/>',
+        job: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16M8 14h3"/>',
+        queue: '<path d="M4 7h12M4 12h16M4 17h9"/><path d="m16 4 3 3-3 3"/>',
+        topic: '<path d="M5 8a8 8 0 0 1 14 0M8 11a4.5 4.5 0 0 1 8 0"/><circle cx="12" cy="15" r="2"/>',
+        pipeline: '<path d="M3 7h6l3 5 3-5h6M3 17h6l3-5 3 5h6"/>',
+        "pipeline-step": '<path d="m4 6 6 6-6 6M11 6l6 6-6 6"/>',
+        external: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 13v7H4V6h7"/>',
+        config: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>',
+        schema: '<path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/>',
+        unknown: '<circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.4 2.4 0 1 1 3.5 2.2c-.9.5-1.3 1-1.3 1.8M12 17h.01"/>'
+      };
+      if (kind === "function") return '<span class="function-mark">ƒ</span>';
+      const path = paths[kind] || paths.unknown;
+      return '<svg viewBox="0 0 24 24" aria-hidden="true">' + path + "</svg>";
+    }
+
     function certaintyOf(item) {
       if (item.evidence.some((entry) => entry.certainty === "inferred")) return "inferred";
       if (item.evidence.some((entry) => entry.certainty === "derived")) return "derived";
       return "observed";
+    }
+
+    function widthForKind(kind) {
+      if (kind === "function" || kind === "column") return 170;
+      if (kind === "hook") return 176;
+      return 190;
     }
 
     function render() {
@@ -191,7 +243,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         laneNodes.forEach((node, index) => {
           const x = laneIndex * laneWidth;
           const y = 34 + index * 78;
-          positions.set(node.id, { x, y });
+          positions.set(node.id, { x, y, width: widthForKind(node.kind) });
           maxHeight = Math.max(maxHeight, y + 70);
           const element = document.createElement("div");
           element.className = "node" + (state.selected === node.id ? " selected" : "");
@@ -199,7 +251,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           element.dataset.id = node.id;
           element.style.left = x + "px";
           element.style.top = y + "px";
-          element.innerHTML = '<div class="top"><span class="glyph">' + node.kind.slice(0, 2) + '</span><span class="label"></span></div><div class="kind">' + node.kind + (node.technology ? " · " + node.technology : "") + "</div>";
+          element.innerHTML = '<div class="top"><span class="glyph">' + iconForKind(node.kind) + '</span><span class="label"></span></div><div class="kind">' + node.kind.replace("-", " ") + (node.technology ? " · " + node.technology : "") + "</div>";
           element.querySelector(".label").textContent = node.label;
           element.onclick = (event) => { event.stopPropagation(); selectNode(node.id); };
           element.ondblclick = (event) => { event.stopPropagation(); focusNode(node.id); };
@@ -216,7 +268,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         const target = positions.get(edge.target);
         if (!source || !target) continue;
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        const sx = source.x + 190;
+        const sx = source.x + source.width;
         const sy = source.y + 29;
         const tx = target.x;
         const ty = target.y + 29;
