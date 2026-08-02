@@ -729,6 +729,82 @@ function titleCaseSingular(label: string): string {
 }
 
 /**
+ * Cron expressions → plain-English schedule phrases for the North star user.
+ * Examples: hourly five-field cron → "every hour"; slash-step minutes →
+ * "every 15 minutes". Unrecognized forms keep the original expression.
+ */
+export function humanizeCronExpression(expression: string): string {
+  const expr = expression.trim();
+  if (!expr) return expr;
+  if (/^@hourly$/i.test(expr)) return "every hour";
+  if (/^@daily$/i.test(expr)) return "every day";
+  if (/^@weekly$/i.test(expr)) return "every week";
+  if (/^@monthly$/i.test(expr)) return "every month";
+  if (/^@yearly$/i.test(expr) || /^@annually$/i.test(expr)) return "every year";
+
+  const parts = expr.split(/\s+/);
+  if (parts.length !== 5) return expr;
+  const minute = parts[0]!;
+  const hour = parts[1]!;
+  const dayOfMonth = parts[2]!;
+  const month = parts[3]!;
+  const dayOfWeek = parts[4]!;
+
+  const starRest =
+    dayOfMonth === "*" && month === "*" && dayOfWeek === "*";
+
+  if (minute === "*" && hour === "*" && starRest) return "every minute";
+
+  const everyMinute = /^\*\/(\d+)$/.exec(minute);
+  if (everyMinute && hour === "*" && starRest) {
+    const n = Number(everyMinute[1]);
+    return n === 1 ? "every minute" : `every ${n} minutes`;
+  }
+
+  if (minute === "0" && hour === "*" && starRest) return "every hour";
+
+  const everyHour = /^\*\/(\d+)$/.exec(hour);
+  if (minute === "0" && everyHour && starRest) {
+    const n = Number(everyHour[1]);
+    return n === 1 ? "every hour" : `every ${n} hours`;
+  }
+
+  if (
+    /^\d+$/.test(minute) &&
+    /^\d+$/.test(hour) &&
+    dayOfMonth === "*" &&
+    month === "*" &&
+    dayOfWeek === "*"
+  ) {
+    return `every day at ${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
+  }
+
+  if (minute === "0" && hour === "0" && starRest) return "every day";
+
+  const weekdays = [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+  ];
+  if (
+    /^\d+$/.test(minute) &&
+    /^\d+$/.test(hour) &&
+    dayOfMonth === "*" &&
+    month === "*" &&
+    /^\d+$/.test(dayOfWeek)
+  ) {
+    const day = weekdays[Number(dayOfWeek) % 7] ?? `day ${dayOfWeek}`;
+    return `every ${day} at ${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
+  }
+
+  return expr;
+}
+
+/**
  * Turn camelCase / PascalCase / kebab identifiers into calm product words.
  * `createPost` → `Create post`, `PostList` → `Post list`, `sign-in` → `Sign in`.
  */
@@ -1461,8 +1537,9 @@ export function projectSemanticArchitecture(
       typeof node.metadata?.handler === "string" &&
       typeof node.metadata?.expression === "string"
     ) {
-      // Celery/node-cron: send_digest (0 * * * *) → Send digest (0 * * * *)
-      nextLabel = `${humanizeIdentifierLabel(node.metadata.handler)} (${node.metadata.expression})`;
+      // Celery/node-cron: send_digest (0 * * * *) → Send digest (every hour)
+      const when = humanizeCronExpression(node.metadata.expression);
+      nextLabel = `${humanizeIdentifierLabel(node.metadata.handler)} (${when})`;
     } else if (node.kind === "component") {
       // All components (client + server): tame PascalCase Card*/skeletons too.
       nextLabel = humanizeIdentifierLabel(node.label);

@@ -890,6 +890,12 @@ if (
   fail(
     `expected humanized cron label with handler name, found '${cron?.label ?? "(none)"}'`,
   );
+} else if (!String(cron.label).includes("every hour")) {
+  fail(
+    `expected cron schedule phrase 'every hour' (not raw cron), found '${cron.label}'`,
+  );
+} else if (/\b\d+\s+\*\s+\*\s+\*\s+\*/.test(String(cron.label))) {
+  fail(`cron label still exposes raw cron expression: '${cron.label}'`);
 } else {
   pass(`cron label humanized: ${cron.label}`);
 }
@@ -2688,6 +2694,30 @@ if (miniPythonCronNodes.length < 2) {
 } else {
   pass(`mini-python Celery beat schedules: ${[...miniPythonCronLabels].join(", ")}`);
 }
+// North-star lock: schedule hubs use plain English, not crontab glyphs.
+for (const expected of [
+  "Send digest (every hour)",
+  "Purge stale notes (every 15 minutes)",
+]) {
+  if (!miniPythonCronLabels.has(expected)) {
+    fail(
+      `mini-python missing humanized schedule hub ${expected}; found ${[...miniPythonCronLabels].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-python schedule hub: ${expected}`);
+  }
+}
+if (
+  [...miniPythonCronLabels].some((label) =>
+    /\b\d+\s+\*\s+\*\s+\*\s+\*/.test(label) || /\*\/\d+/.test(label),
+  )
+) {
+  fail(
+    `mini-python cron labels still expose raw cron expressions: ${[...miniPythonCronLabels].join(", ")}`,
+  );
+} else {
+  pass("mini-python cron labels have no raw crontab glyphs");
+}
 const miniPythonCronHubs = miniPythonCronNodes.filter(
   (node) =>
     node.parentId === miniPythonJobs?.id &&
@@ -2727,6 +2757,18 @@ if (!miniPythonJobsUsesData) {
   fail("mini-python expected Scheduled jobs -[uses:sync]-> Data access");
 } else {
   pass("mini-python collaboration: Scheduled jobs -[uses:sync]-> Data access");
+}
+const miniPythonUsesQuery = miniPythonGraph.edges.some(
+  (edge) =>
+    edge.kind === "uses" &&
+    edge.label === "query" &&
+    edge.source === miniPythonApi?.id &&
+    edge.target === miniPythonData?.id,
+);
+if (!miniPythonUsesQuery) {
+  fail("mini-python expected Notes API -[uses:query]-> Data access");
+} else {
+  pass("mini-python collaboration: Notes API -[uses:query]-> Data access");
 }
 const miniPythonScheduleEdges = miniPythonGraph.edges.filter(
   (edge) => edge.kind === "schedules",
@@ -2984,6 +3026,19 @@ if (fastapiRealRoot) {
       fail("fastapi-real-repo missing flows-to edge HTTP API → Data access");
     } else {
       pass("fastapi-real-repo flows-to: HTTP API → Data access");
+    }
+
+    const fastapiUsesQuery = fastapiRealGraph.edges.some(
+      (edge) =>
+        edge.kind === "uses" &&
+        edge.label === "query" &&
+        edge.source === fastapiApi?.id &&
+        edge.target === fastapiData?.id,
+    );
+    if (!fastapiUsesQuery) {
+      fail("fastapi-real-repo expected HTTP API -[uses:query]-> Data access");
+    } else {
+      pass("fastapi-real-repo collaboration: HTTP API -[uses:query]-> Data access");
     }
 
     if (!fastapiRealGraph.extractors.some((item) => item.id === "python")) {
