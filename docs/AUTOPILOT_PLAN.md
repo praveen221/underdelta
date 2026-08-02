@@ -195,6 +195,9 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 7 polish/lock: quiet thin HTTP API (`GET /` from result/server.js) beside Compose Deploy; North-star overview Deploy-only + flowOrder Deploy-only; golden-lock — **Rung 7 locked**
 - [x] Rung 8 prep: Terraform extractor — `*.tf` `resource`/`module` blocks → Deploy; path-role; README Infrastructure; `verification/mini-terraform` smoke floors + Extractors roster `terraform`; quiet Dockerfile-only Deploy still collapses unless Terraform units exist
 - [x] Rung 8: pin `terraform-aws-modules/terraform-aws-vpc` @ `3ffbd46fb1c7733e1b34d8666893280454e27436`; clone into gitignored `.underdelta-real/terraform-aws-vpc`; golden-lock VPC/Subnet/NAT/IGW/route/EIP/flow-log (+ example modules) under Deploy + flowOrder Deploy-only + overview collapse
+- [x] Rung 8 polish/lock: Terraform label/chrome — drop singleton `this` name chrome (`aws_vpc.this` → VPC), NAT/EIP/DynamoDB acronyms, quiet examples/wrappers/`vpc_issue_*` as `exampleChrome`; golden-lock mini-terraform + terraform-aws-vpc; verify finds root `main.tf` not examples/*/main.tf — **Rung 8 locked**
+- [x] Standing polish: hide remaining compiler chrome pills (`labelSource`, `pathRoleLabel`, `collapsedInOverview`, `overviewHub`, `exampleChrome`) from inspector structuredMetaKeys dump
+- [x] Rung 9 prep: Kubernetes manifests extractor — `Deployment`/`Service`/`Ingress` (+ StatefulSet/DaemonSet/CronJob/Job) → Deploy; path-role `k8s/`/`kubernetes/`/`manifests/`; README Workloads; `verification/mini-k8s` smoke floors + Extractors roster `kubernetes`; quiet Dockerfile-only Deploy still collapses unless K8s units exist
 
 ### Real-repo pins (Capability ladder)
 
@@ -213,25 +216,24 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 8 polish: Terraform label/chrome pass on terraform-aws-vpc (drop `this` name chrome, NAT/EIP/VPC/DynamoDB acronyms, quiet examples/`vpc_issue_*` module noise) then lock
-- [ ] Standing polish: hide remaining compiler chrome pills (`labelSource`, `pathRoleLabel`, `collapsedInOverview`, `overviewHub`) if they still dump in inspector
+- [ ] Rung 9: pin a real Kubernetes OSS repo (Deployment/Service/Ingress surface) @ exact SHA into gitignored `.underdelta-real/`; golden-lock under Deploy/Workloads
+- [ ] Rung 9 polish: Service→Deployment needs edges / Ingress host labels / quiet non-product chrome beside Workloads then lock
 - [ ] GraphQL `schema { query: Root }` / non-Query root types (SWAPI-style) if a later pin needs it
-- [ ] Rung 9 prep: Kubernetes manifests extractor sketch (`Deployment`/`Service`/`Ingress` → Deploy) + mini-k8s fixture
+- [ ] Standing polish: Underdelta self-map cold-read pass — leftover jargon labels or weak hierarchy
 
 ### Seed backlog (pull from here when In progress < 3)
 
 Not a full roadmap — a menu the agent may reorder. Pick what most improves the **Capability ladder** now.
 
-- Rung 9+: Kubernetes manifests after Terraform polish/lock
+- Rung 9+: Helm charts / Kustomize after Kubernetes polish/lock
 - GraphQL `extend type Query` / schema stitching if a real-repo pin needs it
 - OAS3 `servers` / `$ref` path-item resolution if a later OpenAPI pin needs it
-- Standing polish: Underdelta self-map cold-read pass — leftover jargon labels or weak hierarchy
 - Performance pass only if scanning a real repo becomes painfully slow
 - Docs only when CLI/behavior changed
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Rung 8 pin — `terraform-aws-vpc` Deploy nesting golden-lock). Now polish Terraform labels on that pin (`this` chrome, NAT/EIP/VPC acronyms, quiet example module noise) so Rung 8 can lock.
+> **Next focus:** This work is done (Rung 9 prep — Kubernetes extractor + mini-k8s Workloads smoke). Now pin a real Kubernetes OSS repo at an exact SHA into `.underdelta-real/` and golden-lock Deploy/Workloads nesting so Rung 9 can advance.
 
 ### Learning log (append every tick)
 
@@ -303,6 +305,7 @@ Append short bullets like:
 - 2026-08-02 06:16 UTC | Done: Rung 7 locked — quiet thin HTTP API (`GET /` / health probes) when Compose Deploy exists; voting-app overview + flowOrder Deploy-only; golden-lock; promote Terraform as Rung 8 | Next: Rung 8 Terraform extractor + mini-terraform fixture | Learned: Compose-led cold-reads fail when a single result-server `GET /` invents an HTTP API band ahead of Deploy — reuse collapsedInOverview + assignFlowOrder skip (same chrome pattern as empty CLI/Schema) rather than deleting the API system
 - 2026-08-02 06:25 UTC | Done: Rung 8 prep — `src/extractors/terraform.ts` resource/module blocks → Deploy services; path-role `.tf` + README Infrastructure; mini-terraform Notes · S3 bucket / Items · Dynamodb table / API · Lambda / Network; roster `terraform`; keep Dockerfile-only Deploy quiet unless Terraform units exist | Next: pin real Terraform OSS repo + golden-lock | Learned: treat Terraform units as kind:service like Compose so nest/collapse/flowOrder reuse Deploy; strip provider prefixes for North-star labels (`aws_s3_bucket.notes` → Notes · S3 bucket); ignore `.terraform/` in discovery before any real-repo pin
 - 2026-08-02 06:30 UTC | Done: Rung 8 pin+golden — `terraform-aws-modules/terraform-aws-vpc` @ `3ffbd46` gitignored; 94 resources + example modules nested/collapsed under Deploy; VPC/Subnet/NAT/IGW/route/EIP/flow-log floors + flowOrder Deploy-only; golden-lock | Next: Terraform label polish (`this`/NAT/EIP/VPC acronyms + quiet example module noise) then lock | Learned: module repos already map Deploy-led without README Infrastructure; `resource "aws_vpc" "this"` yields `This · VPC` chrome and examples/`vpc_issue_*` modules crowd Details — polish must drop singleton `this` names and tame example module blocks before calling the rung locked
+- 2026-08-02 06:31 UTC | Done: health-reconcile Rung 8 polish (root `main.tf` verify was matching `examples/*/main.tf`); lock Rung 8; standing inspector chrome pills; Rung 9 prep — `src/extractors/kubernetes.ts` Deployment/Service/Ingress (+ peers), mini-k8s Workloads smoke (API/Web/Ingress nested/collapsed), roster `kubernetes` | Next: pin real Kubernetes OSS repo + golden-lock | Learned: verify `.find(/main\.tf$/)` on terraform-aws-vpc hits example chrome first — pin assertions to exact `file === "main.tf"`; K8s multi-doc `---` YAML needs offset-preserving splits so evidence lines stay honest; README `Workloads` heading refines Deploy like Containers/Infrastructure
 
 ---
 

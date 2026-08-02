@@ -28,6 +28,7 @@ const miniOpenapiRoot = path.join(repoRoot, "verification", "mini-openapi");
 const miniGraphqlRoot = path.join(repoRoot, "verification", "mini-graphql");
 const miniDockerRoot = path.join(repoRoot, "verification", "mini-docker");
 const miniTerraformRoot = path.join(repoRoot, "verification", "mini-terraform");
+const miniK8sRoot = path.join(repoRoot, "verification", "mini-k8s");
 
 function fail(message) {
   console.error(`VERIFY FAIL: ${message}`);
@@ -114,6 +115,7 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file.includes("mini-graphql/") ||
         file.includes("mini-docker/") ||
         file.includes("mini-terraform/") ||
+        file.includes("mini-k8s/") ||
         file === ".underdelta-real" ||
         file.startsWith(".underdelta-real/") ||
         file.includes("/.underdelta-real/")
@@ -507,6 +509,7 @@ const extractorRoster = Array.isArray(extractorsSystem?.metadata?.extractorRoste
 const requiredExtractors = [
   "docker",
   "graphql",
+  "kubernetes",
   "mongo",
   "openapi",
   "prisma",
@@ -532,6 +535,7 @@ const extractorKeyFiles = Array.isArray(extractorsSystem?.metadata?.keyFiles)
 const requiredExtractorFiles = [
   "src/extractors/docker.ts",
   "src/extractors/graphql.ts",
+  "src/extractors/kubernetes.ts",
   "src/extractors/mongo.ts",
   "src/extractors/openapi.ts",
   "src/extractors/prisma.ts",
@@ -6609,11 +6613,24 @@ if (terraformRealRoot) {
     const terraformRealTfModules = terraformRealGraph.nodes.filter(
       (node) => node.kind === "module" && node.metadata?.terraformModule === true,
     );
-    const terraformRealMainTf = terraformRealTfModules.find((node) =>
-      /(?:^|\/)main\.tf$/i.test(
-        String(node.metadata?.file ?? node.label).replaceAll("\\", "/"),
-      ),
-    );
+    // Prefer the module-root main.tf — examples/*/main.tf also match a bare
+    // basename regex and are correctly marked exampleChrome.
+    const terraformRealMainTf =
+      terraformRealTfModules.find(
+        (node) =>
+          String(node.metadata?.file ?? node.label).replaceAll("\\", "/") ===
+          "main.tf",
+      ) ??
+      terraformRealTfModules.find((node) => {
+        const file = String(node.metadata?.file ?? node.label).replaceAll(
+          "\\",
+          "/",
+        );
+        return (
+          /(?:^|\/)main\.tf$/i.test(file) &&
+          !/(^|\/)(examples|wrappers)\//i.test(file)
+        );
+      });
     if (
       !terraformRealMainTf ||
       terraformRealMainTf.parentId !== terraformRealDeploy?.id ||
@@ -6710,6 +6727,176 @@ if (terraformRealRoot) {
       );
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Capability ladder rung 9 prep: Kubernetes extractor + mini-k8s smoke.
+// ---------------------------------------------------------------------------
+const miniK8sGraph = await compileRepository(miniK8sRoot);
+const miniK8sServices = miniK8sGraph.nodes.filter(
+  (node) => node.kind === "service" && node.metadata?.kubernetes === true,
+);
+const miniK8sServiceLabels = miniK8sServices.map((node) => node.label);
+console.log(
+  `Mini-k8s graph: ${miniK8sGraph.nodes.length} nodes, ${miniK8sGraph.edges.length} edges → services ${[...new Set(miniK8sServiceLabels)].sort().join(", ")}`,
+);
+
+const miniK8sProduct = miniK8sGraph.nodes.find((node) => node.kind === "product");
+if (!miniK8sProduct || miniK8sProduct.label !== "Mini Kubernetes notes") {
+  fail(
+    `mini-k8s product label expected 'Mini Kubernetes notes', found '${miniK8sProduct?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-k8s product labeled Mini Kubernetes notes");
+}
+
+const miniK8sExtractors = miniK8sGraph.extractors.map((item) => item.id);
+if (!miniK8sExtractors.includes("kubernetes")) {
+  fail(
+    `mini-k8s graph.extractors missing kubernetes; found ${JSON.stringify(miniK8sExtractors)}`,
+  );
+} else {
+  pass("mini-k8s registers kubernetes extractor");
+}
+
+const miniK8sResources = miniK8sServices.filter(
+  (node) => node.metadata?.kubernetesResource === true,
+);
+const miniK8sAddresses = new Set(
+  miniK8sResources.map((node) => node.metadata?.address),
+);
+for (const expected of [
+  "Deployment/api",
+  "Service/api",
+  "Deployment/web",
+  "Ingress/notes",
+]) {
+  if (!miniK8sAddresses.has(expected)) {
+    fail(
+      `mini-k8s missing resource ${expected}; found ${[...miniK8sAddresses].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-k8s has resource ${expected}`);
+  }
+}
+
+for (const expected of [
+  "API · Deployment",
+  "API · Service",
+  "Web · Deployment",
+  "Notes · Ingress",
+]) {
+  if (!miniK8sServiceLabels.includes(expected)) {
+    fail(
+      `mini-k8s missing humanized service label ${expected}; found ${miniK8sServiceLabels.join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-k8s service label ${expected}`);
+  }
+}
+
+const miniK8sSemantic = miniK8sGraph.nodes.filter(
+  (node) => node.metadata?.projection === "semantic",
+);
+const miniK8sByKey = new Map(
+  miniK8sSemantic
+    .filter((node) => typeof node.metadata?.systemKey === "string")
+    .map((node) => [node.metadata.systemKey, node]),
+);
+const miniK8sDeploy = miniK8sByKey.get("deploy");
+if (!miniK8sDeploy || miniK8sDeploy.label !== "Workloads") {
+  fail(
+    `mini-k8s Deploy label expected 'Workloads' from README, found '${miniK8sDeploy?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-k8s Deploy labeled Workloads");
+}
+
+const nestedK8sServices = miniK8sServices.filter(
+  (node) => node.parentId === miniK8sDeploy?.id,
+);
+if (nestedK8sServices.length < 4) {
+  fail(
+    `mini-k8s expected ≥4 kubernetes units nested under Workloads, found ${nestedK8sServices.length}`,
+  );
+} else {
+  pass(`mini-k8s ${nestedK8sServices.length} units nested under Workloads`);
+}
+
+const k8sOverviewLeaves = nestedK8sServices.filter(
+  (node) => node.metadata?.collapsedInOverview !== true,
+);
+if (k8sOverviewLeaves.length > 0) {
+  fail(
+    `mini-k8s overview should collapse Deployments/Services/Ingress under Workloads, still visible: ${k8sOverviewLeaves
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-k8s overview collapses resources under Workloads");
+}
+
+const miniK8sFlow = miniK8sSemantic
+  .filter((node) => typeof node.metadata?.flowOrder === "number")
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+if (
+  miniK8sFlow.length !== 1 ||
+  miniK8sFlow[0]?.metadata?.systemKey !== "deploy"
+) {
+  fail(
+    `mini-k8s flowOrder expected Workloads/Deploy, got ${miniK8sFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `mini-k8s flowOrder: ${miniK8sFlow.map((node) => node.label).join(" → ")}`,
+  );
+}
+
+const miniK8sModules = miniK8sGraph.nodes.filter(
+  (node) => node.kind === "module" && node.metadata?.kubernetesModule === true,
+);
+const miniK8sApiModule = miniK8sModules.find((node) =>
+  /(?:^|\/)k8s\/api\.ya?ml$/i.test(
+    String(node.metadata?.file ?? node.label).replaceAll("\\", "/"),
+  ),
+);
+if (
+  !miniK8sApiModule ||
+  miniK8sApiModule.parentId !== miniK8sDeploy?.id ||
+  miniK8sApiModule.metadata?.collapsedInOverview !== true
+) {
+  fail(
+    `mini-k8s k8s/api.yaml should nest+collapse under Workloads, found parent=${miniK8sApiModule?.parentId ?? "(missing)"} collapsed=${miniK8sApiModule?.metadata?.collapsedInOverview}`,
+  );
+} else {
+  pass("mini-k8s k8s/api.yaml nested+collapsed under Workloads");
+}
+
+const k8sEvidenceGaps = miniK8sServices.filter((node) => {
+  const detail = node.evidence?.[0]?.detail ?? "";
+  return !/^kind:/.test(detail);
+});
+if (k8sEvidenceGaps.length > 0) {
+  fail(
+    `mini-k8s evidence should cite kind: ${k8sEvidenceGaps
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-k8s evidence details cite kind:");
+}
+
+const k8sCommerceNoise = miniK8sGraph.edges.some((edge) =>
+  /checkout|orders?/i.test(
+    `${edge.label ?? ""} ${JSON.stringify(edge.metadata ?? {})}`,
+  ),
+);
+if (k8sCommerceNoise) {
+  fail(
+    "mini-k8s should not inherit Checkout/orders commerce collaboration copy",
+  );
+} else {
+  pass("mini-k8s has no Checkout/orders commerce collaboration noise");
 }
 
 if (process.exitCode) {

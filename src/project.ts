@@ -233,6 +233,13 @@ export function inferSystemKeyFromHeading(heading: string): string | undefined {
         /\binfrastructure\b|\binfra\b|\bterraform\s+(?:stack|module|resources?|configuration)\b/,
       weight: 7,
     },
+    // Kubernetes manifests — prefer "Workloads"; avoid bare "deploy to k8s" how-tos.
+    {
+      key: "deploy",
+      pattern:
+        /\bworkloads?\b|\bkubernetes\b|\bk8s\b|\bmanifests?\b/,
+      weight: 7,
+    },
   ];
 
   let best: { key: string; weight: number } | undefined;
@@ -720,7 +727,7 @@ function quietNonCompilerProductChrome(
 
   // Dockerfile-only Deploy beside API/UI/Data is packaging chrome, not the
   // product story (RealWorld/Petstore ships a Dockerfile). Keep Deploy visible
-  // when Compose services or Terraform resources exist — those are real units.
+  // when Compose / Terraform / Kubernetes units exist — those are real units.
   const deploy = systems.get("deploy");
   const hasDeployUnits = Boolean(
     deploy &&
@@ -729,7 +736,8 @@ function quietNonCompilerProductChrome(
           node.parentId === deploy.id &&
           (node.metadata?.dockerService === true ||
             node.metadata?.terraformResource === true ||
-            node.metadata?.terraformModuleBlock === true),
+            node.metadata?.terraformModuleBlock === true ||
+            node.metadata?.kubernetesResource === true),
       ),
   );
   if (deploy) {
@@ -838,6 +846,30 @@ function isTerraformModulePath(file: string): boolean {
   return /\.tf$/i.test(normalizePath(file));
 }
 
+/** Kubernetes manifest paths — modules even though they are not JS/TS/Py. */
+function isKubernetesModulePath(file: string): boolean {
+  const normalized = normalizePath(file).toLowerCase();
+  const base = normalized.split("/").pop() ?? "";
+  if (
+    base === "docker-compose.yml" ||
+    base === "docker-compose.yaml" ||
+    base === "compose.yml" ||
+    base === "compose.yaml" ||
+    /^docker-compose\.[^/]+\.ya?ml$/.test(base) ||
+    isOpenApiSpecModulePath(normalized)
+  ) {
+    return false;
+  }
+  return (
+    /(^|\/)(k8s|kubernetes|manifests?)(\/|$)/.test(normalized) ||
+    /(^|\/)deploy(?:ment)?s?\//.test(normalized) ||
+    /\.(?:deployment|service|ingress|statefulset|daemonset|cronjob)\.ya?ml$/.test(
+      normalized,
+    ) ||
+    /(?:^|\/)(?:deployment|service|ingress)\.ya?ml$/.test(normalized)
+  );
+}
+
 function isFileModule(node: ArchitectureNode): boolean {
   if (node.kind !== "module") return false;
   const file = normalizePath(node.qualifiedName ?? node.label);
@@ -846,7 +878,10 @@ function isFileModule(node: ArchitectureNode): boolean {
     isOpenApiSpecModulePath(file) ||
     isGraphqlSchemaModulePath(file) ||
     isDockerModulePath(file) ||
-    isTerraformModulePath(file)
+    isTerraformModulePath(file) ||
+    isKubernetesModulePath(file) ||
+    // Manifest modules emitted by the kubernetes extractor (scattered yaml).
+    (node.metadata?.kubernetesModule === true && /\.ya?ml$/i.test(file))
   );
 }
 
@@ -919,6 +954,10 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
   }
   // Terraform `.tf` resources/modules are infrastructure deploy surface.
   if (isTerraformModulePath(file)) {
+    return { key: "deploy", label: "Deploy", kind: "system" };
+  }
+  // Kubernetes manifests are workload deploy surface.
+  if (isKubernetesModulePath(file)) {
     return { key: "deploy", label: "Deploy", kind: "system" };
   }
   if (
@@ -1320,6 +1359,14 @@ export function humanizeTerraformLabel(
     return typeLabel;
   }
   return `${humanizeIdentifierLabel(rawName)} · ${typeLabel}`;
+}
+
+/**
+ * Kubernetes resources → North-star Deploy labels.
+ * `Deployment/api` → `API · Deployment`; `Ingress/notes` → `Notes · Ingress`.
+ */
+export function humanizeKubernetesLabel(kind: string, name: string): string {
+  return `${humanizeIdentifierLabel(name)} · ${kind}`;
 }
 
 /** Example/wrapper TF paths are sample chrome, not the module's product surface. */
@@ -1893,15 +1940,16 @@ export function projectSemanticArchitecture(
     }
   }
 
-  // Nest Docker Compose / Dockerfile / Terraform units under Deploy so the
-  // overview tells a containers/infra story instead of a flat service dump.
+  // Nest Docker / Terraform / Kubernetes units under Deploy so the overview
+  // tells a containers/infra/workloads story instead of a flat service dump.
   const deploySystem = systems.get("deploy");
   if (deploySystem) {
     for (const node of [...nodes.values()]) {
       if (node.kind !== "service") continue;
       if (
         node.metadata?.docker !== true &&
-        node.metadata?.terraform !== true
+        node.metadata?.terraform !== true &&
+        node.metadata?.kubernetes !== true
       ) {
         continue;
       }
@@ -2076,11 +2124,12 @@ export function projectSemanticArchitecture(
     if (node.kind === "function" && node.metadata?.serverAction !== true) {
       continue;
     }
-    // Only collapse Docker/Terraform deployables — Extractor roster stays.
+    // Only collapse Docker/Terraform/Kubernetes deployables — Extractor roster stays.
     if (
       node.kind === "service" &&
       node.metadata?.docker !== true &&
       node.metadata?.terraform !== true &&
+      node.metadata?.kubernetes !== true &&
       node.metadata?.role !== "extractor"
     ) {
       continue;
@@ -2244,6 +2293,17 @@ export function projectSemanticArchitecture(
     ) {
       // module.network → Network
       nextLabel = humanizeTerraformLabel("module", node.metadata.moduleName);
+    } else if (
+      node.kind === "service" &&
+      node.metadata?.kubernetesResource === true &&
+      typeof node.metadata?.k8sKind === "string" &&
+      typeof node.metadata?.resourceName === "string"
+    ) {
+      // Deployment/api → API · Deployment
+      nextLabel = humanizeKubernetesLabel(
+        node.metadata.k8sKind,
+        node.metadata.resourceName,
+      );
     }
 
     if (!nextLabel || nextLabel === node.label) continue;

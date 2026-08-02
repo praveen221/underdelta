@@ -674,6 +674,11 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       "image", "build", "ports", "hostPorts", "dependsOn", "from", "expose",
       "dockerCompose", "dockerfile", "dockerModule", "technicalLabel",
       "composeFiles",
+      // Kubernetes story — kind/name owned by labels + evidence detail.
+      "kubernetes", "kubernetesResource", "kubernetesModule",
+      "k8sKind", "resourceName", "apiVersion", "namespace", "address",
+      "exampleChrome", "labelSource", "pathRoleLabel", "collapsedInOverview",
+      "overviewHub",
     ]);
 
     function connectionButton(edge, id) {
