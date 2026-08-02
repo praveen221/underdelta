@@ -967,6 +967,26 @@ if (!workersConsume) {
   pass("Fulfillment workers consume fulfillment");
 }
 
+const fulfillmentPublishers = Array.isArray(fulfillmentQueue?.metadata?.publishers)
+  ? fulfillmentQueue.metadata.publishers
+  : [];
+const fulfillmentConsumers = Array.isArray(fulfillmentQueue?.metadata?.consumers)
+  ? fulfillmentQueue.metadata.consumers
+  : [];
+if (!fulfillmentPublishers.includes("Checkout API")) {
+  fail(
+    `expected fulfillment publishers to include Checkout API, found ${JSON.stringify(fulfillmentPublishers)}`,
+  );
+} else if (!fulfillmentConsumers.includes("Fulfillment workers")) {
+  fail(
+    `expected fulfillment consumers to include Fulfillment workers, found ${JSON.stringify(fulfillmentConsumers)}`,
+  );
+} else {
+  pass(
+    `fulfillment messaging roles: publishers=${fulfillmentPublishers.join(", ")}; consumers=${fulfillmentConsumers.join(", ")}`,
+  );
+}
+
 // Inspector: collaboration edges (uses/renders/exposes/…) before raw imports,
 // with human detail text (not just kind · label).
 const viewerHtml = renderArchitectureHtml(selfGraph);
@@ -1186,6 +1206,33 @@ if (
   pass(
     "viewer canvas shows collaboration/relation edge labels on selection so founders read meaning without the inspector",
   );
+}
+
+// Inspector: messaging hubs surface publisher/consumer lists (not raw metadata pills).
+const messagingRolesFn = fixtureViewerHtml.indexOf("function messagingRolesHtml");
+const messagingHeading = fixtureViewerHtml.indexOf("<h3>Messaging</h3>");
+const publishersRoleLabel = fixtureViewerHtml.indexOf('"Publishers"');
+const consumersRoleLabel = fixtureViewerHtml.indexOf('"Consumers"');
+const messagingHubNote = fixtureViewerHtml.indexOf("Messaging hub");
+const messagingOwnedPubSub =
+  fixtureViewerHtml.includes('edge.kind === "publishes" || edge.kind === "consumes"') &&
+  fixtureViewerHtml.includes('structuredMetaKeys = new Set([') &&
+  fixtureViewerHtml.includes('"publishers"') &&
+  fixtureViewerHtml.includes('"consumers"') &&
+  fixtureViewerHtml.includes('"messagingHub"');
+const messagingInInspector =
+  fixtureViewerHtml.includes("const messaging = messagingRolesHtml(node)") &&
+  fixtureViewerHtml.includes("tableSources + tableRelations + messaging");
+if (messagingRolesFn < 0 || messagingHeading < 0) {
+  fail("viewer inspector missing Messaging section for queue hubs");
+} else if (publishersRoleLabel < 0 || consumersRoleLabel < 0 || messagingHubNote < 0) {
+  fail("viewer inspector should list Publishers and Consumers on messaging hubs");
+} else if (!messagingOwnedPubSub || !messagingInInspector) {
+  fail(
+    "viewer inspector should own publishers/consumers under Messaging (not raw metadata / Imports & calls)",
+  );
+} else {
+  pass("viewer inspector surfaces queue publisher/consumer lists on messaging hubs");
 }
 
 if (process.exitCode) {

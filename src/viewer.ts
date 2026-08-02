@@ -104,6 +104,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     .table-relation { margin: 0 0 10px; }
     .table-relation .pill { margin-bottom: 2px; }
     .relation-detail { margin: 2px 0 0; font-size: 12px; line-height: 1.35; color: var(--text); }
+    .messaging-role { margin: 0 0 10px; }
+    .messaging-role-label { margin: 0 0 4px; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+    .messaging-hub-note { margin: 0 0 10px; font-size: 12px; color: var(--text); }
     .evidence { border-top: 1px solid var(--line); padding: 9px 0; }
     .evidence a { color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
     .evidence a:hover { color: var(--accent); }
@@ -549,11 +552,40 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     const structuredMetaKeys = new Set([
       "keyFiles", "binEntries", "binCommands", "packageExports", "extractorRoster",
       "prismaName", "sqlName", "sources", "aliases", "normalizedTable",
+      "publishers", "consumers", "messagingHub",
     ]);
 
     function connectionButton(edge, id) {
       const other = byId.get(edge.source === id ? edge.target : edge.source);
       return '<button class="pill connection" data-id="' + (other?.id || "") + '">' + edge.kind + " · " + (other?.label || "unknown") + "</button>";
+    }
+
+    function nodeIdByLabel(label) {
+      for (const node of byId.values()) {
+        if (node.label === label) return node.id;
+      }
+      return "";
+    }
+
+    // Messaging hubs: show who publishes / who consumes before raw edge pills.
+    function messagingRolesHtml(node) {
+      if (node.kind !== "queue" && node.kind !== "topic") return "";
+      const meta = node.metadata || {};
+      const publishers = Array.isArray(meta.publishers) ? meta.publishers : [];
+      const consumers = Array.isArray(meta.consumers) ? meta.consumers : [];
+      if (!publishers.length && !consumers.length) return "";
+      function roleList(labels, role) {
+        if (!labels.length) return "";
+        const pills = labels.map((label) => {
+          const id = nodeIdByLabel(label);
+          return '<button class="pill connection" data-id="' + id + '">' + label + "</button>";
+        }).join("");
+        return '<div class="messaging-role"><p class="messaging-role-label">' + role + "</p>" + pills + "</div>";
+      }
+      const hubNote = meta.messagingHub
+        ? '<p class="messaging-hub-note">Messaging hub</p>'
+        : "";
+      return "<h3>Messaging</h3>" + hubNote + roleList(publishers, "Publishers") + roleList(consumers, "Consumers");
     }
 
     // Collaboration edges carry human detail on evidence (how systems connect).
@@ -683,12 +715,21 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const outgoingEdges = outgoing.get(id) || [];
       const connections = [...incomingEdges, ...outgoingEdges];
       const collaboration = connections.filter((edge) => collaborationKinds.has(edge.kind));
+      const messaging = messagingRolesHtml(node);
       // Table migration lineage is owned by the Prisma / SQL section.
       // Table↔table relation names are owned by the Relations section.
+      // Queue publish/consume roles are owned by the Messaging section.
       const importsAndCalls = connections.filter((edge) => {
         if (collaborationKinds.has(edge.kind)) return false;
         if (node.kind === "table" && edge.kind === "migrates") return false;
         if (node.kind === "table" && isTableRelationEdge(edge)) return false;
+        if (
+          messaging &&
+          (node.kind === "queue" || node.kind === "topic") &&
+          (edge.kind === "publishes" || edge.kind === "consumes")
+        ) {
+          return false;
+        }
         return true;
       });
       const metadataEntries = Object.entries(node.metadata || {}).filter(([key]) => !structuredMetaKeys.has(key));
@@ -700,7 +741,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const collaborationHtml = collabLinks
         ? "<h3>Collaboration</h3>" + collabLinks
         : "";
-      const structuredSections = tableSources || tableRelations || collabLinks;
+      const structuredSections = tableSources || tableRelations || messaging || collabLinks;
       const otherHtml = otherLinks
         ? "<h3>" + (collabLinks ? "Imports &amp; calls" : "Connections") + "</h3>" + otherLinks
         : (structuredSections ? "" : "<h3>Connections</h3><p>None visible</p>");
@@ -724,7 +765,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         const href = "vscode://file/" + graph.project.root.replace(/\\/$/, "") + "/" + item.file + ":" + line;
         return '<div class="evidence"><a href="' + href + '">' + item.file + ":" + line + '</a><div class="certainty ' + item.certainty + '">' + item.certainty + " · " + item.extractor + "</div>" + (item.detail ? "<p>" + item.detail + "</p>" : "") + "</div>";
       }).join("");
-      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + tableSources + tableRelations + binHtml + rosterHtml + keyFiles + collaborationHtml + otherHtml + "<h3>Source evidence</h3>" + evidence;
+      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + tableSources + tableRelations + messaging + binHtml + rosterHtml + keyFiles + collaborationHtml + otherHtml + "<h3>Source evidence</h3>" + evidence;
       inspector.querySelector("h2").textContent = node.label;
       inspector.querySelectorAll(".connection").forEach((button) => {
         button.onclick = () => selectNode(button.dataset.id);
