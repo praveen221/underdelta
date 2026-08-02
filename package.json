@@ -13,7 +13,9 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "verify": "npm run build && node scripts/verify.mjs"
+    "verify": "npm run build && node scripts/verify.mjs",
+    "start": "npm run build && node dist/cli.js scan . --serve",
+    "scan": "node dist/cli.js scan"
   },
   "engines": {
     "node": ">=22"

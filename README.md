@@ -30,36 +30,33 @@ Build history, pin SHAs, and freeze rules:
 
 ## Try it
 
+### Map any project (no Underdelta install)
+
+From the repository you want to understand:
+
 ```bash
-npm install
-npm run build
-node dist/cli.js scan /path/to/repository
+cd /path/to/your/project
+curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/scripts/scan.sh | bash
 ```
 
-Open:
+That caches Underdelta under `~/.cache/underdelta`, scans the current directory,
+writes `.underdelta/`, serves the map, and opens your browser.
 
-```text
-/path/to/repository/.underdelta/index.html
+### Working inside this repo
+
+```bash
+./scripts/run.sh                 # map Underdelta itself
+./scripts/run.sh /path/to/repo   # map another project with your local build
+npm start                        # same as ./scripts/run.sh for .
 ```
 
-The same run writes the portable intermediate representation to
-`.underdelta/architecture.json`.
-
+Output always lands in `<repo>/.underdelta/` (`index.html` + `architecture.json`).
 Generated output, dependencies, build artifacts, fixtures, and conventional
 test/spec files are excluded from scans so the default map represents the
 product rather than development scaffolding.
 
-During development:
-
 ```bash
-npm run dev -- scan /path/to/repository
-```
-
-Verification (isolated `verification/mini-*` fixtures + optional pinned real
-repos under gitignored `.underdelta-real/`; never part of the product diagram):
-
-```bash
-npm run verify
+npm run verify   # fixture + golden-lock suite
 ```
 
 ## Core contract
