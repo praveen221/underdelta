@@ -155,6 +155,7 @@ const thinSystemLabels = new Set([
   "Scheduled jobs",
   "Queue workers",
   "Pipelines",
+  "Deploy",
 ]);
 
 /**
@@ -180,8 +181,9 @@ export function inferSystemKeyFromHeading(heading: string): string | undefined {
   }
 
   // Skip imperative how-to headings ("Generate your Prisma client", "Seed the database").
+  // Also "To run (via Docker)" — docs chrome, not a Deploy system name.
   if (
-    /^(generate|install|run|create|configure|deploy|build|test|clone|download|add|update|set\s*up|make|enable|start|seed|apply|migrate|push|pull|open|visit|follow|copy|paste|replace|remove|delete|drop|reset)\b/.test(
+    /^(to\s+)?(generate|install|run|create|configure|deploy|build|test|clone|download|add|update|set\s*up|make|enable|start|seed|apply|migrate|push|pull|open|visit|follow|copy|paste|replace|remove|delete|drop|reset)\b/.test(
       text,
     )
   ) {
@@ -216,6 +218,12 @@ export function inferSystemKeyFromHeading(heading: string): string | undefined {
       key: "data",
       pattern:
         /\bdata(?:base)?\b|\bcatalog\b|\b(?:prisma|sql)\s+(?:models?|schema|data|layer|access)\b|\b(?:models?|schema)\s+(?:and|&|\/)\s+(?:migrations?|sql|prisma)\b/,
+      weight: 7,
+    },
+    // Docker/Compose — prefer "Containers"; avoid bare "docker" (matches "via Docker" how-tos).
+    {
+      key: "deploy",
+      pattern: /\bcontainers?\b|\bdocker-compose\b|\bcompose\s+(?:file|services?)\b/,
       weight: 7,
     },
   ];
@@ -336,6 +344,7 @@ const flowOrderPreference: string[] = [
   "workers",
   "jobs",
   "data",
+  "deploy",
 ];
 
 function flowOrderRank(key: string): number {
@@ -684,6 +693,27 @@ function quietNonCompilerProductChrome(
     }
   }
 
+  // Dockerfile-only Deploy beside API/UI/Data is packaging chrome, not the
+  // product story (RealWorld/Petstore ships a Dockerfile). Keep Deploy visible
+  // when Compose services exist — those are real deployable units.
+  const deploy = systems.get("deploy");
+  if (deploy) {
+    const hasComposeServices = [...nodes.values()].some(
+      (node) =>
+        node.parentId === deploy.id &&
+        node.metadata?.dockerService === true,
+    );
+    const hasProductSurface =
+      systems.has("api") || systems.has("ui") || systems.has("data");
+    if (hasProductSurface && !hasComposeServices) {
+      deploy.metadata = {
+        ...deploy.metadata,
+        collapsedInOverview: true,
+      };
+      nodes.set(deploy.id, deploy);
+    }
+  }
+
   // Drop flows-to / collab edges that point at collapsed chrome so the IR
   // matches what the overview tells (no ghost API→Data story).
   for (const [edgeId, edge] of [...edges.entries()]) {
@@ -730,13 +760,30 @@ function isGraphqlSchemaModulePath(file: string): boolean {
   );
 }
 
+/** Dockerfile / Compose paths — modules even though they are not JS/TS/Py. */
+function isDockerModulePath(file: string): boolean {
+  const normalized = normalizePath(file);
+  const base = normalized.split("/").pop()?.toLowerCase() ?? "";
+  return (
+    base === "dockerfile" ||
+    base.startsWith("dockerfile.") ||
+    base.endsWith(".dockerfile") ||
+    base === "docker-compose.yml" ||
+    base === "docker-compose.yaml" ||
+    base === "compose.yml" ||
+    base === "compose.yaml" ||
+    /^docker-compose\.[^/]+\.ya?ml$/.test(base)
+  );
+}
+
 function isFileModule(node: ArchitectureNode): boolean {
   if (node.kind !== "module") return false;
   const file = normalizePath(node.qualifiedName ?? node.label);
   return (
     /\.(?:[cm]?[jt]sx?|py)$/i.test(file) ||
     isOpenApiSpecModulePath(file) ||
-    isGraphqlSchemaModulePath(file)
+    isGraphqlSchemaModulePath(file) ||
+    isDockerModulePath(file)
   );
 }
 
@@ -802,6 +849,10 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
     isGraphqlSchemaModulePath(file)
   ) {
     return { key: "api", label: "HTTP API", kind: "api" };
+  }
+  // Docker / Compose recipes are the deployable runtime surface.
+  if (isDockerModulePath(file)) {
+    return { key: "deploy", label: "Deploy", kind: "system" };
   }
   if (
     /(^|\/)jobs?\.[cm]?[jt]sx?$/.test(file) ||
@@ -1674,6 +1725,24 @@ export function projectSemanticArchitecture(
     }
   }
 
+  // Nest Docker Compose / Dockerfile services under Deploy so the overview
+  // tells a containers story instead of a flat service dump.
+  const deploySystem = systems.get("deploy");
+  if (deploySystem) {
+    for (const node of [...nodes.values()]) {
+      if (node.kind !== "service") continue;
+      if (node.metadata?.docker !== true) continue;
+      if (node.metadata?.projection === "semantic") continue;
+      // Extractor roster children under Extractors are also kind:service — skip.
+      if (node.metadata?.role === "extractor") continue;
+      attachToSystem(
+        node.id,
+        deploySystem.id,
+        node.evidence[0] ?? projectionEvidence("."),
+      );
+    }
+  }
+
   // Nest extracted pipelines under the semantic Pipelines system.
   // Mongo aggregation pipelines stay out — they nest under Data access so we
   // never invent a Pipelines system that would gate Checkout commerce collab.
@@ -1823,6 +1892,7 @@ export function projectSemanticArchitecture(
     "schema",
     "pipeline",
     "function",
+    "service",
   ]);
   for (const node of nodes.values()) {
     if (node.metadata?.projection === "semantic") continue;
@@ -1831,6 +1901,14 @@ export function projectSemanticArchitecture(
     if (node.kind === "cron" && node.metadata?.scheduleHub) continue;
     // Only collapse server-action functions — raw handlers stay module-local.
     if (node.kind === "function" && node.metadata?.serverAction !== true) {
+      continue;
+    }
+    // Only collapse Docker deployables — Extractor roster children stay as-is.
+    if (
+      node.kind === "service" &&
+      node.metadata?.docker !== true &&
+      node.metadata?.role !== "extractor"
+    ) {
       continue;
     }
     const parent = node.parentId ? nodes.get(node.parentId) : undefined;
@@ -1956,6 +2034,13 @@ export function projectSemanticArchitecture(
     } else if (node.kind === "component") {
       // All components (client + server): tame PascalCase Card*/skeletons too.
       nextLabel = humanizeIdentifierLabel(node.label);
+    } else if (
+      node.kind === "service" &&
+      node.metadata?.docker === true &&
+      typeof node.metadata?.serviceName === "string"
+    ) {
+      // Compose service ids: api → API, web → Web, notes-api → Notes API.
+      nextLabel = humanizeIdentifierLabel(node.metadata.serviceName);
     }
 
     if (!nextLabel || nextLabel === node.label) continue;

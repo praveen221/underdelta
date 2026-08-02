@@ -24,6 +24,7 @@ const miniPythonRoot = path.join(repoRoot, "verification", "mini-python");
 const miniMongoRoot = path.join(repoRoot, "verification", "mini-mongo");
 const miniOpenapiRoot = path.join(repoRoot, "verification", "mini-openapi");
 const miniGraphqlRoot = path.join(repoRoot, "verification", "mini-graphql");
+const miniDockerRoot = path.join(repoRoot, "verification", "mini-docker");
 
 function fail(message) {
   console.error(`VERIFY FAIL: ${message}`);
@@ -108,6 +109,7 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file.includes("mini-mongo/") ||
         file.includes("mini-openapi/") ||
         file.includes("mini-graphql/") ||
+        file.includes("mini-docker/") ||
         file === ".underdelta-real" ||
         file.startsWith(".underdelta-real/") ||
         file.includes("/.underdelta-real/")
@@ -499,6 +501,7 @@ const extractorRoster = Array.isArray(extractorsSystem?.metadata?.extractorRoste
   ? extractorsSystem.metadata.extractorRoster
   : [];
 const requiredExtractors = [
+  "docker",
   "graphql",
   "mongo",
   "openapi",
@@ -522,6 +525,7 @@ const extractorKeyFiles = Array.isArray(extractorsSystem?.metadata?.keyFiles)
   ? extractorsSystem.metadata.keyFiles
   : [];
 const requiredExtractorFiles = [
+  "src/extractors/docker.ts",
   "src/extractors/graphql.ts",
   "src/extractors/mongo.ts",
   "src/extractors/openapi.ts",
@@ -5351,6 +5355,196 @@ if (graphqlRealRoot) {
       );
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Capability ladder rung 7 prep: Docker/Compose extractor + mini-docker smoke.
+// ---------------------------------------------------------------------------
+const miniDockerGraph = await compileRepository(miniDockerRoot);
+const miniDockerServices = miniDockerGraph.nodes.filter(
+  (node) => node.kind === "service" && node.metadata?.docker === true,
+);
+const miniDockerServiceLabels = miniDockerServices.map((node) => node.label);
+console.log(
+  `Mini-docker graph: ${miniDockerGraph.nodes.length} nodes, ${miniDockerGraph.edges.length} edges → services ${[...new Set(miniDockerServiceLabels)].sort().join(", ")}`,
+);
+
+const miniDockerProduct = miniDockerGraph.nodes.find(
+  (node) => node.kind === "product",
+);
+if (!miniDockerProduct || miniDockerProduct.label !== "Mini Docker notes") {
+  fail(
+    `mini-docker product label expected 'Mini Docker notes', found '${miniDockerProduct?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-docker product labeled Mini Docker notes");
+}
+
+const miniDockerExtractors = miniDockerGraph.extractors.map((item) => item.id);
+if (!miniDockerExtractors.includes("docker")) {
+  fail(
+    `mini-docker graph.extractors missing docker; found ${JSON.stringify(miniDockerExtractors)}`,
+  );
+} else {
+  pass("mini-docker registers docker extractor");
+}
+
+const miniDockerServiceNames = new Set(
+  miniDockerServices
+    .filter((node) => node.metadata?.dockerService === true)
+    .map((node) => node.metadata?.serviceName),
+);
+for (const expected of ["api", "web", "db"]) {
+  if (!miniDockerServiceNames.has(expected)) {
+    fail(
+      `mini-docker missing compose service ${expected}; found ${[...miniDockerServiceNames].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-docker has compose service ${expected}`);
+  }
+}
+
+for (const expected of ["API", "Web", "DB"]) {
+  if (!miniDockerServiceLabels.includes(expected)) {
+    fail(
+      `mini-docker missing humanized service label ${expected}; found ${miniDockerServiceLabels.join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-docker service label ${expected}`);
+  }
+}
+
+if (!miniDockerServiceLabels.includes("App image")) {
+  fail(
+    `mini-docker missing Dockerfile App image service; found ${miniDockerServiceLabels.join(", ") || "(none)"}`,
+  );
+} else {
+  pass("mini-docker has Dockerfile App image service");
+}
+
+const miniDockerEvidenceGaps = miniDockerServices.filter((node) => {
+  const detail = node.evidence?.[0]?.detail ?? "";
+  if (node.metadata?.dockerService === true) {
+    const name = node.metadata?.serviceName;
+    return typeof name !== "string" || !detail.includes(`service:${name}`);
+  }
+  if (node.metadata?.dockerfileService === true) {
+    return !detail.includes("dockerfile");
+  }
+  return true;
+});
+if (miniDockerEvidenceGaps.length > 0) {
+  fail(
+    `mini-docker evidence should cite service:/dockerfile: ${miniDockerEvidenceGaps
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-docker evidence details cite service/dockerfile");
+}
+
+const miniDockerSemantic = miniDockerGraph.nodes.filter(
+  (node) => node.metadata?.projection === "semantic",
+);
+const miniDockerByKey = new Map(
+  miniDockerSemantic
+    .filter((node) => typeof node.metadata?.systemKey === "string")
+    .map((node) => [node.metadata.systemKey, node]),
+);
+const miniDockerDeploy = miniDockerByKey.get("deploy");
+if (!miniDockerDeploy || miniDockerDeploy.label !== "Containers") {
+  fail(
+    `mini-docker Deploy label expected 'Containers' from README, found '${miniDockerDeploy?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-docker Deploy labeled Containers");
+}
+
+const nestedDockerServices = miniDockerServices.filter(
+  (node) => node.parentId === miniDockerDeploy?.id,
+);
+if (nestedDockerServices.length < 4) {
+  fail(
+    `mini-docker expected ≥4 services nested under Containers, found ${nestedDockerServices.length}`,
+  );
+} else {
+  pass(
+    `mini-docker ${nestedDockerServices.length} services nested under Containers`,
+  );
+}
+
+const dockerOverviewLeaves = nestedDockerServices.filter(
+  (node) => node.metadata?.collapsedInOverview !== true,
+);
+if (dockerOverviewLeaves.length > 0) {
+  fail(
+    `mini-docker overview should collapse services under Containers, still visible: ${dockerOverviewLeaves
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-docker overview collapses services under Containers");
+}
+
+const miniDockerFlow = miniDockerSemantic
+  .filter((node) => typeof node.metadata?.flowOrder === "number")
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+if (
+  miniDockerFlow.length < 1 ||
+  miniDockerFlow[0]?.metadata?.systemKey !== "deploy"
+) {
+  fail(
+    `mini-docker flowOrder expected Containers/Deploy, got ${miniDockerFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `mini-docker flowOrder: ${miniDockerFlow.map((node) => node.label).join(" → ")}`,
+  );
+}
+
+const miniDockerModules = miniDockerGraph.nodes.filter(
+  (node) => node.kind === "module" && node.metadata?.dockerModule === true,
+);
+const miniDockerModuleLabels = new Set(
+  miniDockerModules.map((node) =>
+    String(node.metadata?.file ?? node.label).replaceAll("\\", "/"),
+  ),
+);
+if (![...miniDockerModuleLabels].some((label) => label.endsWith("docker-compose.yml"))) {
+  fail("mini-docker missing docker-compose.yml module");
+} else {
+  pass("mini-docker has docker-compose.yml module");
+}
+if (![...miniDockerModuleLabels].some((label) => /(^|\/)Dockerfile$/.test(label))) {
+  fail("mini-docker missing Dockerfile module");
+} else {
+  pass("mini-docker has Dockerfile module");
+}
+
+const dockerModuleChrome = miniDockerModules.filter(
+  (node) => node.metadata?.collapsedInOverview !== true,
+);
+if (dockerModuleChrome.length > 0) {
+  fail(
+    `mini-docker overview should collapse Docker modules, still visible: ${dockerModuleChrome
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-docker overview collapses Docker modules");
+}
+
+const dockerCommerceNoise = miniDockerGraph.edges.some((edge) =>
+  /checkout|orders?/i.test(
+    `${edge.label ?? ""} ${JSON.stringify(edge.metadata ?? {})}`,
+  ),
+);
+if (dockerCommerceNoise) {
+  fail(
+    "mini-docker should not inherit Checkout/orders commerce collaboration copy",
+  );
+} else {
+  pass("mini-docker has no Checkout/orders commerce collaboration noise");
 }
 
 if (process.exitCode) {

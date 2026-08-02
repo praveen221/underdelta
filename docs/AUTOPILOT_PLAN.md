@@ -188,6 +188,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 6: thicken mini-graphql golden — nest schema+document ops under Notes API, evidence floors (`field:` + operationName), collapse schema.graphql + operations.ts chrome, unique North-star labels (named docs drop Query/Mutation so CreateNote ≠ Mutation Create note)
 - [x] Rung 6: pin `zth/graphql-client-example-server` @ `814f2ba089368c29f433dc395fe169ae52740a46`; clone into gitignored `.underdelta-real/graphql-client-example-server`; golden-lock 15 SDL ops (incl. subscription) under HTTP API + unique labels + schema.graphql collapse + evidence `field:`
 - [x] Rung 6 polish/lock: quiet non-compiler chrome — fold bare `schema.ts` Schema contract → HTTP API; collapse empty bin CLI + table-less Data; flowOrder HTTP API only; North-star overview HTTP API–led — **Rung 6 locked**
+- [x] Rung 7 prep: Docker/Compose extractor — `Dockerfile`/`docker-compose.y*ml` services → Deploy; path-role + Containers README; `verification/mini-docker` smoke floors + Extractors roster `docker`; quiet Dockerfile-only Deploy beside API/UI/Data
 
 ### Real-repo pins (Capability ladder)
 
@@ -204,8 +205,8 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 7 prep: Docker / Compose extractor — `Dockerfile`/`docker-compose.y*ml` services → deployable systems; path-role; `verification/mini-docker` smoke floors + Extractors roster `docker`
 - [ ] Rung 7: pin a real Docker/Compose OSS repo (exact SHA) into gitignored `.underdelta-real/` + golden-lock
+- [ ] Rung 7 polish: Compose service story — depends_on / ports / image labels as North-star canvas vocabulary; quiet duplicate Dockerfile App image when Compose `build:` already owns the service
 - [ ] GraphQL `schema { query: Root }` / non-Query root types (SWAPI-style) if a later pin needs it
 - [ ] Standing polish: Underdelta self-map cold-read pass — any leftover jargon labels or weak hierarchy after mongo noise + inspector hygiene
 - [ ] Standing polish: hide remaining compiler chrome pills (`labelSource`, `pathRoleLabel`, `collapsedInOverview`, `overviewHub`) if they still dump in inspector
@@ -222,7 +223,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Rung 6 locked — GraphQL pin North-star overview is HTTP API–led). Now start Rung 7 Docker/Compose extractor + `verification/mini-docker` smoke so we can map deployable services next.
+> **Next focus:** This work is done (Rung 7 prep — Docker/Compose extractor + mini-docker smoke). Now pin a real Docker/Compose OSS repo at an exact SHA and golden-lock Deploy/Containers so we can lock Rung 7.
 
 ### Learning log (append every tick)
 
@@ -287,6 +288,7 @@ Append short bullets like:
 - 2026-08-02 06:00 UTC | Done: Rung 6 thicken mini-graphql — named gql docs drop Query/Mutation prefix (`Create note` vs SDL `Mutation Create note`); store first selected field separately from operationName; evidence floors `field:` + op name; collapse operations.ts + schema.graphql; golden unique 9 labels + nest schema(5)+document(4) | Next: pin real GraphQL OSS repo + golden-lock | Learned: treating operationName as `field` erased the schema selection and guaranteed twin chrome after humanize; OpenAPI-summary-style document labels (no kind prefix) are the GraphQL uniqueness fix
 - 2026-08-02 05:57 UTC | Done: Rung 6 pin+golden — `zth/graphql-client-example-server` @ `814f2ba` gitignored; 15 SDL ops (query/mutation/subscription) nested/collapsed under HTTP API; unique humanized labels; schema.graphql chrome quiet; evidence `field:` | Next: polish North-star overview (CLI/Schema/Data compete with API) then lock Rung 6 | Learned: SWAPI uses `schema { query: Root }` so `type Query` extractors miss it — pick a Query/Mutation SDL pin first, leave Root-alias for seed; npm `bin` + `src/db.ts` + `src/schema.ts` correctly invent CLI/Data/Schema systems that a GraphQL-only cold-read must quiet later
 - 2026-08-02 06:01 UTC | Done: Rung 6 locked — `quietNonCompilerProductChrome` folds bare `schema.ts` Schema contract → HTTP API; collapses empty bin CLI + table-less Data; flowOrder skips collapsed; golden-lock North-star overview HTTP API only; promote Docker as Rung 7 | Next: Rung 7 Docker/Compose extractor + mini-docker fixture | Learned: path-role invention is correct for Underdelta’s compiler stack but steals product cold-reads — gate chrome quieting on absence of compile/extractors/graph/viewer so self-map stays rich while GraphQL example servers read as one HTTP API
+- 2026-08-02 06:05 UTC | Done: Rung 7 prep — `src/extractors/docker.ts` Compose services + Dockerfile App image; Deploy path-role; mini-docker Containers smoke (API/Web/DB + App image nested/collapsed); roster `docker`; quiet Dockerfile-only Deploy beside API/UI/Data (Petstore/RealWorld) | Next: pin real Docker/Compose OSS repo + golden-lock | Learned: bare `\bdocker\b` README heading matches "To run (via Docker)" and invents Deploy chrome — require containers/docker-compose phrasing; Dockerfile-only Deploy must collapse on API-led maps or every RealWorld pin grows a packaging lane
 
 ---
 

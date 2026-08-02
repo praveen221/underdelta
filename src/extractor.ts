@@ -43,6 +43,11 @@ export interface ArchitectureExtractor {
   id: string;
   version: string;
   extensions: ReadonlySet<string>;
+  /**
+   * Optional basename/path matcher for files whose extension is not enough
+   * (e.g. bare `Dockerfile`, `Dockerfile.dev`).
+   */
+  matchesFile?(file: string): boolean;
   extract(context: ExtractionContext): Promise<ExtractorContribution>;
 }
 
@@ -75,8 +80,10 @@ export async function runExtractor(
   root: string,
   allFiles: string[],
 ): Promise<ExtractorContribution> {
-  const files = allFiles.filter((file) =>
-    extractor.extensions.has(path.extname(file).toLowerCase()),
-  );
+  const files = allFiles.filter((file) => {
+    const ext = path.extname(file).toLowerCase();
+    if (extractor.extensions.has(ext)) return true;
+    return extractor.matchesFile?.(file) === true;
+  });
   return extractor.extract({ root, files });
 }
