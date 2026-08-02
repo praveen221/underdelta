@@ -90,21 +90,21 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Queue publish/consume clarity on the default map (messaging hubs stay visible)
 - [x] Generated browser artifact node (`index.html`) beside architecture.json
 - [x] Capture a “scan Underdelta” golden summary in verify (counts + required labels)
+- [x] Richer Underdelta self-map collaboration edges (uses/renders/exposes/triggers/configures)
 
 ### In progress / next
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Richer Underdelta self-map edges (compile uses extractors, viewer renders graph, etc.)
-- [ ] SQL + Prisma table unification polish (names, relations, migrations edge)
 - [ ] Surface extractor roster on Extractors system (keyFiles / child labels)
 - [ ] Mini-stack flowOrder band so fixture diagram reads left-to-right like Underdelta
+- [ ] SQL + Prisma table unification polish (names, relations, migrations edge)
+- [ ] README heading roles as weak projection hints
 
 ### Seed backlog (pull from here when In progress < 3)
 
 Not a full roadmap — a menu the agent may reorder. Pick what most improves the end goal now.
 
-- Richer Underdelta self-map edges (compile uses extractors, viewer renders graph, etc.)
 - Surface extractor roster on Extractors system (keyFiles / child labels)
 - Mini-stack flowOrder band so fixture diagram reads left-to-right like Underdelta
 - Multi-file route frameworks / Next-style app router hints (only if it helps the chosen stack)
@@ -112,10 +112,11 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 - README heading roles as weak projection hints
 - Performance pass only if scan becomes painful on mini-stack / self repo
 - Docs only when CLI/behavior changed
+- Viewer inspector: show collaboration edges (uses/renders/exposes) before raw imports
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Underdelta golden summary locked into verify). Now enrich self-map edges (compile uses extractors, viewer renders graph/artifact, CLI exposes scan) so the default diagram shows how product systems collaborate, not only the happy-path flowOrder band.
+> **Next focus:** This work is done (self-map collaboration edges: compile uses extractors, viewer renders graph/IR, CLI exposes artifacts). Now surface the extractor roster on the Extractors system (keyFiles + child labels for typescript/prisma/sql) so founders can see which extractors power the map.
 
 ### Learning log (append every tick)
 
@@ -135,6 +136,7 @@ Append short bullets like:
 - 2026-08-02 03:05 UTC | Done: package.json bin→CLI projection + keyFiles in inspector | Next: queue publish/consume clarity + index.html artifact | Learned: bin entries are strong CLI evidence and should map dist entrypoints back to src modules for keyFiles
 - 2026-08-02 03:15 UTC | Done: queue `.add`→publishes + Worker→consumes, system-lifted pub/sub, messaging hubs stay on overview | Next: index.html artifact beside architecture.json | Learned: collapsing every queue hides the product story; hubs with both publishers and consumers must stay visible and edges must lift onto API/workers systems
 - 2026-08-02 03:20 UTC | Done: index.html browser artifact (prior commit) + Underdelta golden summary in verify (counts/labels/floors + flowOrder) | Next: richer self-map collaboration edges | Learned: previous tick can land code without updating the plan—first reconcile Status board, then take the next open increment; golden floors beat exact counts for overnight loops
+- 2026-08-02 03:25 UTC | Done: collaboration edges (compile uses extractors/graph/schema, viewer renders graph+IR, CLI triggers compile + exposes artifacts, schema configures extractors/graph) + verify | Next: extractor roster on Extractors system | Learned: flows-to alone reads as a pipeline; uses/renders/exposes/triggers make system collaboration legible without overcrowding the Product flow band
 
 ---
 

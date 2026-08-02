@@ -303,6 +303,39 @@ if (!browserFromArtifact || !browserFromViewer) {
   pass("index.html flows from architecture.json and Viewer");
 }
 
+function requireCollab(kind, fromLabel, toLabel) {
+  const from = selfGraph.nodes.find(
+    (node) =>
+      node.label === fromLabel && node.metadata?.projection === "semantic",
+  );
+  const to = selfGraph.nodes.find(
+    (node) =>
+      node.label === toLabel && node.metadata?.projection === "semantic",
+  );
+  const found =
+    from &&
+    to &&
+    selfGraph.edges.some(
+      (edge) =>
+        edge.kind === kind && edge.source === from.id && edge.target === to.id,
+    );
+  if (!found) {
+    fail(`missing collaboration edge ${fromLabel} -[${kind}]-> ${toLabel}`);
+  } else {
+    pass(`collaboration: ${fromLabel} -[${kind}]-> ${toLabel}`);
+  }
+}
+
+requireCollab("uses", "Compile pipeline", "Extractors");
+requireCollab("uses", "Compile pipeline", "Graph assembly");
+requireCollab("uses", "Compile pipeline", "Schema contract");
+requireCollab("renders", "Viewer", "Graph assembly");
+requireCollab("renders", "Viewer", "architecture.json");
+requireCollab("exposes", "CLI", "architecture.json");
+requireCollab("exposes", "CLI", "index.html");
+requireCollab("triggers", "CLI", "Compile pipeline");
+requireCollab("configures", "Schema contract", "Extractors");
+
 const cli = selfGraph.nodes.find(
   (node) => node.label === "CLI" && node.metadata?.projection === "semantic",
 );

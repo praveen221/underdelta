@@ -3,6 +3,7 @@ import {
   architectureGraphSchema,
   type ArchitectureGraph,
   type ArchitectureNode,
+  type EdgeKind,
   type Evidence,
   type NodeKind,
 } from "./schema.js";
@@ -43,6 +44,107 @@ const preferredFlows: Array<[string, string]> = [
   ["pipelines", "data"],
   ["workers", "data"],
   ["viewer", "api"],
+];
+
+/** How product systems collaborate beyond the left-to-right flow band. */
+const collaborationEdges: Array<{
+  from: string;
+  to: string;
+  kind: EdgeKind;
+  label: string;
+  detail: string;
+}> = [
+  {
+    from: "cli",
+    to: "compile",
+    kind: "triggers",
+    label: "scan",
+    detail: "CLI scan command triggers the compile pipeline",
+  },
+  {
+    from: "cli",
+    to: "artifact",
+    kind: "exposes",
+    label: "architecture.json",
+    detail: "CLI scan writes the architecture IR artifact",
+  },
+  {
+    from: "cli",
+    to: "browser",
+    kind: "exposes",
+    label: "index.html",
+    detail: "CLI scan writes the self-contained browser artifact",
+  },
+  {
+    from: "compile",
+    to: "extractors",
+    kind: "uses",
+    label: "extract",
+    detail: "Compile pipeline uses language extractors",
+  },
+  {
+    from: "compile",
+    to: "graph",
+    kind: "uses",
+    label: "assemble",
+    detail: "Compile pipeline uses graph assembly",
+  },
+  {
+    from: "compile",
+    to: "schema",
+    kind: "uses",
+    label: "validate",
+    detail: "Compile pipeline validates against the schema contract",
+  },
+  {
+    from: "extractors",
+    to: "schema",
+    kind: "uses",
+    label: "kinds",
+    detail: "Extractors emit schema-shaped architecture nodes",
+  },
+  {
+    from: "graph",
+    to: "schema",
+    kind: "uses",
+    label: "contract",
+    detail: "Graph assembly conforms to the schema contract",
+  },
+  {
+    from: "schema",
+    to: "extractors",
+    kind: "configures",
+    label: "shape",
+    detail: "Schema contract configures extractor output shape",
+  },
+  {
+    from: "schema",
+    to: "graph",
+    kind: "configures",
+    label: "shape",
+    detail: "Schema contract configures graph assembly shape",
+  },
+  {
+    from: "viewer",
+    to: "graph",
+    kind: "renders",
+    label: "graph",
+    detail: "Viewer renders the assembled architecture graph",
+  },
+  {
+    from: "viewer",
+    to: "artifact",
+    kind: "renders",
+    label: "IR",
+    detail: "Viewer renders architecture.json into the browser",
+  },
+  {
+    from: "viewer",
+    to: "browser",
+    kind: "exposes",
+    label: "index.html",
+    detail: "Viewer emits the index.html browser artifact",
+  },
 ];
 
 function assignFlowOrder(
@@ -729,6 +831,27 @@ export function projectSemanticArchitecture(
       `${fromKey} → ${toKey}`,
     );
     if (!edges.has(flow.id)) edges.set(flow.id, flow);
+  }
+
+  // Collaboration edges describe how systems work together (uses/renders/…),
+  // complementary to the left-to-right flows-to story band.
+  for (const collab of collaborationEdges) {
+    const from = systemsByKey.get(collab.from);
+    const to = systemsByKey.get(collab.to);
+    if (!from || !to) continue;
+    const edge = edgeFrom(
+      collab.kind,
+      from,
+      to,
+      {
+        file: ".",
+        extractor: "projection",
+        certainty: "inferred",
+        detail: collab.detail,
+      },
+      collab.label,
+    );
+    if (!edges.has(edge.id)) edges.set(edge.id, edge);
   }
 
   // Project package.json bin / exports into the product map.
