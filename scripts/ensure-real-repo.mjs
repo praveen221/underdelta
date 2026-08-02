@@ -60,6 +60,15 @@ export const SWAGGER_PETSTORE = {
   dirname: "swagger-petstore",
 };
 
+/** @type {RealRepoPin} */
+export const GRAPHQL_CLIENT_EXAMPLE_SERVER = {
+  name: "zth/graphql-client-example-server",
+  url: "https://github.com/zth/graphql-client-example-server.git",
+  // Pinned 2026-08-02 — tip of master at plan rung-6 GraphQL real-repo kickoff.
+  sha: "814f2ba089368c29f433dc395fe169ae52740a46",
+  dirname: "graphql-client-example-server",
+};
+
 export const REAL_REPO_ROOT = path.join(repoRoot, ".underdelta-real");
 
 function git(args, cwd, opts = {}) {
@@ -142,6 +151,10 @@ const PINS_BY_NAME = {
   petstore: SWAGGER_PETSTORE,
   "swagger-petstore": SWAGGER_PETSTORE,
   openapi: SWAGGER_PETSTORE,
+  [GRAPHQL_CLIENT_EXAMPLE_SERVER.dirname]: GRAPHQL_CLIENT_EXAMPLE_SERVER,
+  graphql: GRAPHQL_CLIENT_EXAMPLE_SERVER,
+  "graphql-client-example-server": GRAPHQL_CLIENT_EXAMPLE_SERVER,
+  "gql-server": GRAPHQL_CLIENT_EXAMPLE_SERVER,
 };
 
 const isMain =
@@ -157,6 +170,7 @@ if (isMain) {
         FASTAPI_REALWORLD,
         HACKATHON_STARTER,
         SWAGGER_PETSTORE,
+        GRAPHQL_CLIENT_EXAMPLE_SERVER,
       ];
   if (requested && pins.length === 0) {
     throw new Error(

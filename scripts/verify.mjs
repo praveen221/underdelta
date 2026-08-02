@@ -9,6 +9,7 @@ import { renderArchitectureHtml } from "../dist/viewer.js";
 import {
   ensureRealRepo,
   FASTAPI_REALWORLD,
+  GRAPHQL_CLIENT_EXAMPLE_SERVER,
   HACKATHON_STARTER,
   NEXTJS_SAAS_STARTER,
   REALWORLD_EXPRESS,
@@ -5008,6 +5009,274 @@ if (graphqlCommerceNoise) {
   );
 } else {
   pass("mini-graphql has no Checkout/orders commerce collaboration noise");
+}
+
+// ---------------------------------------------------------------------------
+// Capability ladder rung 6: real GraphQL SDL repo (pinned SHA, gitignored).
+// Golden-lock zth/graphql-client-example-server ops under HTTP API.
+// ---------------------------------------------------------------------------
+let graphqlRealRoot;
+try {
+  graphqlRealRoot = await ensureRealRepo(GRAPHQL_CLIENT_EXAMPLE_SERVER);
+  pass(
+    `graphql real repo ${GRAPHQL_CLIENT_EXAMPLE_SERVER.name} ready @ ${GRAPHQL_CLIENT_EXAMPLE_SERVER.sha.slice(0, 12)}`,
+  );
+} catch (error) {
+  fail(
+    `could not ensure graphql real repo ${GRAPHQL_CLIENT_EXAMPLE_SERVER.name}@${GRAPHQL_CLIENT_EXAMPLE_SERVER.sha}: ${error instanceof Error ? error.message : error}`,
+  );
+}
+
+if (graphqlRealRoot) {
+  let graphqlRealGraph;
+  try {
+    graphqlRealGraph = await compileRepository(graphqlRealRoot);
+    pass(
+      `graphql-real-repo scan completed: ${graphqlRealGraph.nodes.length} nodes, ${graphqlRealGraph.edges.length} edges`,
+    );
+  } catch (error) {
+    fail(
+      `graphql-real-repo scan crashed on ${GRAPHQL_CLIENT_EXAMPLE_SERVER.name}: ${error instanceof Error ? error.message : error}`,
+    );
+  }
+
+  if (graphqlRealGraph) {
+    const graphqlRealRoutes = graphqlRealGraph.nodes.filter(
+      (node) => node.kind === "route" && node.metadata?.graphql === true,
+    );
+    const graphqlRealSemantic = graphqlRealGraph.nodes.filter(
+      (node) => node.metadata?.projection === "semantic",
+    );
+    const graphqlRealProduct = graphqlRealGraph.nodes.find(
+      (node) => node.kind === "product",
+    );
+    const graphqlRealByKey = new Map(
+      graphqlRealSemantic
+        .filter((node) => typeof node.metadata?.systemKey === "string")
+        .map((node) => [node.metadata.systemKey, node]),
+    );
+    const graphqlRealApi = graphqlRealByKey.get("api");
+    const graphqlRealFields = new Set(
+      graphqlRealRoutes.map(
+        (node) =>
+          `${node.metadata?.operationType ?? "?"}:${node.metadata?.field ?? "?"}`,
+      ),
+    );
+    const graphqlRealLabels = graphqlRealRoutes.map((node) => node.label);
+
+    const graphqlRealSummary = {
+      pin: `${GRAPHQL_CLIENT_EXAMPLE_SERVER.name}@${GRAPHQL_CLIENT_EXAMPLE_SERVER.sha}`,
+      product: graphqlRealProduct?.label ?? null,
+      nodes: graphqlRealGraph.nodes.length,
+      edges: graphqlRealGraph.edges.length,
+      routes: graphqlRealRoutes.length,
+      semantic: graphqlRealSemantic.map((node) => node.label),
+    };
+    console.log(
+      `GraphQL-real-repo scan summary: ${JSON.stringify(graphqlRealSummary)}`,
+    );
+
+    if (
+      !graphqlRealProduct ||
+      graphqlRealProduct.label !== "GraphQL Client Example Server"
+    ) {
+      fail(
+        `graphql-real-repo product label expected 'GraphQL Client Example Server', found '${graphqlRealProduct?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass(`graphql-real-repo product label: ${graphqlRealProduct.label}`);
+    }
+
+    if (!graphqlRealApi || graphqlRealApi.label !== "HTTP API") {
+      fail(
+        `graphql-real-repo api system label expected 'HTTP API', found '${graphqlRealApi?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass("graphql-real-repo api system labeled 'HTTP API'");
+    }
+
+    if (!graphqlRealGraph.extractors.some((item) => item.id === "graphql")) {
+      fail("graphql-real-repo graph.extractors missing graphql");
+    } else {
+      pass("graphql-real-repo registers graphql extractor");
+    }
+
+    if (graphqlRealRoutes.length < 15) {
+      fail(
+        `graphql-real-repo expected ≥15 GraphQL ops from schema.graphql, found ${graphqlRealRoutes.length}`,
+      );
+    } else {
+      pass(`graphql-real-repo ${graphqlRealRoutes.length} GraphQL ops`);
+    }
+
+    for (const expected of [
+      "query:allTodos",
+      "query:todos",
+      "query:todosConnection",
+      "query:tickets",
+      "query:ticketsConnection",
+      "query:userById",
+      "query:siteStatistics",
+      "query:node",
+      "mutation:addTodoItem",
+      "mutation:updateTodoItem",
+      "mutation:deleteTodoItem",
+      "mutation:addTodoSimple",
+      "mutation:updateTodoSimple",
+      "mutation:deleteTodoSimple",
+      "subscription:siteStatisticsUpdated",
+    ]) {
+      if (!graphqlRealFields.has(expected)) {
+        fail(
+          `graphql-real-repo missing field ${expected}; found ${[...graphqlRealFields].sort().join(", ") || "(none)"}`,
+        );
+      } else {
+        pass(`graphql-real-repo has field ${expected}`);
+      }
+    }
+
+    for (const expected of [
+      "Query All todos",
+      "Query Todos",
+      "Query Todos connection",
+      "Query Tickets",
+      "Query User by ID",
+      "Query Site statistics",
+      "Query Node",
+      "Mutation Add todo item",
+      "Mutation Update todo item",
+      "Mutation Delete todo item",
+      "Mutation Add todo simple",
+      "Subscription Site statistics updated",
+    ]) {
+      if (!graphqlRealLabels.includes(expected)) {
+        fail(
+          `graphql-real-repo missing label ${JSON.stringify(expected)}; found ${[...new Set(graphqlRealLabels)].sort().join(" | ") || "(none)"}`,
+        );
+      } else {
+        pass(`graphql-real-repo label ${expected}`);
+      }
+    }
+
+    const graphqlRealDupLabels = graphqlRealLabels.filter(
+      (label, index) => graphqlRealLabels.indexOf(label) !== index,
+    );
+    if (graphqlRealDupLabels.length > 0) {
+      fail(
+        `graphql-real-repo GraphQL labels must be unique, duplicates: ${[
+          ...new Set(graphqlRealDupLabels),
+        ].join(" | ")}`,
+      );
+    } else {
+      pass(
+        `graphql-real-repo ${graphqlRealLabels.length} labels are unique (no twin chrome)`,
+      );
+    }
+
+    const nestedGraphqlRealRoutes = graphqlRealRoutes.filter(
+      (node) => node.parentId === graphqlRealApi?.id,
+    );
+    if (nestedGraphqlRealRoutes.length < 15) {
+      fail(
+        `graphql-real-repo expected ≥15 ops nested under HTTP API, found ${nestedGraphqlRealRoutes.length}`,
+      );
+    } else {
+      pass(
+        `graphql-real-repo ${nestedGraphqlRealRoutes.length} ops nested under HTTP API`,
+      );
+    }
+
+    const graphqlRealOverviewLeaves = nestedGraphqlRealRoutes.filter(
+      (node) => node.metadata?.collapsedInOverview !== true,
+    );
+    if (graphqlRealOverviewLeaves.length > 0) {
+      fail(
+        `graphql-real-repo overview should collapse ops under HTTP API, still visible: ${graphqlRealOverviewLeaves
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass(
+        "graphql-real-repo routes collapsed on overview (API tells the story)",
+      );
+    }
+
+    const graphqlRealFlow = graphqlRealSemantic
+      .filter((node) => typeof node.metadata?.flowOrder === "number")
+      .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+    const graphqlRealFlowHasApi = graphqlRealFlow.some(
+      (node) => node.metadata?.systemKey === "api",
+    );
+    if (!graphqlRealFlowHasApi) {
+      fail(
+        `graphql-real-repo flowOrder expected HTTP API, got ${graphqlRealFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+      );
+    } else {
+      pass(
+        `graphql-real-repo flowOrder includes HTTP API: ${graphqlRealFlow.map((node) => node.label).join(" → ")}`,
+      );
+    }
+
+    const graphqlRealSpecModules = graphqlRealGraph.nodes.filter(
+      (node) =>
+        node.kind === "module" &&
+        (node.metadata?.graphqlSpec === true ||
+          /\.(?:graphql|gql)$/i.test(node.label)),
+    );
+    if (
+      !graphqlRealSpecModules.some((node) => /schema\.graphql$/i.test(node.label))
+    ) {
+      fail("graphql-real-repo missing schema.graphql module");
+    } else {
+      pass("graphql-real-repo has schema.graphql module");
+    }
+    const graphqlRealSpecChrome = graphqlRealSpecModules.filter(
+      (node) =>
+        node.parentId !== graphqlRealApi?.id ||
+        node.metadata?.collapsedInOverview !== true,
+    );
+    if (graphqlRealSpecChrome.length > 0) {
+      fail(
+        `graphql-real-repo overview should nest+collapse schema.graphql under HTTP API, still chrome: ${graphqlRealSpecChrome
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass(
+        "graphql-real-repo overview collapses schema.graphql under HTTP API",
+      );
+    }
+
+    const graphqlRealEvidenceGaps = graphqlRealRoutes.filter((node) => {
+      const detail = node.evidence?.[0]?.detail ?? "";
+      const field = node.metadata?.field;
+      return !field || !detail.includes(`field:${field}`);
+    });
+    if (graphqlRealEvidenceGaps.length > 0) {
+      fail(
+        `graphql-real-repo evidence should cite field: ${graphqlRealEvidenceGaps
+          .map((node) => node.metadata?.field ?? node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass("graphql-real-repo evidence details cite field:");
+    }
+
+    const graphqlRealCommerceNoise = graphqlRealGraph.edges.some((edge) =>
+      /checkout|orders?/i.test(
+        `${edge.label ?? ""} ${JSON.stringify(edge.metadata ?? {})}`,
+      ),
+    );
+    if (graphqlRealCommerceNoise) {
+      fail(
+        "graphql-real-repo should not inherit Checkout/orders commerce collaboration copy",
+      );
+    } else {
+      pass(
+        "graphql-real-repo has no Checkout/orders commerce collaboration noise",
+      );
+    }
+  }
 }
 
 if (process.exitCode) {

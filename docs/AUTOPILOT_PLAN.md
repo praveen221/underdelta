@@ -186,6 +186,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 5 lock: unique summary labels (mini-openapi + Petstore, no path-param twin chrome); Express+OpenAPI dual-source tempfile nests under one Notes API; North-star overview HTTP API only — **Rung 5 locked**
 - [x] Rung 6 prep: GraphQL operations extractor — `.graphql`/`.gql` SDL `type Query|Mutation|Subscription` fields + `gql`/`graphql` tagged documents; wire compile + path-role/isFileModule; humanize Query/Mutation labels; `verification/mini-graphql` smoke floors + Extractors roster `graphql`
 - [x] Rung 6: thicken mini-graphql golden — nest schema+document ops under Notes API, evidence floors (`field:` + operationName), collapse schema.graphql + operations.ts chrome, unique North-star labels (named docs drop Query/Mutation so CreateNote ≠ Mutation Create note)
+- [x] Rung 6: pin `zth/graphql-client-example-server` @ `814f2ba089368c29f433dc395fe169ae52740a46`; clone into gitignored `.underdelta-real/graphql-client-example-server`; golden-lock 15 SDL ops (incl. subscription) under HTTP API + unique labels + schema.graphql collapse + evidence `field:`
 
 ### Real-repo pins (Capability ladder)
 
@@ -196,13 +197,14 @@ Update these checkboxes and the “Next focus” section every tick.
 | 3 | `nsidnev/fastapi-realworld-example-app` | `029eb7781c60d5f563ee8990a0cbfb79b244538c` | `.underdelta-real/fastapi-realworld` |
 | 4 | `sahat/hackathon-starter` | `d20161b9e81e817d38b3633e08349f327b01d974` | `.underdelta-real/hackathon-starter` |
 | 5 | `swagger-api/swagger-petstore` | `8f0dd286987880b4af7bce552aca3813166f3049` | `.underdelta-real/swagger-petstore` |
+| 6 | `zth/graphql-client-example-server` | `814f2ba089368c29f433dc395fe169ae52740a46` | `.underdelta-real/graphql-client-example-server` |
 
 ### In progress / next
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 6: pin a real GraphQL OSS repo (SHA + gitignored clone) + golden-lock product systems / Notes-or-HTTP API nesting after the mini fixture lands
-- [ ] Rung 6 polish: real GraphQL pin default browser — unique labels, quiet module chrome, North-star overview (then lock Rung 6)
+- [ ] Rung 6 polish: graphql-client-example-server default browser — quiet CLI/Schema-contract/Data chrome so North-star overview is HTTP API–led (then lock Rung 6)
+- [ ] GraphQL `schema { query: Root }` / non-Query root types (SWAPI-style) if a later pin needs it
 - [ ] Standing polish: Underdelta self-map cold-read pass — any leftover jargon labels or weak hierarchy after mongo noise + inspector hygiene
 - [ ] Standing polish: hide remaining compiler chrome pills (`labelSource`, `pathRoleLabel`, `collapsedInOverview`, `overviewHub`) if they still dump in inspector
 
@@ -218,7 +220,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Rung 6 thicken — unique SDL/document labels, evidence floors, ops.ts chrome). Now pin a real GraphQL OSS repo (SHA + gitignored clone) + golden-lock so we can polish and lock Rung 6.
+> **Next focus:** This work is done (Rung 6 pin+golden — `zth/graphql-client-example-server` @ `814f2ba`, 15 ops nested/collapsed under HTTP API). Now polish the real GraphQL pin default browser (quiet CLI/Schema/Data chrome, North-star overview) so we can lock Rung 6.
 
 ### Learning log (append every tick)
 
@@ -281,6 +283,7 @@ Append short bullets like:
 - 2026-08-02 05:50 UTC | Done: Rung 5 locked — golden unique summary labels (mini-openapi + Petstore); tempfile Express+OpenAPI dual-source nests all routes under one Notes API; North-star overview HTTP API only; promote GraphQL as Rung 6 | Next: GraphQL extractor sketch + mini-graphql fixture | Learned: Petstore pin cannot prove Nest/Express dual-source (Java+contract only) — a tempfile with both extractors is the right lock; uniqueness of canvas labels is the twin-chrome regression guard, not path equality
 - 2026-08-02 05:55 UTC | Done: Rung 6 prep — `src/extractors/graphql.ts` SDL Query/Mutation/Subscription fields + gql/graphql tagged documents; path-role/isFileModule for `.graphql`/`.gql`; humanize Query/Mutation labels; `verification/mini-graphql` Notes API smoke + Extractors roster `graphql` | Next: thicken mini-graphql golden then pin real GraphQL OSS repo | Learned: treat GraphQL ops as `route` nodes so existing API nest/collapse/flowOrder apply; named document ops (`ListNotes`) and SDL fields (`notes`) are both product surface — expect label overlap until a later uniqueness polish; isFileModule must admit `.graphql` or schema never gets path-role
 - 2026-08-02 06:00 UTC | Done: Rung 6 thicken mini-graphql — named gql docs drop Query/Mutation prefix (`Create note` vs SDL `Mutation Create note`); store first selected field separately from operationName; evidence floors `field:` + op name; collapse operations.ts + schema.graphql; golden unique 9 labels + nest schema(5)+document(4) | Next: pin real GraphQL OSS repo + golden-lock | Learned: treating operationName as `field` erased the schema selection and guaranteed twin chrome after humanize; OpenAPI-summary-style document labels (no kind prefix) are the GraphQL uniqueness fix
+- 2026-08-02 05:57 UTC | Done: Rung 6 pin+golden — `zth/graphql-client-example-server` @ `814f2ba` gitignored; 15 SDL ops (query/mutation/subscription) nested/collapsed under HTTP API; unique humanized labels; schema.graphql chrome quiet; evidence `field:` | Next: polish North-star overview (CLI/Schema/Data compete with API) then lock Rung 6 | Learned: SWAPI uses `schema { query: Root }` so `type Query` extractors miss it — pick a Query/Mutation SDL pin first, leave Root-alias for seed; npm `bin` + `src/db.ts` + `src/schema.ts` correctly invent CLI/Data/Schema systems that a GraphQL-only cold-read must quiet later
 
 ---
 
