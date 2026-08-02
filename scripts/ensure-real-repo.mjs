@@ -105,6 +105,15 @@ export const HELM_EXAMPLES = {
   dirname: "helm-examples",
 };
 
+/** @type {RealRepoPin} */
+export const PODINFO = {
+  name: "stefanprodan/podinfo",
+  url: "https://github.com/stefanprodan/podinfo.git",
+  // Pinned 2026-08-02 — tip of master at plan rung-11 Kustomize real-repo kickoff.
+  sha: "eec06d1ea459af4cb4e10e806f8be7c7bd58b361",
+  dirname: "podinfo",
+};
+
 export const REAL_REPO_ROOT = path.join(repoRoot, ".underdelta-real");
 
 function git(args, cwd, opts = {}) {
@@ -210,6 +219,10 @@ const PINS_BY_NAME = {
   "helm-examples": HELM_EXAMPLES,
   helm: HELM_EXAMPLES,
   "hello-world": HELM_EXAMPLES,
+  [PODINFO.dirname]: PODINFO,
+  podinfo: PODINFO,
+  kustomize: PODINFO,
+  overlays: PODINFO,
 };
 
 const isMain =
@@ -230,6 +243,7 @@ if (isMain) {
         TERRAFORM_AWS_VPC,
         MICROSERVICES_DEMO,
         HELM_EXAMPLES,
+        PODINFO,
       ];
   if (requested && pins.length === 0) {
     throw new Error(

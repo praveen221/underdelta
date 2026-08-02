@@ -15,6 +15,7 @@ import {
   HELM_EXAMPLES,
   MICROSERVICES_DEMO,
   NEXTJS_SAAS_STARTER,
+  PODINFO,
   REALWORLD_EXPRESS,
   SWAGGER_PETSTORE,
   TERRAFORM_AWS_VPC,
@@ -8342,6 +8343,259 @@ if (kustomizeCommerceNoise) {
   );
 } else {
   pass("mini-kustomize has no Checkout/orders commerce collaboration noise");
+}
+
+// ---------------------------------------------------------------------------
+// Capability ladder rung 11: real Kustomize-led repo (pinned SHA, gitignored).
+// Golden-lock stefanprodan/podinfo Deploy/Overlays story (bases + env overlays).
+// ---------------------------------------------------------------------------
+let kustomizeRealRoot;
+try {
+  kustomizeRealRoot = await ensureRealRepo(PODINFO);
+  pass(
+    `kustomize real repo ${PODINFO.name} ready @ ${PODINFO.sha.slice(0, 12)}`,
+  );
+} catch (error) {
+  fail(
+    `could not ensure kustomize real repo ${PODINFO.name}@${PODINFO.sha}: ${error instanceof Error ? error.message : error}`,
+  );
+}
+
+if (kustomizeRealRoot) {
+  let kustomizeRealGraph;
+  try {
+    kustomizeRealGraph = await compileRepository(kustomizeRealRoot);
+    pass(
+      `kustomize-real-repo scan completed: ${kustomizeRealGraph.nodes.length} nodes, ${kustomizeRealGraph.edges.length} edges`,
+    );
+  } catch (error) {
+    fail(
+      `kustomize-real-repo scan crashed on ${PODINFO.name}: ${error instanceof Error ? error.message : error}`,
+    );
+  }
+
+  if (kustomizeRealGraph) {
+    const kustomizeRealOverlays = kustomizeRealGraph.nodes.filter(
+      (node) =>
+        node.kind === "service" &&
+        node.metadata?.kustomize === true &&
+        node.metadata?.kustomization === true,
+    );
+    const kustomizeRealSemantic = kustomizeRealGraph.nodes.filter(
+      (node) => node.metadata?.projection === "semantic",
+    );
+    const kustomizeRealProduct = kustomizeRealGraph.nodes.find(
+      (node) => node.kind === "product",
+    );
+    const kustomizeRealByKey = new Map(
+      kustomizeRealSemantic
+        .filter((node) => typeof node.metadata?.systemKey === "string")
+        .map((node) => [node.metadata.systemKey, node]),
+    );
+    const kustomizeRealDeploy = kustomizeRealByKey.get("deploy");
+    const kustomizeRealLabels = new Set(
+      kustomizeRealOverlays.map((node) => node.label),
+    );
+
+    const kustomizeRealSummary = {
+      pin: `${PODINFO.name}@${PODINFO.sha}`,
+      product: kustomizeRealProduct?.label ?? null,
+      nodes: kustomizeRealGraph.nodes.length,
+      edges: kustomizeRealGraph.edges.length,
+      overlays: kustomizeRealOverlays.length,
+      semantic: kustomizeRealSemantic.map((node) => node.label),
+      overlayLabels: [...kustomizeRealLabels].sort(),
+    };
+    console.log(
+      `Kustomize-real-repo scan summary: ${JSON.stringify(kustomizeRealSummary)}`,
+    );
+
+    if (!kustomizeRealProduct || kustomizeRealProduct.label !== "Podinfo") {
+      fail(
+        `kustomize-real-repo product label expected 'Podinfo' from README, found '${kustomizeRealProduct?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass(`kustomize-real-repo product label: ${kustomizeRealProduct.label}`);
+    }
+
+    if (!kustomizeRealDeploy || kustomizeRealDeploy.label !== "Deploy") {
+      fail(
+        `kustomize-real-repo deploy system label expected 'Deploy', found '${kustomizeRealDeploy?.label ?? "(missing)"}'`,
+      );
+    } else {
+      pass("kustomize-real-repo deploy system labeled 'Deploy'");
+    }
+
+    if (!kustomizeRealGraph.extractors.some((item) => item.id === "kustomize")) {
+      fail("kustomize-real-repo graph.extractors missing kustomize");
+    } else {
+      pass("kustomize-real-repo registers kustomize extractor");
+    }
+
+    const expectedOverlayLabels = [
+      "Backend · Overlay",
+      "Cache · Overlay",
+      "Database · Overlay",
+      "Frontend · Overlay",
+      "Dev · Overlay",
+      "Production · Overlay",
+      "Staging · Overlay",
+    ];
+    for (const expected of expectedOverlayLabels) {
+      if (!kustomizeRealLabels.has(expected)) {
+        fail(
+          `kustomize-real-repo missing overlay hub ${expected}; found ${[...kustomizeRealLabels].join(", ") || "(none)"}`,
+        );
+      } else {
+        pass(`kustomize-real-repo overlay hub ${expected}`);
+      }
+    }
+
+    const productOverlays = kustomizeRealOverlays.filter(
+      (node) =>
+        expectedOverlayLabels.includes(node.label) &&
+        node.metadata?.exampleChrome !== true,
+    );
+    if (productOverlays.length !== expectedOverlayLabels.length) {
+      fail(
+        `kustomize-real-repo expected ${expectedOverlayLabels.length} non-chrome product overlays, found ${productOverlays.length}`,
+      );
+    } else {
+      pass(
+        `kustomize-real-repo ${productOverlays.length} product overlays stay non-chrome`,
+      );
+    }
+
+    const nestedOverlayHubs = productOverlays.filter(
+      (node) =>
+        node.parentId === kustomizeRealDeploy?.id &&
+        node.metadata?.overviewHub === true &&
+        node.metadata?.collapsedInOverview !== true,
+    );
+    if (nestedOverlayHubs.length !== expectedOverlayLabels.length) {
+      fail(
+        `kustomize-real-repo expected ${expectedOverlayLabels.length} overview Overlay hubs nested under Deploy, found ${nestedOverlayHubs.length}: ${nestedOverlayHubs
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass(
+        `kustomize-real-repo ${nestedOverlayHubs.length} Overlay hubs nested under Deploy as overview hubs`,
+      );
+    }
+
+    // Env overlays should keep namespace metadata from kustomization.yaml.
+    for (const [label, ns] of [
+      ["Dev · Overlay", "dev"],
+      ["Staging · Overlay", "staging"],
+      ["Production · Overlay", "production"],
+    ]) {
+      const overlay = productOverlays.find((node) => node.label === label);
+      if (!overlay || overlay.metadata?.namespace !== ns) {
+        fail(
+          `kustomize-real-repo ${label} namespace expected '${ns}', found '${overlay?.metadata?.namespace ?? "(missing)"}'`,
+        );
+      } else {
+        pass(`kustomize-real-repo ${label} namespace=${ns}`);
+      }
+    }
+
+    // Simple kustomize/ installer beside deploy/bases+overlays is chrome.
+    const rootKustomizeChrome = kustomizeRealOverlays.find(
+      (node) =>
+        node.metadata?.overlayName === "kustomize" ||
+        /(?:^|\/)kustomize\/kustomization\.ya?ml$/i.test(
+          String(node.evidence?.[0]?.file ?? "").replaceAll("\\", "/"),
+        ),
+    );
+    if (
+      !rootKustomizeChrome ||
+      rootKustomizeChrome.metadata?.exampleChrome !== true ||
+      rootKustomizeChrome.metadata?.kustomizeChrome !== true
+    ) {
+      fail(
+        `kustomize-real-repo expected kustomize/ Overlay quieted as chrome beside deploy/; found label=${rootKustomizeChrome?.label ?? "(missing)"} exampleChrome=${rootKustomizeChrome?.metadata?.exampleChrome} kustomizeChrome=${rootKustomizeChrome?.metadata?.kustomizeChrome}`,
+      );
+    } else {
+      pass("kustomize-real-repo kustomize/ Overlay quieted as chrome");
+    }
+
+    const kustomizeRealK8s = kustomizeRealGraph.nodes.filter(
+      (node) =>
+        node.kind === "service" &&
+        node.metadata?.kubernetesResource === true &&
+        node.parentId === kustomizeRealDeploy?.id,
+    );
+    if (kustomizeRealK8s.length < 8) {
+      fail(
+        `kustomize-real-repo expected ≥8 kubernetes resources nested under Deploy, found ${kustomizeRealK8s.length}`,
+      );
+    } else {
+      pass(
+        `kustomize-real-repo ${kustomizeRealK8s.length} kubernetes resources nested under Deploy`,
+      );
+    }
+
+    const visibleK8sLeaves = kustomizeRealK8s.filter(
+      (node) =>
+        node.metadata?.collapsedInOverview !== true &&
+        node.metadata?.exampleChrome !== true &&
+        node.metadata?.overviewHub !== true,
+    );
+    if (visibleK8sLeaves.length > 0) {
+      fail(
+        `kustomize-real-repo overview should collapse Deployments/Services under Deploy, still visible: ${visibleK8sLeaves
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass("kustomize-real-repo overview collapses kubernetes resources under Deploy");
+    }
+
+    const kustomizeRealFlow = kustomizeRealSemantic
+      .filter((node) => typeof node.metadata?.flowOrder === "number")
+      .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+    if (
+      !kustomizeRealFlow.some((node) => node.metadata?.systemKey === "deploy")
+    ) {
+      fail(
+        `kustomize-real-repo flowOrder should include Deploy, got ${kustomizeRealFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+      );
+    } else {
+      pass(
+        `kustomize-real-repo flowOrder includes Deploy: ${kustomizeRealFlow.map((node) => node.label).join(" → ")}`,
+      );
+    }
+
+    const overlayEvidenceGaps = productOverlays.filter((node) => {
+      const detail = node.evidence?.[0]?.detail ?? "";
+      return !/^overlay:/.test(detail);
+    });
+    if (overlayEvidenceGaps.length > 0) {
+      fail(
+        `kustomize-real-repo overlay evidence should cite overlay: ${overlayEvidenceGaps
+          .map((node) => node.label)
+          .join(", ")}`,
+      );
+    } else {
+      pass("kustomize-real-repo overlay evidence details cite overlay:");
+    }
+
+    const kustomizeRealCommerce = kustomizeRealGraph.edges.some((edge) =>
+      /checkout|orders?/i.test(
+        `${edge.label ?? ""} ${JSON.stringify(edge.metadata ?? {})}`,
+      ),
+    );
+    if (kustomizeRealCommerce) {
+      fail(
+        "kustomize-real-repo should not inherit Checkout/orders commerce collaboration copy",
+      );
+    } else {
+      pass(
+        "kustomize-real-repo has no Checkout/orders commerce collaboration noise",
+      );
+    }
+  }
 }
 
 if (process.exitCode) {

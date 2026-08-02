@@ -133,7 +133,15 @@ export function preferProductLabel(
   if (pkg && !pkg.includes("/")) {
     return /[-_]/.test(pkg) ? humanizePackageName(pkg) : pkg;
   }
-  if (readmeTitle) return readmeTitle;
+  if (readmeTitle) {
+    const title = readmeTitle.trim();
+    // Plain lowercase README brands (`podinfo`) read as product names once
+    // title-cased; multi-word / already-cased titles stay as authored.
+    if (/^[a-z][a-z0-9]*$/.test(title)) {
+      return humanizePackageName(title);
+    }
+    return title;
+  }
   if (pkg) return humanizePackageName(pkg);
   const base = fallback.trim();
   return /[-_]/.test(base) ? humanizePackageName(base) : base;
