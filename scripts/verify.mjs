@@ -3965,8 +3965,8 @@ if (mongoRealRoot) {
 }
 
 // ---------------------------------------------------------------------------
-// Capability ladder rung 5 prep: OpenAPI extractor + verification/mini-openapi.
-// Smoke floors — full golden polish lands in the next tick.
+// Capability ladder rung 5: OpenAPI extractor + verification/mini-openapi.
+// Dual-format golden floors (openapi.yaml + swagger.json) + summary labels.
 // ---------------------------------------------------------------------------
 const miniOpenapiGraph = await compileRepository(miniOpenapiRoot);
 const miniOpenapiRoutes = miniOpenapiGraph.nodes.filter(
@@ -4009,6 +4009,8 @@ for (const expected of [
   "POST /notes",
   "GET /notes/{id}",
   "DELETE /notes/{id}",
+  "GET /api/tags",
+  "POST /api/tags",
 ]) {
   if (!miniOpenapiOps.has(expected)) {
     fail(
@@ -4019,14 +4021,92 @@ for (const expected of [
   }
 }
 
-for (const expected of ["GET Notes", "POST Notes", "DELETE Notes"]) {
+const miniOpenapiYamlRoutes = miniOpenapiRoutes.filter(
+  (node) => node.technology === "openapi",
+);
+const miniOpenapiSwaggerRoutes = miniOpenapiRoutes.filter(
+  (node) => node.technology === "swagger",
+);
+if (miniOpenapiYamlRoutes.length < 4) {
+  fail(
+    `mini-openapi expected ≥4 openapi.yaml routes, found ${miniOpenapiYamlRoutes.length}`,
+  );
+} else {
+  pass(`mini-openapi dual-format: ${miniOpenapiYamlRoutes.length} OpenAPI 3 routes`);
+}
+if (miniOpenapiSwaggerRoutes.length < 2) {
+  fail(
+    `mini-openapi expected ≥2 swagger.json routes, found ${miniOpenapiSwaggerRoutes.length}`,
+  );
+} else {
+  pass(
+    `mini-openapi dual-format: ${miniOpenapiSwaggerRoutes.length} Swagger 2 routes (basePath /api)`,
+  );
+}
+
+for (const expected of [
+  "List notes",
+  "Create note",
+  "Get note",
+  "Delete note",
+  "List tags",
+  "Create tag",
+]) {
   if (!miniOpenapiRouteLabels.includes(expected)) {
     fail(
-      `mini-openapi missing humanized route ${expected}; found ${miniOpenapiRouteLabels.join(", ") || "(none)"}`,
+      `mini-openapi missing summary label ${expected}; found ${miniOpenapiRouteLabels.join(", ") || "(none)"}`,
     );
   } else {
-    pass(`mini-openapi humanized route ${expected}`);
+    pass(`mini-openapi summary label ${expected}`);
   }
+}
+
+const miniOpenapiOpIds = new Set(
+  miniOpenapiRoutes.map((node) => node.metadata?.operationId).filter(Boolean),
+);
+for (const expected of [
+  "listNotes",
+  "createNote",
+  "getNote",
+  "deleteNote",
+  "listTags",
+  "createTag",
+]) {
+  if (!miniOpenapiOpIds.has(expected)) {
+    fail(
+      `mini-openapi missing operationId ${expected}; found ${[...miniOpenapiOpIds].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-openapi operationId ${expected}`);
+  }
+}
+
+const miniOpenapiMissingSummary = miniOpenapiRoutes.filter(
+  (node) => typeof node.metadata?.summary !== "string" || !node.metadata.summary,
+);
+if (miniOpenapiMissingSummary.length > 0) {
+  fail(
+    `mini-openapi routes missing summary metadata: ${miniOpenapiMissingSummary
+      .map((node) => node.metadata?.path ?? node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass(`mini-openapi ${miniOpenapiRoutes.length} routes carry summary evidence`);
+}
+
+const miniOpenapiEvidenceGaps = miniOpenapiRoutes.filter((node) => {
+  const detail = node.evidence?.[0]?.detail ?? "";
+  const opId = node.metadata?.operationId;
+  return !opId || !detail.includes(String(opId));
+});
+if (miniOpenapiEvidenceGaps.length > 0) {
+  fail(
+    `mini-openapi evidence should cite operationId: ${miniOpenapiEvidenceGaps
+      .map((node) => node.metadata?.operationId ?? node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-openapi evidence details cite operationId");
 }
 
 const miniOpenapiSystems = miniOpenapiGraph.nodes.filter(
@@ -4049,9 +4129,9 @@ if (!miniOpenapiApi || miniOpenapiApi.label !== "Notes API") {
 const nestedOpenapiRoutes = miniOpenapiRoutes.filter(
   (node) => node.parentId === miniOpenapiApi?.id,
 );
-if (nestedOpenapiRoutes.length < 4) {
+if (nestedOpenapiRoutes.length < 6) {
   fail(
-    `mini-openapi expected ≥4 routes nested under Notes API, found ${nestedOpenapiRoutes.length}`,
+    `mini-openapi expected ≥6 routes nested under Notes API, found ${nestedOpenapiRoutes.length}`,
   );
 } else {
   pass(`mini-openapi ${nestedOpenapiRoutes.length} routes nested under Notes API`);
@@ -4068,6 +4148,52 @@ if (openapiOverviewLeaves.length > 0) {
   );
 } else {
   pass("mini-openapi overview collapses routes under Notes API");
+}
+
+const miniOpenapiFlow = miniOpenapiSystems
+  .filter((node) => typeof node.metadata?.flowOrder === "number")
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+if (
+  miniOpenapiFlow.length < 1 ||
+  miniOpenapiFlow[0]?.label !== "Notes API" ||
+  miniOpenapiFlow[0]?.metadata?.systemKey !== "api"
+) {
+  fail(
+    `mini-openapi flowOrder expected Notes API, got ${miniOpenapiFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `mini-openapi flowOrder: ${miniOpenapiFlow.map((node) => node.label).join(" → ")}`,
+  );
+}
+
+const miniOpenapiSpecModules = miniOpenapiGraph.nodes.filter(
+  (node) => node.kind === "module" && node.metadata?.openapiSpec === true,
+);
+const miniOpenapiSpecLabels = new Set(
+  miniOpenapiSpecModules.map((node) => node.label),
+);
+if (!miniOpenapiSpecLabels.has("openapi.yaml")) {
+  fail("mini-openapi missing openapi.yaml spec module");
+} else {
+  pass("mini-openapi has openapi.yaml spec module");
+}
+if (!miniOpenapiSpecLabels.has("swagger.json")) {
+  fail("mini-openapi missing swagger.json spec module");
+} else {
+  pass("mini-openapi has swagger.json spec module");
+}
+const openapiModuleChrome = miniOpenapiSpecModules.filter(
+  (node) => node.metadata?.collapsedInOverview !== true,
+);
+if (openapiModuleChrome.length > 0) {
+  fail(
+    `mini-openapi overview should collapse spec modules, still visible: ${openapiModuleChrome
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-openapi overview collapses openapi/swagger spec modules");
 }
 
 const openapiCommerceNoise = miniOpenapiGraph.edges.some((edge) =>

@@ -5,5 +5,7 @@ Isolated OpenAPI verification fixture for Underdelta. Scanned on its own by
 
 ## Notes API
 
-HTTP operations declared in `openapi.yaml` — list/create notes and fetch one
-by id.
+HTTP operations declared in dual formats:
+
+- `openapi.yaml` — OpenAPI 3 notes list/create/get/delete
+- `swagger.json` — Swagger 2.0 tags list/create under `/api` basePath

@@ -180,6 +180,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Standing guarantee: mongo `maskComments` treats `/regex/` literals — self-map free of Collection/Note/Receiver/MongoDB comment noise; golden-lock in verify
 - [x] Standing polish: inspector metadata hygiene — hide `projection` / `systemKey` / `flowOrder` pills so North-star users see product evidence, not compiler internals; golden-lock in verify
 - [x] Rung 5 prep: OpenAPI extractor — `openapi.yaml`/`yml`/`json` + `swagger.*`; paths+operations → routes; spec modules path-role → HTTP API; humanize openapi routes; `verification/mini-openapi` smoke floors + Extractors roster includes `openapi`
+- [x] Rung 5: thicken mini-openapi golden — dual-format `openapi.yaml` + `swagger.json` (basePath `/api` tags), summary-first route labels, operationId/summary/evidence floors, flowOrder Notes API, collapse spec modules
 
 ### Real-repo pins (Capability ladder)
 
@@ -194,8 +195,8 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 5: thicken mini-openapi golden floors (swagger.json dual-format, flowOrder, operationId/summary evidence) + North-star polish pass
 - [ ] Rung 5: pin a real OpenAPI-bearing OSS repo (gitignored clone + golden-lock ops under HTTP API)
+- [ ] Rung 5 polish: real-repo OpenAPI default browser — summary labels, collapse path-param twin chrome, Nest/Express dual sources if present
 - [ ] Standing polish: Underdelta self-map cold-read pass — any leftover jargon labels or weak hierarchy after mongo noise + inspector hygiene
 - [ ] Standing polish: hide remaining compiler chrome pills (`labelSource`, `pathRoleLabel`, `collapsedInOverview`, `overviewHub`) if they still dump in inspector
 
@@ -210,7 +211,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (OpenAPI extractor + mini-openapi smoke + roster). Now thicken mini-openapi golden floors (swagger.json dual-format + flowOrder/operation evidence) so Rung 5 can pin a real OpenAPI repo next.
+> **Next focus:** This work is done (mini-openapi dual-format golden + summary-first labels). Now pin a real OpenAPI-bearing OSS repo (gitignored clone + golden-lock ops under HTTP API) so Rung 5 climbs past the fixture.
 
 ### Learning log (append every tick)
 
@@ -267,6 +268,7 @@ Append short bullets like:
 - 2026-08-02 05:33 UTC | Done: maskComments consumes `/regex/` literals (char-class + escapes + flags; keyword/punctuator prefix heuristic) so JSDoc stays masked; self-map drops Collection/Note/Receiver/MongoDB chrome; verify golden-lock | Next: inspector metadata pill hygiene | Learned: the poison was cleanName's quote-stripping character-class regex — a quote inside `/[…]/` flipped maskComments into string mode for the rest of the file; regex extractors need a real mini-lexer, not only quote+comment tracking
 - 2026-08-02 05:34 UTC | Done: inspector hygiene — hide projection/systemKey/flowOrder from structuredMetaKeys pill dump; golden-lock in verify | Next: Rung 5 OpenAPI extractor sketch + mini-openapi fixture | Learned: system nodes dump compiler internals as the first inspector chrome a founder sees; structuredMetaKeys already owned messaging/table keys — extending that set is enough without a second filter
 - 2026-08-02 05:40 UTC | Done: Rung 5 prep — `src/extractors/openapi.ts` YAML/JSON paths+ops, spec modules as file-modules → HTTP API, humanize openapi routes, `verification/mini-openapi` Notes API smoke + Extractors roster `openapi` | Next: thicken mini-openapi golden (swagger.json dual-format + flowOrder) | Learned: isFileModule was JS/TS/Py-only so openapi.yaml never got path-role until yaml/json spec filenames were admitted; keep YAML path walking dependency-free for typical specs; `spec`/`specs` dirs stay ignored — put contracts at `openapi.yaml` or under `openapi/`
+- 2026-08-02 05:45 UTC | Done: Rung 5 mini-openapi golden — swagger.json dual-format (basePath `/api` tags), summary-first OpenAPI labels (List notes vs GET Notes twins), operationId/summary/evidence + flowOrder floors, collapse both spec modules | Next: pin real OpenAPI OSS repo | Learned: path-humanize collapses list+detail to the same label; OpenAPI `summary` is the contract’s product vocabulary and should win when present; Swagger2 `basePath` must be golden-locked separately from OAS3 YAML so JSON parsing cannot silently regress
 
 ---
 

@@ -1644,6 +1644,15 @@ export function projectSemanticArchitecture(
           : `${humanizeAppPathLabel(node.metadata.path)} layout`;
     } else if (
       node.kind === "route" &&
+      node.metadata?.openapi === true &&
+      typeof node.metadata?.summary === "string" &&
+      node.metadata.summary.trim()
+    ) {
+      // OpenAPI/Swagger summaries are already product vocabulary ("List notes").
+      // Prefer them over path-derived labels so list vs detail stay distinct.
+      nextLabel = node.metadata.summary.trim();
+    } else if (
+      node.kind === "route" &&
       typeof node.metadata?.path === "string" &&
       (node.metadata?.next === "route" ||
         node.metadata?.framework === "fastapi" ||
