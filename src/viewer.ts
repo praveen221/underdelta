@@ -127,7 +127,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     .certainty.derived { color: var(--derived); }
     .certainty.inferred { color: var(--inferred); }
     .empty { color: var(--muted); padding-top: 30px; text-align: center; }
-    #legend { position: absolute; left: 14px; bottom: 14px; display: flex; gap: 10px; color: var(--muted); background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; pointer-events: none; }
+    #canvas-chrome { position: absolute; left: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 6px; max-width: min(540px, calc(100% - 28px)); pointer-events: none; }
+    #walk-hint { color: var(--muted); background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font-size: 12px; line-height: 1.35; }
+    #legend { display: flex; flex-wrap: wrap; gap: 10px; color: var(--muted); background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; }
     #legend span::before { content: ""; display: inline-block; width: 14px; border-top: 2px solid var(--observed); margin-right: 5px; vertical-align: middle; }
     #legend .derived::before { border-color: var(--derived); border-top-style: dashed; }
     #legend .inferred::before { border-color: var(--inferred); border-top-style: dotted; }
@@ -150,7 +152,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       <button id="overview" title="Return to Beginner overview">Overview</button>
       <button id="tier" title="Beginner: product story · Intermediate: enter a system’s neighborhood · Advanced: code in focus (modules; functions inside a module/api)">View: Beginner</button>
       <nav class="meta" id="focus-crumb" hidden aria-label="Focus path"></nav>
-      <input id="search" type="search" placeholder="Find a route, table, job, component…" />
+      <input id="search" type="search" placeholder="Find a system, route, table, job…" />
     </header>
     <div id="workspace">
       <main id="viewport">
@@ -158,9 +160,12 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           <svg id="edges"></svg>
           <div id="nodes"></div>
         </div>
-        <div id="legend"><span>observed</span><span class="derived">derived</span><span class="inferred">inferred</span><span class="collab">collaboration</span><span class="narrative">publishes / migrates</span><span class="relation">table relations</span></div>
+        <div id="canvas-chrome">
+          <div id="walk-hint">Beginner · Product Flow — select to inspect, double-click to walk in</div>
+          <div id="legend"><span>observed</span><span class="derived">derived</span><span class="inferred">inferred</span><span class="collab">collaboration</span><span class="narrative">publishes / migrates</span><span class="relation">table relations</span></div>
+        </div>
       </main>
-      <aside id="inspector"><div class="empty">Select a component to inspect its connections and source evidence.</div></aside>
+      <aside id="inspector"><div class="empty">Product Flow · Beginner. Select a system to inspect evidence, or double-click to walk into its Intermediate neighborhood.</div></aside>
     </div>
   </div>
   <script>
@@ -181,7 +186,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       { name: "Application", kinds: ["route"] },
       { name: "Data & automation", kinds: ["database", "schema", "table", "collection", "cron", "job", "queue", "topic", "pipeline", "pipeline-step"] },
       { name: "External", kinds: ["external", "config", "unknown"] },
-      { name: "Details", kinds: ["module", "function", "column", "pipeline-step"] }
+      // Advanced-in-focus lane (modules/functions) — not a whole-repo dump.
+      { name: "Code", kinds: ["module", "function", "column", "pipeline-step"] }
     ];
     // Mongo aggregate hubs live under Data beside collections; semantic
     // Pipelines / Compile pipeline systems stay in the Systems lane.
@@ -268,6 +274,42 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       button.dataset.tier = state.tier;
       button.dataset.codeInFocus = state.tier === "advanced" && state.focus ? "true" : "false";
     }
+    // Legend + inspector empty copy stay honest to the current walk tier.
+    function walkHintText() {
+      if (state.tier === "advanced" && state.focus) {
+        const label = byId.get(state.focus)?.label || "focus";
+        return "Advanced · code in " + label + " — modules first; drill a module for functions";
+      }
+      if (state.tier === "advanced") {
+        return "Advanced · needs a focus — double-click a system (no whole-repo dump)";
+      }
+      if (state.focus) {
+        const label = byId.get(state.focus)?.label || "focus";
+        return "Intermediate · neighborhood of " + label + " — Back returns toward Beginner";
+      }
+      if (state.tier === "intermediate") {
+        return "Intermediate · still overview-calm — double-click a Product Flow system to enter";
+      }
+      return "Beginner · Product Flow — select to inspect, double-click to walk in";
+    }
+    function emptyInspectorMessage() {
+      if (state.tier === "advanced") {
+        if (!state.focus) {
+          return "Advanced shows code in focus — double-click a system (then a module/api) to open its cluster. No whole-repo function dump.";
+        }
+        return "Advanced · code in this focus. Select a module or function here. Back returns to Intermediate, then Beginner.";
+      }
+      if (state.focus) {
+        return "Intermediate neighborhood — select a neighbor, or double-click a module/api for Advanced code in focus.";
+      }
+      if (state.tier === "intermediate") {
+        return "Still overview-calm at Intermediate until you focus. Double-click a Product Flow system to enter its neighborhood.";
+      }
+      return "Product Flow · Beginner. Select a system to inspect evidence, or double-click to walk into its Intermediate neighborhood.";
+    }
+    function emptyInspectorHtml() {
+      return '<div class="empty">' + emptyInspectorMessage() + "</div>";
+    }
     function escapeHtml(text) {
       return String(text)
         .replaceAll("&", "&amp;")
@@ -307,7 +349,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       state.selected = null;
       syncTierToFocus();
       resetCamera();
-      inspector.innerHTML = '<div class="empty">Select a component to inspect its connections and source evidence. Double-click a system for its Intermediate neighborhood; Advanced shows code in that focus.</div>';
+      inspector.innerHTML = emptyInspectorHtml();
       render();
       applyTransform();
     }
@@ -516,7 +558,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const positions = positionsScratch;
       nodesLayer.innerHTML = "";
       const activeLanes = lanes.filter(
-        (lane) => (isAdvancedTier() && state.focus) || lane.name !== "Details",
+        (lane) => (isAdvancedTier() && state.focus) || lane.name !== "Code",
       );
       const laneWidth = 240;
       const flowGap = 220;
@@ -873,6 +915,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
             : visible.length + " in neighborhood · " + graph.edges.length + " relationships")
         : visible.length + " components · " + graph.edges.length + " relationships";
       document.getElementById("back").hidden = !state.focus && state.history.length === 0;
+      const walkHint = document.getElementById("walk-hint");
+      if (walkHint) walkHint.textContent = walkHintText();
     }
 
     function highlightNeighborhood() {
@@ -1316,18 +1360,14 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       // Advanced reveals modules in that focus; functions after drilling into a
       // module/api. Search reveals matches without dumping the whole repo.
       syncTierButton();
-      if (state.tier === "advanced" && !state.focus) {
-        inspector.innerHTML = '<div class="empty">Advanced shows code in focus — double-click a system (then a module/api) to open its cluster. No whole-repo function dump.</div>';
-      }
+      if (!state.selected) inspector.innerHTML = emptyInspectorHtml();
       render();
     };
     syncTierButton();
     search.oninput = render;
     viewport.onclick = () => {
       state.selected = null;
-      inspector.innerHTML = state.tier === "advanced" && !state.focus
-        ? '<div class="empty">Advanced shows code in focus — double-click a system to enter its neighborhood first.</div>'
-        : '<div class="empty">Select a component to inspect its connections and source evidence.</div>';
+      inspector.innerHTML = emptyInspectorHtml();
       render();
     };
     viewport.onwheel = (event) => {
@@ -1360,7 +1400,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       viewport.classList.remove("dragging");
     };
 
-    inspector.innerHTML = '<div class="empty">Select a component to inspect its connections and source evidence. Double-click a system to enter its neighborhood.</div>';
+    inspector.innerHTML = emptyInspectorHtml();
     render();
     applyTransform();
   </script>

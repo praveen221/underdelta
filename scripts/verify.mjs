@@ -1156,9 +1156,22 @@ if (
   fail(
     "viewer Back/Overview must use navigateFocusStack / goOverview so tier stays in sync",
   );
+} else if (
+  !viewerHtml.includes("function emptyInspectorMessage()") ||
+  !viewerHtml.includes("function walkHintText()") ||
+  !viewerHtml.includes('id="walk-hint"') ||
+  !viewerHtml.includes("Beginner · Product Flow") ||
+  !viewerHtml.includes('name: "Code"') ||
+  viewerHtml.includes('name: "Details"') ||
+  viewerHtml.includes('lane.name !== "Details"')
+) {
+  fail(
+    "viewer legend/inspector empty-state copy must match tiers (walk-hint + emptyInspectorMessage; Code lane, not Details)",
+  );
 } else {
   pass("viewer Walkable tiers: Beginner / Intermediate / Advanced (cluster-scoped Advanced)");
   pass("viewer navigation: breadcrumb + Back/Overview tier sync");
+  pass("viewer tier copy: walk-hint + emptyInspectorMessage + Code lane");
 }
 
 // Beginner cold-open floor: Product Flow + top systems; no advanced or intermediate leaf kinds.
@@ -1248,9 +1261,28 @@ if (selfBeginner.length < 6) {
 ) {
   fail("mini-stack Beginner must not show Order/Payment tables or fulfillment queue");
 } else {
-  pass(
-    `Beginner cold open calm: self-map ${selfBeginner.length} flow nodes, mini-stack ${fixtureBeginner.length} flow nodes (no intermediate/advanced leaks)`,
+  // Standing guarantee: self-map Beginner still reads as the product story.
+  const selfBeginnerLabels = selfBeginner
+    .slice()
+    .sort(
+      (a, b) =>
+        (a.metadata?.flowOrder ?? 999) - (b.metadata?.flowOrder ?? 999) ||
+        String(a.label).localeCompare(String(b.label)),
+    )
+    .map((node) => String(node.label));
+  const requiredSelfStory = ["CLI", "Compile pipeline", "Extractors", "Viewer"];
+  const missingSelfStory = requiredSelfStory.filter(
+    (label) => !selfBeginnerLabels.includes(label),
   );
+  if (missingSelfStory.length) {
+    fail(
+      `self-map Beginner cold-read missing product story labels: ${missingSelfStory.join(", ")} (got ${selfBeginnerLabels.join(" → ")})`,
+    );
+  } else {
+    pass(
+      `Beginner cold open calm: self-map ${selfBeginner.length} flow nodes (${selfBeginnerLabels.join(" → ")}), mini-stack ${fixtureBeginner.length} flow nodes (no intermediate/advanced leaks)`,
+    );
+  }
 }
 
 // Intermediate without focus must stay calm (no global hub/leaf dump).
