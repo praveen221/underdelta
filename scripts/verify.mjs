@@ -6165,6 +6165,7 @@ const miniTerraformAddresses = new Set(
   miniTerraformResources.map((node) => node.metadata?.address),
 );
 for (const expected of [
+  "aws_vpc.this",
   "aws_s3_bucket.notes",
   "aws_dynamodb_table.items",
   "aws_lambda_function.api",
@@ -6190,8 +6191,9 @@ if (!miniTerraformModuleNames.has("network")) {
 }
 
 for (const expected of [
+  "VPC",
   "Notes · S3 bucket",
-  "Items · Dynamodb table",
+  "Items · DynamoDB table",
   "API · Lambda function",
   "Network",
 ]) {
@@ -6202,6 +6204,16 @@ for (const expected of [
   } else {
     pass(`mini-terraform service label ${expected}`);
   }
+}
+
+if (miniTerraformServiceLabels.some((label) => /^This ·/i.test(label))) {
+  fail(
+    `mini-terraform should drop singleton 'this' name chrome; found ${miniTerraformServiceLabels
+      .filter((label) => /^This ·/i.test(label))
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-terraform drops singleton 'this' Terraform name chrome");
 }
 
 const miniTerraformSemantic = miniTerraformGraph.nodes.filter(
@@ -6456,16 +6468,15 @@ if (terraformRealRoot) {
     }
 
     for (const expected of [
-      "This · VPC",
+      "VPC",
       "Public · Subnet",
       "Private · Subnet",
-      "This · Nat gateway",
-      "This · Internet gateway",
+      "NAT gateway",
+      "Internet gateway",
       "Public · Route table",
-      "Nat · Eip",
-      "This · Flow log",
+      "NAT · EIP",
+      "Flow log",
       "Database · DB subnet group",
-      "VPC",
       "VPC endpoints",
       "S3 bucket",
     ]) {
@@ -6476,6 +6487,56 @@ if (terraformRealRoot) {
       } else {
         pass(`terraform-real-repo service label ${expected}`);
       }
+    }
+
+    const terraformThisChrome = [...terraformRealLabels].filter((label) =>
+      /^This ·/i.test(label),
+    );
+    if (terraformThisChrome.length > 0) {
+      fail(
+        `terraform-real-repo should drop singleton 'this' name chrome; found ${terraformThisChrome
+          .slice(0, 8)
+          .join(", ")}`,
+      );
+    } else {
+      pass("terraform-real-repo drops singleton 'this' Terraform name chrome");
+    }
+
+    const terraformIssueModules = terraformRealModuleBlocks.filter((node) =>
+      /_issue_/i.test(String(node.metadata?.moduleName ?? "")),
+    );
+    if (terraformIssueModules.length < 3) {
+      fail(
+        `terraform-real-repo expected ≥3 vpc_issue_* modules to quiet, found ${terraformIssueModules.length}`,
+      );
+    } else if (
+      terraformIssueModules.some(
+        (node) => node.metadata?.exampleChrome !== true,
+      )
+    ) {
+      fail(
+        `terraform-real-repo vpc_issue_* modules should be exampleChrome; found ${terraformIssueModules
+          .filter((node) => node.metadata?.exampleChrome !== true)
+          .map((node) => node.label)
+          .join(", ") || "(none)"}`,
+      );
+    } else {
+      pass(
+        `terraform-real-repo ${terraformIssueModules.length} vpc_issue_* modules marked exampleChrome`,
+      );
+    }
+
+    const terraformExampleChrome = terraformRealServices.filter(
+      (node) => node.metadata?.exampleChrome === true,
+    );
+    if (terraformExampleChrome.length < 10) {
+      fail(
+        `terraform-real-repo expected ≥10 exampleChrome services (examples/wrappers modules), found ${terraformExampleChrome.length}`,
+      );
+    } else {
+      pass(
+        `terraform-real-repo ${terraformExampleChrome.length} example/wrapper module services quieted as exampleChrome`,
+      );
     }
 
     const nestedTerraformReal = terraformRealServices.filter(
@@ -6563,6 +6624,27 @@ if (terraformRealRoot) {
       );
     } else {
       pass("terraform-real-repo main.tf nested+collapsed under Deploy");
+    }
+
+    const terraformExampleTfModules = terraformRealTfModules.filter(
+      (node) => node.metadata?.exampleChrome === true,
+    );
+    if (terraformExampleTfModules.length < 40) {
+      fail(
+        `terraform-real-repo expected ≥40 example/wrapper .tf modules quieted, found ${terraformExampleTfModules.length}`,
+      );
+    } else {
+      pass(
+        `terraform-real-repo ${terraformExampleTfModules.length} example/wrapper .tf modules quieted as exampleChrome`,
+      );
+    }
+
+    if (terraformRealMainTf.metadata?.exampleChrome === true) {
+      fail(
+        "terraform-real-repo root main.tf must stay visible (not exampleChrome)",
+      );
+    } else {
+      pass("terraform-real-repo root main.tf is not exampleChrome");
     }
 
     const terraformRealEvidenceGaps = terraformRealServices.filter((node) => {

@@ -232,11 +232,14 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       return graph.nodes.filter((node) => {
         if (!allowed.has(node.id)) return false;
         // ORM relation fields + M2M join-table aliases stay collapsed;
-        // table↔table edges / real models carry the story.
+        // table↔table edges / real models carry the story. Terraform
+        // examples/wrappers and vpc_issue module chrome is the same kind of noise.
         if (
           !query &&
           node.metadata &&
-          (node.metadata.relationOnly || node.metadata.joinTable)
+          (node.metadata.relationOnly ||
+            node.metadata.joinTable ||
+            node.metadata.exampleChrome)
         ) {
           return false;
         }

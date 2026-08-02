@@ -1075,6 +1075,9 @@ const PRODUCT_ACRONYMS = new Set([
   "cpu",
   "io",
   "vpc",
+  "nat",
+  "eip",
+  "dynamodb",
   "iam",
   "ec2",
   "ecs",
@@ -1082,10 +1085,16 @@ const PRODUCT_ACRONYMS = new Set([
   "rds",
 ]);
 
+/** Mixed-case product acronyms that should not become ALL CAPS. */
+const MIXED_CASE_ACRONYMS: Record<string, string> = {
+  oauth: "OAuth",
+  dynamodb: "DynamoDB",
+};
+
 function formatProductWord(part: string, index: number): string {
   const lower = part.toLowerCase();
   if (PRODUCT_ACRONYMS.has(lower)) {
-    return lower === "oauth" ? "OAuth" : lower.toUpperCase();
+    return MIXED_CASE_ACRONYMS[lower] ?? lower.toUpperCase();
   }
   if (index === 0) {
     return `${lower.charAt(0).toUpperCase()}${lower.slice(1)}`;
@@ -1289,6 +1298,7 @@ export function humanizeServerActionLabel(label: string): string {
 /**
  * Terraform resource/module addresses → North-star Deploy labels.
  * `aws_s3_bucket.notes` → `Notes · S3 bucket`; `module.network` → `Network`.
+ * Singleton names (`this`) are HCL chrome — drop them so `aws_vpc.this` → `VPC`.
  */
 export function humanizeTerraformLabel(
   kind: "resource" | "module",
@@ -1303,10 +1313,72 @@ export function humanizeTerraformLabel(
     "",
   );
   const typeLabel = humanizeIdentifierLabel(withoutProvider);
-  const nameLabel = name?.trim()
-    ? humanizeIdentifierLabel(name)
-    : undefined;
-  return nameLabel ? `${nameLabel} · ${typeLabel}` : typeLabel;
+  const rawName = name?.trim();
+  // `resource "aws_vpc" "this"` — "this" is the Terraform singleton idiom,
+  // not a product word founders should read on the canvas.
+  if (!rawName || /^this$/i.test(rawName)) {
+    return typeLabel;
+  }
+  return `${humanizeIdentifierLabel(rawName)} · ${typeLabel}`;
+}
+
+/** Example/wrapper TF paths are sample chrome, not the module's product surface. */
+function isTerraformExampleChromePath(file: string): boolean {
+  return /(^|\/)(examples|wrappers)(\/|$)/i.test(normalizePath(file));
+}
+
+/** Regression-fixture / GitHub-issue sample modules (`vpc_issue_44`, …). */
+function isTerraformIssueModuleName(name: string): boolean {
+  return /_issue_/i.test(name);
+}
+
+/**
+ * Hide examples/ + wrappers/ + `*_issue_*` Terraform chrome from the default
+ * browser (Details still searchable). Root resources + real `modules/` stay.
+ */
+function quietTerraformExampleChrome(
+  nodes: Map<string, ArchitectureNode>,
+): void {
+  for (const node of nodes.values()) {
+    if (node.metadata?.terraform !== true) continue;
+    if (node.metadata?.terraformResource === true) continue;
+
+    const file = normalizePath(
+      String(
+        node.evidence?.[0]?.file ??
+          node.metadata?.file ??
+          node.label ??
+          "",
+      ),
+    );
+
+    if (node.metadata?.terraformModuleBlock === true) {
+      const moduleName = String(node.metadata.moduleName ?? "");
+      if (
+        isTerraformExampleChromePath(file) ||
+        isTerraformIssueModuleName(moduleName)
+      ) {
+        node.metadata = {
+          ...node.metadata,
+          exampleChrome: true,
+        };
+        nodes.set(node.id, node);
+      }
+      continue;
+    }
+
+    if (
+      node.kind === "module" &&
+      node.metadata?.terraformModule === true &&
+      isTerraformExampleChromePath(file)
+    ) {
+      node.metadata = {
+        ...node.metadata,
+        exampleChrome: true,
+      };
+      nodes.set(node.id, node);
+    }
+  }
 }
 
 function isSqlFamilyTable(node: ArchitectureNode): boolean {
@@ -3246,6 +3318,10 @@ export function projectSemanticArchitecture(
     moduleToSystem,
     product.id,
   );
+
+  // Terraform module repos ship examples/ + wrappers/ + vpc_issue_* samples that
+  // restate the product under Deploy Details — hide like join-table chrome.
+  quietTerraformExampleChrome(nodes);
 
   assignFlowOrder(systems, preferredFlows);
 

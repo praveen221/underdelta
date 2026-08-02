@@ -1,5 +1,9 @@
 # Mini Terraform notes — smoke fixture for Underdelta Rung 8.
 
+resource "aws_vpc" "this" {
+  cidr_block = "10.0.0.0/16"
+}
+
 resource "aws_s3_bucket" "notes" {
   bucket = "mini-terraform-notes"
 }
