@@ -98,30 +98,32 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Viewer inspector: show collaboration edges (uses/renders/exposes) before raw imports
 - [x] Inspector: surface migration + sqlName/prismaName on unified tables
 - [x] Collapse relation-only Prisma fields on overview while keeping table↔table edges
+- [x] Inspector: show collaboration edge detail text (not just kind · label)
+- [x] Canvas: style collaboration edges differently from imports/calls
 
 ### In progress / next
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Inspector: show collaboration edge detail text (not just kind · label)
-- [ ] Canvas: style collaboration edges differently from imports/calls
-- [ ] Multi-file route frameworks / Next-style app router hints (only if it helps the chosen stack)
 - [ ] Inspector: show table↔table relation labels beside Data access nodes
+- [ ] Multi-file route frameworks / Next-style app router hints (only if it helps the chosen stack)
+- [ ] Overview: optional edge labels for selected collaboration/relation on hover or focus
+- [ ] Mini-stack: ensure publish/consume/migrates edges read clearly in the default browser
 
 ### Seed backlog (pull from here when In progress < 3)
 
 Not a full roadmap — a menu the agent may reorder. Pick what most improves the end goal now.
 
-- Inspector: show collaboration edge detail text (not just kind · label)
-- Canvas: style collaboration edges differently from imports/calls
-- Multi-file route frameworks / Next-style app router hints (only if it helps the chosen stack)
 - Inspector: show table↔table relation labels beside Data access nodes
+- Multi-file route frameworks / Next-style app router hints (only if it helps the chosen stack)
+- Overview: optional edge labels for selected collaboration/relation on hover or focus
+- Mini-stack: ensure publish/consume/migrates edges read clearly in the default browser
 - Performance pass only if scan becomes painful on mini-stack / self repo
 - Docs only when CLI/behavior changed
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (reconciled Prisma/SQL inspector + collapsed relation-only fields). Now show collaboration edge detail text in the inspector (not just kind · label) so system collaboration explains *how* nodes connect.
+> **Next focus:** This work is done (reconciled collaboration detail + canvas collab edge styling). Now show table↔table relation labels beside Data access nodes in the inspector so founders see *how* Order relates to Payment, not just that an edge exists.
 
 ### Learning log (append every tick)
 
@@ -145,6 +147,7 @@ Append short bullets like:
 - 2026-08-02 03:30 UTC | Done: reconciled extractor roster + mini-stack flowOrder on Status board; polished SQL+Prisma table unify (labels/sources, migrates edges, FK relations, column dedupe, fix retarget-before-attach) + verify | Next: README heading roles as weak projection hints | Learned: retargeting SQL table ids after attach resurrects product→table contains; merge redirects must land before Data access nesting; column camel/snake aliases otherwise restates the schema twice
 - 2026-08-02 03:40 UTC | Done: reconciled README heading hints on Status board; inspector Collaboration section (uses/renders/exposes/triggers/configures/flows-to) before Imports & calls + verify | Next: inspector migration/sqlName/prismaName on unified tables | Learned: prior tick can land a feature without updating the plan—reconcile Done first; product-story edges must outrank module imports in the inspector or founders still see a dependency dump
 - 2026-08-02 03:45 UTC | Done: reconciled Prisma/SQL inspector on Status board; collapse relation-only Prisma fields (order/payments) with relationOnly + viewer hide; keep Payment↔Order edges + verify | Next: inspector collaboration edge detail text | Learned: ORM navigation fields restate table↔table edges as fake columns once Details is on; collapse them at projection time and hide unless searched so Data access stays schema-true
+- 2026-08-02 03:50 UTC | Done: reconciled collaboration inspector detail on Status board; canvas `.edge.collab` / `.flows-to` styling + legend + verify | Next: inspector table↔table relation labels | Learned: prior tick can land inspector detail without plan update—reconcile first; collaboration edges were inferred-purple like noise until given a dedicated canvas class apart from import/call hairlines
 
 ---
 
