@@ -736,18 +736,61 @@ function normalizeColumnKey(label: string): string {
   return label.trim().replaceAll("_", "").toLowerCase();
 }
 
+/**
+ * Product acronyms kept uppercase in North-star labels.
+ * `ai_agent_checkpoints` → `AI agent checkpoint`, `RAG_CHUNKS` → `RAG chunks`.
+ */
+const PRODUCT_ACRONYMS = new Set([
+  "ai",
+  "api",
+  "rag",
+  "llm",
+  "sql",
+  "http",
+  "https",
+  "url",
+  "uri",
+  "id",
+  "uuid",
+  "jwt",
+  "oauth",
+  "db",
+  "ui",
+  "ux",
+  "css",
+  "html",
+  "json",
+  "xml",
+  "aws",
+  "gcp",
+  "s3",
+  "cdn",
+  "sms",
+  "gpu",
+  "cpu",
+  "io",
+]);
+
+function formatProductWord(part: string, index: number): string {
+  const lower = part.toLowerCase();
+  if (PRODUCT_ACRONYMS.has(lower)) {
+    return lower === "oauth" ? "OAuth" : lower.toUpperCase();
+  }
+  if (index === 0) {
+    return `${lower.charAt(0).toUpperCase()}${lower.slice(1)}`;
+  }
+  return lower;
+}
+
 function titleCaseSingular(label: string): string {
   const key = normalizeTableKey(label);
   if (!key) return label;
   // team_member → Team member (readable for non-coders; not Team_member).
+  // ai_agent_checkpoint → AI agent checkpoint (keep product acronyms).
   return key
     .split(/[_\s]+/)
     .filter(Boolean)
-    .map((part, index) =>
-      index === 0
-        ? `${part.charAt(0).toUpperCase()}${part.slice(1)}`
-        : part.toLowerCase(),
-    )
+    .map((part, index) => formatProductWord(part, index))
     .join(" ");
 }
 
@@ -836,17 +879,14 @@ export function humanizeIdentifierLabel(label: string): string {
   if (!trimmed || /\s/.test(trimmed)) return trimmed;
   const spaced = trimmed
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
     .replace(/[-_]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
   if (!spaced) return trimmed;
   return spaced
     .split(" ")
-    .map((part, index) =>
-      index === 0
-        ? `${part.charAt(0).toUpperCase()}${part.slice(1).toLowerCase()}`
-        : part.toLowerCase(),
-    )
+    .map((part, index) => formatProductWord(part, index))
     .join(" ");
 }
 
@@ -883,12 +923,15 @@ export function humanizeHttpRouteLabel(method: string, path: string): string {
   if (segments[0]?.toLowerCase() === "api") {
     segments = segments.slice(1);
   }
-  if (!segments.length) return verb;
+  // Bare `/api` → "GET API" (not a lonely verb).
+  if (!segments.length) return `${verb} API`;
   // Sentence-case the path: Stripe checkout (not Stripe Checkout).
+  // Keep product acronyms intact (AI, RAG, LLM) — never turn RAG into rAG.
   const humanPath = segments
     .map((segment, index) => {
       const human = humanizeIdentifierLabel(segment);
       if (index === 0) return human;
+      if (/^[A-Z0-9]{2,}$/.test(human) || human === "OAuth") return human;
       return human.charAt(0).toLowerCase() + human.slice(1);
     })
     .join(" ");
@@ -943,7 +986,7 @@ function preferredCollectionLabel(bucket: ArchitectureNode[]): string {
   ) {
     return best.label;
   }
-  // Prefer RAG_CHUNKS → "Rag chunks" over rag_chunks → "Rag chunk".
+  // Prefer RAG_CHUNKS → "RAG chunks" over rag_chunks → "Rag chunk".
   const binding = ranked
     .map((node) => node.metadata?.bindingName)
     .find(
@@ -1976,6 +2019,16 @@ export function projectSemanticArchitecture(
         collapsedInOverview: false,
       };
       nodes.set(node.id, node);
+      // Stage leaves (Filter/Group/Sort) stay Details-only — the hub label
+      // carries the aggregate story beside collections on overview.
+      for (const step of nodes.values()) {
+        if (step.kind !== "pipeline-step" || step.parentId !== node.id) continue;
+        step.metadata = {
+          ...step.metadata,
+          collapsedInOverview: true,
+        };
+        nodes.set(step.id, step);
+      }
     }
   }
 

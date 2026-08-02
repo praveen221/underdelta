@@ -3180,6 +3180,33 @@ for (const expected of ["Filter", "Group", "Sort"]) {
   }
 }
 
+const miniMongoVisibleSteps = miniMongoAggregateSteps.filter(
+  (node) => node.metadata?.collapsedInOverview !== true,
+);
+if (miniMongoVisibleSteps.length > 0) {
+  fail(
+    `mini-mongo aggregate stages should collapse on overview, still visible: ${miniMongoVisibleSteps
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-mongo aggregate stages collapsed on overview (hubs tell the story)");
+}
+
+// Rendered browser: mongo aggregate hubs share the Data constellation with
+// collections (laneNameFor routes mongoAggregate → Data & automation).
+const miniMongoHtml = renderArchitectureHtml(miniMongoGraph);
+if (
+  !miniMongoHtml.includes("isMongoAggregateHub") ||
+  !miniMongoHtml.includes("Data & automation")
+) {
+  fail(
+    "mini-mongo browser should place mongo aggregate hubs in the Data & automation lane",
+  );
+} else {
+  pass("mini-mongo browser routes mongo aggregate hubs into Data & automation");
+}
+
 const miniMongoPipelineUsesCollection = miniMongoGraph.edges.some(
   (edge) =>
     edge.kind === "uses" &&
@@ -3692,10 +3719,10 @@ if (mongoRealRoot) {
     for (const expected of [
       "User",
       "Session",
-      "Ai agent checkpoint",
+      "AI agent checkpoint",
       // controllers/ai.js: const RAG_CHUNKS / LLM_SEMANTIC_CACHE = '…'
-      "Rag chunks",
-      "Llm semantic cache",
+      "RAG chunks",
+      "LLM semantic cache",
     ]) {
       if (!mongoCollectionLabels.has(expected)) {
         fail(

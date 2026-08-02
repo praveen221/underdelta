@@ -171,10 +171,26 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       { name: "Systems", kinds: ["system", "api", "service", "pipeline"] },
       { name: "Experience", kinds: ["ui", "page", "component", "hook"] },
       { name: "Application", kinds: ["route"] },
-      { name: "Data & automation", kinds: ["database", "schema", "table", "collection", "cron", "job", "queue", "topic", "pipeline-step"] },
+      { name: "Data & automation", kinds: ["database", "schema", "table", "collection", "cron", "job", "queue", "topic", "pipeline", "pipeline-step"] },
       { name: "External", kinds: ["external", "config", "unknown"] },
       { name: "Details", kinds: ["module", "function", "column", "pipeline-step"] }
     ];
+    // Mongo aggregate hubs live under Data beside collections; semantic
+    // Pipelines / Compile pipeline systems stay in the Systems lane.
+    function isMongoAggregateHub(node) {
+      return (
+        node.kind === "pipeline" &&
+        node.metadata &&
+        node.metadata.mongoAggregate
+      );
+    }
+    function laneNameFor(node) {
+      if (isMongoAggregateHub(node)) return "Data & automation";
+      for (const lane of lanes) {
+        if (lane.kinds.includes(node.kind)) return lane.name;
+      }
+      return null;
+    }
     // Default view prefers product systems over raw modules/functions/steps.
     const hiddenByDefault = new Set(["function", "column", "module", "pipeline-step"]);
     // Product-story edges — canvas + inspector treat these apart from imports/calls.
@@ -351,7 +367,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       }
 
       activeLanes.forEach((lane, laneIndex) => {
-        const laneNodes = visible.filter((node) => lane.kinds.includes(node.kind) && !flowIds.has(node.id));
+        const laneNodes = visible.filter((node) => laneNameFor(node) === lane.name && !flowIds.has(node.id));
         if (!laneNodes.length) return;
         const label = document.createElement("div");
         label.className = "lane-label";
@@ -365,14 +381,16 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           if (ao !== null || bo !== null) return (ao ?? 999) - (bo ?? 999) || a.label.localeCompare(b.label);
           return a.kind.localeCompare(b.kind) || a.label.localeCompare(b.label);
         });
-        // Tables + Mongo collections: 2-column constellation so relation edges
-        // aren't same-column spaghetti.
+        // Tables + Mongo collections + aggregate hubs: 2-column constellation
+        // so RAG/query pipelines sit beside the collections they query.
         const tables = laneNodes.filter(
-          (node) => node.kind === "table" || node.kind === "collection",
+          (node) =>
+            node.kind === "table" ||
+            node.kind === "collection" ||
+            isMongoAggregateHub(node),
         );
-        const nonTables = laneNodes.filter(
-          (node) => node.kind !== "table" && node.kind !== "collection",
-        );
+        const tableIds = new Set(tables.map((node) => node.id));
+        const nonTables = laneNodes.filter((node) => !tableIds.has(node.id));
         let nextY = laneTop + 34;
         if (tables.length >= 2) {
           const colGap = 210;

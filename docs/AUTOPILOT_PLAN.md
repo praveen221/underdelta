@@ -176,6 +176,7 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Rung 4: resolve `.collection(CONST)` same-file string bindings — Rag chunks / Llm semantic cache on hackathon-starter + Search chunks / Query cache on mini-mongo; SCREAMING_SNAKE consts → humanized labels; golden-lock
 - [x] Rung 4: Mongo `.aggregate([...])` → pipeline nodes (stages as Filter/Group/Sort… steps); nest under Data as overview hubs; mini-mongo Search chunks + Note pipelines golden-locked (hackathon-starter only documents aggregate in README)
 - [x] Rung 4: surface `createCollectionForVectorSearch(db, CONST, …)` helper wrappers as collection evidence (mini-mongo Vector docs helper-only; hackathon-starter RAG_CHUNKS + LLM_SEMANTIC_CACHE append helper evidence)
+- [x] Rung 4 polish: North-star mini-mongo + hackathon-starter — acronym labels (RAG/LLM/AI), aggregate hubs in Data constellation beside collections, collapse aggregate stages on overview, bare `/api` → `GET API`; golden-lock — **Rung 4 locked**
 
 ### Real-repo pins (Capability ladder)
 
@@ -190,9 +191,9 @@ Update these checkboxes and the “Next focus” section every tick.
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Rung 4 polish pass: North-star legibility on mini-mongo + hackathon-starter (aggregate hubs + Vector docs beside collections; quiet any remaining chrome) before calling the rung locked
+- [ ] Standing guarantee: mongo `maskComments` must treat `/regex/` literals so JSDoc/line comments stay masked — stop Collection/Note/Receiver/MongoDB self-noise on Underdelta self-map overview
 - [ ] Standing polish: inspector metadata hygiene (hide projection/systemKey/flowOrder pills) on self-map + RealWorld
-- [ ] Standing guarantee: spot-check Underdelta self-map + mini-stack still demo-ready after Mongo ladder work
+- [ ] Rung 5 prep: pick OpenAPI or GraphQL from README roadmap; sketch extractor surface + mini fixture target
 
 ### Seed backlog (pull from here when In progress < 3)
 
@@ -204,7 +205,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (`createCollectionForVectorSearch` → Vector docs on mini-mongo + RAG/cache helper evidence on hackathon-starter). Now do the Rung 4 polish pass so mini-mongo + hackathon-starter default browsers are North-star legible before locking the rung.
+> **Next focus:** This work is done (Rung 4 polish + lock — acronym labels, aggregate hubs beside collections, stage collapse). Now fix mongo `maskComments` regex-literal handling so Underdelta’s self-map stops showing Collection/Note/Receiver/MongoDB chrome from extractor comments.
 
 ### Learning log (append every tick)
 
@@ -257,6 +258,7 @@ Append short bullets like:
 - 2026-08-02 05:45 UTC | Done: `.collection(CONST)` same-file string bindings — Rag chunks / Llm semantic cache + mini-mongo Search chunks / Query cache; SCREAMING_SNAKE → humanizeIdentifierLabel; golden-lock | Next: Mongo `.aggregate` pipelines | Learned: resolve identifier→literal in-extractor and keep `collectionName` for dedupe keys; prefer binding names for labels because `rag_chunks` singularizes to "Rag chunk" while `RAG_CHUNKS` keeps the product plural
 - 2026-08-02 05:55 UTC | Done: Mongo `.aggregate` → pipeline + humanized stage steps; nest under Data as overviewHub (never invent Pipelines system — Checkout gate); mask comments so JSDoc cannot invent call sites; mini-mongo golden-lock Search chunks + Note pipelines | Next: createCollectionForVectorSearch helpers | Learned: sahat/hackathon-starter only shows aggregate in README (fixture carries the rung); `$sum` accumulators must not become stages — whitelist known stage ops; comment masking is mandatory for regex extractors
 - 2026-08-02 05:25 UTC | Done: `createCollectionForVectorSearch(db, CONST)` → collections (+ append evidence on already-seen nodes); mini-mongo Vector docs helper-only golden-lock; hackathon-starter RAG_CHUNKS/LLM_SEMANTIC_CACHE helper evidence | Next: Rung 4 polish pass then lock | Learned: helper body `db.collection(collectionName)` is a param and correctly skipped — call sites carry the product CONST; fixture must omit bare `.collection(VECTOR_DOCS)` or the helper path is never proven
+- 2026-08-02 05:30 UTC | Done: Rung 4 locked — acronym-aware labels (RAG/LLM/AI), viewer puts mongoAggregate hubs in Data constellation beside collections, collapse aggregate stages, `/api`→GET API; golden-lock | Next: fix maskComments regex literals (self-map Collection/Note noise) | Learned: comment masking is defeated by `/regex/` patterns that contain quotes — later JSDoc/line comments stay live and the mongo extractor maps its own docs onto Underdelta’s self-map; semantic `kind:pipeline` systems must stay in Systems lane while mongo hubs route to Data via laneNameFor
 
 ---
 
