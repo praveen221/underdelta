@@ -923,6 +923,11 @@ function isMongoCollection(node: ArchitectureNode): boolean {
   );
 }
 
+/** SCREAMING_SNAKE const names used as `.collection(CONST)` args. */
+function isScreamingSnakeBinding(name: string): boolean {
+  return /^[A-Z][A-Z0-9]*(_[A-Z0-9]+)+$/.test(name);
+}
+
 function preferredCollectionLabel(bucket: ArchitectureNode[]): string {
   const ranked = [...bucket].sort((a, b) => {
     const rankDiff = collectionRank(b) - collectionRank(a);
@@ -938,6 +943,14 @@ function preferredCollectionLabel(bucket: ArchitectureNode[]): string {
   ) {
     return best.label;
   }
+  // Prefer RAG_CHUNKS → "Rag chunks" over rag_chunks → "Rag chunk".
+  const binding = ranked
+    .map((node) => node.metadata?.bindingName)
+    .find(
+      (name): name is string =>
+        typeof name === "string" && isScreamingSnakeBinding(name),
+    );
+  if (binding) return humanizeIdentifierLabel(binding);
   const raw =
     (typeof best.metadata?.collectionName === "string"
       ? best.metadata.collectionName

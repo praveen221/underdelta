@@ -2925,22 +2925,44 @@ const miniMongoCollections = miniMongoGraph.nodes.filter(
 const miniMongoCollectionLabels = new Set(
   miniMongoCollections.map((node) => node.label),
 );
-for (const expected of ["Note", "User", "Tag"]) {
+for (const expected of [
+  "Note",
+  "User",
+  "Tag",
+  // `.collection(CONST)` same-file string bindings → product labels.
+  "Search chunks",
+  "Query cache",
+]) {
   if (!miniMongoCollectionLabels.has(expected)) {
     fail(
-      `mini-mongo missing Mongoose collection ${expected}; found ${[...miniMongoCollectionLabels].join(", ") || "(none)"}`,
+      `mini-mongo missing collection ${expected}; found ${[...miniMongoCollectionLabels].join(", ") || "(none)"}`,
     );
   } else {
     pass(`mini-mongo has collection ${expected}`);
   }
 }
 
+const miniMongoConstCollections = miniMongoCollections.filter((node) =>
+  node.evidence?.some((item) =>
+    /\.collection\([A-Z_]+ →/.test(item.detail ?? ""),
+  ),
+);
+if (miniMongoConstCollections.length < 2) {
+  fail(
+    `mini-mongo expected ≥2 .collection(CONST) bindings, found ${miniMongoConstCollections.length}`,
+  );
+} else {
+  pass(
+    `mini-mongo ${miniMongoConstCollections.length} collections from .collection(CONST)`,
+  );
+}
+
 const miniMongoCollectionsUnderData = miniMongoCollections.filter(
   (node) => node.parentId === miniMongoData?.id,
 );
-if (miniMongoCollectionsUnderData.length < 3) {
+if (miniMongoCollectionsUnderData.length < 5) {
   fail(
-    `mini-mongo expected ≥3 collections nested under Catalog data, found ${miniMongoCollectionsUnderData.length}`,
+    `mini-mongo expected ≥5 collections nested under Catalog data, found ${miniMongoCollectionsUnderData.length}`,
   );
 } else {
   pass(
@@ -3543,7 +3565,14 @@ if (mongoRealRoot) {
       pass("mongo-real-repo registers mongo extractor");
     }
 
-    for (const expected of ["User", "Session", "Ai agent checkpoint"]) {
+    for (const expected of [
+      "User",
+      "Session",
+      "Ai agent checkpoint",
+      // controllers/ai.js: const RAG_CHUNKS / LLM_SEMANTIC_CACHE = '…'
+      "Rag chunks",
+      "Llm semantic cache",
+    ]) {
       if (!mongoCollectionLabels.has(expected)) {
         fail(
           `mongo-real-repo missing collection ${expected}; found ${[...mongoCollectionLabels].join(", ") || "(none)"}`,
@@ -3553,12 +3582,29 @@ if (mongoRealRoot) {
       }
     }
 
+    const mongoConstCollections = mongoCollections.filter((node) =>
+      node.evidence?.some((item) =>
+        /\.collection\((?:RAG_CHUNKS|LLM_SEMANTIC_CACHE) →/.test(
+          item.detail ?? "",
+        ),
+      ),
+    );
+    if (mongoConstCollections.length < 2) {
+      fail(
+        `mongo-real-repo expected RAG_CHUNKS + LLM_SEMANTIC_CACHE via .collection(CONST), found ${mongoConstCollections.length}`,
+      );
+    } else {
+      pass(
+        `mongo-real-repo ${mongoConstCollections.length} collections from .collection(CONST)`,
+      );
+    }
+
     const mongoCollectionsUnderData = mongoCollections.filter(
       (node) => node.parentId === mongoData?.id,
     );
-    if (mongoCollectionsUnderData.length < 3) {
+    if (mongoCollectionsUnderData.length < 5) {
       fail(
-        `mongo-real-repo expected ≥3 collections nested under Data access, found ${mongoCollectionsUnderData.length}`,
+        `mongo-real-repo expected ≥5 collections nested under Data access, found ${mongoCollectionsUnderData.length}`,
       );
     } else {
       pass(

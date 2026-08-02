@@ -50,9 +50,28 @@ function looksLikeModelName(name: string): boolean {
   return /^[A-Z][A-Za-z0-9]*$/.test(name);
 }
 
+/**
+ * Map simple same-file string bindings used as `.collection(CONST)` args.
+ * Covers hackathon-starter style:
+ *   const RAG_CHUNKS = 'rag_chunks';
+ *   db.collection(RAG_CHUNKS)
+ */
+function collectStringBindings(source: string): Map<string, string> {
+  const bindings = new Map<string, string>();
+  const pattern =
+    /(?:^|[;\n])\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(['"])([^'"\n]+)\2/gm;
+  for (const match of source.matchAll(pattern)) {
+    const name = match[1] ?? "";
+    const value = cleanName(match[3] ?? "");
+    if (!name || !value) continue;
+    bindings.set(name, value);
+  }
+  return bindings;
+}
+
 export const mongoExtractor: ArchitectureExtractor = {
   id: "mongo",
-  version: "0.1.0",
+  version: "0.1.1",
   extensions,
 
   async extract(context) {
@@ -91,6 +110,7 @@ export const mongoExtractor: ArchitectureExtractor = {
       technology: "mongoose" | "mongodb",
       extras: {
         collectionName?: string;
+        bindingName?: string;
         discoveredFromUsage?: boolean;
         detail?: string;
       } = {},
@@ -99,15 +119,15 @@ export const mongoExtractor: ArchitectureExtractor = {
       const collectionId = stableId("collection", technology, key);
       if (seen.has(collectionId)) {
         const existing = nodes.find((node) => node.id === collectionId);
-        if (
-          existing &&
-          extras.collectionName &&
-          !existing.metadata?.collectionName
-        ) {
-          existing.metadata = {
-            ...existing.metadata,
-            collectionName: extras.collectionName,
-          };
+        if (existing) {
+          const next = { ...existing.metadata };
+          if (extras.collectionName && !next.collectionName) {
+            next.collectionName = extras.collectionName;
+          }
+          if (extras.bindingName && !next.bindingName) {
+            next.bindingName = extras.bindingName;
+          }
+          existing.metadata = next;
         }
         return collectionId;
       }
@@ -115,6 +135,7 @@ export const mongoExtractor: ArchitectureExtractor = {
       const databaseId = ensureDatabase(file, source, offset, technology);
       const metadata: Record<string, unknown> = {};
       if (extras.collectionName) metadata.collectionName = extras.collectionName;
+      if (extras.bindingName) metadata.bindingName = extras.bindingName;
       if (extras.discoveredFromUsage) metadata.discoveredFromUsage = true;
       nodes.push({
         id: collectionId,
@@ -210,12 +231,24 @@ export const mongoExtractor: ArchitectureExtractor = {
         }
       }
 
-      // Native driver: db.collection("notes") / client.db().collection('users')
+      // Native driver: db.collection("notes") / db.collection(RAG_CHUNKS)
+      // when RAG_CHUNKS = 'rag_chunks' is a same-file string binding.
+      const stringBindings = collectStringBindings(source);
       const nativeCollectionPattern =
-        /\.collection\s*\(\s*(['"])([^'"\n]+)\1/g;
+        /\.collection\s*\(\s*(?:(['"])([^'"\n]+)\1|([A-Za-z_$][\w$]*))/g;
       for (const match of source.matchAll(nativeCollectionPattern)) {
-        const collectionName = cleanName(match[2] ?? "");
-        if (!collectionName || match.index === undefined) continue;
+        if (match.index === undefined) continue;
+        const literal = cleanName(match[2] ?? "");
+        const identifier = match[3] ?? "";
+        let collectionName = literal;
+        let bindingName: string | undefined;
+        if (!collectionName && identifier) {
+          const resolved = stringBindings.get(identifier);
+          if (!resolved) continue;
+          collectionName = resolved;
+          bindingName = identifier;
+        }
+        if (!collectionName) continue;
         ensureCollection(
           file,
           source,
@@ -224,8 +257,11 @@ export const mongoExtractor: ArchitectureExtractor = {
           mentionsMongoose ? "mongoose" : "mongodb",
           {
             collectionName,
+            ...(bindingName ? { bindingName } : {}),
             discoveredFromUsage: true,
-            detail: `.collection(${JSON.stringify(collectionName)})`,
+            detail: bindingName
+              ? `.collection(${bindingName} → ${JSON.stringify(collectionName)})`
+              : `.collection(${JSON.stringify(collectionName)})`,
           },
         );
       }
