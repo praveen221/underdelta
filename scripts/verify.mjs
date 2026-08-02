@@ -971,14 +971,16 @@ if (
 
 if (!cron || cron.metadata?.scheduleHub !== true) {
   fail(
-    `expected cron scheduleHub=true so jobs stay on the overview, found ${JSON.stringify(
+    `expected cron scheduleHub=true so jobs stay available at Intermediate, found ${JSON.stringify(
       cron?.metadata ?? null,
     )}`,
   );
 } else if (cron.metadata?.collapsedInOverview === true) {
-  fail("cron schedule hub should stay visible on overview (like messaging hubs)");
+  fail(
+    "cron schedule hub should not be collapsedInOverview (Intermediate reveals it; Beginner hides via intermediateKinds)",
+  );
 } else {
-  pass("cron schedule hub visible on overview");
+  pass("cron schedule hub available at Intermediate (not collapsedInOverview)");
 }
 
 const pipelines = fixtureByKey.get("pipelines");
@@ -1025,9 +1027,11 @@ if (!fulfillmentQueue || fulfillmentQueue.metadata?.messagingHub !== true) {
 }
 
 if (fulfillmentQueue?.metadata?.collapsedInOverview === true) {
-  fail("messaging hub queue should stay visible on overview");
+  fail(
+    "messaging hub queue should not be collapsedInOverview (Intermediate reveals it; Beginner hides via intermediateKinds)",
+  );
 } else {
-  pass("fulfillment queue visible on overview");
+  pass("fulfillment queue available at Intermediate (not collapsedInOverview)");
 }
 
 const workers = fixtureByKey.get("workers");
@@ -1083,6 +1087,745 @@ if (!fulfillmentPublishers.includes("Checkout API")) {
 // Inspector: collaboration edges (uses/renders/exposes/…) before raw imports,
 // with human detail text (not just kind · label).
 const viewerHtml = renderArchitectureHtml(selfGraph);
+
+// Walkable graph: Beginner / Intermediate / Advanced tier control (not Details on/off).
+if (
+  !viewerHtml.includes('id="tier"') ||
+  !viewerHtml.includes("View: Beginner") ||
+  !viewerHtml.includes('tierOrder = ["beginner", "intermediate", "advanced"]') ||
+  viewerHtml.includes("Details: off") ||
+  viewerHtml.includes('id="implementation"')
+) {
+  fail(
+    "viewer should expose Beginner/Intermediate/Advanced tier control (id=tier), not Details on/off",
+  );
+} else if (
+  !viewerHtml.includes("isAdvancedTier()") ||
+  !viewerHtml.includes("function showsAdvancedKind(node)") ||
+  !viewerHtml.includes("!showsAdvancedKind(node)")
+) {
+  fail(
+    "viewer Advanced tier must use showsAdvancedKind (focus-scoped; no whole-repo dump)",
+  );
+} else if (
+  !viewerHtml.includes("code in focus") ||
+  !viewerHtml.includes("View: Advanced · code in focus")
+) {
+  fail(
+    "viewer Advanced-in-focus must surface clear 'code in focus' tier/crumb copy",
+  );
+} else if (
+  !viewerHtml.includes("const intermediateKinds = new Set([") ||
+  !viewerHtml.includes("intermediateKinds.has(node.kind)") ||
+  !viewerHtml.includes("hasProductFlow") ||
+  !viewerHtml.includes("calmOverview")
+) {
+  fail(
+    "viewer Beginner cold open must hide intermediateKinds and gate on Product Flow",
+  );
+} else if (
+  !viewerHtml.includes("function focusNeighborhood(rootId)") ||
+  !viewerHtml.includes("focusNeighborhood(state.focus)") ||
+  !viewerHtml.includes("neighborhoodEdgeKinds")
+) {
+  fail(
+    "viewer Intermediate focus must use focusNeighborhood (contains + story neighbors), not whole-repo uncollapse",
+  );
+} else if (
+  !viewerHtml.includes("syncTierToFocus()") ||
+  !viewerHtml.includes('id="focus-crumb"')
+) {
+  fail(
+    "viewer focus should sync tier via syncTierToFocus and show a Focus crumb",
+  );
+} else if (
+  !viewerHtml.includes("function focusStack()") ||
+  !viewerHtml.includes("function navigateFocusStack(index)") ||
+  !viewerHtml.includes("function goOverview()") ||
+  !viewerHtml.includes('data-stack="-1"') ||
+  !viewerHtml.includes("Back to Beginner overview") ||
+  !viewerHtml.includes("crumb-sep")
+) {
+  fail(
+    "viewer navigation must expose Overview › focus breadcrumb + navigateFocusStack (Back → Intermediate then Beginner)",
+  );
+} else if (
+  !viewerHtml.includes("function goBack()") ||
+  !viewerHtml.includes("navigateFocusStack(stack.length - 2)") ||
+  !viewerHtml.includes("document.getElementById(\"overview\").onclick = () => goOverview()") ||
+  !viewerHtml.includes('document.getElementById("back").onclick = () =>')
+) {
+  fail(
+    "viewer Back/Overview must use goBack / navigateFocusStack / goOverview so tier stays in sync",
+  );
+} else if (
+  !viewerHtml.includes("function handleEscapeKey(event)") ||
+  !viewerHtml.includes('event.key !== "Escape"') ||
+  !viewerHtml.includes('document.addEventListener("keydown", handleEscapeKey)') ||
+  !viewerHtml.includes("if (goBack())") ||
+  !viewerHtml.includes("Back / Esc returns")
+) {
+  fail(
+    "viewer Esc must call goBack (one focus-stack step) after clearing search when typing",
+  );
+} else if (
+  !viewerHtml.includes("function clusterRootFor(id)") ||
+  !viewerHtml.includes("function enterSearchMatch(matchId)") ||
+  !viewerHtml.includes("function searchMatchNodes()") ||
+  !viewerHtml.includes("function handleSearchKeydown(event)") ||
+  !viewerHtml.includes('id="search-results"') ||
+  !viewerHtml.includes("Enter enters its cluster") ||
+  !viewerHtml.includes("const calmOverview = !state.focus;") ||
+  viewerHtml.includes("const calmOverview = !state.focus && !query;")
+) {
+  fail(
+    "viewer Search must enter a match’s cluster (clusterRootFor/enterSearchMatch) without query dumping the god-graph",
+  );
+} else if (
+  !viewerHtml.includes("sessionStorage") ||
+  !viewerHtml.includes("walkStorageKey") ||
+  !viewerHtml.includes("function persistWalkState()") ||
+  !viewerHtml.includes("function restoreWalkState()") ||
+  !viewerHtml.includes('sessionStorage.setItem(walkStorageKey') ||
+  !viewerHtml.includes("sessionStorage.getItem(walkStorageKey)") ||
+  !viewerHtml.includes("restoreWalkState()") ||
+  !viewerHtml.includes("persistWalkState()")
+) {
+  fail(
+    "viewer must persist last tier/focus in sessionStorage (persistWalkState/restoreWalkState) for reload comfort",
+  );
+} else if (
+  !viewerHtml.includes("function emptyInspectorMessage()") ||
+  !viewerHtml.includes("function walkHintText()") ||
+  !viewerHtml.includes('id="walk-hint"') ||
+  !viewerHtml.includes("Beginner · Product Flow") ||
+  !viewerHtml.includes('name: "Code"') ||
+  viewerHtml.includes('name: "Details"') ||
+  viewerHtml.includes('lane.name !== "Details"')
+) {
+  fail(
+    "viewer legend/inspector empty-state copy must match tiers (walk-hint + emptyInspectorMessage; Code lane, not Details)",
+  );
+} else if (
+  !viewerHtml.includes("function showsStructuralEdge(edge)") ||
+  !viewerHtml.includes("ownershipEdgeKinds") ||
+  !viewerHtml.includes('ownershipEdgeKinds = new Set(["contains"])') ||
+  !viewerHtml.includes("structuralHairlineKinds") ||
+  !viewerHtml.includes('edge.structural') ||
+  !viewerHtml.includes('data-structural') ||
+  !viewerHtml.includes("if (!showsStructuralEdge(edge)) continue")
+) {
+  fail(
+    "viewer Intermediate must collapse ownership contains fans and quiet/gate derived structural hairlines (showsStructuralEdge)",
+  );
+} else {
+  pass("viewer Walkable tiers: Beginner / Intermediate / Advanced (cluster-scoped Advanced)");
+  pass("viewer navigation: breadcrumb + Back/Overview + Esc tier sync");
+  pass("viewer Search Enter/click enters cluster (no query god-graph dump)");
+  pass("viewer sessionStorage persists last tier/focus for reload comfort");
+  pass("viewer tier copy: walk-hint + emptyInspectorMessage + Code lane");
+  pass("viewer Intermediate edge calm: ownership fans collapsed + structural hairlines gated");
+}
+
+// Beginner cold-open floor: Product Flow + top systems; no advanced or intermediate leaf kinds.
+const beginnerAdvancedKinds = new Set(["function", "column", "module", "pipeline-step"]);
+const beginnerIntermediateKinds = new Set([
+  "table",
+  "collection",
+  "queue",
+  "cron",
+  "route",
+  "page",
+  "component",
+  "hook",
+  "job",
+  "database",
+  "schema",
+]);
+function beginnerColdOpenNodes(graph) {
+  const hasProductFlow = graph.nodes.some(
+    (node) => typeof node.metadata?.flowOrder === "number",
+  );
+  return graph.nodes.filter((node) => {
+    if (node.kind === "product") return false;
+    if (
+      node.metadata?.relationOnly ||
+      node.metadata?.joinTable ||
+      node.metadata?.exampleChrome
+    ) {
+      return false;
+    }
+    const isOverviewHub = node.metadata?.overviewHub === true;
+    if (beginnerAdvancedKinds.has(node.kind) && !isOverviewHub) return false;
+    if (beginnerIntermediateKinds.has(node.kind)) return false;
+    if (node.metadata?.collapsedInOverview === true) return false;
+    if (hasProductFlow && typeof node.metadata?.flowOrder !== "number") {
+      return false;
+    }
+    return true;
+  });
+}
+const selfBeginner = beginnerColdOpenNodes(selfGraph);
+const fixtureBeginner = beginnerColdOpenNodes(fixtureGraph);
+const selfBeginnerLeak = selfBeginner.filter(
+  (node) =>
+    beginnerAdvancedKinds.has(node.kind) || beginnerIntermediateKinds.has(node.kind),
+);
+const fixtureBeginnerLeak = fixtureBeginner.filter(
+  (node) =>
+    beginnerAdvancedKinds.has(node.kind) || beginnerIntermediateKinds.has(node.kind),
+);
+const fixtureBeginnerHasFlow = fixtureBeginner.every(
+  (node) => typeof node.metadata?.flowOrder === "number",
+);
+const selfBeginnerHasFlow = selfBeginner.every(
+  (node) => typeof node.metadata?.flowOrder === "number",
+);
+if (selfBeginner.length < 6) {
+  fail(
+    `self-map Beginner cold open should keep Product Flow systems, found ${selfBeginner.length}`,
+  );
+} else if (selfBeginnerLeak.length > 0) {
+  fail(
+    `self-map Beginner leaked advanced/intermediate kinds: ${selfBeginnerLeak
+      .map((node) => `${node.kind}:${node.label}`)
+      .join(", ")}`,
+  );
+} else if (!selfBeginnerHasFlow) {
+  fail("self-map Beginner cold open should be Product Flow–led (every node has flowOrder)");
+} else if (fixtureBeginner.length < 4) {
+  fail(
+    `mini-stack Beginner cold open should keep Product Flow systems, found ${fixtureBeginner.length}`,
+  );
+} else if (fixtureBeginnerLeak.length > 0) {
+  fail(
+    `mini-stack Beginner leaked advanced/intermediate kinds: ${fixtureBeginnerLeak
+      .map((node) => `${node.kind}:${node.label}`)
+      .join(", ")}`,
+  );
+} else if (!fixtureBeginnerHasFlow) {
+  fail(
+    "mini-stack Beginner cold open should be Product Flow–led (every node has flowOrder)",
+  );
+} else if (
+  fixtureBeginner.some((node) =>
+    ["Order", "Payment", "fulfillment"].includes(String(node.label)),
+  )
+) {
+  fail("mini-stack Beginner must not show Order/Payment tables or fulfillment queue");
+} else {
+  // Standing guarantee: self-map Beginner still reads as the product story.
+  const selfBeginnerLabels = selfBeginner
+    .slice()
+    .sort(
+      (a, b) =>
+        (a.metadata?.flowOrder ?? 999) - (b.metadata?.flowOrder ?? 999) ||
+        String(a.label).localeCompare(String(b.label)),
+    )
+    .map((node) => String(node.label));
+  const requiredSelfStory = ["CLI", "Compile pipeline", "Extractors", "Viewer"];
+  const missingSelfStory = requiredSelfStory.filter(
+    (label) => !selfBeginnerLabels.includes(label),
+  );
+  if (missingSelfStory.length) {
+    fail(
+      `self-map Beginner cold-read missing product story labels: ${missingSelfStory.join(", ")} (got ${selfBeginnerLabels.join(" → ")})`,
+    );
+  } else {
+    pass(
+      `Beginner cold open calm: self-map ${selfBeginner.length} flow nodes (${selfBeginnerLabels.join(" → ")}), mini-stack ${fixtureBeginner.length} flow nodes (no intermediate/advanced leaks)`,
+    );
+  }
+}
+
+// Intermediate without focus must stay calm (no global hub/leaf dump).
+const selfIntermediateNoFocus = beginnerColdOpenNodes(selfGraph);
+const fixtureIntermediateNoFocus = beginnerColdOpenNodes(fixtureGraph);
+if (
+  fixtureIntermediateNoFocus.some((node) =>
+    ["Order", "Payment", "fulfillment"].includes(String(node.label)),
+  )
+) {
+  fail(
+    "mini-stack Intermediate without focus must not globally uncollapse Order/Payment/fulfillment",
+  );
+} else if (selfIntermediateNoFocus.length !== selfBeginner.length) {
+  fail(
+    "self-map Intermediate without focus should match Beginner calm overview",
+  );
+} else {
+  pass(
+    "Intermediate without focus stays Product Flow–calm (no global uncollapse)",
+  );
+}
+
+// Focus neighborhood floor: contains children + key story neighbors; no advanced dump.
+const neighborhoodEdgeKinds = new Set([
+  "uses",
+  "renders",
+  "exposes",
+  "triggers",
+  "configures",
+  "reads",
+  "flows-to",
+  "publishes",
+  "consumes",
+  "migrates",
+  "writes",
+  "schedules",
+  "routes-to",
+]);
+function focusNeighborhoodIds(graph, rootId) {
+  const outgoing = new Map();
+  const incoming = new Map();
+  for (const edge of graph.edges) {
+    if (!outgoing.has(edge.source)) outgoing.set(edge.source, []);
+    if (!incoming.has(edge.target)) incoming.set(edge.target, []);
+    outgoing.get(edge.source).push(edge);
+    incoming.get(edge.target).push(edge);
+  }
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+  const tree = new Set([rootId]);
+  const queue = [rootId];
+  while (queue.length) {
+    const id = queue.shift();
+    for (const edge of outgoing.get(id) || []) {
+      if (edge.kind === "contains" && !tree.has(edge.target)) {
+        tree.add(edge.target);
+        queue.push(edge.target);
+      }
+    }
+  }
+  const found = new Set(tree);
+  for (const id of tree) {
+    const node = byId.get(id);
+    const isOverviewHub = node?.metadata?.overviewHub === true;
+    if (
+      id !== rootId &&
+      node &&
+      beginnerAdvancedKinds.has(node.kind) &&
+      !isOverviewHub
+    ) {
+      continue;
+    }
+    for (const edge of outgoing.get(id) || []) {
+      if (neighborhoodEdgeKinds.has(edge.kind)) found.add(edge.target);
+    }
+    for (const edge of incoming.get(id) || []) {
+      if (neighborhoodEdgeKinds.has(edge.kind)) found.add(edge.source);
+    }
+  }
+  return found;
+}
+function intermediateFocusNodes(graph, rootId) {
+  const allowed = focusNeighborhoodIds(graph, rootId);
+  return graph.nodes.filter((node) => {
+    if (!allowed.has(node.id)) return false;
+    if (node.kind === "product") return false;
+    if (
+      node.metadata?.relationOnly ||
+      node.metadata?.joinTable ||
+      node.metadata?.exampleChrome
+    ) {
+      return false;
+    }
+    const isOverviewHub = node.metadata?.overviewHub === true;
+    if (beginnerAdvancedKinds.has(node.kind) && !isOverviewHub) return false;
+    return true;
+  });
+}
+const focusExtractorsSystem = selfGraph.nodes.find(
+  (node) => node.kind === "system" && node.label === "Extractors",
+);
+const focusCheckoutApi = fixtureGraph.nodes.find(
+  (node) => node.kind === "api" && /checkout/i.test(node.label),
+);
+const selfExtractorsFocus = focusExtractorsSystem
+  ? intermediateFocusNodes(selfGraph, focusExtractorsSystem.id)
+  : [];
+const fixtureCheckoutFocus = focusCheckoutApi
+  ? intermediateFocusNodes(fixtureGraph, focusCheckoutApi.id)
+  : [];
+const selfExtractorsFocusLabels = new Set(
+  selfExtractorsFocus.map((node) => String(node.label)),
+);
+const fixtureCheckoutFocusLabels = new Set(
+  fixtureCheckoutFocus.map((node) => String(node.label)),
+);
+const selfFocusAdvancedLeak = selfExtractorsFocus.filter(
+  (node) =>
+    beginnerAdvancedKinds.has(node.kind) && !node.metadata?.overviewHub,
+);
+const fixtureFocusAdvancedLeak = fixtureCheckoutFocus.filter(
+  (node) =>
+    beginnerAdvancedKinds.has(node.kind) && !node.metadata?.overviewHub,
+);
+if (!focusExtractorsSystem) {
+  fail("self-map should have Extractors system for Intermediate focus floor");
+} else if (!focusCheckoutApi) {
+  fail("mini-stack should have Checkout API for Intermediate focus floor");
+} else if (selfExtractorsFocus.length < 8) {
+  fail(
+    `Extractors Intermediate neighborhood too small: ${selfExtractorsFocus.length}`,
+  );
+} else if (
+  !selfExtractorsFocusLabels.has("typescript") ||
+  !selfExtractorsFocusLabels.has("prisma")
+) {
+  fail("Extractors Intermediate neighborhood should include extractor services");
+} else if (
+  !selfExtractorsFocusLabels.has("Compile pipeline") &&
+  !selfExtractorsFocusLabels.has("Schema contract") &&
+  !selfExtractorsFocusLabels.has("Graph assembly")
+) {
+  fail(
+    "Extractors Intermediate neighborhood should include key collab neighbors",
+  );
+} else if (selfFocusAdvancedLeak.length > 0) {
+  fail(
+    `Extractors Intermediate focus leaked advanced kinds: ${selfFocusAdvancedLeak
+      .map((node) => `${node.kind}:${node.label}`)
+      .join(", ")}`,
+  );
+} else if (selfExtractorsFocus.length > 40) {
+  fail(
+    `Extractors Intermediate neighborhood too large (global dump?): ${selfExtractorsFocus.length}`,
+  );
+} else if (
+  !fixtureCheckoutFocusLabels.has("POST /checkout") ||
+  !fixtureCheckoutFocusLabels.has("GET /health")
+) {
+  fail("Checkout API Intermediate neighborhood should include its routes");
+} else if (
+  !fixtureCheckoutFocusLabels.has("Catalog data") &&
+  !fixtureCheckoutFocusLabels.has("fulfillment") &&
+  !fixtureCheckoutFocusLabels.has("Order pipeline")
+) {
+  fail(
+    "Checkout API Intermediate neighborhood should include key collab/story neighbors",
+  );
+} else if (fixtureFocusAdvancedLeak.length > 0) {
+  fail(
+    `Checkout API Intermediate focus leaked advanced kinds: ${fixtureFocusAdvancedLeak
+      .map((node) => `${node.kind}:${node.label}`)
+      .join(", ")}`,
+  );
+} else if (
+  fixtureCheckoutFocus.some((node) => node.label === "Order" || node.label === "Payment")
+) {
+  fail(
+    "Checkout API Intermediate neighborhood should not pull Catalog tables until Catalog is focused",
+  );
+} else {
+  pass(
+    `Intermediate focus neighborhoods: Extractors ${selfExtractorsFocus.length} nodes, Checkout API ${fixtureCheckoutFocus.length} nodes (children + collab, no advanced dump)`,
+  );
+}
+
+// Search → cluster floor: jump targets are walkable roots, not a god-graph filter.
+const searchFunctionFocusKinds = new Set([
+  "module",
+  "api",
+  "service",
+  "function",
+  "route",
+  "ui",
+  "page",
+  "component",
+  "hook",
+]);
+const searchAdvancedKinds = new Set(["function", "column", "module", "pipeline-step"]);
+const searchIntermediateKinds = new Set([
+  "table",
+  "collection",
+  "queue",
+  "cron",
+  "route",
+  "page",
+  "component",
+  "hook",
+  "job",
+  "database",
+  "schema",
+]);
+function clusterRootForGraph(graph, id) {
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+  const incoming = new Map();
+  for (const edge of graph.edges) {
+    if (!incoming.has(edge.target)) incoming.set(edge.target, []);
+    incoming.get(edge.target).push(edge);
+  }
+  const parentOf = (node) => {
+    if (!node) return null;
+    if (node.parentId && byId.has(node.parentId)) return byId.get(node.parentId);
+    const owned = (incoming.get(node.id) || []).find((edge) => edge.kind === "contains");
+    return owned ? byId.get(owned.source) || null : null;
+  };
+  const node = byId.get(id);
+  if (!node || node.kind === "product") return null;
+  if (
+    node.kind === "system" ||
+    node.kind === "pipeline" ||
+    node.kind === "api" ||
+    node.kind === "service" ||
+    node.kind === "ui" ||
+    node.kind === "module"
+  ) {
+    return node.id;
+  }
+  if (searchAdvancedKinds.has(node.kind)) {
+    let cur = node;
+    while (cur) {
+      const parent = parentOf(cur);
+      if (!parent) break;
+      if (searchFunctionFocusKinds.has(parent.kind)) return parent.id;
+      cur = parent;
+    }
+  }
+  if (
+    searchIntermediateKinds.has(node.kind) ||
+    node.kind === "external" ||
+    node.kind === "config"
+  ) {
+    let cur = node;
+    while (cur) {
+      const parent = parentOf(cur);
+      if (!parent) break;
+      if (
+        parent.kind === "system" ||
+        parent.kind === "pipeline" ||
+        parent.kind === "api" ||
+        parent.kind === "service" ||
+        parent.kind === "ui"
+      ) {
+        return parent.id;
+      }
+      cur = parent;
+    }
+  }
+  let cur = node;
+  while (cur) {
+    if (
+      cur.kind === "system" ||
+      cur.kind === "pipeline" ||
+      cur.kind === "api" ||
+      cur.kind === "service" ||
+      cur.kind === "ui" ||
+      cur.kind === "module"
+    ) {
+      return cur.id;
+    }
+    cur = parentOf(cur);
+  }
+  return node.id;
+}
+const fixtureCreateCheckout = fixtureGraph.nodes.find(
+  (node) => node.kind === "function" && node.label === "createCheckout",
+);
+const fixtureOrderTable = fixtureGraph.nodes.find(
+  (node) => node.kind === "table" && node.label === "Order",
+);
+const createCheckoutCluster = fixtureCreateCheckout
+  ? fixtureGraph.nodes.find(
+      (node) => node.id === clusterRootForGraph(fixtureGraph, fixtureCreateCheckout.id),
+    )
+  : null;
+const orderCluster = fixtureOrderTable
+  ? fixtureGraph.nodes.find(
+      (node) => node.id === clusterRootForGraph(fixtureGraph, fixtureOrderTable.id),
+    )
+  : null;
+const selfExtractorsClusterId = focusExtractorsSystem
+  ? clusterRootForGraph(selfGraph, focusExtractorsSystem.id)
+  : null;
+if (!fixtureCreateCheckout || !createCheckoutCluster) {
+  fail("search cluster floor needs createCheckout → module/api root");
+} else if (
+  createCheckoutCluster.kind !== "module" ||
+  createCheckoutCluster.label !== "src/server.ts"
+) {
+  fail(
+    `createCheckout search should enter src/server.ts module cluster, got ${createCheckoutCluster.kind}:${createCheckoutCluster.label}`,
+  );
+} else if (!fixtureOrderTable || !orderCluster) {
+  fail("search cluster floor needs Order table → Catalog data system");
+} else if (orderCluster.kind !== "system" || orderCluster.label !== "Catalog data") {
+  fail(
+    `Order search should enter Catalog data system, got ${orderCluster.kind}:${orderCluster.label}`,
+  );
+} else if (!focusExtractorsSystem || selfExtractorsClusterId !== focusExtractorsSystem.id) {
+  fail("Extractors search should focus the Extractors system itself");
+} else {
+  pass(
+    "Search enters cluster: createCheckout→src/server.ts, Order→Catalog data, Extractors→self",
+  );
+}
+
+// Intermediate edge calm: ownership contains fans exist in IR but stay off-canvas.
+const extractorsContainsFan = focusExtractorsSystem
+  ? selfGraph.edges.filter(
+      (edge) =>
+        edge.kind === "contains" &&
+        edge.source === focusExtractorsSystem.id &&
+        selfExtractorsFocus.some((node) => node.id === edge.target),
+    )
+  : [];
+const extractorsDerivedDepends = focusExtractorsSystem
+  ? selfGraph.edges.filter((edge) => {
+      if (edge.kind !== "depends-on") return false;
+      const ids = new Set(selfExtractorsFocus.map((node) => node.id));
+      if (!ids.has(edge.source) || !ids.has(edge.target)) return false;
+      return (edge.evidence || []).some((item) => item.certainty === "derived");
+    })
+  : [];
+if (extractorsContainsFan.length < 8) {
+  fail(
+    `Extractors Intermediate should own a contains fan in IR (≥8 child edges), found ${extractorsContainsFan.length}`,
+  );
+} else if (
+  !viewerHtml.includes("ownershipEdgeKinds.has(edge.kind)") ||
+  !viewerHtml.includes("showsStructuralEdge(edge)")
+) {
+  fail(
+    "viewer must collapse ownership contains fans via ownershipEdgeKinds / showsStructuralEdge",
+  );
+} else if (
+  extractorsDerivedDepends.length > 0 &&
+  !viewerHtml.includes("structuralHairlineKinds")
+) {
+  fail(
+    "viewer must gate derived depends-on hairlines via structuralHairlineKinds",
+  );
+} else {
+  pass(
+    `Intermediate edge calm floor: Extractors ${extractorsContainsFan.length} contains fans collapsed off-canvas; ${extractorsDerivedDepends.length} derived depends-on hairlines selection/Advanced-gated`,
+  );
+}
+
+// Advanced-in-focus floor: modules (and api functions) inside the cluster only.
+const broadFocusKinds = new Set(["system", "pipeline"]);
+const functionFocusKinds = new Set([
+  "module",
+  "api",
+  "service",
+  "function",
+  "route",
+  "ui",
+  "page",
+  "component",
+  "hook",
+]);
+function advancedFocusNodes(graph, rootId) {
+  const allowed = focusNeighborhoodIds(graph, rootId);
+  const focused = graph.nodes.find((node) => node.id === rootId);
+  return graph.nodes.filter((node) => {
+    if (!allowed.has(node.id)) return false;
+    if (node.kind === "product") return false;
+    if (
+      node.metadata?.relationOnly ||
+      node.metadata?.joinTable ||
+      node.metadata?.exampleChrome
+    ) {
+      return false;
+    }
+    const isOverviewHub = node.metadata?.overviewHub === true;
+    if (beginnerAdvancedKinds.has(node.kind) && !isOverviewHub) {
+      // Mirror viewer showsAdvancedKind: modules/columns at Advanced+focus;
+      // functions only inside a code-container focus (not broad system/pipeline).
+      if (node.kind === "function") {
+        if (!focused) return false;
+        if (broadFocusKinds.has(focused.kind)) return false;
+        return functionFocusKinds.has(focused.kind);
+      }
+      return true;
+    }
+    return true;
+  });
+}
+const selfExtractorsAdvanced = focusExtractorsSystem
+  ? advancedFocusNodes(selfGraph, focusExtractorsSystem.id)
+  : [];
+const fixtureCheckoutAdvanced = focusCheckoutApi
+  ? advancedFocusNodes(fixtureGraph, focusCheckoutApi.id)
+  : [];
+const selfExtractorsAdvancedModules = selfExtractorsAdvanced.filter(
+  (node) => node.kind === "module",
+);
+const selfExtractorsAdvancedFunctions = selfExtractorsAdvanced.filter(
+  (node) => node.kind === "function",
+);
+const fixtureCheckoutAdvancedFunctions = fixtureCheckoutAdvanced.filter(
+  (node) => node.kind === "function",
+);
+const selfAdvancedLeakedModules = selfExtractorsAdvanced.filter(
+  (node) =>
+    node.kind === "module" &&
+    ["src/viewer.ts", "src/cli.ts", "src/compile.ts"].includes(String(node.label)),
+);
+const typescriptModule = selfGraph.nodes.find(
+  (node) => node.kind === "module" && node.label === "src/extractors/typescript.ts",
+);
+const selfTypescriptModuleAdvanced = typescriptModule
+  ? advancedFocusNodes(selfGraph, typescriptModule.id)
+  : [];
+const selfTypescriptModuleFunctions = selfTypescriptModuleAdvanced.filter(
+  (node) => node.kind === "function",
+);
+if (!focusExtractorsSystem || !focusCheckoutApi) {
+  fail("Advanced-in-focus floors need Extractors + Checkout API roots");
+} else if (selfExtractorsAdvancedModules.length < 8) {
+  fail(
+    `Extractors Advanced-in-focus should reveal extractor modules, found ${selfExtractorsAdvancedModules.length}`,
+  );
+} else if (selfExtractorsAdvancedFunctions.length > 0) {
+  fail(
+    `Extractors (system) Advanced should show modules first, not ${selfExtractorsAdvancedFunctions.length} functions`,
+  );
+} else if (selfAdvancedLeakedModules.length > 0) {
+  fail(
+    `Extractors Advanced leaked modules outside cluster: ${selfAdvancedLeakedModules
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else if (selfExtractorsAdvanced.length > 80) {
+  fail(
+    `Extractors Advanced-in-focus too large (global dump?): ${selfExtractorsAdvanced.length}`,
+  );
+} else if (
+  !fixtureCheckoutAdvanced.some((node) => node.label === "src/server.ts") ||
+  !fixtureCheckoutAdvancedFunctions.some((node) => node.label === "createCheckout")
+) {
+  fail(
+    "Checkout API Advanced-in-focus should include server module + createCheckout function",
+  );
+} else if (fixtureCheckoutAdvancedFunctions.length < 2) {
+  fail(
+    `Checkout API Advanced-in-focus should keep local functions, found ${fixtureCheckoutAdvancedFunctions.length}`,
+  );
+} else if (
+  fixtureCheckoutAdvancedFunctions.length >=
+  fixtureGraph.nodes.filter((node) => node.kind === "function").length
+) {
+  fail("Checkout API Advanced must not equal whole-repo function dump");
+} else if (!typescriptModule) {
+  fail("self-map should have src/extractors/typescript.ts module for nested Advanced floor");
+} else if (selfTypescriptModuleFunctions.length < 5) {
+  fail(
+    `Module Advanced-in-focus should reveal functions, found ${selfTypescriptModuleFunctions.length}`,
+  );
+} else if (
+  selfTypescriptModuleAdvanced.some(
+    (node) => node.kind === "module" && node.label === "src/viewer.ts",
+  )
+) {
+  fail("typescript module Advanced must not pull unrelated modules like viewer.ts");
+} else {
+  pass(
+    `Advanced-in-focus: Extractors ${selfExtractorsAdvancedModules.length} modules (no function dump), Checkout ${fixtureCheckoutAdvancedFunctions.length} functions, typescript module ${selfTypescriptModuleFunctions.length} functions`,
+  );
+}
+
+
 const collaborationHeading = viewerHtml.indexOf("<h3>Collaboration</h3>");
 const importsHeading = viewerHtml.indexOf("Imports &amp; calls");
 const collaborationKindsDecl = viewerHtml.indexOf(

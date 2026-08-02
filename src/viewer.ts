@@ -36,8 +36,35 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     header { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); padding: 0 14px; background: var(--panel); }
     header strong { font-size: 15px; }
     header .meta { color: var(--muted); }
-    #search { width: min(340px, 30vw); margin-left: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; outline: none; }
+    #focus-crumb { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; max-width: min(420px, 36vw); color: var(--muted); }
+    #focus-crumb[hidden] { display: none; }
+    #focus-crumb .crumb { background: transparent; border: none; padding: 2px 4px; color: var(--accent); border-radius: 4px; }
+    #focus-crumb .crumb:hover { border-color: transparent; background: color-mix(in srgb, var(--accent) 12%, transparent); }
+    #focus-crumb .crumb.current { color: var(--text); cursor: default; font-weight: 650; }
+    #focus-crumb .crumb.current:hover { background: transparent; }
+    #focus-crumb .crumb-sep { color: var(--muted); user-select: none; }
+    #search-wrap { position: relative; margin-left: auto; width: min(340px, 30vw); }
+    #search { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; outline: none; }
     #search:focus { border-color: var(--accent); }
+    #search-results {
+      position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 4px);
+      max-height: min(320px, 50vh); overflow: auto; margin: 0; padding: 4px;
+      list-style: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, .35);
+    }
+    #search-results[hidden] { display: none; }
+    #search-results button {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+      width: 100%; text-align: left; background: transparent; border: 1px solid transparent;
+      border-radius: 6px; padding: 7px 8px; cursor: pointer;
+    }
+    #search-results button:hover, #search-results button[data-active="true"] {
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+    }
+    #search-results .match-label { font-weight: 650; }
+    #search-results .match-meta { color: var(--muted); font-size: 11px; }
+    #search-results .match-hint { color: var(--accent); font-size: 10px; margin-top: 2px; }
     #workspace { display: grid; grid-template-columns: 1fr 320px; min-height: 0; }
     #viewport { position: relative; overflow: hidden; cursor: grab; }
     #viewport.dragging { cursor: grabbing; }
@@ -46,6 +73,11 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     .edge { stroke: #46505d; stroke-width: 1.2; fill: none; opacity: .48; }
     .edge.derived { stroke-dasharray: 5 4; stroke: var(--derived); }
     .edge.inferred { stroke-dasharray: 2 5; stroke: var(--inferred); }
+    /* Ownership/import fans — collapsed off-canvas at Intermediate; quiet when shown */
+    .edge.structural { stroke: #3d4652; stroke-width: 1; opacity: .26; stroke-dasharray: 3 5; }
+    .edge.structural.derived { stroke: #5c5644; opacity: .3; stroke-dasharray: 3 5; }
+    .edge.structural.inferred { stroke: #4a4558; opacity: .28; stroke-dasharray: 2 5; }
+    .edge.structural.active { stroke: var(--accent); stroke-width: 2; opacity: .9; stroke-dasharray: none; }
     /* Product collaboration (uses/renders/…) — distinct from import/call hairlines */
     .edge.collab { stroke: #6e8fe0; stroke-width: 1.55; opacity: .64; }
     .edge.collab.derived { stroke-dasharray: 8 5; stroke: #6e8fe0; }
@@ -120,7 +152,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     .certainty.derived { color: var(--derived); }
     .certainty.inferred { color: var(--inferred); }
     .empty { color: var(--muted); padding-top: 30px; text-align: center; }
-    #legend { position: absolute; left: 14px; bottom: 14px; display: flex; gap: 10px; color: var(--muted); background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; pointer-events: none; }
+    #canvas-chrome { position: absolute; left: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 6px; max-width: min(540px, calc(100% - 28px)); pointer-events: none; }
+    #walk-hint { color: var(--muted); background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font-size: 12px; line-height: 1.35; }
+    #legend { display: flex; flex-wrap: wrap; gap: 10px; color: var(--muted); background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; }
     #legend span::before { content: ""; display: inline-block; width: 14px; border-top: 2px solid var(--observed); margin-right: 5px; vertical-align: middle; }
     #legend .derived::before { border-color: var(--derived); border-top-style: dashed; }
     #legend .inferred::before { border-color: var(--inferred); border-top-style: dotted; }
@@ -139,10 +173,14 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     <header>
       <strong>${title}</strong>
       <span class="meta" id="counts"></span>
-      <button id="back" hidden>Back</button>
-      <button id="overview">Overview</button>
-      <button id="implementation">Details: off</button>
-      <input id="search" type="search" placeholder="Find a route, table, job, component…" />
+      <button id="back" hidden title="Back one step (Esc) — Intermediate, then Beginner">Back</button>
+      <button id="overview" title="Return to Beginner overview">Overview</button>
+      <button id="tier" title="Beginner: product story · Intermediate: enter a system’s neighborhood · Advanced: code in focus (modules; functions inside a module/api)">View: Beginner</button>
+      <nav class="meta" id="focus-crumb" hidden aria-label="Focus path"></nav>
+      <div id="search-wrap">
+        <input id="search" type="search" placeholder="Find… Enter enters its cluster" autocomplete="off" />
+        <ul id="search-results" hidden role="listbox" aria-label="Search matches"></ul>
+      </div>
     </header>
     <div id="workspace">
       <main id="viewport">
@@ -150,9 +188,12 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           <svg id="edges"></svg>
           <div id="nodes"></div>
         </div>
-        <div id="legend"><span>observed</span><span class="derived">derived</span><span class="inferred">inferred</span><span class="collab">collaboration</span><span class="narrative">publishes / migrates</span><span class="relation">table relations</span></div>
+        <div id="canvas-chrome">
+          <div id="walk-hint">Beginner · Product Flow — select to inspect, double-click to walk in</div>
+          <div id="legend"><span>observed</span><span class="derived">derived</span><span class="inferred">inferred</span><span class="collab">collaboration</span><span class="narrative">publishes / migrates</span><span class="relation">table relations</span></div>
+        </div>
       </main>
-      <aside id="inspector"><div class="empty">Select a component to inspect its connections and source evidence.</div></aside>
+      <aside id="inspector"><div class="empty">Product Flow · Beginner. Select a system to inspect evidence, or double-click to walk into its Intermediate neighborhood.</div></aside>
     </div>
   </div>
   <script>
@@ -173,7 +214,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       { name: "Application", kinds: ["route"] },
       { name: "Data & automation", kinds: ["database", "schema", "table", "collection", "cron", "job", "queue", "topic", "pipeline", "pipeline-step"] },
       { name: "External", kinds: ["external", "config", "unknown"] },
-      { name: "Details", kinds: ["module", "function", "column", "pipeline-step"] }
+      // Advanced-in-focus lane (modules/functions) — not a whole-repo dump.
+      { name: "Code", kinds: ["module", "function", "column", "pipeline-step"] }
     ];
     // Mongo aggregate hubs live under Data beside collections; semantic
     // Pipelines / Compile pipeline systems stay in the Systems lane.
@@ -191,15 +233,402 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       }
       return null;
     }
-    // Default view prefers product systems over raw modules/functions/steps.
-    const hiddenByDefault = new Set(["function", "column", "module", "pipeline-step"]);
+    // Code-level kinds — Beginner/Intermediate hide these; Advanced shows them
+    // only inside the current focus (never a whole-repo dump).
+    const advancedKinds = new Set(["function", "column", "module", "pipeline-step"]);
+    // Broad Product Flow containers: Advanced reveals modules/columns first;
+    // functions wait until the user focuses a code container (module/api/…).
+    const broadFocusKinds = new Set(["system", "pipeline"]);
+    const functionFocusKinds = new Set([
+      "module", "api", "service", "function", "route",
+      "ui", "page", "component", "hook",
+    ]);
+    // Hub / leaf kinds that belong on Intermediate (and Advanced-in-focus), not
+    // Beginner cold open. Beginner stays Product Flow + top systems only.
+    const intermediateKinds = new Set([
+      "table", "collection", "queue", "cron", "route", "page",
+      "component", "hook", "job", "database", "schema",
+    ]);
     // Product-story edges — canvas + inspector treat these apart from imports/calls.
     const collaborationKinds = new Set([
       "uses", "renders", "exposes", "triggers", "configures", "reads", "flows-to",
     ]);
     // Messaging + schema lineage — labeled badges on the default overview.
     const narrativeKinds = new Set(["publishes", "consumes", "migrates"]);
-    const state = { scale: 1, x: 36, y: 40, dragging: false, startX: 0, startY: 0, focus: null, selected: null, implementation: false, history: [] };
+    // Focus neighborhood story edges (not calls / depends-on hairballs).
+    const neighborhoodEdgeKinds = new Set([
+      ...collaborationKinds,
+      ...narrativeKinds,
+      "writes", "schedules", "routes-to",
+    ]);
+    // Ownership fans (contains × N children) — never painted; layout is the signal.
+    const ownershipEdgeKinds = new Set(["contains"]);
+    // Derived/inferred depends-on / calls / imports — yellow spaghetti at Intermediate
+    // unless selected (or quiet Advanced-in-focus). Table relations stay separate.
+    const structuralHairlineKinds = new Set([
+      "depends-on", "calls", "imports", "exports",
+    ]);
+    // Beginner = product flow · Intermediate = focused neighborhood · Advanced = code in focus
+    const tierOrder = ["beginner", "intermediate", "advanced"];
+    const state = {
+      scale: 1,
+      x: 36,
+      y: 40,
+      dragging: false,
+      startX: 0,
+      startY: 0,
+      focus: null,
+      selected: null,
+      tier: "beginner",
+      history: [],
+    };
+    // Reload comfort: remember last walk (tier + focus stack) for this project root.
+    const walkStorageKey = "underdelta:walk:" + (graph.project.root || graph.project.name || "default");
+    function persistWalkState() {
+      try {
+        sessionStorage.setItem(walkStorageKey, JSON.stringify({
+          tier: state.tier,
+          focus: state.focus,
+          history: state.history.filter(Boolean),
+          selected: state.selected,
+        }));
+      } catch (_err) {
+        /* private mode / quota — walk still works without persistence */
+      }
+    }
+    function restoreWalkState() {
+      try {
+        const raw = sessionStorage.getItem(walkStorageKey);
+        if (!raw) return false;
+        const saved = JSON.parse(raw);
+        if (!saved || typeof saved !== "object") return false;
+        const focus = typeof saved.focus === "string" && byId.has(saved.focus) ? saved.focus : null;
+        const history = Array.isArray(saved.history)
+          ? saved.history.filter((id) => typeof id === "string" && byId.has(id))
+          : [];
+        state.focus = focus;
+        state.history = focus ? history : [];
+        const selected = typeof saved.selected === "string" && byId.has(saved.selected)
+          ? saved.selected
+          : focus;
+        state.selected = selected;
+        // Keep a manually chosen Advanced-without-focus; otherwise fall back safely.
+        if (typeof saved.tier === "string" && tierOrder.includes(saved.tier)) {
+          state.tier = saved.tier;
+        } else if (focus) {
+          const focused = byId.get(focus);
+          state.tier = focused && advancedKinds.has(focused.kind) ? "advanced" : "intermediate";
+        } else {
+          state.tier = "beginner";
+        }
+        return true;
+      } catch (_err) {
+        return false;
+      }
+    }
+    function isAdvancedTier() {
+      return state.tier === "advanced";
+    }
+    // Advanced code kinds only inside the focused cluster — never whole-repo.
+    // Modules/columns/pipeline-steps appear at Advanced+focus; functions appear
+    // when the focus is a code container (not a broad system/pipeline hub).
+    function showsAdvancedKind(node) {
+      if (!isAdvancedTier() || !state.focus) return false;
+      if (node.kind !== "function") return true;
+      const focused = byId.get(state.focus);
+      if (!focused) return false;
+      if (broadFocusKinds.has(focused.kind)) return false;
+      return functionFocusKinds.has(focused.kind);
+    }
+    function tierButtonLabel() {
+      if (state.tier === "beginner") return "View: Beginner";
+      if (state.tier === "intermediate") return "View: Intermediate";
+      if (state.focus) return "View: Advanced · code in focus";
+      return "View: Advanced";
+    }
+    function syncTierButton() {
+      const button = document.getElementById("tier");
+      if (!button) return;
+      button.textContent = tierButtonLabel();
+      button.dataset.tier = state.tier;
+      button.dataset.codeInFocus = state.tier === "advanced" && state.focus ? "true" : "false";
+    }
+    // Legend + inspector empty copy stay honest to the current walk tier.
+    function walkHintText() {
+      if (state.tier === "advanced" && state.focus) {
+        const label = byId.get(state.focus)?.label || "focus";
+        return "Advanced · code in " + label + " — modules first; drill a module for functions";
+      }
+      if (state.tier === "advanced") {
+        return "Advanced · needs a focus — double-click a system (no whole-repo dump)";
+      }
+      if (state.focus) {
+        const label = byId.get(state.focus)?.label || "focus";
+        return "Intermediate · neighborhood of " + label + " — Back / Esc returns toward Beginner";
+      }
+      if (state.tier === "intermediate") {
+        return "Intermediate · still overview-calm — double-click a Product Flow system to enter";
+      }
+      return "Beginner · Product Flow — select to inspect, double-click to walk in";
+    }
+    function emptyInspectorMessage() {
+      if (state.tier === "advanced") {
+        if (!state.focus) {
+          return "Advanced shows code in focus — double-click a system (then a module/api) to open its cluster. No whole-repo function dump.";
+        }
+        return "Advanced · code in this focus. Select a module or function here. Back / Esc returns to Intermediate, then Beginner.";
+      }
+      if (state.focus) {
+        return "Intermediate neighborhood — select a neighbor, or double-click a module/api for Advanced code in focus.";
+      }
+      if (state.tier === "intermediate") {
+        return "Still overview-calm at Intermediate until you focus. Double-click a Product Flow system to enter its neighborhood.";
+      }
+      return "Product Flow · Beginner. Select a system to inspect evidence, or double-click to walk into its Intermediate neighborhood.";
+    }
+    function emptyInspectorHtml() {
+      return '<div class="empty">' + emptyInspectorMessage() + "</div>";
+    }
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+    // Focus walk stack (nulls filtered — first enter used to push null).
+    function focusStack() {
+      const stack = state.history.filter(Boolean);
+      if (state.focus) stack.push(state.focus);
+      return stack;
+    }
+    // Keep the View: label honest as the user walks Back / Overview / crumbs.
+    // Overview → Beginner; system/hub focus → Intermediate; code container → Advanced.
+    function syncTierToFocus() {
+      if (!state.focus) {
+        state.tier = "beginner";
+      } else {
+        const focused = byId.get(state.focus);
+        if (focused && advancedKinds.has(focused.kind)) {
+          state.tier = "advanced";
+        } else {
+          state.tier = "intermediate";
+        }
+      }
+      syncTierButton();
+    }
+    function resetCamera() {
+      state.x = 36;
+      state.y = 40;
+      state.scale = 1;
+    }
+    function goOverview() {
+      state.focus = null;
+      state.history = [];
+      state.selected = null;
+      syncTierToFocus();
+      resetCamera();
+      inspector.innerHTML = emptyInspectorHtml();
+      render();
+      applyTransform();
+      persistWalkState();
+    }
+    // Breadcrumb / Back / Esc: jump to stack index (-1 = Beginner overview).
+    function navigateFocusStack(index) {
+      const stack = focusStack();
+      if (index < 0) {
+        goOverview();
+        return;
+      }
+      if (index >= stack.length) return;
+      state.focus = stack[index];
+      state.history = stack.slice(0, index);
+      state.selected = state.focus;
+      syncTierToFocus();
+      resetCamera();
+      render();
+      applyTransform();
+      persistWalkState();
+    }
+    // One step back: nested Advanced → Intermediate parent, then Beginner.
+    function goBack() {
+      const stack = focusStack();
+      if (stack.length === 0) return false;
+      navigateFocusStack(stack.length - 2);
+      return true;
+    }
+    // Esc = back one tier without the mouse (search clear first when typing).
+    function handleEscapeKey(event) {
+      if (event.key !== "Escape") return;
+      const searchEl = document.getElementById("search");
+      if (searchEl && document.activeElement === searchEl) {
+        if (searchEl.value) {
+          searchEl.value = "";
+          renderSearchResults();
+          render();
+          event.preventDefault();
+          return;
+        }
+        searchEl.blur();
+        renderSearchResults();
+        event.preventDefault();
+        return;
+      }
+      if (goBack()) {
+        event.preventDefault();
+        return;
+      }
+      if (state.selected) {
+        state.selected = null;
+        inspector.innerHTML = emptyInspectorHtml();
+        render();
+        event.preventDefault();
+      }
+    }
+    function parentOf(node) {
+      if (!node) return null;
+      if (node.parentId && byId.has(node.parentId)) return byId.get(node.parentId);
+      const owned = (incoming.get(node.id) || []).find((edge) => edge.kind === "contains");
+      return owned ? byId.get(owned.source) || null : null;
+    }
+    // Search jump: enter a walkable cluster, not a whole-repo highlight dump.
+    // Functions → module/api; Intermediate leaves → system/api hub; hubs → self.
+    function clusterRootFor(id) {
+      const node = byId.get(id);
+      if (!node || node.kind === "product") return null;
+      if (
+        node.kind === "system" ||
+        node.kind === "pipeline" ||
+        node.kind === "api" ||
+        node.kind === "service" ||
+        node.kind === "ui" ||
+        node.kind === "module"
+      ) {
+        return node.id;
+      }
+      // Code leaves: open the code container so Advanced can show them.
+      if (advancedKinds.has(node.kind)) {
+        let cur = node;
+        while (cur) {
+          const parent = parentOf(cur);
+          if (!parent) break;
+          if (functionFocusKinds.has(parent.kind)) return parent.id;
+          cur = parent;
+        }
+      }
+      // Routes/tables/jobs/… → containing system / pipeline / api / service.
+      if (intermediateKinds.has(node.kind) || node.kind === "external" || node.kind === "config") {
+        let cur = node;
+        while (cur) {
+          const parent = parentOf(cur);
+          if (!parent) break;
+          if (
+            parent.kind === "system" ||
+            parent.kind === "pipeline" ||
+            parent.kind === "api" ||
+            parent.kind === "service" ||
+            parent.kind === "ui"
+          ) {
+            return parent.id;
+          }
+          cur = parent;
+        }
+      }
+      let cur = node;
+      while (cur) {
+        if (
+          cur.kind === "system" ||
+          cur.kind === "pipeline" ||
+          cur.kind === "api" ||
+          cur.kind === "service" ||
+          cur.kind === "ui" ||
+          cur.kind === "module"
+        ) {
+          return cur.id;
+        }
+        cur = parentOf(cur);
+      }
+      return node.id;
+    }
+    function searchMatchNodes() {
+      const query = search.value.trim().toLowerCase();
+      if (!query) return [];
+      const scored = [];
+      for (const node of graph.nodes) {
+        if (node.kind === "product") continue;
+        const hay = (node.label + " " + node.kind + " " + (node.qualifiedName || "")).toLowerCase();
+        if (!hay.includes(query)) continue;
+        const label = String(node.label).toLowerCase();
+        let score = 40;
+        if (label === query) score = 100;
+        else if (label.startsWith(query)) score = 80;
+        else if (label.includes(query)) score = 60;
+        if (node.kind === "system" || node.kind === "pipeline") score += 3;
+        else if (node.kind === "api" || node.kind === "service" || node.kind === "ui") score += 2;
+        else if (advancedKinds.has(node.kind)) score -= 1;
+        scored.push({ node, score });
+      }
+      scored.sort((a, b) => b.score - a.score || String(a.node.label).localeCompare(String(b.node.label)));
+      return scored.map((item) => item.node).slice(0, 12);
+    }
+    function enterSearchMatch(matchId) {
+      const root = clusterRootFor(matchId);
+      if (!root) return false;
+      search.value = "";
+      renderSearchResults();
+      if (state.focus !== root) {
+        focusNode(root);
+      } else {
+        syncTierToFocus();
+        resetCamera();
+        applyTransform();
+      }
+      selectNode(matchId);
+      return true;
+    }
+    function renderSearchResults() {
+      const list = document.getElementById("search-results");
+      if (!list) return;
+      const matches = searchMatchNodes();
+      if (!matches.length) {
+        list.hidden = true;
+        list.innerHTML = "";
+        return;
+      }
+      list.hidden = false;
+      list.innerHTML = matches.map((node, index) => (
+        '<li role="option">' +
+          '<button type="button" data-id="' + node.id + '" data-active="' + (index === 0 ? "true" : "false") + '">' +
+            '<span class="match-label"></span>' +
+            '<span class="match-meta"></span>' +
+            '<span class="match-hint"></span>' +
+          "</button>" +
+        "</li>"
+      )).join("");
+      list.querySelectorAll("button[data-id]").forEach((button, index) => {
+        const node = matches[index];
+        const rootId = clusterRootFor(node.id);
+        const root = rootId ? byId.get(rootId) : null;
+        button.querySelector(".match-label").textContent = node.label;
+        button.querySelector(".match-meta").textContent =
+          node.kind + (node.technology ? " · " + node.technology : "");
+        button.querySelector(".match-hint").textContent = root && root.id !== node.id
+          ? "Enter → " + root.label + " cluster"
+          : "Enter focuses this cluster";
+        button.onclick = (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          enterSearchMatch(node.id);
+        };
+      });
+    }
+    function handleSearchKeydown(event) {
+      if (event.key !== "Enter") return;
+      const matches = searchMatchNodes();
+      if (!matches.length) return;
+      event.preventDefault();
+      enterSearchMatch(matches[0].id);
+    }
     const viewport = document.getElementById("viewport");
     const world = document.getElementById("world");
     const nodesLayer = document.getElementById("nodes");
@@ -226,16 +655,54 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       return found;
     }
 
+    // Intermediate focus: contains-tree + key story neighbors of the focus and
+    // its important (non-advanced) children — never a whole-repo uncollapse.
+    function focusNeighborhood(rootId) {
+      const tree = descendants(rootId);
+      const found = new Set(tree);
+      const seeds = [];
+      for (const id of tree) {
+        if (id === rootId) {
+          seeds.push(id);
+          continue;
+        }
+        const node = byId.get(id);
+        if (!node) continue;
+        const isOverviewHub = node.metadata && node.metadata.overviewHub;
+        if (advancedKinds.has(node.kind) && !isOverviewHub) continue;
+        seeds.push(id);
+      }
+      for (const id of seeds) {
+        for (const edge of outgoing.get(id) || []) {
+          if (neighborhoodEdgeKinds.has(edge.kind)) found.add(edge.target);
+        }
+        for (const edge of incoming.get(id) || []) {
+          if (neighborhoodEdgeKinds.has(edge.kind)) found.add(edge.source);
+        }
+      }
+      return found;
+    }
+
     function visibleNodes() {
-      let allowed = state.focus ? descendants(state.focus) : new Set(graph.nodes.map((node) => node.id));
-      const query = search.value.trim().toLowerCase();
+      let allowed = state.focus
+        ? focusNeighborhood(state.focus)
+        : new Set(graph.nodes.map((node) => node.id));
+      // Search picks from a results list and enters a cluster — it must not
+      // break calm overview into a whole-repo match dump / god-graph.
+      const calmOverview = !state.focus;
+      // When a Product Flow exists, calm overview is that band only — drill in
+      // (double-click / search Enter) to see a system’s Intermediate neighborhood.
+      const hasProductFlow =
+        calmOverview &&
+        graph.nodes.some(
+          (node) => node.metadata && typeof node.metadata.flowOrder === "number",
+        );
       return graph.nodes.filter((node) => {
         if (!allowed.has(node.id)) return false;
         // ORM relation fields + M2M join-table aliases stay collapsed;
         // table↔table edges / real models carry the story. Terraform
         // examples/wrappers and vpc_issue module chrome is the same kind of noise.
         if (
-          !query &&
           node.metadata &&
           (node.metadata.relationOnly ||
             node.metadata.joinTable ||
@@ -244,26 +711,32 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           return false;
         }
         // overviewHub (auth/billing actions, Helm Chart/resources, mongo
-        // aggregates) bypasses kind/collapse hides so product hubs stay on
-        // the default map beside their parent system.
-        if (
-          !state.implementation &&
-          hiddenByDefault.has(node.kind) &&
-          !(node.metadata && node.metadata.overviewHub)
-        ) {
+        // aggregates) bypasses advanced-kind hides so hubs can appear once the
+        // user focuses a system (Intermediate neighborhood / Advanced-in-focus).
+        const isOverviewHub = node.metadata && node.metadata.overviewHub;
+        if (advancedKinds.has(node.kind) && !isOverviewHub) {
+          // Cluster-scoped Advanced only — never a whole-repo function dump.
+          if (!showsAdvancedKind(node)) return false;
+        }
+        // Calm overview: Product Flow + top systems only. Tables, queues,
+        // crons, routes, etc. wait for a focused Intermediate neighborhood.
+        if (calmOverview && intermediateKinds.has(node.kind)) {
           return false;
         }
         if (
-          !state.implementation &&
-          !state.focus &&
-          !query &&
+          calmOverview &&
           node.metadata &&
           node.metadata.collapsedInOverview
         ) {
           return false;
         }
+        if (
+          hasProductFlow &&
+          !(node.metadata && typeof node.metadata.flowOrder === "number")
+        ) {
+          return false;
+        }
         if (node.kind === "product") return false;
-        if (query && !(node.label + " " + node.kind + " " + (node.qualifiedName || "")).toLowerCase().includes(query)) return false;
         return true;
       });
     }
@@ -305,6 +778,19 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       return "observed";
     }
 
+    // Intermediate calm: collapse ownership fans; gate structural hairlines.
+    // Story edges (collab / narrative / relation / writes…) stay always-on.
+    function showsStructuralEdge(edge) {
+      if (ownershipEdgeKinds.has(edge.kind)) return false;
+      if (!structuralHairlineKinds.has(edge.kind)) return true;
+      if (isTableRelationEdge(edge)) return true;
+      const selected =
+        state.selected === edge.source || state.selected === edge.target;
+      if (selected) return true;
+      // Advanced-in-focus may show quiet hairlines inside the cluster.
+      return isAdvancedTier() && !!state.focus;
+    }
+
     function widthForKind(kind) {
       if (kind === "function" || kind === "column") return 170;
       if (kind === "hook") return 176;
@@ -341,7 +827,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       positionsScratch = new Map();
       const positions = positionsScratch;
       nodesLayer.innerHTML = "";
-      const activeLanes = lanes.filter((lane) => state.implementation || lane.name !== "Details");
+      const activeLanes = lanes.filter(
+        (lane) => (isAdvancedTier() && state.focus) || lane.name !== "Code",
+      );
       const laneWidth = 240;
       const flowGap = 220;
       let maxHeight = 0;
@@ -610,16 +1098,28 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         appendEdgeBadge(geom.mx, geom.my, labels.join(" · "), false, "relation");
       }
 
+      // Collapse structural hairlines by directed pair (one quiet path, not a fan).
+      const structuralDrawn = new Set();
       for (const edge of graph.edges) {
         if (!visibleIds.has(edge.source) || !visibleIds.has(edge.target)) continue;
         if (narrativeEdgeIds.has(edge.id)) continue;
         if (relationEdgeIds.has(edge.id)) continue;
+        // Ownership fans (contains) + unselected derived depends-on/calls stay off
+        // Intermediate canvas — neighborhood layout already shows children.
+        if (!showsStructuralEdge(edge)) continue;
         // contains under a labeled messaging/migration story just restates ownership.
         if (
           edge.kind === "contains" &&
           narrativePairs.has(edge.source + "|" + edge.target)
         ) {
           continue;
+        }
+        const isStructuralHairline =
+          structuralHairlineKinds.has(edge.kind) && !isTableRelationEdge(edge);
+        if (isStructuralHairline) {
+          const pairKey = edge.kind + "|" + edge.source + "|" + edge.target;
+          if (structuralDrawn.has(pairKey)) continue;
+          structuralDrawn.add(pairKey);
         }
         const source = positions.get(edge.source);
         const target = positions.get(edge.target);
@@ -628,6 +1128,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         const geom = edgeGeometry(source, target);
         path.setAttribute("d", geom.d);
         const classes = ["edge", certaintyOf(edge)];
+        if (isStructuralHairline) classes.push("structural");
         if (collaborationKinds.has(edge.kind)) {
           classes.push("collab");
           if (edge.kind === "flows-to") classes.push("flows-to");
@@ -637,6 +1138,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         if (selected) classes.push("active");
         path.setAttribute("class", classes.join(" "));
         path.setAttribute("data-kind", edge.kind);
+        if (isStructuralHairline) path.setAttribute("data-structural", "true");
         edgesLayer.appendChild(path);
         // Selection reveals what blue collab lines mean on-canvas.
         if (selected) {
@@ -648,8 +1150,57 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         }
       }
       highlightNeighborhood();
-      document.getElementById("counts").textContent = visible.length + " components · " + graph.edges.length + " relationships";
-      document.getElementById("back").hidden = state.history.length === 0;
+      const focused = state.focus ? byId.get(state.focus) : null;
+      const crumb = document.getElementById("focus-crumb");
+      if (crumb) {
+        const stack = focusStack();
+        if (stack.length === 0) {
+          crumb.hidden = true;
+          crumb.innerHTML = "";
+        } else {
+          crumb.hidden = false;
+          const parts = [];
+          parts.push('<button type="button" class="crumb" data-stack="-1" title="Back to Beginner overview">Overview</button>');
+          stack.forEach((id, index) => {
+            const node = byId.get(id);
+            const label = escapeHtml(node ? node.label : id);
+            const isCurrent = index === stack.length - 1;
+            const title = isCurrent
+              ? (isAdvancedTier() ? "Code in focus" : "Current focus")
+              : "Back to this focus";
+            parts.push('<span class="crumb-sep" aria-hidden="true">›</span>');
+            if (isCurrent) {
+              parts.push(
+                '<span class="crumb current" title="' + title + '">' +
+                label +
+                (isAdvancedTier() ? " · code" : "") +
+                "</span>",
+              );
+            } else {
+              parts.push(
+                '<button type="button" class="crumb" data-stack="' + index + '" title="' + title + '">' +
+                label +
+                "</button>",
+              );
+            }
+          });
+          crumb.innerHTML = parts.join("");
+          crumb.querySelectorAll("button.crumb[data-stack]").forEach((button) => {
+            button.onclick = (event) => {
+              event.stopPropagation();
+              navigateFocusStack(Number(button.dataset.stack));
+            };
+          });
+        }
+      }
+      document.getElementById("counts").textContent = focused
+        ? (isAdvancedTier()
+            ? visible.length + " in focus (code) · " + graph.edges.length + " relationships"
+            : visible.length + " in neighborhood · " + graph.edges.length + " relationships")
+        : visible.length + " components · " + graph.edges.length + " relationships";
+      document.getElementById("back").hidden = !state.focus && state.history.length === 0;
+      const walkHint = document.getElementById("walk-hint");
+      if (walkHint) walkHint.textContent = walkHintText();
     }
 
     function highlightNeighborhood() {
@@ -1068,39 +1619,45 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     }
 
     function focusNode(id) {
-      state.history.push(state.focus);
+      // Only push real foci — avoids null placeholders that confuse breadcrumbs.
+      if (state.focus) state.history.push(state.focus);
       state.focus = id;
       state.selected = id;
-      state.x = 36;
-      state.y = 40;
-      state.scale = 1;
+      // Tier follows the walk: system → Intermediate, module/api code → Advanced.
+      syncTierToFocus();
+      resetCamera();
       render();
       applyTransform();
+      persistWalkState();
     }
 
-    document.getElementById("overview").onclick = () => {
-      state.focus = null;
-      state.history = [];
-      state.selected = null;
-      state.x = 36; state.y = 40; state.scale = 1;
-      inspector.innerHTML = '<div class="empty">Select a component to inspect its connections and source evidence.</div>';
-      render(); applyTransform();
-    };
+    document.getElementById("overview").onclick = () => goOverview();
     document.getElementById("back").onclick = () => {
-      state.focus = state.history.pop() || null;
-      state.selected = state.focus;
-      render();
+      goBack();
     };
-    document.getElementById("implementation").onclick = (event) => {
-      state.implementation = !state.implementation;
-      event.currentTarget.textContent = "Details: " + (state.implementation ? "on" : "off");
+    document.addEventListener("keydown", handleEscapeKey);
+    document.getElementById("tier").onclick = () => {
+      const index = tierOrder.indexOf(state.tier);
+      state.tier = tierOrder[(index + 1) % tierOrder.length];
+      // Without a focused system, Intermediate/Advanced stay Product Flow–calm
+      // (no global hub dump). Double-click a system to enter its neighborhood;
+      // Advanced reveals modules in that focus; functions after drilling into a
+      // module/api. Search Enter/click enters a match’s cluster (no god-graph dump).
+      syncTierButton();
+      if (!state.selected) inspector.innerHTML = emptyInspectorHtml();
       render();
+      persistWalkState();
     };
-    search.oninput = render;
+    search.oninput = () => {
+      renderSearchResults();
+    };
+    search.onkeydown = handleSearchKeydown;
+    search.addEventListener("focus", renderSearchResults);
     viewport.onclick = () => {
       state.selected = null;
-      inspector.innerHTML = '<div class="empty">Select a component to inspect its connections and source evidence.</div>';
+      inspector.innerHTML = emptyInspectorHtml();
       render();
+      persistWalkState();
     };
     viewport.onwheel = (event) => {
       event.preventDefault();
@@ -1132,7 +1689,15 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       viewport.classList.remove("dragging");
     };
 
-    render();
+    // Hydrate last walk before first paint (stale ids → Beginner overview).
+    restoreWalkState();
+    syncTierButton();
+    if (state.selected && byId.has(state.selected)) {
+      selectNode(state.selected);
+    } else {
+      inspector.innerHTML = emptyInspectorHtml();
+      render();
+    }
     applyTransform();
   </script>
 </body>
