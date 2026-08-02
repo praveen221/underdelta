@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import ts from "typescript";
+import { ts } from "ts-morph";
 import { edgeFrom, relativeFile, stableId } from "../graph.js";
 import type {
   ArchitectureExtractor,
