@@ -82,16 +82,19 @@ Update these checkboxes and the “Next focus” section every tick.
 - [x] Flow-ordered Product flow band in viewer (`metadata.flowOrder`)
 - [x] Explicit `architecture.json` artifact node on Underdelta self-map (compile/graph → artifact → viewer)
 - [x] Verify asserts artifact node, flowOrder chain, and artifact flows-to links
+- [x] Humanized cron labels (`handler (expression)`)
+- [x] Extracted `checkout` pipeline nested under Pipelines + collapsed in overview
+- [x] Overview collapses system leaves (routes/components/cron/queue/…) until focus/Details
 
 ### In progress / next
 
 Keep **at least 3 unchecked items** here at all times (refill from Self-renewing backlog).
 
-- [ ] Better cron/job labeling (not raw `"0 * * * *"` only)
-- [ ] Nest extracted `checkout` pipeline under Pipelines without duplicate confusion
-- [ ] Collapse noisy default-visible leaves when a parent system already tells the story
 - [ ] Projection from package.json exports / bin entries / README headings
 - [ ] Inspector: show system → key files prominently
+- [ ] Queue publish/consume clarity on the default map
+- [ ] Generated browser artifact node (`index.html`) beside architecture.json
+- [ ] Capture a “scan Underdelta” golden summary in verify (counts + required labels)
 
 ### Seed backlog (pull from here when In progress < 3)
 
@@ -99,10 +102,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 - Richer Underdelta self-map edges (compile uses extractors, viewer renders graph, etc.)
 - Projection from package.json exports / bin entries / README headings
-- Better cron/job labeling (not raw `"0 * * * *"` only)
 - Queue publish/consume clarity on the default map
-- Nest or relate extracted `checkout` pipeline under Pipelines without duplicate confusion
-- Collapse noisy default-visible leaves when a parent system already tells the story
 - Inspector: show system → key files prominently
 - Generated browser artifact node (`index.html`) beside architecture.json
 - Multi-file route frameworks / Next-style app router hints (only if it helps the chosen stack)
@@ -113,7 +113,7 @@ Not a full roadmap — a menu the agent may reorder. Pick what most improves the
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Product flow band + architecture.json artifact). Now improve mini-stack readability: humanize cron labels, nest the extracted `checkout` pipeline under Pipelines, and collapse noisy default-visible leaves that duplicate their parent systems.
+> **Next focus:** This work is done (cron labels + nest checkout + collapse overview leaves). Now project from package.json `bin`/exports into the self-map and make the inspector surface each system’s key source files so evidence is obvious without opening Details.
 
 ### Learning log (append every tick)
 
@@ -129,6 +129,7 @@ Append short bullets like:
 - 2026-08-02 02:32 UTC | Done: nest runtime nodes under systems, dedupe tables, UI vs Viewer, richer verify | Next: flow-ordered layout + architecture.json artifact node | Learned: Prisma+SQL+usage tables triple-count without normalization; high-signal nodes must be reparented onto systems or the overview still feels like a parts bin
 - 2026-08-02 02:50 UTC | Done: hardened plan (product-build > merge-prep, never-idle, self-renewing backlog) | Next: flow-ordered layout + artifact node | Learned: checklist exhaustion and merge-ready autopilot skill can falsely idle a build loop unless the plan forbids it
 - 2026-08-02 02:55 UTC | Done: flowOrder Product flow band + architecture.json artifact + verify | Next: cron labels, nest checkout pipeline, collapse duplicate leaves | Learned: left-to-right product story needs a dedicated flow band above lanes; artifact should sit between compile/graph and viewer
+- 2026-08-02 03:00 UTC | Done: humanized cron labels, nest checkout under Pipelines, collapse overview leaves | Next: package.json projection + inspector key files | Learned: parent semantic systems should own the overview; leaves stay available on focus/Details so the map stops restating itself
 
 ---
 

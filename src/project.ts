@@ -350,6 +350,24 @@ export function projectSemanticArchitecture(
     }
   }
 
+  // Nest extracted pipelines under the semantic Pipelines system.
+  const pipelinesSystem = systems.get("pipelines");
+  if (pipelinesSystem) {
+    for (const node of [...nodes.values()]) {
+      if (
+        node.kind === "pipeline" &&
+        node.metadata?.projection !== "semantic" &&
+        node.id !== pipelinesSystem.id
+      ) {
+        attachToSystem(
+          node.id,
+          pipelinesSystem.id,
+          node.evidence[0] ?? projectionEvidence("."),
+        );
+      }
+    }
+  }
+
   // Nest pipeline steps under their pipeline parent when available.
   for (const edge of [...edges.values()]) {
     if (edge.kind !== "contains") continue;
@@ -358,6 +376,30 @@ export function projectSemanticArchitecture(
     if (parent?.kind === "pipeline" && child?.kind === "pipeline-step") {
       child.parentId = parent.id;
       nodes.set(child.id, child);
+    }
+  }
+
+  // Hide leaves that only restate their parent semantic system on the overview.
+  const collapsibleKinds = new Set([
+    "route",
+    "component",
+    "page",
+    "hook",
+    "cron",
+    "queue",
+    "database",
+    "schema",
+    "pipeline",
+  ]);
+  for (const node of nodes.values()) {
+    if (node.metadata?.projection === "semantic") continue;
+    if (!collapsibleKinds.has(node.kind)) continue;
+    const parent = node.parentId ? nodes.get(node.parentId) : undefined;
+    if (parent?.metadata?.projection === "semantic") {
+      node.metadata = {
+        ...node.metadata,
+        collapsedInOverview: true,
+      };
     }
   }
 

@@ -177,6 +177,15 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       return graph.nodes.filter((node) => {
         if (!allowed.has(node.id)) return false;
         if (!state.implementation && hiddenByDefault.has(node.kind)) return false;
+        if (
+          !state.implementation &&
+          !state.focus &&
+          !query &&
+          node.metadata &&
+          node.metadata.collapsedInOverview
+        ) {
+          return false;
+        }
         if (node.kind === "product") return false;
         if (query && !(node.label + " " + node.kind + " " + (node.qualifiedName || "")).toLowerCase().includes(query)) return false;
         return true;

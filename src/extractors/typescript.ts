@@ -362,14 +362,21 @@ export const typescriptExtractor: ArchitectureExtractor = {
           if (method === "schedule" || method === "cron") {
             const expression = stringValue(node.arguments[0]);
             if (expression) {
+              const handler = node.arguments[1];
+              const handlerName =
+                handler && ts.isIdentifier(handler) ? handler.text : undefined;
               const cronId = stableId("cron", file.relative, expression);
+              const cronMetadata: Record<string, unknown> = { expression };
+              if (handlerName !== undefined) cronMetadata.handler = handlerName;
               nodes.push({
                 id: cronId,
                 kind: "cron",
-                label: expression,
+                label: handlerName
+                  ? `${handlerName} (${expression})`
+                  : expression,
                 parentId: file.moduleId,
                 technology: receiver ?? "scheduler",
-                metadata: { expression },
+                metadata: cronMetadata,
                 evidence: [evidenceFor(file, node)],
               });
               edges.push(
@@ -380,7 +387,6 @@ export const typescriptExtractor: ArchitectureExtractor = {
                   evidenceFor(file, node),
                 ),
               );
-              const handler = node.arguments[1];
               if (handler && ts.isIdentifier(handler)) {
                 const target =
                   localDeclarations.get(handler.text) ??

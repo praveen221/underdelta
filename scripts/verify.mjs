@@ -210,6 +210,45 @@ if (!routesUnderApi) {
   pass(`HTTP API contains ${routesUnderApi} route(s)`);
 }
 
+const cron = fixtureGraph.nodes.find((node) => node.kind === "cron");
+if (!cron || !String(cron.label).includes("reconcilePayments")) {
+  fail(
+    `expected humanized cron label with handler name, found '${cron?.label ?? "(none)"}'`,
+  );
+} else {
+  pass(`cron label humanized: ${cron.label}`);
+}
+
+const pipelines = fixtureSystems.find((node) => node.label === "Pipelines");
+const checkout = fixtureGraph.nodes.find(
+  (node) =>
+    node.kind === "pipeline" &&
+    node.label === "checkout" &&
+    node.metadata?.projection !== "semantic",
+);
+if (!pipelines || !checkout || checkout.parentId !== pipelines.id) {
+  fail("expected extracted checkout pipeline nested under Pipelines system");
+} else {
+  pass("checkout pipeline nested under Pipelines");
+}
+
+const collapsedRoutes = fixtureGraph.nodes.filter(
+  (node) => node.kind === "route" && node.metadata?.collapsedInOverview === true,
+);
+if (collapsedRoutes.length < 2) {
+  fail(
+    `expected routes collapsed in overview under HTTP API, found ${collapsedRoutes.length}`,
+  );
+} else {
+  pass(`collapsed overview leaves: ${collapsedRoutes.length} route(s)`);
+}
+
+if (checkout && checkout.metadata?.collapsedInOverview !== true) {
+  fail("expected checkout pipeline collapsed in overview under Pipelines");
+} else {
+  pass("checkout pipeline collapsed in overview");
+}
+
 if (process.exitCode) {
   console.error("Verification suite failed.");
   process.exit(process.exitCode);
