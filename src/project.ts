@@ -1158,13 +1158,46 @@ const PRODUCT_ACRONYMS = new Set([
   "ecs",
   "eks",
   "rds",
+  // OpenTelemetry is a product name, not OTEL shouting.
+  "opentelemetry",
 ]);
 
 /** Mixed-case product acronyms that should not become ALL CAPS. */
 const MIXED_CASE_ACRONYMS: Record<string, string> = {
   oauth: "OAuth",
   dynamodb: "DynamoDB",
+  opentelemetry: "OpenTelemetry",
 };
+
+/**
+ * Dictionary of product-name segments found glued in Kubernetes resource
+ * names (Online Boutique `productcatalogservice`, `loadgenerator`, …).
+ * Longest-first greedy matching turns them into camelCase before humanize.
+ */
+const KUBERNETES_NAME_SEGMENTS = [
+  "opentelemetry",
+  "recommendation",
+  "product",
+  "catalog",
+  "shopping",
+  "assistant",
+  "generator",
+  "collector",
+  "checkout",
+  "currency",
+  "payment",
+  "shipping",
+  "frontend",
+  "backend",
+  "service",
+  "redis",
+  "email",
+  "cart",
+  "load",
+  "web",
+  "api",
+  "ad",
+].sort((a, b) => b.length - a.length);
 
 function formatProductWord(part: string, index: number): string {
   const lower = part.toLowerCase();
@@ -1405,13 +1438,57 @@ export function humanizeTerraformLabel(
  * Compound microservice names (`cartservice`) become camelCase before humanize
  * so `adservice` → `Ad service` (space early-return must not skip title case).
  */
+/**
+ * Split all-lowercase glued K8s names into camelCase via a product lexicon.
+ * `productcatalogservice` → `productCatalogService`, `loadgenerator` →
+ * `loadGenerator`. Names that already have hyphens/underscores/camelCase (or
+ * cannot be fully segmented) keep the trailing-`service` split only.
+ */
+export function splitGluedKubernetesName(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return trimmed;
+  // Hyphen / underscore / existing camelCase already humanize cleanly.
+  if (/[-_]/.test(trimmed) || /[a-z][A-Z]/.test(trimmed)) {
+    return trimmed.replace(/([a-z0-9])service$/i, "$1Service");
+  }
+  const lower = trimmed.toLowerCase();
+  // Only attempt lexicon splits on plain glued identifiers.
+  if (!/^[a-z][a-z0-9]*$/.test(lower)) {
+    return trimmed.replace(/([a-z0-9])service$/i, "$1Service");
+  }
+  const parts: string[] = [];
+  let i = 0;
+  while (i < lower.length) {
+    let matched: string | undefined;
+    for (const word of KUBERNETES_NAME_SEGMENTS) {
+      if (lower.startsWith(word, i)) {
+        matched = word;
+        break;
+      }
+    }
+    if (!matched) {
+      // Incomplete lexicon coverage — fall back to service-suffix split.
+      return trimmed.replace(/([a-z0-9])service$/i, "$1Service");
+    }
+    parts.push(matched);
+    i += matched.length;
+  }
+  if (parts.length <= 1) {
+    return trimmed.replace(/([a-z0-9])service$/i, "$1Service");
+  }
+  return parts
+    .map((part, index) =>
+      index === 0 ? part : `${part.charAt(0).toUpperCase()}${part.slice(1)}`,
+    )
+    .join("");
+}
+
 export function humanizeKubernetesLabel(
   kind: string,
   name: string,
   hosts?: string[],
 ): string {
-  const splitService = name.replace(/([a-z0-9])service$/i, "$1Service");
-  const base = humanizeIdentifierLabel(splitService);
+  const base = humanizeIdentifierLabel(splitGluedKubernetesName(name));
   if (kind === "Ingress") {
     const host = hosts?.find((item) => typeof item === "string" && item.trim());
     if (host) return `${base} · ${host.trim()}`;

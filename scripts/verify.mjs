@@ -7080,7 +7080,8 @@ if (k8sRealRoot) {
       "Cart service · Deployment",
       "Cart service · Service",
       "Checkout service · Deployment",
-      "Productcatalog service · Deployment",
+      "Product catalog service · Deployment",
+      "Product catalog service · Service",
       "Recommendation service · Deployment",
       "Payment service · Deployment",
       "Shipping service · Deployment",
@@ -7088,7 +7089,10 @@ if (k8sRealRoot) {
       "Currency service · Deployment",
       "Ad service · Deployment",
       "Redis cart · Deployment",
-      "Loadgenerator · Deployment",
+      "Load generator · Deployment",
+      // Kustomize overlay chrome (Details) still needs North-star labels.
+      "Shopping assistant service · Deployment",
+      "OpenTelemetry collector · Deployment",
     ]) {
       if (!k8sRealLabels.has(expected)) {
         fail(
