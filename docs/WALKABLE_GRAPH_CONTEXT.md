@@ -82,10 +82,13 @@ Not done in this slice — do not assume they exist:
 
 ## Bug fixes (2026-08-03)
 
-Shipped on `walkable-graph-bugs-03082026`:
+Shipped on `walkable-graph-bugs-03082026` (continues after PR #5):
 
 - **Dead-end Intermediate drills** — leaf services with no Intermediate children escalate to the parent system at Advanced (sibling modules appear; selection kept).
 - **View without focus** — no longer cycles Intermediate/Advanced on the calm overview; stays Beginner and nudges a double-click.
-- **Verify floors** — typescript service → Extractors Advanced; Extractors stays Intermediate; modules stay in-place Advanced.
+- **Inspector on walk** — `focusNode` / breadcrumb navigation call `selectNode` so the right panel shows the clicked thing (not stale Beginner copy).
+- **Advanced layout** — Code lane sits beside Systems so modules are next to the stack roster, not a far-right column.
+- **Thin Product Flow rooms** — CLI / Viewer-style boxes with little Intermediate furniture open Advanced when they own code; Extractors stays Intermediate (rich service roster).
+- **Verify floors** — typescript service → Extractors Advanced; Extractors Intermediate; CLI Advanced (`src/cli.ts`); module stays in-place Advanced.
 
 ---

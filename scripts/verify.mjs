@@ -1832,6 +1832,7 @@ if (
   !viewerHtml.includes("function resolveWalkFocus(clickedId)") ||
   !viewerHtml.includes("function intermediateNeighborhoodNodes(rootId)") ||
   !viewerHtml.includes("function advancedNeighborhoodNodes(rootId)") ||
+  !viewerHtml.includes("function intermediateRoomNodes(rootId)") ||
   !viewerHtml.includes("const walk = resolveWalkFocus(id)")
 ) {
   fail(
@@ -1853,16 +1854,60 @@ if (
   fail(
     "viewer restoreWalkState must coerce Intermediate/Advanced-without-focus back to Beginner",
   );
+} else if (
+  !viewerHtml.includes("selectNode(walk.selectedId)") ||
+  !viewerHtml.includes("Must refresh inspector")
+) {
+  fail(
+    "viewer focusNode must call selectNode so inspector shows the clicked node (not Beginner empty copy)",
+  );
+} else if (
+  !viewerHtml.includes("Code sits beside Systems") ||
+  !viewerHtml.includes('[systems, code, ...rest]')
+) {
+  fail(
+    "viewer Advanced layout must place Code lane beside Systems (not far-right)",
+  );
+}
+
+function countAdvancedContainsForGraph(graph, rootId) {
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+  const outgoing = new Map();
+  for (const edge of graph.edges) {
+    if (!outgoing.has(edge.source)) outgoing.set(edge.source, []);
+    outgoing.get(edge.source).push(edge);
+  }
+  const tree = new Set([rootId]);
+  const queue = [rootId];
+  while (queue.length) {
+    const id = queue.shift();
+    for (const edge of outgoing.get(id) || []) {
+      if (edge.kind === "contains" && !tree.has(edge.target)) {
+        tree.add(edge.target);
+        queue.push(edge.target);
+      }
+    }
+  }
+  let count = 0;
+  for (const id of tree) {
+    if (id === rootId) continue;
+    const node = byId.get(id);
+    if (
+      node &&
+      beginnerAdvancedKinds.has(node.kind) &&
+      !node.metadata?.overviewHub
+    ) {
+      count += 1;
+    }
+  }
+  return count;
 }
 
 function resolveWalkFocusForGraph(graph, clickedId) {
   const byId = new Map(graph.nodes.map((node) => [node.id, node]));
-  const outgoing = new Map();
   const incoming = new Map();
   for (const edge of graph.edges) {
-    if (!outgoing.has(edge.source)) outgoing.set(edge.source, []);
     if (!incoming.has(edge.target)) incoming.set(edge.target, []);
-    outgoing.get(edge.source).push(edge);
     incoming.get(edge.target).push(edge);
   }
   const parentOf = (node) => {
@@ -1872,6 +1917,12 @@ function resolveWalkFocusForGraph(graph, clickedId) {
     return owned ? byId.get(owned.source) || null : null;
   };
   const inter = (rootId) => intermediateFocusNodes(graph, rootId);
+  const room = (rootId) =>
+    inter(rootId).filter((node) => {
+      if (node.id === rootId) return true;
+      if (typeof node.metadata?.flowOrder === "number") return false;
+      return true;
+    });
   const adv = (rootId) => advancedFocusNodes(graph, rootId);
   const clicked = byId.get(clickedId);
   if (!clicked) {
@@ -1881,6 +1932,13 @@ function resolveWalkFocusForGraph(graph, clickedId) {
     return { focusId: clickedId, tier: "advanced", selectedId: clickedId };
   }
   const interNodes = inter(clickedId);
+  const roomOthers = room(clickedId).filter((node) => node.id !== clickedId);
+  if (roomOthers.length >= 3) {
+    return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
+  }
+  if (countAdvancedContainsForGraph(graph, clickedId) >= 1) {
+    return { focusId: clickedId, tier: "advanced", selectedId: clickedId };
+  }
   const interOthers = interNodes.filter((node) => node.id !== clickedId);
   if (interOthers.length >= 2) {
     return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
@@ -1910,37 +1968,6 @@ function resolveWalkFocusForGraph(graph, clickedId) {
   if (selfAdv.length > interNodes.length) {
     return { focusId: clickedId, tier: "advanced", selectedId: clickedId };
   }
-  let advancedContains = 0;
-  const allowedTree = focusNeighborhoodIds(graph, clickedId);
-  for (const id of allowedTree) {
-    if (id === clickedId) continue;
-    const node = byId.get(id);
-    if (
-      node &&
-      beginnerAdvancedKinds.has(node.kind) &&
-      !node.metadata?.overviewHub
-    ) {
-      // Only count contains-descendants, not story neighbors — approximate via parent walk.
-      let cur = node;
-      let under = false;
-      while (cur) {
-        const p = parentOf(cur);
-        if (!p) break;
-        if (p.id === clickedId) {
-          under = true;
-          break;
-        }
-        cur = p;
-      }
-      if (under) advancedContains += 1;
-    }
-  }
-  if (
-    (clicked.kind === "system" || clicked.kind === "pipeline") &&
-    advancedContains >= 2
-  ) {
-    return { focusId: clickedId, tier: "advanced", selectedId: clickedId };
-  }
   return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
 }
 
@@ -1964,6 +1991,17 @@ const extractorsDirectWalk = focusExtractorsSystem
 const typescriptModuleWalk = typescriptModule
   ? resolveWalkFocusForGraph(selfGraph, typescriptModule.id)
   : null;
+const selfCliSystem = selfGraph.nodes.find(
+  (node) => node.kind === "system" && node.label === "CLI",
+);
+const cliWalk = selfCliSystem
+  ? resolveWalkFocusForGraph(selfGraph, selfCliSystem.id)
+  : null;
+const cliAdvModules = cliWalk
+  ? advancedFocusNodes(selfGraph, cliWalk.focusId).filter(
+      (node) => node.kind === "module",
+    )
+  : [];
 
 if (!selfTypescriptService) {
   fail("self-map should have typescript extractor service for dead-end escalation floor");
@@ -2002,9 +2040,20 @@ if (!selfTypescriptService) {
   fail(
     "typescript module double-click must stay on the module at Advanced (not escalate to Extractors)",
   );
+} else if (!selfCliSystem || !cliWalk) {
+  fail("self-map CLI system needed for thin-room Advanced floor");
+} else if (
+  cliWalk.focusId !== selfCliSystem.id ||
+  cliWalk.tier !== "advanced"
+) {
+  fail(
+    `CLI thin Intermediate room should open Advanced on CLI, got focus=${cliWalk.focusId} tier=${cliWalk.tier}`,
+  );
+} else if (!cliAdvModules.some((node) => node.label === "src/cli.ts")) {
+  fail("CLI Advanced should reveal src/cli.ts module");
 } else {
   pass(
-    `Dead-end Intermediate escalation: typescript service → Extractors Advanced (${typescriptServiceAdvModules.length} modules); Extractors stays Intermediate; module stays Advanced`,
+    `Dead-end + thin-room walks: typescript service → Extractors Advanced (${typescriptServiceAdvModules.length} modules); Extractors Intermediate; CLI Advanced (src/cli.ts); module stays Advanced`,
   );
 }
 
