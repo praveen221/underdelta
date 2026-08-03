@@ -1768,7 +1768,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
                   ? " — " + child.metadata.detail
                   : "";
                 return '<span class="pill">' + child.label + "</span>" +
-                  (detail ? "<div class=\"evidence\"><p>" + escapeHtml(child.label + detail) + "</p></div>" : "");
+                  (detail
+                    ? '<div class="evidence"><p>' + escapeHtml(child.label + detail) + "</p></div>"
+                    : "");
               })
               .join("") +
             "</p>"
