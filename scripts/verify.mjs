@@ -2686,6 +2686,74 @@ if (miniNextClientsUnderHome.length < 2) {
   pass("mini-next client feature roots nested under Home molecule");
 }
 
+// System-design molecules: FE story edges from page (renders / writes).
+const miniNextPostForm = miniNextGraph.nodes.find(
+  (node) => node.kind === "component" && node.label === "Post form",
+);
+const miniNextHomePageAtom = miniNextPages.find((node) => node.label === "Home");
+const miniNextHomeRendersPostForm = miniNextGraph.edges.some(
+  (edge) =>
+    edge.kind === "renders" &&
+    edge.source === miniNextHomePageAtom?.id &&
+    edge.target === miniNextPostForm?.id,
+);
+if (!miniNextHomeRendersPostForm) {
+  fail(
+    `mini-next expected Home page -[renders]-> Post form story edge (found renders=${miniNextGraph.edges
+      .filter((edge) => edge.kind === "renders")
+      .map((edge) => {
+        const source = miniNextGraph.nodes.find((node) => node.id === edge.source);
+        const target = miniNextGraph.nodes.find((node) => node.id === edge.target);
+        return `${source?.label ?? "?"}→${target?.label ?? "?"}`;
+      })
+      .join(", ") || "(none)"})`,
+  );
+} else {
+  pass("mini-next story edge: Home -[renders]-> Post form");
+}
+
+const miniNextHomeWritesApi = miniNextGraph.edges.find(
+  (edge) =>
+    edge.kind === "writes" &&
+    edge.source === miniNextHomeMolecule?.id &&
+    edge.target === miniNextApi?.id,
+);
+if (
+  !miniNextHomeWritesApi ||
+  !miniNextHomeWritesApi.evidence?.some(
+    (item) =>
+      item.certainty === "derived" &&
+      typeof item.detail === "string" &&
+      item.detail.includes("Post form") &&
+      item.detail.includes("Create post"),
+  )
+) {
+  fail(
+    `mini-next expected Home molecule -[writes]-> Posts API via Post form → Create post (found ${
+      miniNextHomeWritesApi
+        ? JSON.stringify(miniNextHomeWritesApi.evidence?.[0] ?? null)
+        : "no writes edge"
+    })`,
+  );
+} else {
+  pass("mini-next story edge: Home -[writes]-> Posts API via Post form → Create post");
+}
+
+// Dashboard has no server-action caller — do not invent a writes edge.
+const miniNextDashboardWritesApi = miniNextGraph.edges.some(
+  (edge) =>
+    edge.kind === "writes" &&
+    edge.source === miniNextDashboardMolecule?.id &&
+    edge.target === miniNextApi?.id,
+);
+if (miniNextDashboardWritesApi) {
+  fail(
+    "mini-next Dashboard must not invent -[writes]-> Posts API without a static server-action call",
+  );
+} else {
+  pass("mini-next Dashboard has no invented writes→API edge");
+}
+
 const miniNextHome = miniNextPages.find((node) => node.label === "Home");
 const miniNextHomeChild = miniNextGraph.nodes.find(
   (node) =>

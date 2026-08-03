@@ -210,17 +210,17 @@ Update checkboxes + Next focus every tick (unless Idle protocol).
 - [x] Soft-stop / LOOP COMPLETE idle protocol documented  
 - [x] **FE atoms — Next App Router pages/layouts:** `page`/`layout` atoms with `metadata.path` + `framework=next`; nested dashboard layout fixture; verify locks Home `/`, Dashboard `/dashboard`, App layout `/`, Dashboard layout `/dashboard`  
 - [x] **FE omission — leaf components collapsed:** `featureRoot` vs `leafChrome` metadata; Card/Button fixture leaves omitted from mini-next Beginner/Intermediate; Post list/Post form page-owned roots kept; viewer + verify floors  
+- [x] **FE molecules — one molecule per route segment:** Home `/` + Dashboard `/dashboard` `ui` hubs (`page:/` keys, `routeMolecule`); aggregate Journal UI collapsed; Beginner flowOrder Home → Dashboard → Posts API; pages/feature roots nested under hubs  
+- [x] **FE story edges from page:** keep atom `renders` (page body→feature) through chrome quieting; lift page -[renders]-> featureRoot; lift Home -[writes]-> Posts API from PostForm→Create post (derived); Dashboard has no invented writes; verify floors  
 
 ### In progress / next
 
 Keep **at least 3 unchecked items** here until LOOP COMPLETE (refill from Seed backlog).  
 These remaining items are the **mandatory** slice — finishing them (with gates 1–8) is what completes the loop:
 
-- [ ] **FE molecules — one molecule per route segment:** projection groups page+feature roots under a `ui`/feature system or page hub; Beginner shows route molecules not one UI blob  
-- [ ] **FE story edges from page:** where static, `reads`/`renders`/`routes-to` from page/action to API or data; verify ≥1 such edge on mini-next or mini-stack storefront  
-- [ ] **Vue router atoms (or documented defer):** parse Vue route table → page atoms + molecules; fixture `verification/mini-vue` **or** cancel with Learning-log reason after Next gates solid  
 - [ ] **BE molecule polish — API/Data/Jobs:** mini-stack Beginner molecules distinct; story edge API↔Data locked  
 - [ ] **Insight drill — table writers:** Intermediate focus on a table shows `writes`/`reads` neighbors with evidence; verify floor  
+- [ ] **Vue router atoms (or documented defer):** parse Vue route table → page atoms + molecules; fixture `verification/mini-vue` **or** cancel with Learning-log reason after Next gates solid  
 - [ ] **Dogfood floors in verify:** explicit self-map Beginner + Extractors capability floors remain; add FE molecule floors without breaking compiler story  
 - [ ] **Final LOOP COMPLETE gate pass** (re-check gates 1–8 in one tick; set Loop status)  
 
@@ -236,7 +236,7 @@ Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder fr
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (leaf presentational omission via featureRoot/leafChrome on mini-next). Now project one FE molecule per route segment (Home `/`, Dashboard `/dashboard` hubs — not one Journal UI blob) so Beginner/Intermediate read as route molecules. Do not touch Vue. Do not add AI. Stop after green verify + dogfood note.
+> **Next focus:** This work is done (FE page story edges: Home renders Post form/Post list + Home writes Posts API via Create post). Now polish mini-stack BE molecules so Beginner shows distinct API + Data (+ Jobs) with a locked API↔Data story edge (`reads`/`writes`). Do not touch Vue. Do not add AI. Stop after green verify + dogfood note.
 
 ### Learning log (append every tick)
 
@@ -247,6 +247,7 @@ Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder fr
 - 2026-08-04 | Plan created for system-design molecules on `system-design-molecules-04082026` | Next: Next App Router page/layout atoms | Learned: Greptile/Graphify optimize symbol graphs for agents; our wedge is product molecules for vibe-coders; AI deferred until IR is strong | Dogfood: n/a (plan-only tick)
 - 2026-08-03 19:09 UTC | Done: locked mini-next page/layout URL path metadata floors; nested `app/dashboard/layout.tsx`; evidence details cite path; extractor path already existed | Next: FE leaf-component omission | Learned: page/layout atoms were largely shipped on master — this tick’s value is golden-locking `metadata.path` + nested layout so molecule work cannot regress the atom contract | Dogfood: self-map Beginner still CLI → Compile pipeline → … → Viewer → index.html; 0 page atoms (compiler, not Next) — OK
 - 2026-08-03 19:15 UTC | Done: FE leaf omission — Card/Button leafChrome vs Post list/Post form featureRoot; ESM `.js`→`.tsx` import resolve; Intermediate/Beginner floors | Next: FE route-segment molecules | Learned: page→feature ownership via imports/renders one hop is enough; presentational name regex blocks Card imported-by-page false roots; leafChrome is Intermediate-hidden but Advanced-kept (unlike exampleChrome) | Dogfood: self-map Beginner CLI → Compile pipeline → Schema contract → Extractors → Graph assembly → architecture.json → Viewer → index.html; Extractors present; 0 page atoms (compiler) — OK; verify passed
+- 2026-08-03 19:35 UTC | Done: reconciled FE route-segment molecules Done (prior code commit); FE story edges — chrome quiet only drops semantic collapsed systems; page -[renders]-> featureRoot; Home -[writes]-> Posts API via Post form→Create post; verify floors; no Dashboard invented writes | Next: BE molecule polish API↔Data on mini-stack | Learned: quietNonCompiler was deleting HomePage→PostForm renders because feature roots are collapsedInOverview; gate on `projection===semantic` keeps Intermediate FE story edges while still dropping ghost system collab | Dogfood: self-map Beginner CLI → Compile pipeline → Schema contract → Extractors → Graph assembly → architecture.json → Viewer → index.html; Extractors present; 0 page atoms (compiler) — OK; verify passed
 
 ---
 

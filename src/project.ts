@@ -871,8 +871,10 @@ function quietNonCompilerProductChrome(
     }
   }
 
-  // Drop flows-to / collab edges that point at collapsed chrome so the IR
-  // matches what the overview tells (no ghost API→Data story).
+  // Drop flows-to / collab edges that point at collapsed *semantic* chrome
+  // systems so the IR matches the overview (no ghost API→Data story).
+  // Atom leaves (pages/feature roots) stay collapsedInOverview for Beginner,
+  // but their renders/calls story edges must survive for Intermediate drill.
   for (const [edgeId, edge] of [...edges.entries()]) {
     if (
       edge.kind !== "flows-to" &&
@@ -886,10 +888,13 @@ function quietNonCompilerProductChrome(
     }
     const source = nodes.get(edge.source);
     const target = nodes.get(edge.target);
-    if (
-      source?.metadata?.collapsedInOverview === true ||
-      target?.metadata?.collapsedInOverview === true
-    ) {
+    const sourceChrome =
+      source?.metadata?.collapsedInOverview === true &&
+      source.metadata?.projection === "semantic";
+    const targetChrome =
+      target?.metadata?.collapsedInOverview === true &&
+      target.metadata?.projection === "semantic";
+    if (sourceChrome || targetChrome) {
       edges.delete(edgeId);
     }
   }
@@ -1867,6 +1872,109 @@ function collapseAggregateUiBehindRouteMolecules(
     replacedByRouteMolecules: true,
   };
   nodes.set(ui.id, ui);
+}
+
+/** Server-action label → story edge kind (mutations write; getters read). */
+function serverActionStoryEdgeKind(label: string): "reads" | "writes" {
+  const normalized = label.toLowerCase();
+  if (
+    /\b(get|list|find|fetch|load|read|query|show|select)\b/.test(normalized)
+  ) {
+    return "reads";
+  }
+  return "writes";
+}
+
+/**
+ * FE story edges from pages (deterministic, evidence-backed):
+ * - `renders` page atom → page-owned feature root (lifted from page-body JSX)
+ * - `reads`/`writes` page molecule → API when a owned feature root calls a
+ *   server action nested under the API system
+ */
+function liftFePageStoryEdges(
+  nodes: Map<string, ArchitectureNode>,
+  edges: Map<string, ArchitectureEdge>,
+  systems: Map<string, ArchitectureNode>,
+): void {
+  const api = systems.get("api");
+
+  // page body component id → owning page atom
+  const pageBodyToPage = new Map<string, string>();
+  for (const node of nodes.values()) {
+    if (node.kind !== "component" || !node.parentId) continue;
+    const parent = nodes.get(node.parentId);
+    if (parent?.kind === "page") {
+      pageBodyToPage.set(node.id, parent.id);
+    }
+  }
+
+  // Lift JSX renders onto the page atom so the catalog edge is page→feature.
+  for (const edge of [...edges.values()]) {
+    if (edge.kind !== "renders") continue;
+    const pageId = pageBodyToPage.get(edge.source);
+    if (!pageId) continue;
+    const target = nodes.get(edge.target);
+    if (!target || target.kind !== "component") continue;
+    if (target.metadata?.featureRoot !== true) continue;
+    const page = nodes.get(pageId);
+    if (!page) continue;
+    const seed = edge.evidence[0]!;
+    const lifted = edgeFrom(
+      "renders",
+      pageId,
+      target.id,
+      {
+        ...seed,
+        extractor: "projection",
+        certainty: "derived",
+        detail:
+          seed.detail ??
+          `${page.label} page renders feature root ${target.label}`,
+      },
+      edge.label,
+    );
+    if (!edges.has(lifted.id)) edges.set(lifted.id, lifted);
+  }
+
+  if (!api) return;
+
+  // Page molecule → API reads/writes from featureRoot → serverAction calls.
+  for (const edge of [...edges.values()]) {
+    if (edge.kind !== "calls") continue;
+    const source = nodes.get(edge.source);
+    const target = nodes.get(edge.target);
+    if (!source || !target) continue;
+    if (source.metadata?.featureRoot !== true) continue;
+    if (target.metadata?.serverAction !== true) continue;
+    if (target.parentId !== api.id) continue;
+
+    const moleculeKey =
+      typeof source.metadata?.routeMolecule === "string"
+        ? source.metadata.routeMolecule
+        : typeof source.metadata?.projectedSystem === "string" &&
+            String(source.metadata.projectedSystem).startsWith("page:")
+          ? String(source.metadata.projectedSystem)
+          : undefined;
+    if (!moleculeKey) continue;
+    const molecule = systems.get(moleculeKey);
+    if (!molecule) continue;
+
+    const kind = serverActionStoryEdgeKind(target.label);
+    const seed = edge.evidence[0]!;
+    const lifted = edgeFrom(
+      kind,
+      molecule.id,
+      api.id,
+      {
+        ...seed,
+        extractor: "projection",
+        certainty: "derived",
+        detail: `${molecule.label} ${kind} ${api.label} via ${source.label} → ${target.label}`,
+      },
+      target.label,
+    );
+    if (!edges.has(lifted.id)) edges.set(lifted.id, lifted);
+  }
 }
 
 /**
@@ -3435,6 +3543,10 @@ export function projectSemanticArchitecture(
     product.id,
     attachToSystem,
   );
+
+  // FE story edges: page -[renders]-> feature roots; page molecule
+  // -[reads|writes]-> API from static featureRoot → server-action calls.
+  liftFePageStoryEdges(nodes, edges, systems);
 
   // Auth + billing mutations are the SaaS product story beside UI→API→Data.
   // Keep them visible on overview like messaging/cron hubs (not buried in Details).
