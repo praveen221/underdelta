@@ -871,6 +871,37 @@ function quietNonCompilerProductChrome(
     }
   }
 
+  // Compose/K8s/Helm/Kustomize-led apps may still grow a module-only UI blob
+  // (path-role `views/` / `components/` chrome with no page atoms). Without
+  // route molecules that steals the Deploy North-star cold-read — collapse it.
+  const ui = systems.get("ui");
+  if (
+    ui &&
+    (hasComposeServices ||
+      hasKubernetesUnits ||
+      hasHelmUnits ||
+      hasKustomizeUnits)
+  ) {
+    const hasRouteMolecules = [...systems.keys()].some((key) =>
+      key.startsWith("page:"),
+    );
+    const hasPageAtoms = [...nodes.values()].some(
+      (node) =>
+        node.kind === "page" &&
+        (node.metadata?.next === "page" ||
+          node.metadata?.vue === "page" ||
+          node.metadata?.framework === "next" ||
+          node.metadata?.framework === "vue"),
+    );
+    if (!hasRouteMolecules && !hasPageAtoms) {
+      ui.metadata = {
+        ...ui.metadata,
+        collapsedInOverview: true,
+      };
+      nodes.set(ui.id, ui);
+    }
+  }
+
   // Drop flows-to / collab edges that point at collapsed *semantic* chrome
   // systems so the IR matches the overview (no ghost API→Data story).
   // Atom leaves (pages/feature roots) stay collapsedInOverview for Beginner,
@@ -1042,13 +1073,17 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
   if (/(^|\/)viewer\.[cm]?[jt]sx?$/.test(file)) {
     return { key: "viewer", label: "Viewer", kind: "ui" };
   }
-  // Top-level `components/` / `ui/` / `views/` (no leading slash) must match too —
+  // Top-level `components/` / `ui/` (no leading slash) must match too —
   // Next fixtures often keep client widgets beside `app/`, not under `src/`.
-  // Vue Router keeps page SFCs under `views/`; router modules are FE routing.
-  // Skip Kustomize `components/` overlays — those are deploy patches, not UI.
+  // Vue Router page SFCs live under `src/views/` or `views/*View` / `*.vue` —
+  // not every `*/views/*.js` (Compose apps ship result/views angular chrome).
+  // Router modules are FE routing. Skip Kustomize `components/` overlays.
   if (
     !/(^|\/)kustomize\//.test(file) &&
-    (/(^|\/)(ui|components|views)\//.test(file) ||
+    (/(^|\/)(ui|components)\//.test(file) ||
+      /(^|\/)src\/views\//.test(file) ||
+      /(^|\/)views\/[^/]*view[^/]*\.(vue|[cm]?[jt]sx?)$/.test(file) ||
+      /\.vue$/.test(file) ||
       /(^|\/)router\.[cm]?[jt]sx?$/.test(file) ||
       file.includes("/router/"))
   ) {

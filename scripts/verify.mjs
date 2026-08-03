@@ -3228,6 +3228,144 @@ if (
 }
 
 // ---------------------------------------------------------------------------
+// System-design molecules dogfood plug (acceptance gates — every ACTIVE tick).
+// Locks self-map compiler story + Extractors Intermediate + FE route molecules
+// on mini-next / mini-vue without inventing structure.
+// ---------------------------------------------------------------------------
+const dogfoodSelfBeginnerChain = selfBeginner
+  .slice()
+  .sort(
+    (a, b) =>
+      (a.metadata?.flowOrder ?? 999) - (b.metadata?.flowOrder ?? 999) ||
+      String(a.label).localeCompare(String(b.label)),
+  )
+  .map((node) => String(node.label));
+const dogfoodRequiredSelfChain = [
+  "CLI",
+  "Compile pipeline",
+  "Schema contract",
+  "Extractors",
+  "Graph assembly",
+  "architecture.json",
+  "Viewer",
+  "index.html",
+];
+const dogfoodSelfChainOk =
+  dogfoodRequiredSelfChain.length === dogfoodSelfBeginnerChain.length &&
+  dogfoodRequiredSelfChain.every(
+    (label, index) => dogfoodSelfBeginnerChain[index] === label,
+  );
+const dogfoodSelfPageAtoms = selfGraph.nodes.filter(
+  (node) => node.kind === "page",
+);
+const dogfoodSelfFeDump = selfBeginner.filter((node) =>
+  ["Card", "Button", "Home", "Dashboard", "Journal UI", "Board UI"].includes(
+    String(node.label),
+  ),
+);
+const dogfoodExtractorsOk =
+  Boolean(focusExtractorsSystem) &&
+  selfExtractorsFocusLabels.has("typescript") &&
+  selfExtractorsFocusLabels.has("prisma") &&
+  selfExtractorsFocus.length >= 8 &&
+  selfExtractorsFocus.length <= 40;
+const dogfoodMiniNextOk =
+  miniNextBeginnerLabels.includes("Home") &&
+  miniNextBeginnerLabels.includes("Dashboard") &&
+  miniNextBeginnerLabels.includes("Posts API") &&
+  !miniNextBeginnerLabels.includes("Journal UI") &&
+  !miniNextBeginnerLabels.includes("Card") &&
+  !miniNextBeginnerLabels.includes("Button") &&
+  miniNextHomeMolecule?.metadata?.routeMolecule === true &&
+  miniNextDashboardMolecule?.metadata?.routeMolecule === true;
+const dogfoodMiniVueOk =
+  miniVueBeginnerLabels.includes("Home") &&
+  miniVueBeginnerLabels.includes("Dashboard") &&
+  !miniVueBeginnerLabels.includes("Board UI") &&
+  miniVueHomeMolecule?.metadata?.routeMolecule === true &&
+  miniVueDashboardMolecule?.metadata?.routeMolecule === true &&
+  miniVueHomeMolecule?.metadata?.framework === "vue" &&
+  miniVueDashboardMolecule?.metadata?.framework === "vue";
+const dogfoodBeStoryOk =
+  fixtureBeginnerLabels.includes("Checkout API") &&
+  fixtureBeginnerLabels.includes("Catalog data") &&
+  fixtureBeginnerLabels.includes("Reconciliation jobs");
+
+if (!dogfoodSelfChainOk) {
+  fail(
+    `dogfood self-map Beginner chain expected ${dogfoodRequiredSelfChain.join(" → ")}, got ${dogfoodSelfBeginnerChain.join(" → ") || "(none)"}`,
+  );
+} else if (dogfoodSelfPageAtoms.length > 0) {
+  fail(
+    `dogfood self-map must not invent FE page atoms (compiler story); found ${dogfoodSelfPageAtoms
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else if (dogfoodSelfFeDump.length > 0) {
+  fail(
+    `dogfood self-map Beginner must not dump FE UI chrome: ${dogfoodSelfFeDump
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else if (!dogfoodExtractorsOk) {
+  fail(
+    "dogfood Extractors Intermediate focus missing typescript/prisma capabilities or size out of band",
+  );
+} else if (!dogfoodMiniNextOk) {
+  fail(
+    `dogfood mini-next Beginner must keep Home + Dashboard + Posts API route molecules (no Journal UI/Card dump); found ${miniNextBeginnerLabels.join(", ") || "(none)"}`,
+  );
+} else if (!dogfoodMiniVueOk) {
+  fail(
+    `dogfood mini-vue Beginner must keep Home + Dashboard Vue route molecules (no Board UI blob); found ${miniVueBeginnerLabels.join(", ") || "(none)"}`,
+  );
+} else if (!dogfoodBeStoryOk) {
+  fail(
+    `dogfood mini-stack Beginner must keep Checkout API + Catalog data + Reconciliation jobs; found ${fixtureBeginnerLabels.join(", ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `dogfood plug: self-map ${dogfoodSelfBeginnerChain.join(" → ")}; Extractors Intermediate ${selfExtractorsFocus.length} nodes; mini-next ${miniNextBeginnerLabels.join(" → ")}; mini-vue ${miniVueBeginnerLabels.join(" → ")}; mini-stack ${fixtureBeginnerLabels.join(" → ")}`,
+  );
+}
+
+// mini-next / mini-vue Intermediate molecule drill: page atom inside hub.
+const dogfoodMiniNextHomeFocus = miniNextHomeMolecule
+  ? intermediateFocusNodes(miniNextGraph, miniNextHomeMolecule.id)
+  : [];
+const dogfoodMiniNextHomeFocusLabels = new Set(
+  dogfoodMiniNextHomeFocus.map((node) => String(node.label)),
+);
+const dogfoodMiniVueHomeFocus = miniVueHomeMolecule
+  ? intermediateFocusNodes(miniVueGraph, miniVueHomeMolecule.id)
+  : [];
+const dogfoodMiniVueHomeFocusLabels = new Set(
+  dogfoodMiniVueHomeFocus.map((node) => String(node.label)),
+);
+if (
+  !dogfoodMiniNextHomeFocusLabels.has("Home") ||
+  !dogfoodMiniNextHomeFocusLabels.has("Post list") ||
+  !dogfoodMiniNextHomeFocusLabels.has("Post form")
+) {
+  fail(
+    `dogfood mini-next Home Intermediate should keep page + feature roots; found ${[...dogfoodMiniNextHomeFocusLabels].join(", ") || "(none)"}`,
+  );
+} else if (
+  dogfoodMiniNextHomeFocusLabels.has("Card") ||
+  dogfoodMiniNextHomeFocusLabels.has("Button")
+) {
+  fail("dogfood mini-next Home Intermediate must omit Card/Button leaf chrome");
+} else if (!dogfoodMiniVueHomeFocusLabels.has("Home")) {
+  fail(
+    `dogfood mini-vue Home Intermediate should keep Home page atom; found ${[...dogfoodMiniVueHomeFocusLabels].join(", ") || "(none)"}`,
+  );
+} else {
+  pass(
+    "dogfood FE Intermediate drills: mini-next Home (page+features) + mini-vue Home page",
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Capability ladder rung 1: real Node/Express repo (pinned SHA, gitignored).
 // Golden-lock a legible product map: API + Data systems, routes/tables nested,
 // flowOrder left-to-right, join tables collapsed, clean product title.
