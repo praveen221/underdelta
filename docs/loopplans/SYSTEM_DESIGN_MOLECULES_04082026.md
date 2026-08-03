@@ -170,7 +170,7 @@ When gates 1–8 all pass in a single tick:
 ### Loop status
 
 ```text
-ACTIVE
+LOOP COMPLETE
 ```
 
 *(Change the line above to `LOOP COMPLETE` only when acceptance gates 1–8 all pass.)*
@@ -215,15 +215,13 @@ Update checkboxes + Next focus every tick (unless Idle protocol).
 - [x] **BE molecule polish — API/Data/Jobs:** mini-stack Beginner distinct Checkout API + Catalog data + Reconciliation jobs; derived API/Jobs ↔ Data `reads`/`writes` from Prisma + call/schedule bridges; verify floors  
 - [x] **Insight drill — table writers:** lift API/Jobs → table `reads`/`writes`; Intermediate focus Order shows Checkout API writer; Payment shows Reconciliation jobs; verify floors + evidence on orders.ts / reconcile.ts  
 - [x] **Vue router atoms:** parse `createRouter({ routes })` (incl. shorthand `routes`) → page atoms `framework=vue` + path; `verification/mini-vue` Home `/` + Dashboard `/dashboard` molecules; Board UI collapsed; page -[routes-to]-> view module; verify floors  
+- [x] **Dogfood floors in verify:** explicit dogfood plug locks self-map Beginner chain, Extractors Intermediate, mini-next/mini-vue route molecules + Intermediate drills, mini-stack BE molecules; Deploy-led module-only UI quieted  
+- [x] **README “How to read FE/BE maps” blurb** — route molecules vs API/Data/Jobs story + self-map compiler note  
+- [x] **Final LOOP COMPLETE gate pass** — gates 1–8 true this tick (`npm run build` + `npm run verify` green)  
 
 ### In progress / next
 
-Keep **at least 3 unchecked items** here until LOOP COMPLETE (refill from Seed backlog).  
-These remaining items are the **mandatory** slice — finishing them (with gates 1–8) is what completes the loop:
-
-- [ ] **Dogfood floors in verify:** explicit self-map Beginner + Extractors capability floors remain; add FE molecule floors (mini-next + mini-vue) without breaking compiler story  
-- [ ] **Final LOOP COMPLETE gate pass** (re-check gates 1–8 in one tick; set Loop status)  
-- [ ] **README “How to read FE/BE maps” blurb** (optional polish — keep open so In progress ≥ 3 until gate pass)  
+*(Empty — Loop status is LOOP COMPLETE. Seed backlog may remain open forever.)*
 
 ### Seed backlog (optional — not required for LOOP COMPLETE)
 
@@ -236,7 +234,7 @@ Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder fr
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Vue Router page atoms + Home/Dashboard route molecules on `verification/mini-vue`, Board UI collapsed). Now strengthen dogfood floors in verify (self-map Beginner + Extractors + FE molecule floors) so we can pass gates 1–8 and set LOOP COMPLETE. Do not add AI. Stop after green verify + dogfood note.
+> **Next focus:** LOOP COMPLETE — idle. Do not invent work. Human should disable push-automation when convenient.
 
 ### Learning log (append every tick)
 
@@ -250,6 +248,7 @@ Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder fr
 - 2026-08-03 19:35 UTC | Done: reconciled FE route-segment molecules Done (prior code commit); FE story edges — chrome quiet only drops semantic collapsed systems; page -[renders]-> featureRoot; Home -[writes]-> Posts API via Post form→Create post; verify floors; no Dashboard invented writes | Next: BE molecule polish API↔Data on mini-stack | Learned: quietNonCompiler was deleting HomePage→PostForm renders because feature roots are collapsedInOverview; gate on `projection===semantic` keeps Intermediate FE story edges while still dropping ghost system collab | Dogfood: self-map Beginner CLI → Compile pipeline → Schema contract → Extractors → Graph assembly → architecture.json → Viewer → index.html; Extractors present; 0 page atoms (compiler) — OK; verify passed
 - 2026-08-03 19:42 UTC | Done: reconciled BE API/Data/Jobs polish Done (prior commit); table writer insight — lift API/Jobs→table reads/writes; Intermediate Order←Checkout API, Payment←Jobs; fixed mini-next uses floor to accept Home writes twin; verify green | Next: Vue router atoms or documented defer | Learned: function→table writers stay Advanced-hidden, so molecule→table story edges are what Intermediate table focus needs; Checkout API Intermediate may now include Order (writer path) but not Payment | Dogfood: self-map Beginner CLI → Compile pipeline → Schema contract → Extractors → Graph assembly → architecture.json → Viewer → index.html; Intermediate Order writer drill on mini-stack; verify passed
 - 2026-08-03 19:55 UTC | Done: Vue Router page atoms + molecules — createRouter routes (shorthand `routes` + const array); mini-vue Home/Dashboard; Board UI collapsed; routes-to view modules; projectFeRouteSegmentMolecules framework-agnostic; verify floors | Next: dogfood floors + LOOP COMPLETE gate pass | Learned: `createRouter({ routes })` shorthand is ShorthandPropertyAssignment not PropertyAssignment — must resolve both; `src/App.ts` falsely classifies as HTTP API via path-role `app.ts` — renamed fixture shell to Shell.ts | Dogfood: pending full verify this commit
+- 2026-08-03 19:47 UTC | Done: reconciled dogfood plug (prior code) + README FE/BE how-to-read; gates 1–8 pass → LOOP COMPLETE | Next: IDLE — no invent/push unless gate regresses | Learned: prior tick shipped dogfood floors without plan reconcile — this tick’s job was gate pass + soft-stop status, not more IR; Compose `views/` path-role must stay narrow or Deploy North-star grows a chrome UI blob | Dogfood: self-map CLI → Compile pipeline → Schema contract → Extractors → Graph assembly → architecture.json → Viewer → index.html; Extractors Intermediate 16 nodes; mini-next Posts API → Home → Dashboard; mini-vue Home → Dashboard; verify passed
 
 ---
 
