@@ -707,7 +707,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           node.metadata &&
           (node.metadata.relationOnly ||
             node.metadata.joinTable ||
-            node.metadata.exampleChrome)
+            node.metadata.exampleChrome ||
+            node.metadata.leafChrome)
         ) {
           return false;
         }
@@ -732,6 +733,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         ) {
           return false;
         }
+        // leafChrome (Card/Button) is Advanced-only — keep here, hide Intermediate.
         const isOverviewHub = node.metadata && node.metadata.overviewHub;
         if (advancedKinds.has(node.kind) && !isOverviewHub) {
           if (node.kind === "function") {
@@ -833,6 +835,11 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
             node.metadata.joinTable ||
             node.metadata.exampleChrome)
         ) {
+          return false;
+        }
+        // Presentational FE leaves (Card/Button) stay off Beginner/Intermediate;
+        // Advanced-in-focus may reveal them as code chrome.
+        if (node.metadata && node.metadata.leafChrome && !isAdvancedTier()) {
           return false;
         }
         // Detection surfaces live under capabilities — only show inside that
@@ -1388,7 +1395,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       "kustomize", "kustomization", "kustomizeModule", "kustomizationYaml",
       "overlayName", "overlayRoot", "namePrefix", "nameSuffix", "resources",
       "kustomizeRole", "kustomizeModuleTwinChrome",
-      "exampleChrome", "labelSource", "pathRoleLabel", "collapsedInOverview",
+      "exampleChrome", "leafChrome", "featureRoot", "labelSource", "pathRoleLabel",
+      "collapsedInOverview",
       "overviewHub",
     ]);
 

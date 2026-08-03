@@ -1252,7 +1252,8 @@ function beginnerColdOpenNodes(graph) {
     if (
       node.metadata?.relationOnly ||
       node.metadata?.joinTable ||
-      node.metadata?.exampleChrome
+      node.metadata?.exampleChrome ||
+      node.metadata?.leafChrome
     ) {
       return false;
     }
@@ -1426,7 +1427,8 @@ function intermediateFocusNodes(graph, rootId) {
     if (
       node.metadata?.relationOnly ||
       node.metadata?.joinTable ||
-      node.metadata?.exampleChrome
+      node.metadata?.exampleChrome ||
+      node.metadata?.leafChrome
     ) {
       return false;
     }
@@ -2669,6 +2671,94 @@ if (!miniNextHomeChild) {
   );
 } else {
   pass("mini-next Home page keeps Home page child nested (not flattened onto UI)");
+}
+
+// System-design molecules: leaf presentational chrome omitted from Intermediate.
+const miniNextLeafChrome = miniNextGraph.nodes.filter(
+  (node) => node.kind === "component" && node.metadata?.leafChrome === true,
+);
+const miniNextFeatureRoots = miniNextGraph.nodes.filter(
+  (node) => node.kind === "component" && node.metadata?.featureRoot === true,
+);
+const miniNextLeafLabels = new Set(
+  miniNextLeafChrome.map((node) => String(node.label)),
+);
+const miniNextFeatureLabels = new Set(
+  miniNextFeatureRoots.map((node) => String(node.label)),
+);
+if (!miniNextLeafLabels.has("Card") || !miniNextLeafLabels.has("Button")) {
+  fail(
+    `mini-next expected Card + Button marked leafChrome, found leaf=[${[...miniNextLeafLabels].join(", ") || "(none)"}]`,
+  );
+} else {
+  pass("mini-next presentational Card + Button marked leafChrome");
+}
+if (
+  !miniNextFeatureLabels.has("Post list") ||
+  !miniNextFeatureLabels.has("Post form")
+) {
+  fail(
+    `mini-next expected Post list + Post form marked featureRoot, found roots=[${[...miniNextFeatureLabels].join(", ") || "(none)"}]`,
+  );
+} else {
+  pass("mini-next page-owned Post list + Post form marked featureRoot");
+}
+if (
+  miniNextFeatureRoots.some((node) => node.metadata?.leafChrome === true) ||
+  miniNextLeafChrome.some((node) => node.metadata?.featureRoot === true)
+) {
+  fail("mini-next featureRoot and leafChrome must be mutually exclusive");
+} else {
+  pass("mini-next featureRoot ⊥ leafChrome");
+}
+
+const miniNextUiFocus = miniNextUi
+  ? intermediateFocusNodes(miniNextGraph, miniNextUi.id)
+  : [];
+const miniNextUiFocusLabels = new Set(
+  miniNextUiFocus.map((node) => String(node.label)),
+);
+if (
+  miniNextUiFocusLabels.has("Card") ||
+  miniNextUiFocusLabels.has("Button")
+) {
+  fail(
+    `mini-next Journal UI Intermediate must not dump Card/Button leaf chrome; found ${[...miniNextUiFocusLabels].join(", ")}`,
+  );
+} else if (
+  !miniNextUiFocusLabels.has("Post list") ||
+  !miniNextUiFocusLabels.has("Post form")
+) {
+  fail(
+    `mini-next Journal UI Intermediate should keep feature roots Post list + Post form; found ${[...miniNextUiFocusLabels].join(", ") || "(none)"}`,
+  );
+} else {
+  pass(
+    "mini-next Journal UI Intermediate keeps feature roots, omits Card/Button leaf chrome",
+  );
+}
+
+const miniNextBeginnerDump = beginnerColdOpenNodes(miniNextGraph).filter(
+  (node) =>
+    ["Card", "Button", "Post list", "Post form"].includes(String(node.label)),
+);
+if (miniNextBeginnerDump.length) {
+  fail(
+    `mini-next Beginner must not show component dump: ${miniNextBeginnerDump
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-next Beginner has no Card/Button/feature-root component dump");
+}
+
+if (
+  !viewerHtml.includes("leafChrome") ||
+  !viewerHtml.includes("featureRoot")
+) {
+  fail("viewer must honor leafChrome / featureRoot FE omission metadata");
+} else {
+  pass("viewer wires leafChrome + featureRoot FE omission");
 }
 
 // ---------------------------------------------------------------------------

@@ -28,7 +28,7 @@ export const EXTRACTOR_DETECTION_SURFACES: Record<string, DetectionSurface[]> = 
     {
       id: "ui",
       label: "UI pages & components",
-      detail: "Pages, layouts, and components (leaf chrome omitted later)",
+      detail: "Pages, layouts, and feature-root components (leaf chrome omitted)",
     },
     {
       id: "hooks",

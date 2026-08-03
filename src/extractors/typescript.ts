@@ -223,10 +223,19 @@ function resolveRelativeImport(
 ): string | undefined {
   if (!specifier.startsWith(".")) return undefined;
   const base = path.resolve(path.dirname(fromFile.absolute), specifier);
+  // TypeScript ESM often writes `import "./x.js"` while the file is `x.ts(x)`.
+  const stripped = base.replace(/\.(?:[cm]?[jt]sx?)$/i, "");
   const candidates = [
     base,
+    stripped,
+    ...[...extensions].map((extension) => `${stripped}${extension}`),
     ...[...extensions].map((extension) => `${base}${extension}`),
-    ...[...extensions].map((extension) => path.join(base, `index${extension}`)),
+    ...[...extensions].map((extension) =>
+      path.join(stripped, `index${extension}`),
+    ),
+    ...[...extensions].map((extension) =>
+      path.join(base, `index${extension}`),
+    ),
   ];
   for (const candidate of candidates) {
     const id = modules.get(path.normalize(candidate));

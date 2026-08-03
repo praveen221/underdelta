@@ -1456,6 +1456,153 @@ export function humanizeGraphqlOperationLabel(
  * App Router URL paths → product page labels for the North star non-coder.
  * `/dashboard/activity` → `Dashboard · Activity`, `/sign-in` → `Sign in`.
  */
+/**
+ * Presentational UI-kit names (shadcn-style Card/Button/…) — Intermediate
+ * system-design maps keep feature roots only; these stay Advanced/code.
+ */
+const PRESENTATIONAL_COMPONENT_NAME =
+  /^(?:App)?(?:Card|Button|Icon|Badge|Skeleton|Toggle|Avatar|Spinner|Separator|Divider|Input|Label|Textarea|Checkbox|Switch|Tooltip|Dialog|Modal|Sheet|Popover|Dropdown|Select|Slider|Progress|Toast|Alert|Link|Image|Spacer|Container|Wrapper|Provider|Theme|Portal|Overlay|Backdrop|Close|Chevron|Menu|Nav|Header|Footer|Sidebar|Toolbar|Tab|Tabs|Pill|Chip|Tag|Kbd|Code|Pre|Table|Row|Cell|Grid|Stack|Flex|Box|Slot|VisuallyHidden)(?:[A-Z].*)?$/;
+
+function isPresentationalComponentName(label: string): boolean {
+  const trimmed = label.trim();
+  if (!trimmed) return false;
+  // Humanized labels ("Post list") are never presentational chrome names.
+  if (/\s/.test(trimmed)) return false;
+  return PRESENTATIONAL_COMPONENT_NAME.test(trimmed);
+}
+
+function isAppRouterPageOrLayoutFile(file: string): boolean {
+  const normalized = normalizePath(file);
+  return /(?:^|\/)(?:src\/)?app\/(?:.*\/)?(page|layout)\.[cm]?[jt]sx?$/i.test(
+    normalized,
+  );
+}
+
+/**
+ * FE atom catalog: feature-root components (one hop from page/layout via
+ * imports/renders) stay Intermediate-visible; leaf presentational chrome
+ * (Card/Button, stories, deeper hops) is marked leafChrome for Advanced only.
+ */
+function markFeFeatureRootsAndLeafChrome(
+  nodes: Map<string, ArchitectureNode>,
+  graph: ArchitectureGraph,
+): void {
+  const pageOrLayoutOwners = new Set<string>();
+  for (const node of nodes.values()) {
+    if (node.metadata?.next === "page" || node.metadata?.next === "layout") {
+      pageOrLayoutOwners.add(node.id);
+    }
+    if (node.kind === "module") {
+      const file = normalizePath(node.qualifiedName ?? node.label);
+      if (isAppRouterPageOrLayoutFile(file)) {
+        pageOrLayoutOwners.add(node.id);
+      }
+    }
+    if (
+      (node.kind === "component" || node.kind === "page") &&
+      node.evidence.some((item) => isAppRouterPageOrLayoutFile(item.file))
+    ) {
+      pageOrLayoutOwners.add(node.id);
+    }
+  }
+
+  const moduleComponentIds = new Map<string, string[]>();
+  for (const node of nodes.values()) {
+    if (node.kind !== "component") continue;
+    const file = normalizePath(node.evidence[0]?.file ?? "");
+    if (!file) continue;
+    const moduleId = stableId("module", file);
+    const list = moduleComponentIds.get(moduleId) ?? [];
+    list.push(node.id);
+    moduleComponentIds.set(moduleId, list);
+    // Also index by observed module node ids (hash-stable via same file).
+    if (node.parentId) {
+      const parentList = moduleComponentIds.get(node.parentId) ?? [];
+      parentList.push(node.id);
+      moduleComponentIds.set(node.parentId, parentList);
+    }
+  }
+  for (const node of nodes.values()) {
+    if (node.kind !== "module") continue;
+    const file = normalizePath(node.qualifiedName ?? node.label);
+    const fromEvidence = [...nodes.values()].filter(
+      (candidate) =>
+        candidate.kind === "component" &&
+        candidate.evidence.some(
+          (item) => normalizePath(item.file) === file,
+        ),
+    );
+    if (fromEvidence.length) {
+      moduleComponentIds.set(
+        node.id,
+        fromEvidence.map((candidate) => candidate.id),
+      );
+    }
+  }
+
+  const featureRootIds = new Set<string>();
+  for (const edge of graph.edges) {
+    if (edge.kind !== "imports" && edge.kind !== "renders") continue;
+    if (!pageOrLayoutOwners.has(edge.source)) continue;
+    const target = nodes.get(edge.target);
+    if (!target) continue;
+    if (target.kind === "component") {
+      featureRootIds.add(target.id);
+      continue;
+    }
+    if (target.kind === "module") {
+      for (const id of moduleComponentIds.get(target.id) ?? []) {
+        featureRootIds.add(id);
+      }
+      const file = normalizePath(target.qualifiedName ?? target.label);
+      for (const node of nodes.values()) {
+        if (
+          node.kind === "component" &&
+          node.evidence.some((item) => normalizePath(item.file) === file)
+        ) {
+          featureRootIds.add(node.id);
+        }
+      }
+    }
+  }
+
+  for (const node of nodes.values()) {
+    if (node.kind !== "component") continue;
+    if (node.metadata?.projection === "semantic") continue;
+
+    // App Router page/layout convention atoms + default-export bodies stay
+    // Intermediate atoms — they are not leaf UI chrome.
+    if (node.metadata?.next === "page" || node.metadata?.next === "layout") {
+      node.metadata = {
+        ...node.metadata,
+        collapsedInOverview: true,
+      };
+      nodes.set(node.id, node);
+      continue;
+    }
+
+    const evidenceFile = normalizePath(node.evidence[0]?.file ?? "");
+    const isStories = /\.stories\./i.test(evidenceFile);
+    const presentational = isPresentationalComponentName(node.label);
+    const oneHopFromPage = featureRootIds.has(node.id);
+
+    if (oneHopFromPage && !presentational && !isStories) {
+      node.metadata = {
+        ...node.metadata,
+        featureRoot: true,
+        collapsedInOverview: true,
+      };
+    } else {
+      node.metadata = {
+        ...node.metadata,
+        leafChrome: true,
+        collapsedInOverview: true,
+      };
+    }
+    nodes.set(node.id, node);
+  }
+}
+
 export function humanizeAppPathLabel(path: string): string {
   const trimmed = path.trim();
   if (!trimmed || trimmed === "/") return "Home";
@@ -2823,6 +2970,10 @@ export function projectSemanticArchitecture(
     };
     nodes.set(node.id, node);
   }
+
+  // FE atom catalog: mark page-owned feature roots vs leaf presentational chrome
+  // (Card/Button/stories). Intermediate shows feature roots; Advanced keeps leaves.
+  markFeFeatureRootsAndLeafChrome(nodes, graph);
 
   // Quiet Python/JS file-module chrome once product systems exist — API + Data
   // (and UI) tell the story; modules stay available via Details/search.
