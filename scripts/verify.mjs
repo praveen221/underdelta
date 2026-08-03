@@ -1597,15 +1597,107 @@ if (!focusExtractorsSystem) {
       .map((node) => `${node.kind}:${node.label}`)
       .join(", ")}`,
   );
-} else if (
-  fixtureCheckoutFocus.some((node) => node.label === "Order" || node.label === "Payment")
-) {
+} else if (!fixtureCheckoutFocusLabels.has("Order")) {
   fail(
-    "Checkout API Intermediate neighborhood should not pull Catalog tables until Catalog is focused",
+    "Checkout API Intermediate neighborhood should include Order via writes/reads story edge",
+  );
+} else if (fixtureCheckoutFocusLabels.has("Payment")) {
+  fail(
+    "Checkout API Intermediate neighborhood should not pull Payment (Jobs writer, not API)",
   );
 } else {
   pass(
-    `Intermediate focus neighborhoods: Extractors ${selfExtractorsFocus.length} nodes, Checkout API ${fixtureCheckoutFocus.length} nodes (children + collab, no advanced dump)`,
+    `Intermediate focus neighborhoods: Extractors ${selfExtractorsFocus.length} nodes, Checkout API ${fixtureCheckoutFocus.length} nodes (routes + Order writer path, no advanced dump)`,
+  );
+}
+
+// Insight drill: Intermediate focus on a table surfaces who writes/reads it.
+const focusOrderTable = fixtureGraph.nodes.find(
+  (node) => node.kind === "table" && node.label === "Order",
+);
+const focusPaymentTable = fixtureGraph.nodes.find(
+  (node) => node.kind === "table" && node.label === "Payment",
+);
+const fixtureOrderFocus = focusOrderTable
+  ? intermediateFocusNodes(fixtureGraph, focusOrderTable.id)
+  : [];
+const fixturePaymentFocus = focusPaymentTable
+  ? intermediateFocusNodes(fixtureGraph, focusPaymentTable.id)
+  : [];
+const fixtureOrderFocusLabels = new Set(
+  fixtureOrderFocus.map((node) => String(node.label)),
+);
+const fixturePaymentFocusLabels = new Set(
+  fixturePaymentFocus.map((node) => String(node.label)),
+);
+const fixtureApiWritesOrder = focusOrderTable
+  ? fixtureGraph.edges.find(
+      (edge) =>
+        edge.kind === "writes" &&
+        edge.source === fixtureByKey.get("api")?.id &&
+        edge.target === focusOrderTable.id,
+    )
+  : undefined;
+const fixtureJobsWritesPayment = focusPaymentTable
+  ? fixtureGraph.edges.find(
+      (edge) =>
+        edge.kind === "writes" &&
+        edge.source === fixtureByKey.get("jobs")?.id &&
+        edge.target === focusPaymentTable.id,
+    )
+  : undefined;
+if (!focusOrderTable || !focusPaymentTable) {
+  fail("mini-stack missing Order/Payment tables for writer insight drill");
+} else if (!fixtureOrderFocusLabels.has("Checkout API")) {
+  fail(
+    `Order Intermediate focus should include Checkout API writer (got ${[...fixtureOrderFocusLabels].join(", ")})`,
+  );
+} else if (
+  !fixtureApiWritesOrder?.evidence?.some(
+    (item) =>
+      item.certainty === "derived" &&
+      item.extractor === "projection" &&
+      typeof item.file === "string" &&
+      item.file.includes("orders.ts"),
+  )
+) {
+  fail(
+    `expected derived Checkout API -[writes]-> Order citing orders.ts (got ${JSON.stringify(
+      fixtureApiWritesOrder?.evidence?.[0] ?? null,
+    )})`,
+  );
+} else if (!fixturePaymentFocusLabels.has("Reconciliation jobs")) {
+  fail(
+    `Payment Intermediate focus should include Reconciliation jobs writer (got ${[...fixturePaymentFocusLabels].join(", ")})`,
+  );
+} else if (
+  !fixtureJobsWritesPayment?.evidence?.some(
+    (item) =>
+      item.certainty === "derived" &&
+      item.extractor === "projection" &&
+      typeof item.file === "string" &&
+      item.file.includes("reconcile.ts"),
+  )
+) {
+  fail(
+    `expected derived Reconciliation jobs -[writes]-> Payment citing reconcile.ts (got ${JSON.stringify(
+      fixtureJobsWritesPayment?.evidence?.[0] ?? null,
+    )})`,
+  );
+} else if (
+  fixtureOrderFocus.some(
+    (node) =>
+      beginnerAdvancedKinds.has(node.kind) && !node.metadata?.overviewHub,
+  ) ||
+  fixturePaymentFocus.some(
+    (node) =>
+      beginnerAdvancedKinds.has(node.kind) && !node.metadata?.overviewHub,
+  )
+) {
+  fail("table Intermediate focus leaked advanced kinds (functions/columns)");
+} else {
+  pass(
+    "table writer insight: Order ← Checkout API writes (orders.ts); Payment ← Reconciliation jobs writes (reconcile.ts)",
   );
 }
 
@@ -2670,9 +2762,11 @@ if (miniNextUi?.metadata?.collapsedInOverview !== true) {
   pass("mini-next Journal UI collapsed behind Home/Dashboard molecules");
 }
 
-const miniNextHomeUsesApi = miniNextGraph.edges.some(
+// Home prefers derived writes (from PostForm→Create post); inferred uses is
+// dropped when a derived reads/writes twin exists. Dashboard keeps uses.
+const miniNextHomeStoryToApi = miniNextGraph.edges.some(
   (edge) =>
-    edge.kind === "uses" &&
+    (edge.kind === "uses" || edge.kind === "writes" || edge.kind === "reads") &&
     edge.source === miniNextHomeMolecule?.id &&
     edge.target === miniNextApi?.id,
 );
@@ -2682,10 +2776,14 @@ const miniNextDashboardUsesApi = miniNextGraph.edges.some(
     edge.source === miniNextDashboardMolecule?.id &&
     edge.target === miniNextApi?.id,
 );
-if (!miniNextHomeUsesApi || !miniNextDashboardUsesApi) {
-  fail("mini-next missing Home/Dashboard -[uses]-> Posts API collaboration");
+if (!miniNextHomeStoryToApi || !miniNextDashboardUsesApi) {
+  fail(
+    "mini-next missing Home -[uses|writes|reads]-> / Dashboard -[uses]-> Posts API collaboration",
+  );
 } else {
-  pass("mini-next collaboration: Home + Dashboard -[uses]-> Posts API");
+  pass(
+    "mini-next collaboration: Home story→Posts API + Dashboard -[uses]-> Posts API",
+  );
 }
 
 const miniNextCommerceNoise = miniNextGraph.edges.some((edge) =>

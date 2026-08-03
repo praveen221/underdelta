@@ -1995,12 +1995,13 @@ function semanticOwnerOf(
 }
 
 /**
- * BE story edges API/Jobs → Data (deterministic, evidence-backed):
+ * BE story edges API/Jobs → Data + tables (deterministic, evidence-backed):
  * - When an API-owned function `reads`/`writes` a table under Data, lift the
- *   molecule edge.
+ *   molecule edge (API→Data) and the table insight edge (API→table).
  * - When a Data-owned function does the Prisma I/O but an API function `calls`
  *   it (Checkout → fulfillOrder → Order), lift through that call bridge.
- * - When Jobs `schedules` a function that `reads`/`writes` Data, lift Jobs→Data.
+ * - When Jobs `schedules` a function that `reads`/`writes` Data, lift Jobs→Data
+ *   and Jobs→table so Intermediate table focus answers “who writes this?”.
  */
 function liftBeApiDataStoryEdges(
   nodes: Map<string, ArchitectureNode>,
@@ -2017,19 +2018,20 @@ function liftBeApiDataStoryEdges(
   const addLifted = (
     kind: "reads" | "writes",
     from: ArchitectureNode,
+    to: ArchitectureNode,
     viaCaller: ArchitectureNode | undefined,
     viaFn: ArchitectureNode,
     seed: Evidence,
   ): void => {
-    const dedupeKey = `${kind}:${from.id}:${data.id}`;
+    const dedupeKey = `${kind}:${from.id}:${to.id}`;
     if (liftedKinds.has(dedupeKey)) return;
     const detail = viaCaller
-      ? `${from.label} ${kind} ${data.label} via ${viaCaller.label} → ${viaFn.label}`
-      : `${from.label} ${kind} ${data.label} via ${viaFn.label}`;
+      ? `${from.label} ${kind} ${to.label} via ${viaCaller.label} → ${viaFn.label}`
+      : `${from.label} ${kind} ${to.label} via ${viaFn.label}`;
     const lifted = edgeFrom(
       kind,
       from.id,
-      data.id,
+      to.id,
       {
         ...seed,
         extractor: "projection",
@@ -2040,6 +2042,18 @@ function liftBeApiDataStoryEdges(
     );
     if (!edges.has(lifted.id)) edges.set(lifted.id, lifted);
     liftedKinds.add(dedupeKey);
+  };
+
+  const liftOwnerStory = (
+    kind: "reads" | "writes",
+    from: ArchitectureNode,
+    table: ArchitectureNode,
+    viaCaller: ArchitectureNode | undefined,
+    viaFn: ArchitectureNode,
+    seed: Evidence,
+  ): void => {
+    addLifted(kind, from, data, viaCaller, viaFn, seed);
+    addLifted(kind, from, table, viaCaller, viaFn, seed);
   };
 
   for (const edge of [...edges.values()]) {
@@ -2056,7 +2070,7 @@ function liftBeApiDataStoryEdges(
 
     // Direct: API-owned function touches a Data table.
     if (api && sourceOwner?.id === api.id) {
-      addLifted(edge.kind, api, undefined, source, seed);
+      liftOwnerStory(edge.kind, api, target, undefined, source, seed);
       continue;
     }
 
@@ -2069,7 +2083,7 @@ function liftBeApiDataStoryEdges(
         if (!caller) continue;
         const callerOwner = semanticOwnerOf(caller.id, nodes);
         if (callerOwner?.id !== api.id) continue;
-        addLifted(edge.kind, api, caller, source, seed);
+        liftOwnerStory(edge.kind, api, target, caller, source, seed);
         break;
       }
     }
@@ -2088,7 +2102,7 @@ function liftBeApiDataStoryEdges(
         ) {
           continue;
         }
-        addLifted(edge.kind, jobs, scheduler, source, seed);
+        liftOwnerStory(edge.kind, jobs, target, scheduler, source, seed);
         break;
       }
     }
