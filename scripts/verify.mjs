@@ -25,6 +25,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const fixtureRoot = path.join(repoRoot, "verification", "mini-stack");
 const miniNextRoot = path.join(repoRoot, "verification", "mini-next");
+const miniVueRoot = path.join(repoRoot, "verification", "mini-vue");
 const miniPythonRoot = path.join(repoRoot, "verification", "mini-python");
 const miniMongoRoot = path.join(repoRoot, "verification", "mini-mongo");
 const miniOpenapiRoot = path.join(repoRoot, "verification", "mini-openapi");
@@ -114,6 +115,7 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file.includes("/verification/") ||
         file.includes("mini-stack/") ||
         file.includes("mini-next/") ||
+        file.includes("mini-vue/") ||
         file.includes("mini-python/") ||
         file.includes("mini-mongo/") ||
         file.includes("mini-openapi/") ||
@@ -3049,6 +3051,180 @@ if (
   fail("viewer must honor leafChrome / featureRoot FE omission metadata");
 } else {
   pass("viewer wires leafChrome + featureRoot FE omission");
+}
+
+// ---------------------------------------------------------------------------
+// Vue Router fixture (verification/mini-vue): page atoms + route molecules.
+// ---------------------------------------------------------------------------
+const miniVueGraph = await compileRepository(miniVueRoot);
+const miniVueCounts = countByKind(miniVueGraph.nodes);
+console.log(
+  `Mini-vue graph: ${miniVueGraph.nodes.length} nodes, ${miniVueGraph.edges.length} edges`,
+);
+requireKind(miniVueCounts, "page", 2);
+
+const miniVuePages = miniVueGraph.nodes.filter((node) => node.kind === "page");
+const miniVueHome = miniVuePages.find(
+  (node) =>
+    node.metadata?.path === "/" &&
+    node.metadata?.framework === "vue" &&
+    node.metadata?.vue === "page",
+);
+const miniVueDashboard = miniVuePages.find(
+  (node) =>
+    node.metadata?.path === "/dashboard" &&
+    node.metadata?.framework === "vue" &&
+    node.metadata?.vue === "page",
+);
+if (!miniVueHome || miniVueHome.label !== "Home") {
+  fail(
+    `mini-vue Home page atom missing path=/ framework=vue (found ${
+      miniVueHome
+        ? JSON.stringify({
+            label: miniVueHome.label,
+            path: miniVueHome.metadata?.path,
+            framework: miniVueHome.metadata?.framework,
+            vue: miniVueHome.metadata?.vue,
+          })
+        : "(missing)"
+    })`,
+  );
+} else {
+  pass("mini-vue Home page atom: path=/ framework=vue");
+}
+if (!miniVueDashboard || miniVueDashboard.label !== "Dashboard") {
+  fail(
+    `mini-vue Dashboard page atom missing path=/dashboard framework=vue (found ${
+      miniVueDashboard
+        ? JSON.stringify({
+            label: miniVueDashboard.label,
+            path: miniVueDashboard.metadata?.path,
+            framework: miniVueDashboard.metadata?.framework,
+            vue: miniVueDashboard.metadata?.vue,
+          })
+        : "(missing)"
+    })`,
+  );
+} else {
+  pass("mini-vue Dashboard page atom: path=/dashboard framework=vue");
+}
+
+const miniVuePageEvidence = [miniVueHome, miniVueDashboard].every((page) =>
+  page?.evidence.some(
+    (item) =>
+      item.extractor === "typescript" &&
+      item.certainty === "observed" &&
+      String(item.file).includes("router"),
+  ),
+);
+if (!miniVuePageEvidence) {
+  fail("mini-vue page atoms must cite observed Vue Router table evidence");
+} else {
+  pass("mini-vue page atoms cite createRouter route table evidence");
+}
+
+const miniVueHomeRoutesToView = miniVueGraph.edges.some(
+  (edge) =>
+    edge.kind === "routes-to" &&
+    edge.source === miniVueHome?.id &&
+    miniVueGraph.nodes.some(
+      (node) =>
+        node.id === edge.target &&
+        node.kind === "module" &&
+        String(node.label).includes("HomeView"),
+    ),
+);
+if (!miniVueHomeRoutesToView) {
+  fail("mini-vue expected Home -[routes-to]-> HomeView module");
+} else {
+  pass("mini-vue story edge: Home -[routes-to]-> HomeView");
+}
+
+const miniVueSystems = miniVueGraph.nodes.filter(
+  (node) => node.metadata?.projection === "semantic",
+);
+const miniVueByKey = new Map(
+  miniVueSystems
+    .filter((node) => typeof node.metadata?.systemKey === "string")
+    .map((node) => [node.metadata.systemKey, node]),
+);
+const miniVueHomeMolecule = miniVueByKey.get("page:/");
+const miniVueDashboardMolecule = miniVueByKey.get("page:/dashboard");
+const miniVueUi = miniVueByKey.get("ui");
+if (
+  !miniVueHomeMolecule ||
+  !miniVueDashboardMolecule ||
+  miniVueHomeMolecule.metadata?.routeMolecule !== true ||
+  miniVueDashboardMolecule.metadata?.routeMolecule !== true ||
+  miniVueHomeMolecule.metadata?.framework !== "vue" ||
+  miniVueDashboardMolecule.metadata?.framework !== "vue"
+) {
+  fail(
+    `mini-vue expected Home + Dashboard Vue route molecules, found keys=${[...miniVueByKey.keys()].join(", ")}`,
+  );
+} else {
+  pass("mini-vue route molecules: Home `/` + Dashboard `/dashboard`");
+}
+
+if (miniVueUi?.label !== "Board UI") {
+  fail(
+    `mini-vue UI label expected 'Board UI' from README, found '${miniVueUi?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-vue UI labeled Board UI");
+}
+
+if (miniVueUi?.metadata?.collapsedInOverview !== true) {
+  fail("mini-vue aggregate Board UI should collapse behind route molecules");
+} else {
+  pass("mini-vue Board UI collapsed behind Home/Dashboard molecules");
+}
+
+const miniVueFlow = miniVueSystems
+  .filter((node) => typeof node.metadata?.flowOrder === "number")
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+const miniVueFlowLabels = miniVueFlow.map((node) => node.label);
+if (
+  miniVueFlowLabels.indexOf("Home") < 0 ||
+  miniVueFlowLabels.indexOf("Dashboard") < 0 ||
+  miniVueFlowLabels.includes("Board UI")
+) {
+  fail(
+    `mini-vue flowOrder expected Home + Dashboard molecules (no Board UI blob), got ${miniVueFlowLabels.join(" → ") || "(none)"}`,
+  );
+} else {
+  pass(`mini-vue flowOrder: ${miniVueFlowLabels.join(" → ")}`);
+}
+
+const miniVuePagesUnderMolecules = miniVuePages.filter(
+  (page) =>
+    page.parentId === miniVueHomeMolecule?.id ||
+    page.parentId === miniVueDashboardMolecule?.id,
+);
+if (miniVuePagesUnderMolecules.length < 2) {
+  fail(
+    `mini-vue expected pages nested under Home/Dashboard molecules, found ${miniVuePagesUnderMolecules.length}`,
+  );
+} else {
+  pass(
+    `mini-vue ${miniVuePagesUnderMolecules.length} pages nested under route molecules`,
+  );
+}
+
+const miniVueBeginner = beginnerColdOpenNodes(miniVueGraph);
+const miniVueBeginnerLabels = miniVueBeginner.map((node) => String(node.label));
+if (
+  miniVueBeginnerLabels.includes("Board UI") ||
+  !miniVueBeginnerLabels.includes("Home") ||
+  !miniVueBeginnerLabels.includes("Dashboard")
+) {
+  fail(
+    `mini-vue Beginner should show Home + Dashboard molecules (not Board UI blob), found ${miniVueBeginnerLabels.join(", ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `mini-vue Beginner route molecules: ${miniVueBeginnerLabels.join(" → ")}`,
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -1042,12 +1042,15 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
   if (/(^|\/)viewer\.[cm]?[jt]sx?$/.test(file)) {
     return { key: "viewer", label: "Viewer", kind: "ui" };
   }
-  // Top-level `components/` / `ui/` (no leading slash) must match too —
+  // Top-level `components/` / `ui/` / `views/` (no leading slash) must match too —
   // Next fixtures often keep client widgets beside `app/`, not under `src/`.
+  // Vue Router keeps page SFCs under `views/`; router modules are FE routing.
   // Skip Kustomize `components/` overlays — those are deploy patches, not UI.
   if (
     !/(^|\/)kustomize\//.test(file) &&
-    /(^|\/)(ui|components)\//.test(file)
+    (/(^|\/)(ui|components|views)\//.test(file) ||
+      /(^|\/)router\.[cm]?[jt]sx?$/.test(file) ||
+      file.includes("/router/"))
   ) {
     return { key: "ui", label: "UI", kind: "ui" };
   }
@@ -1645,10 +1648,34 @@ function pageMoleculeSystemKey(segment: string): string {
   return `page:${segment}`;
 }
 
+/** True when a page atom is a Next App Router or Vue Router product page. */
+function isFeRoutePageAtom(node: ArchitectureNode): boolean {
+  if (node.kind !== "page" || typeof node.metadata?.path !== "string") {
+    return false;
+  }
+  return (
+    node.metadata.next === "page" ||
+    node.metadata.vue === "page" ||
+    node.metadata.framework === "next" ||
+    node.metadata.framework === "vue"
+  );
+}
+
+function fePageFramework(page: ArchitectureNode): "next" | "vue" | undefined {
+  if (page.metadata?.framework === "vue" || page.metadata?.vue === "page") {
+    return "vue";
+  }
+  if (page.metadata?.framework === "next" || page.metadata?.next === "page") {
+    return "next";
+  }
+  return undefined;
+}
+
 /**
- * FE molecules: one semantic `ui` hub per top-level App Router route segment.
- * Nest page atoms + page-owned feature roots under the hub; collapse the
- * aggregate UI system so Beginner reads Home / Dashboard — not one UI blob.
+ * FE molecules: one semantic `ui` hub per top-level route segment (Next App
+ * Router or Vue Router). Nest page atoms + page-owned feature roots under the
+ * hub; collapse the aggregate UI system so Beginner reads Home / Dashboard —
+ * not one UI blob.
  */
 function projectFeRouteSegmentMolecules(
   systems: Map<string, ArchitectureNode>,
@@ -1657,12 +1684,7 @@ function projectFeRouteSegmentMolecules(
   productId: string,
   attachToSystem: (nodeId: string, systemId: string, evidence: Evidence) => void,
 ): string[] {
-  const pageAtoms = [...nodes.values()].filter(
-    (node) =>
-      node.kind === "page" &&
-      node.metadata?.next === "page" &&
-      typeof node.metadata.path === "string",
-  );
+  const pageAtoms = [...nodes.values()].filter(isFeRoutePageAtom);
   if (pageAtoms.length < 2) return [];
 
   const bySegment = new Map<string, ArchitectureNode[]>();
@@ -1677,6 +1699,7 @@ function projectFeRouteSegmentMolecules(
 
   // Page atoms own modules by evidence file; feature roots are reached via
   // module-level imports/renders (page.tsx → PostList.tsx), not page-atom edges.
+  // Vue Router pages live in the router module — also own bound view modules.
   const pageFileToSegment = new Map<string, string>();
   for (const page of pageAtoms) {
     const path = String(page.metadata!.path);
@@ -1712,6 +1735,14 @@ function projectFeRouteSegmentMolecules(
         appRouterRouteSegment(parent.metadata.path),
       );
     }
+  }
+  // Vue Router: page -[routes-to]-> view module owns that segment's features.
+  for (const edge of edges.values()) {
+    if (edge.kind !== "routes-to") continue;
+    const page = nodes.get(edge.source);
+    if (!page || !isFeRoutePageAtom(page)) continue;
+    const segment = appRouterRouteSegment(String(page.metadata!.path));
+    ownerIdsToSegment.set(edge.target, segment);
   }
 
   const pageOwnedFeatureRoots = new Map<string, Set<string>>();
@@ -1758,6 +1789,7 @@ function projectFeRouteSegmentMolecules(
     const key = pageMoleculeSystemKey(segment);
     const systemId = stableId("system", key);
     const label = humanizeAppPathLabel(segment);
+    const framework = fePageFramework(pages[0]!) ?? "next";
     const evidence = dedupeEvidence(
       pages.flatMap((page) => page.evidence).slice(0, 8),
     );
@@ -1765,7 +1797,7 @@ function projectFeRouteSegmentMolecules(
       evidence[0] ??
       projectionEvidence(
         pages[0]?.evidence[0]?.file ?? ".",
-        `App Router route molecule ${segment}`,
+        `FE route molecule ${segment}`,
       );
 
     let molecule = systems.get(key);
@@ -1780,14 +1812,14 @@ function projectFeRouteSegmentMolecules(
           systemKey: key,
           routeMolecule: true,
           path: segment,
-          framework: "next",
+          framework,
         },
         evidence: [
           {
             ...seedEvidence,
             detail:
               seedEvidence.detail ??
-              `FE molecule for App Router segment ${segment}`,
+              `FE molecule for route segment ${segment}`,
           },
         ],
       };
@@ -1806,7 +1838,7 @@ function projectFeRouteSegmentMolecules(
         ...molecule.metadata,
         routeMolecule: true,
         path: segment,
-        framework: "next",
+        framework,
       };
       molecule.evidence = dedupeEvidence([...molecule.evidence, ...evidence]);
       nodes.set(molecule.id, molecule);
@@ -3489,7 +3521,12 @@ export function projectSemanticArchitecture(
     if (node.metadata?.projection === "semantic") continue;
     let nextLabel: string | undefined;
 
-    if (node.kind === "page" && node.metadata?.next === "page") {
+    if (
+      node.kind === "page" &&
+      (node.metadata?.next === "page" ||
+        node.metadata?.vue === "page" ||
+        node.metadata?.framework === "vue")
+    ) {
       const path =
         typeof node.metadata.path === "string" ? node.metadata.path : node.label;
       nextLabel = humanizeAppPathLabel(path);

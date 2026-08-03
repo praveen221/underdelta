@@ -161,6 +161,151 @@ function parseNextAppFile(relative: string): NextAppFile | undefined {
   };
 }
 
+function isCreateRouterCall(node: ts.CallExpression): boolean {
+  if (ts.isIdentifier(node.expression)) {
+    return node.expression.text === "createRouter";
+  }
+  if (ts.isPropertyAccessExpression(node.expression)) {
+    return node.expression.name.text === "createRouter";
+  }
+  return false;
+}
+
+/** Resolve an array literal from an expression or a same-file const binding. */
+function resolveArrayLiteral(
+  expression: ts.Expression | undefined,
+  source: ts.SourceFile,
+): ts.ArrayLiteralExpression | undefined {
+  if (!expression) return undefined;
+  if (ts.isArrayLiteralExpression(expression)) return expression;
+  if (!ts.isIdentifier(expression)) return undefined;
+  const name = expression.text;
+  for (const statement of source.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        ts.isIdentifier(declaration.name) &&
+        declaration.name.text === name &&
+        declaration.initializer &&
+        ts.isArrayLiteralExpression(declaration.initializer)
+      ) {
+        return declaration.initializer;
+      }
+    }
+  }
+  return undefined;
+}
+
+function objectProperty(
+  object: ts.ObjectLiteralExpression,
+  name: string,
+): ts.Expression | undefined {
+  for (const property of object.properties) {
+    // Vue fixtures often write `createRouter({ history, routes })`.
+    if (ts.isShorthandPropertyAssignment(property)) {
+      if (property.name.text === name) return property.name;
+      continue;
+    }
+    if (!ts.isPropertyAssignment(property)) continue;
+    const key = property.name;
+    const keyText = ts.isIdentifier(key)
+      ? key.text
+      : ts.isStringLiteralLike(key)
+        ? key.text
+        : undefined;
+    if (keyText === name) return property.initializer;
+  }
+  return undefined;
+}
+
+/**
+ * Lazy Vue route components: `() => import('./views/Home.vue')`.
+ * Returns the module specifier when statically visible.
+ */
+function lazyImportSpecifier(expression: ts.Expression): string | undefined {
+  if (!ts.isArrowFunction(expression) && !ts.isFunctionExpression(expression)) {
+    return undefined;
+  }
+  let call: ts.CallExpression | undefined;
+  if (ts.isCallExpression(expression.body)) {
+    call = expression.body;
+  } else if (ts.isBlock(expression.body)) {
+    for (const statement of expression.body.statements) {
+      if (
+        ts.isReturnStatement(statement) &&
+        statement.expression &&
+        ts.isCallExpression(statement.expression)
+      ) {
+        call = statement.expression;
+        break;
+      }
+    }
+  }
+  if (!call) return undefined;
+  // Dynamic `import("…")` uses SyntaxKind.ImportKeyword as the callee.
+  if (call.expression.kind !== ts.SyntaxKind.ImportKeyword) return undefined;
+  return stringValue(call.arguments[0]);
+}
+
+interface VueRouteRecord {
+  path: string;
+  name?: string;
+  componentName?: string;
+  componentSpecifier?: string;
+  at: ts.Node;
+}
+
+function collectVueRouteRecords(
+  elements: ts.NodeArray<ts.Expression>,
+  parentPath = "",
+): VueRouteRecord[] {
+  const records: VueRouteRecord[] = [];
+  for (const element of elements) {
+    if (!ts.isObjectLiteralExpression(element)) continue;
+    const pathExpr = objectProperty(element, "path");
+    const pathValue = stringValue(pathExpr);
+    if (pathValue === undefined) continue;
+
+    let path = pathValue;
+    if (!path.startsWith("/")) {
+      const base = parentPath.endsWith("/")
+        ? parentPath.slice(0, -1)
+        : parentPath || "";
+      path = path === "" ? parentPath || "/" : `${base}/${path}`.replace(/\/+/g, "/");
+      if (!path.startsWith("/")) path = `/${path}`;
+    }
+
+    const nameValue = stringValue(objectProperty(element, "name"));
+    const componentExpr = objectProperty(element, "component");
+    let componentName: string | undefined;
+    let componentSpecifier: string | undefined;
+    if (componentExpr) {
+      if (ts.isIdentifier(componentExpr)) {
+        componentName = componentExpr.text;
+      } else {
+        componentSpecifier = lazyImportSpecifier(componentExpr);
+      }
+    }
+
+    const record: VueRouteRecord = {
+      path,
+      at: element,
+    };
+    if (nameValue !== undefined) record.name = nameValue;
+    if (componentName !== undefined) record.componentName = componentName;
+    if (componentSpecifier !== undefined) {
+      record.componentSpecifier = componentSpecifier;
+    }
+    records.push(record);
+
+    const childrenExpr = objectProperty(element, "children");
+    if (childrenExpr && ts.isArrayLiteralExpression(childrenExpr)) {
+      records.push(...collectVueRouteRecords(childrenExpr.elements, path));
+    }
+  }
+  return records;
+}
+
 /** Leading `"use client"` / `"use server"` directive, if present. */
 function readUseDirective(
   source: ts.SourceFile,
@@ -1003,6 +1148,146 @@ export const typescriptExtractor: ArchitectureExtractor = {
           }
         }
       }
+    }
+
+    // Vue Router: createRouter({ routes }) → page atoms (path + component binding).
+    const seenVuePagePaths = new Set<string>();
+    for (const file of parsed) {
+      const localDeclarations =
+        declarationsByFile.get(file.relative) ?? new Map<string, string>();
+      const importSpecByLocal = new Map<string, string>();
+      for (const statement of file.source.statements) {
+        if (!ts.isImportDeclaration(statement) || !statement.importClause) {
+          continue;
+        }
+        const specifier = stringValue(statement.moduleSpecifier);
+        if (!specifier) continue;
+        const clause = statement.importClause;
+        if (clause.name) importSpecByLocal.set(clause.name.text, specifier);
+        const bindings = clause.namedBindings;
+        if (bindings && ts.isNamedImports(bindings)) {
+          for (const element of bindings.elements) {
+            importSpecByLocal.set(element.name.text, specifier);
+          }
+        }
+      }
+
+      const visitRouter = (node: ts.Node): void => {
+        if (ts.isCallExpression(node) && isCreateRouterCall(node)) {
+          const options = node.arguments[0];
+          if (options && ts.isObjectLiteralExpression(options)) {
+            const routesExpr = objectProperty(options, "routes");
+            const routesArray = resolveArrayLiteral(routesExpr, file.source);
+            if (routesArray) {
+              for (const record of collectVueRouteRecords(routesArray.elements)) {
+                if (seenVuePagePaths.has(record.path)) continue;
+                seenVuePagePaths.add(record.path);
+                const label =
+                  record.path === "/"
+                    ? "Home"
+                    : record.name
+                      ? record.name
+                      : record.path;
+                const pageId = stableId(
+                  "page",
+                  file.relative,
+                  "vue-router",
+                  record.path,
+                );
+                const componentSpecifier =
+                  record.componentSpecifier ??
+                  (record.componentName
+                    ? importSpecByLocal.get(record.componentName)
+                    : undefined);
+                nodes.push({
+                  id: pageId,
+                  kind: "page",
+                  label,
+                  qualifiedName: `${file.relative}#vue-route:${record.path}`,
+                  parentId: file.moduleId,
+                  technology: "vue-router",
+                  metadata: {
+                    vue: "page",
+                    path: record.path,
+                    framework: "vue",
+                    ...(record.name ? { routeName: record.name } : {}),
+                    ...(record.componentName
+                      ? { componentName: record.componentName }
+                      : {}),
+                    ...(componentSpecifier
+                      ? { componentSpecifier }
+                      : {}),
+                  },
+                  evidence: [
+                    evidenceFor(
+                      file,
+                      record.at,
+                      "observed",
+                      `Vue Router page ${record.path}`,
+                    ),
+                  ],
+                });
+                edges.push(
+                  edgeFrom(
+                    "contains",
+                    file.moduleId,
+                    pageId,
+                    evidenceFor(
+                      file,
+                      record.at,
+                      "observed",
+                      `Vue Router page ${record.path}`,
+                    ),
+                  ),
+                );
+
+                // Prefer binding the page atom to its view module when resolvable.
+                if (componentSpecifier?.startsWith(".")) {
+                  const targetModule = resolveRelativeImport(
+                    file,
+                    componentSpecifier,
+                    moduleByAbsolute,
+                  );
+                  if (targetModule) {
+                    edges.push(
+                      edgeFrom(
+                        "routes-to",
+                        pageId,
+                        targetModule,
+                        evidenceFor(
+                          file,
+                          record.at,
+                          "derived",
+                          `Vue Router binds ${record.path} → ${componentSpecifier}`,
+                        ),
+                      ),
+                    );
+                  }
+                } else if (record.componentName) {
+                  const target = localDeclarations.get(record.componentName);
+                  if (target) {
+                    edges.push(
+                      edgeFrom(
+                        "routes-to",
+                        pageId,
+                        target,
+                        evidenceFor(
+                          file,
+                          record.at,
+                          "derived",
+                          `Vue Router binds ${record.path} → ${record.componentName}`,
+                        ),
+                      ),
+                    );
+                  }
+                }
+              }
+            }
+          }
+        }
+        ts.forEachChild(node, visitRouter);
+      };
+      visitRouter(file.source);
     }
 
     return {
