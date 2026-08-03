@@ -64,7 +64,7 @@ npm run verify   # fixture + golden-lock suite
 The browser is a walk, not a dump of every function.
 
 1. **Beginner** (default) — Product Flow and top systems. Answers “what did I build?” without opening the parts bin.
-2. **Intermediate** — Double-click a system (or use **Find…** and press Enter / click a result) to enter that cluster’s neighborhood only.
+2. **Intermediate** — Double-click a system (or use **Find…** and press Enter / click a result) to enter that cluster’s neighborhood only. On Underdelta’s **Extractors**, drill a **capability** (e.g. kubernetes) to see its **Detects** surfaces — what that extractor understands — not a raw entity dump.
 3. **Advanced** — Modules and functions appear **inside the current focus**, never as a whole-repo phonebook. Drill a module/api for functions. Dead-end leaves (e.g. a service with no children) escalate to the parent system at Advanced so sibling modules appear.
 
 **View** only deepens inside a focus (Intermediate ↔ Advanced). Without a focus it stays Beginner and nudges you to double-click a Product Flow system.
