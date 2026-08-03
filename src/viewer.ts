@@ -260,7 +260,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     ]);
     // Product-story edges — canvas + inspector treat these apart from imports/calls.
     const collaborationKinds = new Set([
-      "uses", "renders", "exposes", "triggers", "configures", "reads", "flows-to",
+      "uses", "renders", "exposes", "triggers", "configures",
+      "reads", "writes", "flows-to",
     ]);
     // Messaging + schema lineage — labeled badges on the default overview.
     const narrativeKinds = new Set(["publishes", "consumes", "migrates"]);
@@ -268,7 +269,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     const neighborhoodEdgeKinds = new Set([
       ...collaborationKinds,
       ...narrativeKinds,
-      "writes", "schedules", "routes-to",
+      "schedules", "routes-to",
     ]);
     // Ownership fans (contains × N children) — never painted; layout is the signal.
     const ownershipEdgeKinds = new Set(["contains"]);

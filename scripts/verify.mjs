@@ -752,14 +752,68 @@ requireFixtureCollab(
   "reads",
   "api",
   "data",
-  "Checkout API reads Catalog data",
+  "Checkout API reads Catalog data via createCheckout → fulfillOrder",
 );
 requireFixtureCollab(
-  "uses",
+  "writes",
+  "api",
+  "data",
+  "Checkout API writes Catalog data via createCheckout → fulfillOrder",
+);
+requireFixtureCollab(
+  "writes",
   "jobs",
   "data",
-  "Reconciliation jobs use Catalog data",
+  "Reconciliation jobs writes Catalog data via Reconcile payments",
 );
+
+// System-design molecules: BE API↔Data story edges are derived (not inferred).
+const fixtureApiDataReads = fixtureGraph.edges.find(
+  (edge) =>
+    edge.kind === "reads" &&
+    edge.source === fixtureByKey.get("api")?.id &&
+    edge.target === fixtureByKey.get("data")?.id,
+);
+if (
+  !fixtureApiDataReads?.evidence?.some(
+    (item) =>
+      item.certainty === "derived" &&
+      item.extractor === "projection" &&
+      typeof item.file === "string" &&
+      item.file.includes("orders.ts"),
+  )
+) {
+  fail(
+    `mini-stack expected derived Checkout API -[reads]-> Catalog data citing orders.ts (got ${JSON.stringify(
+      fixtureApiDataReads?.evidence?.[0] ?? null,
+    )})`,
+  );
+} else {
+  pass("mini-stack story edge: Checkout API -[reads]-> Catalog data (derived, orders.ts)");
+}
+const fixtureApiDataWrites = fixtureGraph.edges.find(
+  (edge) =>
+    edge.kind === "writes" &&
+    edge.source === fixtureByKey.get("api")?.id &&
+    edge.target === fixtureByKey.get("data")?.id,
+);
+if (
+  !fixtureApiDataWrites?.evidence?.some(
+    (item) =>
+      item.certainty === "derived" &&
+      item.extractor === "projection" &&
+      typeof item.file === "string" &&
+      item.file.includes("orders.ts"),
+  )
+) {
+  fail(
+    `mini-stack expected derived Checkout API -[writes]-> Catalog data citing orders.ts (got ${JSON.stringify(
+      fixtureApiDataWrites?.evidence?.[0] ?? null,
+    )})`,
+  );
+} else {
+  pass("mini-stack story edge: Checkout API -[writes]-> Catalog data (derived, orders.ts)");
+}
 
 const fixtureTables = fixtureGraph.nodes.filter((node) => node.kind === "table");
 // After projection, Order/order/orders and Payment/payment/payments collapse.
@@ -1338,6 +1392,29 @@ if (selfBeginner.length < 6) {
       `Beginner cold open calm: self-map ${selfBeginner.length} flow nodes (${selfBeginnerLabels.join(" → ")}), mini-stack ${fixtureBeginner.length} flow nodes (no intermediate/advanced leaks)`,
     );
   }
+}
+
+// System-design molecules: mini-stack Beginner keeps distinct API + Data + Jobs.
+const fixtureBeginnerLabels = fixtureBeginner
+  .slice()
+  .sort(
+    (a, b) =>
+      (a.metadata?.flowOrder ?? 999) - (b.metadata?.flowOrder ?? 999) ||
+      String(a.label).localeCompare(String(b.label)),
+  )
+  .map((node) => String(node.label));
+const requiredBeMolecules = ["Checkout API", "Catalog data", "Reconciliation jobs"];
+const missingBeMolecules = requiredBeMolecules.filter(
+  (label) => !fixtureBeginnerLabels.includes(label),
+);
+if (missingBeMolecules.length) {
+  fail(
+    `mini-stack Beginner missing distinct BE molecules: ${missingBeMolecules.join(", ")} (got ${fixtureBeginnerLabels.join(" → ")})`,
+  );
+} else {
+  pass(
+    `mini-stack Beginner BE molecules: ${requiredBeMolecules.join(" + ")} (${fixtureBeginnerLabels.join(" → ")})`,
+  );
 }
 
 // Intermediate without focus must stay calm (no global hub/leaf dump).
@@ -2071,6 +2148,7 @@ const usesInKinds = viewerHtml.indexOf('"uses"', collaborationKindsDecl);
 const rendersInKinds = viewerHtml.indexOf('"renders"', collaborationKindsDecl);
 const exposesInKinds = viewerHtml.indexOf('"exposes"', collaborationKindsDecl);
 const readsInKinds = viewerHtml.indexOf('"reads"', collaborationKindsDecl);
+const writesInKinds = viewerHtml.indexOf('"writes"', collaborationKindsDecl);
 const triggersInKinds = viewerHtml.indexOf('"triggers"', collaborationKindsDecl);
 const importsFilter = viewerHtml.indexOf(
   "importsAndCalls = connections.filter",
@@ -2087,9 +2165,10 @@ if (
   rendersInKinds < 0 ||
   exposesInKinds < 0 ||
   readsInKinds < 0 ||
+  writesInKinds < 0 ||
   triggersInKinds < 0
 ) {
-  fail("viewer missing collaborationKinds set for inspector (uses/renders/exposes/triggers/reads)");
+  fail("viewer missing collaborationKinds set for inspector (uses/renders/exposes/triggers/reads/writes)");
 } else if (importsFilter < 0 || importsFilter < collaborationKindsDecl) {
   fail("viewer inspector should split importsAndCalls after collaborationKinds");
 } else if (collaborationHeading < 0 || importsHeading < 0 || collaborationHeading > importsHeading) {

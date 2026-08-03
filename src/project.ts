@@ -1977,6 +1977,124 @@ function liftFePageStoryEdges(
   }
 }
 
+/** Walk parentId until a semantic system/molecule hub. */
+function semanticOwnerOf(
+  nodeId: string,
+  nodes: Map<string, ArchitectureNode>,
+): ArchitectureNode | undefined {
+  let current: string | undefined = nodeId;
+  const seen = new Set<string>();
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    const node = nodes.get(current);
+    if (!node) return undefined;
+    if (node.metadata?.projection === "semantic") return node;
+    current = node.parentId;
+  }
+  return undefined;
+}
+
+/**
+ * BE story edges API/Jobs → Data (deterministic, evidence-backed):
+ * - When an API-owned function `reads`/`writes` a table under Data, lift the
+ *   molecule edge.
+ * - When a Data-owned function does the Prisma I/O but an API function `calls`
+ *   it (Checkout → fulfillOrder → Order), lift through that call bridge.
+ * - When Jobs `schedules` a function that `reads`/`writes` Data, lift Jobs→Data.
+ */
+function liftBeApiDataStoryEdges(
+  nodes: Map<string, ArchitectureNode>,
+  edges: Map<string, ArchitectureEdge>,
+  systems: Map<string, ArchitectureNode>,
+): void {
+  const api = systems.get("api");
+  const data = systems.get("data");
+  const jobs = systems.get("jobs");
+  if (!data) return;
+
+  const liftedKinds = new Set<string>();
+
+  const addLifted = (
+    kind: "reads" | "writes",
+    from: ArchitectureNode,
+    viaCaller: ArchitectureNode | undefined,
+    viaFn: ArchitectureNode,
+    seed: Evidence,
+  ): void => {
+    const dedupeKey = `${kind}:${from.id}:${data.id}`;
+    if (liftedKinds.has(dedupeKey)) return;
+    const detail = viaCaller
+      ? `${from.label} ${kind} ${data.label} via ${viaCaller.label} → ${viaFn.label}`
+      : `${from.label} ${kind} ${data.label} via ${viaFn.label}`;
+    const lifted = edgeFrom(
+      kind,
+      from.id,
+      data.id,
+      {
+        ...seed,
+        extractor: "projection",
+        certainty: "derived",
+        detail,
+      },
+      viaFn.label,
+    );
+    if (!edges.has(lifted.id)) edges.set(lifted.id, lifted);
+    liftedKinds.add(dedupeKey);
+  };
+
+  for (const edge of [...edges.values()]) {
+    if (edge.kind !== "reads" && edge.kind !== "writes") continue;
+    const source = nodes.get(edge.source);
+    const target = nodes.get(edge.target);
+    if (!source || !target) continue;
+    if (target.kind !== "table" && target.kind !== "collection") continue;
+    const tableOwner = semanticOwnerOf(target.id, nodes);
+    if (!tableOwner || tableOwner.id !== data.id) continue;
+
+    const sourceOwner = semanticOwnerOf(source.id, nodes);
+    const seed = edge.evidence[0]!;
+
+    // Direct: API-owned function touches a Data table.
+    if (api && sourceOwner?.id === api.id) {
+      addLifted(edge.kind, api, undefined, source, seed);
+      continue;
+    }
+
+    // Bridge: API function calls a Data-owned reader/writer (mini-stack Checkout).
+    if (api && sourceOwner?.id === data.id) {
+      for (const call of edges.values()) {
+        if (call.kind !== "calls") continue;
+        if (call.target !== source.id) continue;
+        const caller = nodes.get(call.source);
+        if (!caller) continue;
+        const callerOwner = semanticOwnerOf(caller.id, nodes);
+        if (callerOwner?.id !== api.id) continue;
+        addLifted(edge.kind, api, caller, source, seed);
+        break;
+      }
+    }
+
+    // Jobs schedule a function that reads/writes Data tables.
+    if (jobs && (sourceOwner?.id === data.id || sourceOwner?.id === jobs.id)) {
+      for (const sched of edges.values()) {
+        if (sched.kind !== "schedules" && sched.kind !== "triggers") continue;
+        if (sched.target !== source.id) continue;
+        const scheduler = nodes.get(sched.source);
+        if (!scheduler) continue;
+        const schedulerOwner = semanticOwnerOf(scheduler.id, nodes);
+        if (
+          schedulerOwner?.id !== jobs.id &&
+          scheduler.id !== jobs.id
+        ) {
+          continue;
+        }
+        addLifted(edge.kind, jobs, scheduler, source, seed);
+        break;
+      }
+    }
+  }
+}
+
 /**
  * HTTP route labels for the North star non-coder.
  * Parent system is already "HTTP API", so drop the redundant `/api` prefix and
@@ -4447,6 +4565,8 @@ export function projectSemanticArchitecture(
 
   // Collaboration edges describe how systems work together (uses/renders/…),
   // complementary to the left-to-right flows-to story band.
+  // Inferred API/Jobs → Data reads/uses may be replaced after README labels
+  // once evidence-lifted reads/writes land (see liftBeApiDataStoryEdges).
   for (const collab of collaborationEdges) {
     const from = systemsByKey.get(collab.from);
     const to = systemsByKey.get(collab.to);
@@ -4609,6 +4729,33 @@ export function projectSemanticArchitecture(
   // Weak README heading hints: refine thin path-role labels with human names
   // from docs. Never invent systems from README alone.
   applyReadmeHeadingHints(systems, options.readmeHints);
+
+  // BE story edges after tables nest under Data + README labels: API/Jobs
+  // -[reads|writes]-> Data from Prisma evidence + call/schedule bridges.
+  liftBeApiDataStoryEdges(nodes, edges, systems);
+  // Prefer derived API/Jobs → Data story edges over inferred collab twins.
+  for (const [edgeId, edge] of [...edges.entries()]) {
+    if (
+      edge.kind !== "reads" &&
+      edge.kind !== "writes" &&
+      edge.kind !== "uses"
+    ) {
+      continue;
+    }
+    if (!edge.evidence.some((item) => item.certainty === "inferred")) continue;
+    const hasDerivedStory = [...edges.values()].some(
+      (other) =>
+        other.id !== edge.id &&
+        other.source === edge.source &&
+        other.target === edge.target &&
+        (other.kind === "reads" || other.kind === "writes") &&
+        other.evidence.some(
+          (item) =>
+            item.certainty === "derived" && item.extractor === "projection",
+        ),
+    );
+    if (hasDerivedStory) edges.delete(edgeId);
+  }
 
   // Queue publisher/consumer lists were snapshotted before README rename.
   // Rebuild labels from lifted publishes/consumes so Messaging shows
