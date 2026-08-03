@@ -2418,18 +2418,111 @@ if (
   pass("mini-next server actions: Create post, Delete post");
 }
 
-const miniNextLayout = miniNextGraph.nodes.find(
+const miniNextLayouts = miniNextGraph.nodes.filter(
   (node) =>
     node.metadata?.next === "layout" &&
     node.kind === "component" &&
     typeof node.metadata?.path === "string",
 );
-if (!miniNextLayout || miniNextLayout.label !== "App layout") {
+const miniNextRootLayout = miniNextLayouts.find(
+  (node) => node.metadata.path === "/",
+);
+const miniNextDashboardLayout = miniNextLayouts.find(
+  (node) => node.metadata.path === "/dashboard",
+);
+if (!miniNextRootLayout || miniNextRootLayout.label !== "App layout") {
   fail(
-    `mini-next expected App layout label, found '${miniNextLayout?.label ?? "(missing)"}'`,
+    `mini-next expected App layout label at path /, found '${miniNextRootLayout?.label ?? "(missing)"}'`,
   );
 } else {
   pass("mini-next layout humanized: App layout");
+}
+if (!miniNextDashboardLayout || miniNextDashboardLayout.label !== "Dashboard layout") {
+  fail(
+    `mini-next expected nested Dashboard layout at path /dashboard, found '${miniNextDashboardLayout?.label ?? "(missing)"}' (layouts: ${miniNextLayouts
+      .map((node) => `${node.label}@${node.metadata.path}`)
+      .join(", ") || "(none)"})`,
+  );
+} else {
+  pass("mini-next nested layout: Dashboard layout @ /dashboard");
+}
+
+// System-design molecules gate: App Router page/layout atoms carry URL path metadata.
+const miniNextPageByPath = new Map(
+  miniNextPages
+    .filter((node) => typeof node.metadata?.path === "string")
+    .map((node) => [node.metadata.path, node]),
+);
+const miniNextHomePath = miniNextPageByPath.get("/");
+const miniNextDashboardPath = miniNextPageByPath.get("/dashboard");
+if (
+  !miniNextHomePath ||
+  miniNextHomePath.label !== "Home" ||
+  miniNextHomePath.metadata?.next !== "page" ||
+  miniNextHomePath.metadata?.framework !== "next"
+) {
+  fail(
+    `mini-next Home page atom missing path=/ metadata (found ${miniNextHomePath ? JSON.stringify({
+      label: miniNextHomePath.label,
+      path: miniNextHomePath.metadata?.path,
+      next: miniNextHomePath.metadata?.next,
+      framework: miniNextHomePath.metadata?.framework,
+    }) : "(missing)"})`,
+  );
+} else {
+  pass("mini-next Home page atom: path=/ framework=next");
+}
+if (
+  !miniNextDashboardPath ||
+  miniNextDashboardPath.label !== "Dashboard" ||
+  miniNextDashboardPath.metadata?.next !== "page" ||
+  miniNextDashboardPath.metadata?.framework !== "next"
+) {
+  fail(
+    `mini-next Dashboard page atom missing path=/dashboard metadata (found ${miniNextDashboardPath ? JSON.stringify({
+      label: miniNextDashboardPath.label,
+      path: miniNextDashboardPath.metadata?.path,
+      next: miniNextDashboardPath.metadata?.next,
+      framework: miniNextDashboardPath.metadata?.framework,
+    }) : "(missing)"})`,
+  );
+} else {
+  pass("mini-next Dashboard page atom: path=/dashboard framework=next");
+}
+const miniNextPagePathsMissing = miniNextPages.filter(
+  (node) =>
+    typeof node.metadata?.path !== "string" ||
+    !String(node.metadata.path).startsWith("/") ||
+    node.metadata?.next !== "page" ||
+    node.metadata?.framework !== "next",
+);
+if (miniNextPagePathsMissing.length) {
+  fail(
+    `mini-next page atoms missing App Router path metadata: ${miniNextPagePathsMissing
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass(
+    `mini-next ${miniNextPages.length} page atoms lock path + next=page + framework=next`,
+  );
+}
+const miniNextLayoutPathsMissing = miniNextLayouts.filter(
+  (node) =>
+    typeof node.metadata?.path !== "string" ||
+    !String(node.metadata.path).startsWith("/") ||
+    node.metadata?.framework !== "next",
+);
+if (miniNextLayoutPathsMissing.length || miniNextLayouts.length < 2) {
+  fail(
+    `mini-next layout atoms expected >=2 with path metadata, found ${miniNextLayouts.length} (bad: ${miniNextLayoutPathsMissing
+      .map((node) => node.label)
+      .join(", ") || "none"})`,
+  );
+} else {
+  pass(
+    `mini-next ${miniNextLayouts.length} layout atoms lock path + next=layout + framework=next`,
+  );
 }
 
 const miniNextSystems = miniNextGraph.nodes.filter(

@@ -208,13 +208,13 @@ Update checkboxes + Next focus every tick (unless Idle protocol).
 - [x] Prior master: v0 extractors, walkable tiers, capability Detects catalogs  
 - [x] This loop plan created on `system-design-molecules-04082026`  
 - [x] Soft-stop / LOOP COMPLETE idle protocol documented  
+- [x] **FE atoms — Next App Router pages/layouts:** `page`/`layout` atoms with `metadata.path` + `framework=next`; nested dashboard layout fixture; verify locks Home `/`, Dashboard `/dashboard`, App layout `/`, Dashboard layout `/dashboard`  
 
 ### In progress / next
 
 Keep **at least 3 unchecked items** here until LOOP COMPLETE (refill from Seed backlog).  
 These remaining items are the **mandatory** slice — finishing them (with gates 1–8) is what completes the loop:
 
-- [ ] **FE atoms — Next App Router pages/layouts:** extract `page`/`layout` with URL path metadata; verify floors on `verification/mini-next` (or create/extend fixture) for ≥2 distinct pages  
 - [ ] **FE omission — leaf components collapsed:** presentational components not on Beginner/Intermediate unless feature-root (imported by page); verify no Card/Button-style dump on mini-next  
 - [ ] **FE molecules — one molecule per route segment:** projection groups page+feature roots under a `ui`/feature system or page hub; Beginner shows route molecules not one UI blob  
 - [ ] **FE story edges from page:** where static, `reads`/`renders`/`routes-to` from page/action to API or data; verify ≥1 such edge on mini-next or mini-stack storefront  
@@ -236,7 +236,7 @@ Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder fr
 
 ### Next focus (edit every tick)
 
-> **Next focus:** Implement Next App Router `page`/`layout` atoms with URL path metadata and golden floors on `verification/mini-next` (≥2 pages). Do not touch Vue yet. Do not add AI. After green verify + dogfood self-map note, stop the tick.
+> **Next focus:** This work is done (Next App Router page/layout path atoms + nested layout floors). Now collapse leaf presentational components on mini-next Intermediate/Beginner (feature-roots only; no Card/Button-style dump) so we can reach route-segment molecules without a component phonebook. Do not touch Vue. Do not add AI. Stop after green verify + dogfood note.
 
 ### Learning log (append every tick)
 
@@ -245,6 +245,7 @@ Pull from here when In progress &lt; 3 **and** Loop status is ACTIVE. Reorder fr
 ```
 
 - 2026-08-04 | Plan created for system-design molecules on `system-design-molecules-04082026` | Next: Next App Router page/layout atoms | Learned: Greptile/Graphify optimize symbol graphs for agents; our wedge is product molecules for vibe-coders; AI deferred until IR is strong | Dogfood: n/a (plan-only tick)
+- 2026-08-03 19:09 UTC | Done: locked mini-next page/layout URL path metadata floors; nested `app/dashboard/layout.tsx`; evidence details cite path; extractor path already existed | Next: FE leaf-component omission | Learned: page/layout atoms were largely shipped on master — this tick’s value is golden-locking `metadata.path` + nested layout so molecule work cannot regress the atom contract | Dogfood: self-map Beginner still CLI → Compile pipeline → … → Viewer → index.html; 0 page atoms (compiler, not Next) — OK
 
 ---
 

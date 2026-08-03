@@ -945,8 +945,8 @@ export const typescriptExtractor: ArchitectureExtractor = {
               certainty: "observed",
               detail:
                 nextFile.type === "page"
-                  ? "Next.js App Router page"
-                  : "Next.js App Router layout",
+                  ? `Next.js App Router page ${nextFile.urlPath}`
+                  : `Next.js App Router layout ${nextFile.urlPath}`,
             },
           ],
         });
