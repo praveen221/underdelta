@@ -402,6 +402,11 @@ const flowOrderPreference: string[] = [
 ];
 
 function flowOrderRank(key: string): number {
+  // App Router page molecules occupy the UI slot, ordered among themselves by key.
+  if (key.startsWith("page:")) {
+    const uiIndex = flowOrderPreference.indexOf("ui");
+    return uiIndex === -1 ? flowOrderPreference.length : uiIndex;
+  }
   const index = flowOrderPreference.indexOf(key);
   return index === -1 ? flowOrderPreference.length : index;
 }
@@ -1613,6 +1618,255 @@ export function humanizeAppPathLabel(path: string): string {
     .filter((segment) => !segment.startsWith("(") && !segment.startsWith("@"));
   if (!segments.length) return "Home";
   return segments.map((segment) => humanizeIdentifierLabel(segment)).join(" · ");
+}
+
+/**
+ * Top-level App Router segment for FE molecules.
+ * `/dashboard/activity` → `/dashboard`; `/` → `/`.
+ */
+export function appRouterRouteSegment(path: string): string {
+  const trimmed = path.trim() || "/";
+  if (!trimmed.startsWith("/")) return `/${trimmed}`;
+  if (trimmed === "/") return "/";
+  const segments = trimmed
+    .split("/")
+    .filter(Boolean)
+    .filter((segment) => !segment.startsWith("(") && !segment.startsWith("@"));
+  if (!segments.length) return "/";
+  return `/${segments[0]}`;
+}
+
+function pageMoleculeSystemKey(segment: string): string {
+  return `page:${segment}`;
+}
+
+/**
+ * FE molecules: one semantic `ui` hub per top-level App Router route segment.
+ * Nest page atoms + page-owned feature roots under the hub; collapse the
+ * aggregate UI system so Beginner reads Home / Dashboard — not one UI blob.
+ */
+function projectFeRouteSegmentMolecules(
+  systems: Map<string, ArchitectureNode>,
+  nodes: Map<string, ArchitectureNode>,
+  edges: Map<string, ArchitectureEdge>,
+  productId: string,
+  attachToSystem: (nodeId: string, systemId: string, evidence: Evidence) => void,
+): string[] {
+  const pageAtoms = [...nodes.values()].filter(
+    (node) =>
+      node.kind === "page" &&
+      node.metadata?.next === "page" &&
+      typeof node.metadata.path === "string",
+  );
+  if (pageAtoms.length < 2) return [];
+
+  const bySegment = new Map<string, ArchitectureNode[]>();
+  for (const page of pageAtoms) {
+    const path = String(page.metadata!.path);
+    const segment = appRouterRouteSegment(path);
+    const bucket = bySegment.get(segment) ?? [];
+    bucket.push(page);
+    bySegment.set(segment, bucket);
+  }
+  if (bySegment.size < 2) return [];
+
+  // Page atoms own modules by evidence file; feature roots are reached via
+  // module-level imports/renders (page.tsx → PostList.tsx), not page-atom edges.
+  const pageFileToSegment = new Map<string, string>();
+  for (const page of pageAtoms) {
+    const path = String(page.metadata!.path);
+    const segment = appRouterRouteSegment(path);
+    for (const item of page.evidence) {
+      if (item.file && item.file !== ".") {
+        pageFileToSegment.set(normalizePath(item.file), segment);
+      }
+    }
+  }
+  const ownerIdsToSegment = new Map<string, string>();
+  for (const page of pageAtoms) {
+    const segment = appRouterRouteSegment(String(page.metadata!.path));
+    ownerIdsToSegment.set(page.id, segment);
+  }
+  for (const node of nodes.values()) {
+    if (node.kind !== "module") continue;
+    const file = modulePath(node);
+    const segment = pageFileToSegment.get(file);
+    if (segment) ownerIdsToSegment.set(node.id, segment);
+  }
+  // Default-export page bodies (Home page) also count as owners when they import.
+  for (const node of nodes.values()) {
+    if (node.kind !== "component" && node.kind !== "function") continue;
+    const parent = node.parentId ? nodes.get(node.parentId) : undefined;
+    if (
+      parent &&
+      parent.kind === "page" &&
+      typeof parent.metadata?.path === "string"
+    ) {
+      ownerIdsToSegment.set(
+        node.id,
+        appRouterRouteSegment(parent.metadata.path),
+      );
+    }
+  }
+
+  const pageOwnedFeatureRoots = new Map<string, Set<string>>();
+  const addFeature = (segment: string, featureId: string): void => {
+    const bucket = pageOwnedFeatureRoots.get(segment) ?? new Set<string>();
+    bucket.add(featureId);
+    pageOwnedFeatureRoots.set(segment, bucket);
+  };
+  for (const edge of edges.values()) {
+    if (edge.kind !== "imports" && edge.kind !== "renders") continue;
+    const segment = ownerIdsToSegment.get(edge.source);
+    if (!segment) continue;
+    const target = nodes.get(edge.target);
+    if (!target) continue;
+    if (target.kind === "component" && target.metadata?.featureRoot === true) {
+      addFeature(segment, target.id);
+      continue;
+    }
+    if (target.kind === "module") {
+      const targetFile = modulePath(target);
+      for (const node of nodes.values()) {
+        if (node.kind !== "component" || node.metadata?.featureRoot !== true) {
+          continue;
+        }
+        if (
+          node.parentId === target.id ||
+          node.evidence.some(
+            (item) => normalizePath(item.file) === targetFile,
+          )
+        ) {
+          addFeature(segment, node.id);
+        }
+      }
+    }
+  }
+
+  const moleculeKeys: string[] = [];
+  const sortedSegments = [...bySegment.keys()].sort((a, b) =>
+    a.localeCompare(b),
+  );
+
+  for (const segment of sortedSegments) {
+    const pages = bySegment.get(segment)!;
+    const key = pageMoleculeSystemKey(segment);
+    const systemId = stableId("system", key);
+    const label = humanizeAppPathLabel(segment);
+    const evidence = dedupeEvidence(
+      pages.flatMap((page) => page.evidence).slice(0, 8),
+    );
+    const seedEvidence =
+      evidence[0] ??
+      projectionEvidence(
+        pages[0]?.evidence[0]?.file ?? ".",
+        `App Router route molecule ${segment}`,
+      );
+
+    let molecule = systems.get(key);
+    if (!molecule) {
+      molecule = {
+        id: systemId,
+        kind: "ui",
+        label,
+        technology: "semantic",
+        metadata: {
+          projection: "semantic",
+          systemKey: key,
+          routeMolecule: true,
+          path: segment,
+          framework: "next",
+        },
+        evidence: [
+          {
+            ...seedEvidence,
+            detail:
+              seedEvidence.detail ??
+              `FE molecule for App Router segment ${segment}`,
+          },
+        ],
+      };
+      systems.set(key, molecule);
+      nodes.set(molecule.id, molecule);
+      const productEdge = edgeFrom(
+        "contains",
+        productId,
+        molecule.id,
+        seedEvidence,
+      );
+      edges.set(productEdge.id, productEdge);
+    } else {
+      molecule.label = label;
+      molecule.metadata = {
+        ...molecule.metadata,
+        routeMolecule: true,
+        path: segment,
+        framework: "next",
+      };
+      molecule.evidence = dedupeEvidence([...molecule.evidence, ...evidence]);
+      nodes.set(molecule.id, molecule);
+    }
+    moleculeKeys.push(key);
+
+    for (const page of pages) {
+      attachToSystem(page.id, molecule.id, page.evidence[0] ?? seedEvidence);
+      page.metadata = {
+        ...page.metadata,
+        projectedSystem: key,
+        routeMolecule: key,
+      };
+      nodes.set(page.id, page);
+    }
+
+    // Matching layout atoms (same segment path) live with the route molecule.
+    for (const node of [...nodes.values()]) {
+      if (node.metadata?.next !== "layout") continue;
+      if (typeof node.metadata.path !== "string") continue;
+      if (appRouterRouteSegment(node.metadata.path) !== segment) continue;
+      attachToSystem(node.id, molecule.id, node.evidence[0] ?? seedEvidence);
+      node.metadata = {
+        ...node.metadata,
+        projectedSystem: key,
+        routeMolecule: key,
+      };
+      nodes.set(node.id, node);
+    }
+
+    for (const featureId of pageOwnedFeatureRoots.get(segment) ?? []) {
+      const feature = nodes.get(featureId);
+      if (!feature) continue;
+      attachToSystem(featureId, molecule.id, feature.evidence[0] ?? seedEvidence);
+      feature.metadata = {
+        ...feature.metadata,
+        projectedSystem: key,
+        routeMolecule: key,
+      };
+      nodes.set(featureId, feature);
+    }
+
+    molecule.evidence = dedupeEvidence(molecule.evidence);
+    nodes.set(molecule.id, molecule);
+  }
+
+  return moleculeKeys;
+}
+
+/** Collapse aggregate UI once route molecules own the Beginner band. */
+function collapseAggregateUiBehindRouteMolecules(
+  systems: Map<string, ArchitectureNode>,
+  nodes: Map<string, ArchitectureNode>,
+): void {
+  const pageMoleculeCount = [...systems.keys()].filter((key) =>
+    key.startsWith("page:"),
+  ).length;
+  const ui = systems.get("ui");
+  if (!ui || pageMoleculeCount < 2) return;
+  ui.metadata = {
+    ...ui.metadata,
+    collapsedInOverview: true,
+    replacedByRouteMolecules: true,
+  };
+  nodes.set(ui.id, ui);
 }
 
 /**
@@ -3173,6 +3427,15 @@ export function projectSemanticArchitecture(
     nodes.set(node.id, node);
   }
 
+  // FE molecules: Home `/`, Dashboard `/dashboard`, … — Beginner route hubs.
+  projectFeRouteSegmentMolecules(
+    systems,
+    nodes,
+    edges,
+    product.id,
+    attachToSystem,
+  );
+
   // Auth + billing mutations are the SaaS product story beside UI→API→Data.
   // Keep them visible on overview like messaging/cron hubs (not buried in Details).
   const authBillingOverviewHubs = new Set([
@@ -4040,10 +4303,21 @@ export function projectSemanticArchitecture(
   const systemsByKey = new Map(
     [...systems.entries()].map(([key, node]) => [key, node.id]),
   );
-  for (const [fromKey, toKey] of preferredFlows) {
+  const pageMoleculeKeys = [...systems.keys()]
+    .filter((key) => key.startsWith("page:"))
+    .sort((a, b) => a.localeCompare(b));
+  const flowPairs: Array<[string, string]> = [...preferredFlows];
+  if (systemsByKey.has("api")) {
+    for (const pageKey of pageMoleculeKeys) {
+      flowPairs.push([pageKey, "api"]);
+    }
+  }
+  for (const [fromKey, toKey] of flowPairs) {
     const from = systemsByKey.get(fromKey);
     const to = systemsByKey.get(toKey);
     if (!from || !to) continue;
+    // Aggregate UI→API flow stays in IR when UI is collapsed; page molecules
+    // carry the visible Beginner band via their own flows-to edges.
     const flow = edgeFrom(
       "flows-to",
       from,
@@ -4090,6 +4364,29 @@ export function projectSemanticArchitecture(
       collab.label,
     );
     if (!edges.has(edge.id)) edges.set(edge.id, edge);
+  }
+
+  // Route molecules collaborate with HTTP API the same way aggregate UI did.
+  if (systemsByKey.has("api") && pageMoleculeKeys.length) {
+    const apiId = systemsByKey.get("api")!;
+    for (const pageKey of pageMoleculeKeys) {
+      const fromId = systemsByKey.get(pageKey);
+      if (!fromId) continue;
+      const molecule = systems.get(pageKey);
+      const edge = edgeFrom(
+        "uses",
+        fromId,
+        apiId,
+        {
+          file: ".",
+          extractor: "projection",
+          certainty: "inferred",
+          detail: `${molecule?.label ?? pageKey} calls the HTTP API and server actions`,
+        },
+        "fetch",
+      );
+      if (!edges.has(edge.id)) edges.set(edge.id, edge);
+    }
   }
 
   // Project package.json bin / exports into the product map.
@@ -4275,7 +4572,11 @@ export function projectSemanticArchitecture(
   // Overlays own the cold-read. Chart-led repos without product overlays keep hubs.
   quietHelmBesideKustomizeOverlays(nodes);
 
-  assignFlowOrder(systems, preferredFlows);
+  // After chrome quieting (which drops edges to collapsed systems): hide the
+  // aggregate UI blob so Beginner flowOrder is route molecules → API → …
+  collapseAggregateUiBehindRouteMolecules(systems, nodes);
+
+  assignFlowOrder(systems, flowPairs);
 
   // Surface the language-extractor roster on the Extractors system so the
   // default map answers "which extractors power this architecture?"

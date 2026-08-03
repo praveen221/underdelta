@@ -2553,33 +2553,60 @@ if (miniNextByKey.get("api")?.label !== "Posts API") {
 const miniNextFlow = miniNextSystems
   .filter((node) => typeof node.metadata?.flowOrder === "number")
   .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
-const miniNextFlowKeys = miniNextFlow.map((node) => node.metadata.systemKey);
+const miniNextFlowLabels = miniNextFlow.map((node) => node.label);
+const miniNextHomeMolecule = miniNextByKey.get("page:/");
+const miniNextDashboardMolecule = miniNextByKey.get("page:/dashboard");
+const miniNextApi = miniNextByKey.get("api");
+const miniNextUi = miniNextByKey.get("ui");
 if (
-  miniNextFlowKeys.indexOf("ui") < 0 ||
-  miniNextFlowKeys.indexOf("api") < 0 ||
-  miniNextFlowKeys.indexOf("ui") > miniNextFlowKeys.indexOf("api")
+  !miniNextHomeMolecule ||
+  !miniNextDashboardMolecule ||
+  miniNextHomeMolecule.metadata?.routeMolecule !== true ||
+  miniNextDashboardMolecule.metadata?.routeMolecule !== true
 ) {
   fail(
-    `mini-next flowOrder expected UI → API, got ${miniNextFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+    `mini-next expected Home + Dashboard route molecules, found keys=${[...miniNextByKey.keys()].join(", ")}`,
+  );
+} else if (
+  miniNextFlowLabels.indexOf("Home") < 0 ||
+  miniNextFlowLabels.indexOf("Dashboard") < 0 ||
+  miniNextFlowLabels.indexOf("Posts API") < 0 ||
+  miniNextFlowLabels.indexOf("Home") > miniNextFlowLabels.indexOf("Posts API") ||
+  miniNextFlowLabels.indexOf("Dashboard") > miniNextFlowLabels.indexOf("Posts API")
+) {
+  fail(
+    `mini-next flowOrder expected Home + Dashboard → Posts API, got ${miniNextFlowLabels.join(" → ") || "(none)"}`,
+  );
+} else if (miniNextFlowLabels.includes("Journal UI")) {
+  fail(
+    `mini-next Beginner must not keep Journal UI blob in flowOrder; got ${miniNextFlowLabels.join(" → ")}`,
   );
 } else {
-  pass(
-    `mini-next flowOrder: ${miniNextFlow.map((node) => node.label).join(" → ")}`,
-  );
+  pass(`mini-next flowOrder: ${miniNextFlowLabels.join(" → ")}`);
 }
 
-const miniNextUi = miniNextByKey.get("ui");
-const miniNextApi = miniNextByKey.get("api");
-const miniNextUiUsesApi = miniNextGraph.edges.some(
+if (miniNextUi?.metadata?.collapsedInOverview !== true) {
+  fail("mini-next aggregate Journal UI should collapse behind route molecules");
+} else {
+  pass("mini-next Journal UI collapsed behind Home/Dashboard molecules");
+}
+
+const miniNextHomeUsesApi = miniNextGraph.edges.some(
   (edge) =>
     edge.kind === "uses" &&
-    edge.source === miniNextUi?.id &&
+    edge.source === miniNextHomeMolecule?.id &&
     edge.target === miniNextApi?.id,
 );
-if (!miniNextUiUsesApi) {
-  fail("mini-next missing Journal UI -[uses]-> Posts API collaboration");
+const miniNextDashboardUsesApi = miniNextGraph.edges.some(
+  (edge) =>
+    edge.kind === "uses" &&
+    edge.source === miniNextDashboardMolecule?.id &&
+    edge.target === miniNextApi?.id,
+);
+if (!miniNextHomeUsesApi || !miniNextDashboardUsesApi) {
+  fail("mini-next missing Home/Dashboard -[uses]-> Posts API collaboration");
 } else {
-  pass("mini-next collaboration: Journal UI -[uses]-> Posts API");
+  pass("mini-next collaboration: Home + Dashboard -[uses]-> Posts API");
 }
 
 const miniNextCommerceNoise = miniNextGraph.edges.some((edge) =>
@@ -2608,21 +2635,25 @@ if (miniNextRoutesUnderApi.length < 3) {
   pass(`mini-next ${miniNextRoutesUnderApi.length} routes nested under Posts API`);
 }
 
-const miniNextPagesUnderUi = miniNextPages.filter(
-  (node) => node.parentId === miniNextUi?.id,
+const miniNextPagesUnderMolecules = miniNextPages.filter(
+  (node) =>
+    node.parentId === miniNextHomeMolecule?.id ||
+    node.parentId === miniNextDashboardMolecule?.id,
 );
-if (miniNextPagesUnderUi.length < 2) {
+if (miniNextPagesUnderMolecules.length < 2) {
   fail(
-    `mini-next expected pages nested under Journal UI, found ${miniNextPagesUnderUi.length}`,
+    `mini-next expected pages nested under Home/Dashboard molecules, found ${miniNextPagesUnderMolecules.length}`,
   );
 } else {
-  pass(`mini-next ${miniNextPagesUnderUi.length} pages nested under Journal UI`);
+  pass(
+    `mini-next ${miniNextPagesUnderMolecules.length} pages nested under route molecules`,
+  );
 }
 
 const miniNextCollapsedRoutes = miniNextRoutesUnderApi.filter(
   (node) => node.metadata?.collapsedInOverview === true,
 );
-const miniNextCollapsedPages = miniNextPagesUnderUi.filter(
+const miniNextCollapsedPages = miniNextPagesUnderMolecules.filter(
   (node) => node.metadata?.collapsedInOverview === true,
 );
 if (miniNextCollapsedRoutes.length < 3 || miniNextCollapsedPages.length < 2) {
@@ -2644,15 +2675,15 @@ if (miniNextActionsUnderApi.length < 2) {
   pass("mini-next server actions nested under Posts API");
 }
 
-const miniNextClientsUnderUi = miniNextClientComponents.filter(
-  (node) => node.parentId === miniNextUi?.id,
+const miniNextClientsUnderHome = miniNextClientComponents.filter(
+  (node) => node.parentId === miniNextHomeMolecule?.id,
 );
-if (miniNextClientsUnderUi.length < 2) {
+if (miniNextClientsUnderHome.length < 2) {
   fail(
-    `mini-next expected client components nested under Journal UI, found ${miniNextClientsUnderUi.length}`,
+    `mini-next expected client feature roots nested under Home molecule, found ${miniNextClientsUnderHome.length}`,
   );
 } else {
-  pass("mini-next client components nested under Journal UI");
+  pass("mini-next client feature roots nested under Home molecule");
 }
 
 const miniNextHome = miniNextPages.find((node) => node.label === "Home");
@@ -2712,44 +2743,58 @@ if (
   pass("mini-next featureRoot ⊥ leafChrome");
 }
 
-const miniNextUiFocus = miniNextUi
-  ? intermediateFocusNodes(miniNextGraph, miniNextUi.id)
+const miniNextHomeFocus = miniNextHomeMolecule
+  ? intermediateFocusNodes(miniNextGraph, miniNextHomeMolecule.id)
   : [];
-const miniNextUiFocusLabels = new Set(
-  miniNextUiFocus.map((node) => String(node.label)),
+const miniNextHomeFocusLabels = new Set(
+  miniNextHomeFocus.map((node) => String(node.label)),
 );
 if (
-  miniNextUiFocusLabels.has("Card") ||
-  miniNextUiFocusLabels.has("Button")
+  miniNextHomeFocusLabels.has("Card") ||
+  miniNextHomeFocusLabels.has("Button")
 ) {
   fail(
-    `mini-next Journal UI Intermediate must not dump Card/Button leaf chrome; found ${[...miniNextUiFocusLabels].join(", ")}`,
+    `mini-next Home Intermediate must not dump Card/Button leaf chrome; found ${[...miniNextHomeFocusLabels].join(", ")}`,
   );
 } else if (
-  !miniNextUiFocusLabels.has("Post list") ||
-  !miniNextUiFocusLabels.has("Post form")
+  !miniNextHomeFocusLabels.has("Post list") ||
+  !miniNextHomeFocusLabels.has("Post form") ||
+  !miniNextHomeFocusLabels.has("Home")
 ) {
   fail(
-    `mini-next Journal UI Intermediate should keep feature roots Post list + Post form; found ${[...miniNextUiFocusLabels].join(", ") || "(none)"}`,
+    `mini-next Home Intermediate should keep page + feature roots; found ${[...miniNextHomeFocusLabels].join(", ") || "(none)"}`,
   );
 } else {
   pass(
-    "mini-next Journal UI Intermediate keeps feature roots, omits Card/Button leaf chrome",
+    "mini-next Home Intermediate keeps page + feature roots, omits Card/Button leaf chrome",
   );
 }
 
-const miniNextBeginnerDump = beginnerColdOpenNodes(miniNextGraph).filter(
-  (node) =>
-    ["Card", "Button", "Post list", "Post form"].includes(String(node.label)),
+const miniNextBeginner = beginnerColdOpenNodes(miniNextGraph);
+const miniNextBeginnerLabels = miniNextBeginner.map((node) => String(node.label));
+const miniNextBeginnerDump = miniNextBeginner.filter((node) =>
+  ["Card", "Button", "Post list", "Post form", "Journal UI"].includes(
+    String(node.label),
+  ),
 );
 if (miniNextBeginnerDump.length) {
   fail(
-    `mini-next Beginner must not show component dump: ${miniNextBeginnerDump
+    `mini-next Beginner must not show UI blob/component dump: ${miniNextBeginnerDump
       .map((node) => node.label)
       .join(", ")}`,
   );
+} else if (
+  !miniNextBeginnerLabels.includes("Home") ||
+  !miniNextBeginnerLabels.includes("Dashboard") ||
+  !miniNextBeginnerLabels.includes("Posts API")
+) {
+  fail(
+    `mini-next Beginner should show Home + Dashboard + Posts API molecules, found ${miniNextBeginnerLabels.join(", ") || "(none)"}`,
+  );
 } else {
-  pass("mini-next Beginner has no Card/Button/feature-root component dump");
+  pass(
+    `mini-next Beginner route molecules: ${miniNextBeginnerLabels.join(" → ")}`,
+  );
 }
 
 if (
@@ -3290,32 +3335,56 @@ if (nextRealRoot) {
         `next-real-repo App Router pages: ${expectedNextPages.join(", ")}`,
       );
     }
-    if (nextUi) {
-      const orphanPages = nextPages.filter((node) => node.parentId !== nextUi.id);
+    const nextRouteMolecules = nextSemantic.filter(
+      (node) => node.metadata?.routeMolecule === true,
+    );
+    const nextRouteMoleculeIds = new Set(nextRouteMolecules.map((node) => node.id));
+    if (nextRouteMolecules.length < 4) {
+      fail(
+        `next-real-repo expected ≥4 FE route molecules, found ${nextRouteMolecules.length} (${nextRouteMolecules.map((node) => node.label).join(", ") || "none"})`,
+      );
+    } else {
+      pass(
+        `next-real-repo ${nextRouteMolecules.length} FE route molecules: ${nextRouteMolecules.map((node) => node.label).join(", ")}`,
+      );
+    }
+    if (nextUi?.metadata?.collapsedInOverview !== true) {
+      fail("next-real-repo aggregate UI should collapse behind route molecules");
+    } else {
+      pass("next-real-repo aggregate UI collapsed behind route molecules");
+    }
+    {
+      const orphanPages = nextPages.filter(
+        (node) => !nextRouteMoleculeIds.has(node.parentId),
+      );
       if (orphanPages.length) {
         fail(
-          `next-real-repo pages not nested under UI: ${orphanPages
+          `next-real-repo pages not nested under route molecules: ${orphanPages
             .map((node) => node.label)
             .join(", ")}`,
         );
       } else if (nextPages.length < 8) {
         fail(
-          `next-real-repo expected ≥8 pages nested under UI, found ${nextPages.length}`,
+          `next-real-repo expected ≥8 pages nested under route molecules, found ${nextPages.length}`,
         );
       } else {
-        pass(`next-real-repo ${nextPages.length} pages nested under UI`);
+        pass(
+          `next-real-repo ${nextPages.length} pages nested under route molecules`,
+        );
       }
       const uncollapsedPages = nextPages.filter(
         (node) => node.metadata?.collapsedInOverview !== true,
       );
       if (uncollapsedPages.length) {
         fail(
-          `next-real-repo pages should collapse on overview under UI: ${uncollapsedPages
+          `next-real-repo pages should collapse on overview under route molecules: ${uncollapsedPages
             .map((node) => node.label)
             .join(", ")}`,
         );
       } else {
-        pass("next-real-repo pages collapsed on overview (UI tells the story)");
+        pass(
+          "next-real-repo pages collapsed on overview (route molecules tell the story)",
+        );
       }
     }
 
@@ -3611,17 +3680,24 @@ if (nextRealRoot) {
       .filter((node) => typeof node.metadata?.flowOrder === "number")
       .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder)
       .map((node) => node.label);
-    const uiIdx = nextFlowWithData.indexOf("UI");
+    const nextFlowMoleculeLabels = nextRouteMolecules.map((node) => node.label);
+    const firstMoleculeIdx = Math.min(
+      ...nextFlowMoleculeLabels.map((label) => nextFlowWithData.indexOf(label)),
+    );
     const apiIdx = nextFlowWithData.indexOf("HTTP API");
     const dataIdx = nextFlowWithData.indexOf("Data access");
+    const missingFlowMolecules = nextFlowMoleculeLabels.filter(
+      (label) => !nextFlowWithData.includes(label),
+    );
     if (
-      uiIdx < 0 ||
+      missingFlowMolecules.length ||
       apiIdx < 0 ||
       dataIdx < 0 ||
-      !(uiIdx < apiIdx && apiIdx < dataIdx)
+      !(firstMoleculeIdx < apiIdx && apiIdx < dataIdx) ||
+      nextFlowWithData.includes("UI")
     ) {
       fail(
-        `next-real-repo flowOrder should be UI → HTTP API → Data access, got ${nextFlowWithData.join(" → ") || "(none)"}`,
+        `next-real-repo flowOrder should be route molecules → HTTP API → Data access (no UI blob), got ${nextFlowWithData.join(" → ") || "(none)"}`,
       );
     } else {
       pass(`next-real-repo flowOrder: ${nextFlowWithData.join(" → ")}`);
