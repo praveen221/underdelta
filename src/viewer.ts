@@ -209,7 +209,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     }
 
     const lanes = [
-      { name: "Systems", kinds: ["system", "api", "service", "pipeline"] },
+      { name: "Systems", kinds: ["system", "api", "service", "pipeline", "capability"] },
+      // Capability drill: deterministic "what this detects" surfaces (not entity dump).
+      { name: "Detects", kinds: [] },
       { name: "Experience", kinds: ["ui", "page", "component", "hook"] },
       { name: "Application", kinds: ["route"] },
       { name: "Data & automation", kinds: ["database", "schema", "table", "collection", "cron", "job", "queue", "topic", "pipeline", "pipeline-step"] },
@@ -226,7 +228,14 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         node.metadata.mongoAggregate
       );
     }
+    function isDetectionSurface(node) {
+      return !!(
+        node.metadata &&
+        (node.metadata.role === "detection-surface" || node.metadata.detectionSurface)
+      );
+    }
     function laneNameFor(node) {
+      if (isDetectionSurface(node)) return "Detects";
       if (isMongoAggregateHub(node)) return "Data & automation";
       for (const lane of lanes) {
         if (lane.kinds.includes(node.kind)) return lane.name;
@@ -240,7 +249,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     // functions wait until the user focuses a code container (module/api/…).
     const broadFocusKinds = new Set(["system", "pipeline"]);
     const functionFocusKinds = new Set([
-      "module", "api", "service", "function", "route",
+      "module", "api", "service", "capability", "function", "route",
       "ui", "page", "component", "hook",
     ]);
     // Hub / leaf kinds that belong on Intermediate (and Advanced-in-focus), not
@@ -503,6 +512,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         node.kind === "pipeline" ||
         node.kind === "api" ||
         node.kind === "service" ||
+        node.kind === "capability" ||
         node.kind === "ui" ||
         node.kind === "module"
       ) {
@@ -518,7 +528,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           cur = parent;
         }
       }
-      // Routes/tables/jobs/… → containing system / pipeline / api / service.
+      // Routes/tables/jobs/… → containing system / pipeline / api / capability.
       if (intermediateKinds.has(node.kind) || node.kind === "external" || node.kind === "config") {
         let cur = node;
         while (cur) {
@@ -529,6 +539,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
             parent.kind === "pipeline" ||
             parent.kind === "api" ||
             parent.kind === "service" ||
+            parent.kind === "capability" ||
             parent.kind === "ui"
           ) {
             return parent.id;
@@ -543,6 +554,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           cur.kind === "pipeline" ||
           cur.kind === "api" ||
           cur.kind === "service" ||
+          cur.kind === "capability" ||
           cur.kind === "ui" ||
           cur.kind === "module"
         ) {
@@ -823,6 +835,16 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         ) {
           return false;
         }
+        // Detection surfaces live under capabilities — only show inside that
+        // capability focus (never flood Extractors Intermediate with every surface).
+        if (isDetectionSurface(node)) {
+          if (!state.focus) return false;
+          if (node.parentId === state.focus || node.id === state.focus) {
+            /* keep */
+          } else {
+            return false;
+          }
+        }
         // overviewHub (auth/billing actions, Helm Chart/resources, mongo
         // aggregates) bypasses advanced-kind hides so hubs can appear once the
         // user focuses a system (Intermediate neighborhood / Advanced-in-focus).
@@ -858,6 +880,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const paths = {
         module: '<path d="M3 6.5h6l2 2h10v10H3z"/><path d="M3 9h18"/>',
         system: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M8 5v14M14 5v14"/>',
+        capability: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 9h8M8 13h5"/><circle cx="17" cy="13" r="1.5"/>',
         service: '<rect x="4" y="4" width="16" height="6" rx="2"/><rect x="4" y="14" width="16" height="6" rx="2"/><path d="M8 7h.01M8 17h.01"/>',
         component: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 8h18M7 6h.01M10 6h.01"/>',
         page: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 8h16M8 6h.01"/>',
@@ -940,9 +963,21 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       positionsScratch = new Map();
       const positions = positionsScratch;
       nodesLayer.innerHTML = "";
-      const activeLanes = lanes.filter(
+      let activeLanes = lanes.filter(
         (lane) => (isAdvancedTier() && state.focus) || lane.name !== "Code",
       );
+      // Capability focus: put Detects next to Systems (the payoff of the drill).
+      if (state.focus) {
+        const focused = byId.get(state.focus);
+        if (focused && focused.kind === "capability") {
+          const systems = activeLanes.find((lane) => lane.name === "Systems");
+          const detects = activeLanes.find((lane) => lane.name === "Detects");
+          const rest = activeLanes.filter(
+            (lane) => lane.name !== "Systems" && lane.name !== "Detects",
+          );
+          activeLanes = [systems, detects, ...rest].filter(Boolean);
+        }
+      }
       const laneWidth = 240;
       const flowGap = 220;
       let maxHeight = 0;
@@ -1334,6 +1369,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       "prismaName", "sqlName", "sources", "aliases", "normalizedTable",
       "publishers", "consumers", "messagingHub",
       "projection", "systemKey", "flowOrder",
+      "role", "extractorId", "capabilityKind", "detectionSurface", "surfaceId", "detail",
+      "projectedSystem",
       // Docker Compose story — owned by the Container inspector section.
       "docker", "dockerService", "dockerfileService", "serviceName",
       "image", "build", "ports", "hostPorts", "dependsOn", "from", "expose",
@@ -1716,14 +1753,36 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         : "";
       const extractorRoster = Array.isArray(node.metadata && node.metadata.extractorRoster) ? node.metadata.extractorRoster : [];
       const rosterHtml = extractorRoster.length
-        ? "<h3>Extractors</h3><p>" + extractorRoster.map((name) => '<span class="pill">' + name + "</span>").join("") + "</p>"
+        ? "<h3>Capabilities</h3><p>" + extractorRoster.map((name) => '<span class="pill">' + name + "</span>").join("") + "</p>"
         : "";
+      const surfaceKids = (outgoing.get(id) || [])
+        .filter((edge) => edge.kind === "contains")
+        .map((edge) => byId.get(edge.target))
+        .filter((child) => child && isDetectionSurface(child));
+      const capabilityHtml =
+        node.kind === "capability" && surfaceKids.length
+          ? "<h3>Detects</h3><p>" +
+            surfaceKids
+              .map((child) => {
+                const detail = child.metadata && child.metadata.detail
+                  ? " — " + child.metadata.detail
+                  : "";
+                return '<span class="pill">' + child.label + "</span>" +
+                  (detail ? "<div class=\"evidence\"><p>" + escapeHtml(child.label + detail) + "</p></div>" : "");
+              })
+              .join("") +
+            "</p>"
+          : "";
+      const surfaceHtml =
+        isDetectionSurface(node) && node.metadata && node.metadata.detail
+          ? "<h3>Detection surface</h3><p>" + escapeHtml(String(node.metadata.detail)) + "</p>"
+          : "";
       const evidence = node.evidence.map((item) => {
         const line = item.range?.startLine || 1;
         const href = "vscode://file/" + graph.project.root.replace(/\\/$/, "") + "/" + item.file + ":" + line;
         return '<div class="evidence"><a href="' + href + '">' + item.file + ":" + line + '</a><div class="certainty ' + item.certainty + '">' + item.certainty + " · " + item.extractor + "</div>" + (item.detail ? "<p>" + item.detail + "</p>" : "") + "</div>";
       }).join("");
-      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + containerStory + workloadStory + chartStory + overlayStory + tableSources + tableRelations + messaging + binHtml + rosterHtml + keyFiles + collaborationHtml + otherHtml + "<h3>Source evidence</h3>" + evidence;
+      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + surfaceHtml + capabilityHtml + containerStory + workloadStory + chartStory + overlayStory + tableSources + tableRelations + messaging + binHtml + rosterHtml + keyFiles + collaborationHtml + otherHtml + "<h3>Source evidence</h3>" + evidence;
       inspector.querySelector("h2").textContent = node.label;
       inspector.querySelectorAll(".connection").forEach((button) => {
         button.onclick = () => selectNode(button.dataset.id);

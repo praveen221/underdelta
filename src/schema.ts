@@ -11,6 +11,8 @@ export const nodeKinds = [
   "api",
   "route",
   "service",
+  /** Product capability (e.g. an Underdelta extractor) — Intermediate roster / drill target. */
+  "capability",
   "function",
   "database",
   "schema",
