@@ -1825,6 +1825,189 @@ if (!focusExtractorsSystem || !focusCheckoutApi) {
   );
 }
 
+// Walkable bugfix: dead-end Intermediate leaves escalate to parent Advanced.
+// Extractor services do not contain modules (siblings under Extractors) — double-click
+// must not strand the user on a 1-node neighborhood.
+if (
+  !viewerHtml.includes("function resolveWalkFocus(clickedId)") ||
+  !viewerHtml.includes("function intermediateNeighborhoodNodes(rootId)") ||
+  !viewerHtml.includes("function advancedNeighborhoodNodes(rootId)") ||
+  !viewerHtml.includes("const walk = resolveWalkFocus(id)")
+) {
+  fail(
+    "viewer must resolveWalkFocus so Intermediate dead-end leaves escalate to parent Advanced",
+  );
+} else if (!viewerHtml.includes("View deepens inside a focus")) {
+  fail(
+    "viewer View button must refuse Intermediate/Advanced without a focus (no fake calm cycle)",
+  );
+} else if (
+  !viewerHtml.includes('state.tier = state.tier === "advanced" ? "intermediate" : "advanced"')
+) {
+  fail(
+    "viewer tier click with focus must toggle Intermediate↔Advanced only (Beginner via Overview/Back)",
+  );
+} else if (
+  !viewerHtml.includes("Without a focus, Intermediate/Advanced are not real modes")
+) {
+  fail(
+    "viewer restoreWalkState must coerce Intermediate/Advanced-without-focus back to Beginner",
+  );
+}
+
+function resolveWalkFocusForGraph(graph, clickedId) {
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+  const outgoing = new Map();
+  const incoming = new Map();
+  for (const edge of graph.edges) {
+    if (!outgoing.has(edge.source)) outgoing.set(edge.source, []);
+    if (!incoming.has(edge.target)) incoming.set(edge.target, []);
+    outgoing.get(edge.source).push(edge);
+    incoming.get(edge.target).push(edge);
+  }
+  const parentOf = (node) => {
+    if (!node) return null;
+    if (node.parentId && byId.has(node.parentId)) return byId.get(node.parentId);
+    const owned = (incoming.get(node.id) || []).find((edge) => edge.kind === "contains");
+    return owned ? byId.get(owned.source) || null : null;
+  };
+  const inter = (rootId) => intermediateFocusNodes(graph, rootId);
+  const adv = (rootId) => advancedFocusNodes(graph, rootId);
+  const clicked = byId.get(clickedId);
+  if (!clicked) {
+    return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
+  }
+  if (beginnerAdvancedKinds.has(clicked.kind)) {
+    return { focusId: clickedId, tier: "advanced", selectedId: clickedId };
+  }
+  const interNodes = inter(clickedId);
+  const interOthers = interNodes.filter((node) => node.id !== clickedId);
+  if (interOthers.length >= 2) {
+    return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
+  }
+  let walkParent = parentOf(clicked);
+  while (
+    walkParent &&
+    walkParent.kind !== "system" &&
+    walkParent.kind !== "pipeline" &&
+    walkParent.kind !== "api" &&
+    walkParent.kind !== "ui"
+  ) {
+    walkParent = parentOf(walkParent);
+  }
+  if (walkParent) {
+    const parentAdv = adv(walkParent.id);
+    const modules = parentAdv.filter((node) => node.kind === "module");
+    if (modules.length >= 1) {
+      return { focusId: walkParent.id, tier: "advanced", selectedId: clickedId };
+    }
+    const parentInter = inter(walkParent.id);
+    if (parentInter.length > interNodes.length) {
+      return { focusId: walkParent.id, tier: "intermediate", selectedId: clickedId };
+    }
+  }
+  const selfAdv = adv(clickedId);
+  if (selfAdv.length > interNodes.length) {
+    return { focusId: clickedId, tier: "advanced", selectedId: clickedId };
+  }
+  let advancedContains = 0;
+  const allowedTree = focusNeighborhoodIds(graph, clickedId);
+  for (const id of allowedTree) {
+    if (id === clickedId) continue;
+    const node = byId.get(id);
+    if (
+      node &&
+      beginnerAdvancedKinds.has(node.kind) &&
+      !node.metadata?.overviewHub
+    ) {
+      // Only count contains-descendants, not story neighbors — approximate via parent walk.
+      let cur = node;
+      let under = false;
+      while (cur) {
+        const p = parentOf(cur);
+        if (!p) break;
+        if (p.id === clickedId) {
+          under = true;
+          break;
+        }
+        cur = p;
+      }
+      if (under) advancedContains += 1;
+    }
+  }
+  if (
+    (clicked.kind === "system" || clicked.kind === "pipeline") &&
+    advancedContains >= 2
+  ) {
+    return { focusId: clickedId, tier: "advanced", selectedId: clickedId };
+  }
+  return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
+}
+
+const selfTypescriptService = selfGraph.nodes.find(
+  (node) => node.kind === "service" && node.label === "typescript",
+);
+const typescriptServiceWalk = selfTypescriptService
+  ? resolveWalkFocusForGraph(selfGraph, selfTypescriptService.id)
+  : null;
+const typescriptServiceFocusNode = typescriptServiceWalk
+  ? selfGraph.nodes.find((node) => node.id === typescriptServiceWalk.focusId)
+  : null;
+const typescriptServiceAdvModules = typescriptServiceWalk
+  ? advancedFocusNodes(selfGraph, typescriptServiceWalk.focusId).filter(
+      (node) => node.kind === "module",
+    )
+  : [];
+const extractorsDirectWalk = focusExtractorsSystem
+  ? resolveWalkFocusForGraph(selfGraph, focusExtractorsSystem.id)
+  : null;
+const typescriptModuleWalk = typescriptModule
+  ? resolveWalkFocusForGraph(selfGraph, typescriptModule.id)
+  : null;
+
+if (!selfTypescriptService) {
+  fail("self-map should have typescript extractor service for dead-end escalation floor");
+} else if (!typescriptServiceWalk || !typescriptServiceFocusNode) {
+  fail("typescript service resolveWalkFocus should return a focus root");
+} else if (typescriptServiceWalk.focusId === selfTypescriptService.id) {
+  fail(
+    "typescript service Intermediate is a dead end — resolveWalkFocus must escalate off the service",
+  );
+} else if (
+  typescriptServiceFocusNode.label !== "Extractors" ||
+  typescriptServiceWalk.tier !== "advanced"
+) {
+  fail(
+    `typescript service should escalate to Extractors Advanced, got ${typescriptServiceFocusNode.kind}:${typescriptServiceFocusNode.label} tier=${typescriptServiceWalk.tier}`,
+  );
+} else if (typescriptServiceWalk.selectedId !== selfTypescriptService.id) {
+  fail("typescript service escalation should keep the service selected");
+} else if (typescriptServiceAdvModules.length < 8) {
+  fail(
+    `escalated Extractors Advanced should show modules, found ${typescriptServiceAdvModules.length}`,
+  );
+} else if (
+  !extractorsDirectWalk ||
+  extractorsDirectWalk.focusId !== focusExtractorsSystem.id ||
+  extractorsDirectWalk.tier !== "intermediate"
+) {
+  fail(
+    `Extractors system double-click should stay Intermediate (rich neighborhood), got focus=${extractorsDirectWalk?.focusId} tier=${extractorsDirectWalk?.tier}`,
+  );
+} else if (
+  !typescriptModuleWalk ||
+  typescriptModuleWalk.focusId !== typescriptModule.id ||
+  typescriptModuleWalk.tier !== "advanced"
+) {
+  fail(
+    "typescript module double-click must stay on the module at Advanced (not escalate to Extractors)",
+  );
+} else {
+  pass(
+    `Dead-end Intermediate escalation: typescript service → Extractors Advanced (${typescriptServiceAdvModules.length} modules); Extractors stays Intermediate; module stays Advanced`,
+  );
+}
+
 
 const collaborationHeading = viewerHtml.indexOf("<h3>Collaboration</h3>");
 const importsHeading = viewerHtml.indexOf("Imports &amp; calls");

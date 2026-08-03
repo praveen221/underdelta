@@ -65,7 +65,9 @@ The browser is a walk, not a dump of every function.
 
 1. **Beginner** (default) — Product Flow and top systems. Answers “what did I build?” without opening the parts bin.
 2. **Intermediate** — Double-click a system (or use **Find…** and press Enter / click a result) to enter that cluster’s neighborhood only.
-3. **Advanced** — Modules and functions appear **inside the current focus**, never as a whole-repo phonebook. Drill a module/api for functions.
+3. **Advanced** — Modules and functions appear **inside the current focus**, never as a whole-repo phonebook. Drill a module/api for functions. Dead-end leaves (e.g. a service with no children) escalate to the parent system at Advanced so sibling modules appear.
+
+**View** only deepens inside a focus (Intermediate ↔ Advanced). Without a focus it stays Beginner and nudges you to double-click a Product Flow system.
 
 **Back** / **Esc** steps toward Intermediate, then Beginner; **Overview** jumps home. Reloading the same project keeps your last view, focus, and selection for the tab session.
 

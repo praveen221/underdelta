@@ -80,9 +80,12 @@ Not done in this slice — do not assume they exist:
 
 ---
 
-## Handoff checklist
+## Bug fixes (2026-08-03)
 
-- [ ] Disable push-automation on `walkable-graph-02082026` if still armed  
-- [ ] Review PR → merge to `master` when satisfied  
-- [ ] Demo on 2–3 outsider vibe-coder repos (Beginner + one Intermediate focus)  
-- [ ] Next loop: pick from Phase B (agent query/files) or demo polish only if cold-reads fail  
+Shipped on `walkable-graph-bugs-03082026`:
+
+- **Dead-end Intermediate drills** — leaf services with no Intermediate children escalate to the parent system at Advanced (sibling modules appear; selection kept).
+- **View without focus** — no longer cycles Intermediate/Advanced on the calm overview; stays Beginner and nudges a double-click.
+- **Verify floors** — typescript service → Extractors Advanced; Extractors stays Intermediate; modules stay in-place Advanced.
+
+---

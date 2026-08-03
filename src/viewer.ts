@@ -312,8 +312,10 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           ? saved.selected
           : focus;
         state.selected = selected;
-        // Keep a manually chosen Advanced-without-focus; otherwise fall back safely.
-        if (typeof saved.tier === "string" && tierOrder.includes(saved.tier)) {
+        // Without a focus, Intermediate/Advanced are not real modes — stay Beginner.
+        if (!focus) {
+          state.tier = "beginner";
+        } else if (typeof saved.tier === "string" && tierOrder.includes(saved.tier) && saved.tier !== "beginner") {
           state.tier = saved.tier;
         } else if (focus) {
           const focused = byId.get(focus);
@@ -367,7 +369,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         return "Intermediate · neighborhood of " + label + " — Back / Esc returns toward Beginner";
       }
       if (state.tier === "intermediate") {
-        return "Intermediate · still overview-calm — double-click a Product Flow system to enter";
+        return "Double-click a Product Flow system to walk in — View deepens inside a focus";
       }
       return "Beginner · Product Flow — select to inspect, double-click to walk in";
     }
@@ -382,7 +384,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         return "Intermediate neighborhood — select a neighbor, or double-click a module/api for Advanced code in focus.";
       }
       if (state.tier === "intermediate") {
-        return "Still overview-calm at Intermediate until you focus. Double-click a Product Flow system to enter its neighborhood.";
+        return "Double-click a Product Flow system to walk in — View deepens inside a focus.";
       }
       return "Product Flow · Beginner. Select a system to inspect evidence, or double-click to walk into its Intermediate neighborhood.";
     }
@@ -681,6 +683,117 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         }
       }
       return found;
+    }
+
+    // Intermediate-visible nodes inside a focus (no Advanced code kinds).
+    function intermediateNeighborhoodNodes(rootId) {
+      const allowed = focusNeighborhood(rootId);
+      return graph.nodes.filter((node) => {
+        if (!allowed.has(node.id)) return false;
+        if (node.kind === "product") return false;
+        if (
+          node.metadata &&
+          (node.metadata.relationOnly ||
+            node.metadata.joinTable ||
+            node.metadata.exampleChrome)
+        ) {
+          return false;
+        }
+        const isOverviewHub = node.metadata && node.metadata.overviewHub;
+        if (advancedKinds.has(node.kind) && !isOverviewHub) return false;
+        return true;
+      });
+    }
+
+    // Advanced-visible nodes inside a focus (modules; functions only in code containers).
+    function advancedNeighborhoodNodes(rootId) {
+      const allowed = focusNeighborhood(rootId);
+      const focused = byId.get(rootId);
+      return graph.nodes.filter((node) => {
+        if (!allowed.has(node.id)) return false;
+        if (node.kind === "product") return false;
+        if (
+          node.metadata &&
+          (node.metadata.relationOnly ||
+            node.metadata.joinTable ||
+            node.metadata.exampleChrome)
+        ) {
+          return false;
+        }
+        const isOverviewHub = node.metadata && node.metadata.overviewHub;
+        if (advancedKinds.has(node.kind) && !isOverviewHub) {
+          if (node.kind === "function") {
+            if (!focused) return false;
+            if (broadFocusKinds.has(focused.kind)) return false;
+            return functionFocusKinds.has(focused.kind);
+          }
+          return true;
+        }
+        return true;
+      });
+    }
+
+    function countAdvancedContains(rootId) {
+      let count = 0;
+      for (const id of descendants(rootId)) {
+        if (id === rootId) continue;
+        const node = byId.get(id);
+        if (!node) continue;
+        const isOverviewHub = node.metadata && node.metadata.overviewHub;
+        if (advancedKinds.has(node.kind) && !isOverviewHub) count += 1;
+      }
+      return count;
+    }
+
+    // Dead-end fix: Intermediate leaf services (no children) escalate to the
+    // parent system at Advanced so sibling modules appear. Modules stay in-place.
+    function resolveWalkFocus(clickedId) {
+      const clicked = byId.get(clickedId);
+      if (!clicked) {
+        return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
+      }
+      if (advancedKinds.has(clicked.kind)) {
+        return { focusId: clickedId, tier: "advanced", selectedId: clickedId };
+      }
+
+      const inter = intermediateNeighborhoodNodes(clickedId);
+      const interOthers = inter.filter((node) => node.id !== clickedId);
+      if (interOthers.length >= 2) {
+        return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
+      }
+
+      let walkParent = parentOf(clicked);
+      while (
+        walkParent &&
+        walkParent.kind !== "system" &&
+        walkParent.kind !== "pipeline" &&
+        walkParent.kind !== "api" &&
+        walkParent.kind !== "ui"
+      ) {
+        walkParent = parentOf(walkParent);
+      }
+      if (walkParent) {
+        const parentAdv = advancedNeighborhoodNodes(walkParent.id);
+        const modules = parentAdv.filter((node) => node.kind === "module");
+        if (modules.length >= 1) {
+          return { focusId: walkParent.id, tier: "advanced", selectedId: clickedId };
+        }
+        const parentInter = intermediateNeighborhoodNodes(walkParent.id);
+        if (parentInter.length > inter.length) {
+          return { focusId: walkParent.id, tier: "intermediate", selectedId: clickedId };
+        }
+      }
+
+      const selfAdv = advancedNeighborhoodNodes(clickedId);
+      if (selfAdv.length > inter.length) {
+        return { focusId: clickedId, tier: "advanced", selectedId: clickedId };
+      }
+
+      if (broadFocusKinds.has(clicked.kind) && countAdvancedContains(clickedId) >= 2) {
+        return { focusId: clickedId, tier: "advanced", selectedId: clickedId };
+      }
+
+      return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
     }
 
     function visibleNodes() {
@@ -1619,12 +1732,17 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     }
 
     function focusNode(id) {
-      // Only push real foci — avoids null placeholders that confuse breadcrumbs.
-      if (state.focus) state.history.push(state.focus);
-      state.focus = id;
-      state.selected = id;
-      // Tier follows the walk: system → Intermediate, module/api code → Advanced.
-      syncTierToFocus();
+      // Dead-end Intermediate leaves (e.g. extractor services with no children)
+      // escalate via resolveWalkFocus to the parent system at Advanced.
+      const walk = resolveWalkFocus(id);
+      const prevFocus = state.focus;
+      if (prevFocus && prevFocus !== walk.focusId) {
+        state.history.push(prevFocus);
+      }
+      state.focus = walk.focusId;
+      state.selected = walk.selectedId;
+      state.tier = walk.tier;
+      syncTierButton();
       resetCamera();
       render();
       applyTransform();
@@ -1637,12 +1755,23 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     };
     document.addEventListener("keydown", handleEscapeKey);
     document.getElementById("tier").onclick = () => {
-      const index = tierOrder.indexOf(state.tier);
-      state.tier = tierOrder[(index + 1) % tierOrder.length];
-      // Without a focused system, Intermediate/Advanced stay Product Flow–calm
-      // (no global hub dump). Double-click a system to enter its neighborhood;
-      // Advanced reveals modules in that focus; functions after drilling into a
-      // module/api. Search Enter/click enters a match’s cluster (no god-graph dump).
+      // View only deepens inside a focus — without one, Intermediate/Advanced
+      // used to look identical to Beginner (calm overview) and felt broken.
+      if (!state.focus) {
+        state.tier = "beginner";
+        syncTierButton();
+        const walkHint = document.getElementById("walk-hint");
+        if (walkHint) {
+          walkHint.textContent =
+            "Double-click a Product Flow system to walk in — View deepens inside a focus";
+        }
+        if (!state.selected) inspector.innerHTML = emptyInspectorHtml();
+        render();
+        persistWalkState();
+        return;
+      }
+      // With focus: Intermediate ↔ Advanced (Beginner via Overview / Back / Esc).
+      state.tier = state.tier === "advanced" ? "intermediate" : "advanced";
       syncTierButton();
       if (!state.selected) inspector.innerHTML = emptyInspectorHtml();
       render();
