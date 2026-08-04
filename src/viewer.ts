@@ -454,10 +454,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       if (index >= stack.length) return;
       state.focus = stack[index];
       state.history = stack.slice(0, index);
-      state.selected = state.focus;
       syncTierToFocus();
       resetCamera();
-      render();
+      selectNode(state.focus);
       applyTransform();
       persistWalkState();
     }
@@ -757,8 +756,19 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       return count;
     }
 
-    // Dead-end fix: Intermediate leaf services (no children) escalate to the
-    // parent system at Advanced so sibling modules appear. Modules stay in-place.
+    // Dead-end / thin-room fix: Intermediate leaf services escalate to the parent
+    // system at Advanced so sibling modules appear. Product Flow boxes with almost
+    // no Intermediate "room" (only other flow neighbors) open Advanced when they
+    // own code — Extractors stays Intermediate because its service roster is rich.
+    function intermediateRoomNodes(rootId) {
+      return intermediateNeighborhoodNodes(rootId).filter((node) => {
+        if (node.id === rootId) return true;
+        // Other Product Flow systems are hallway neighbors, not room furniture.
+        if (typeof flowOrderOf(node) === "number") return false;
+        return true;
+      });
+    }
+
     function resolveWalkFocus(clickedId) {
       const clicked = byId.get(clickedId);
       if (!clicked) {
@@ -769,6 +779,18 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       }
 
       const inter = intermediateNeighborhoodNodes(clickedId);
+      const room = intermediateRoomNodes(clickedId);
+      const roomOthers = room.filter((node) => node.id !== clickedId);
+      // Rich Intermediate room (Extractors roster, Checkout routes, …).
+      if (roomOthers.length >= 3) {
+        return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
+      }
+
+      // Thin room with code under it → Advanced (CLI → src/cli.ts, not 4 lonely nodes).
+      if (countAdvancedContains(clickedId) >= 1) {
+        return { focusId: clickedId, tier: "advanced", selectedId: clickedId };
+      }
+
       const interOthers = inter.filter((node) => node.id !== clickedId);
       if (interOthers.length >= 2) {
         return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
@@ -798,10 +820,6 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
 
       const selfAdv = advancedNeighborhoodNodes(clickedId);
       if (selfAdv.length > inter.length) {
-        return { focusId: clickedId, tier: "advanced", selectedId: clickedId };
-      }
-
-      if (broadFocusKinds.has(clicked.kind) && countAdvancedContains(clickedId) >= 2) {
         return { focusId: clickedId, tier: "advanced", selectedId: clickedId };
       }
 
@@ -966,6 +984,15 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       let activeLanes = lanes.filter(
         (lane) => (isAdvancedTier() && state.focus) || lane.name !== "Code",
       );
+      // Advanced payoff: Code sits beside Systems (not a far-right column).
+      if (isAdvancedTier() && state.focus) {
+        const systems = activeLanes.find((lane) => lane.name === "Systems");
+        const code = activeLanes.find((lane) => lane.name === "Code");
+        const rest = activeLanes.filter(
+          (lane) => lane.name !== "Systems" && lane.name !== "Code",
+        );
+        activeLanes = [systems, code, ...rest].filter(Boolean);
+      }
       // Capability focus: put Detects next to Systems (the payoff of the drill).
       if (state.focus) {
         const focused = byId.get(state.focus);
@@ -1801,11 +1828,11 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         state.history.push(prevFocus);
       }
       state.focus = walk.focusId;
-      state.selected = walk.selectedId;
       state.tier = walk.tier;
       syncTierButton();
       resetCamera();
-      render();
+      // Must refresh inspector — setting selected alone left Beginner empty copy.
+      selectNode(walk.selectedId);
       applyTransform();
       persistWalkState();
     }
