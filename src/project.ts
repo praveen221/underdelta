@@ -1,3 +1,4 @@
+import { detectionSurfacesForExtractor } from "./capabilitySurfaces.js";
 import { edgeFrom, stableId } from "./graph.js";
 import {
   architectureGraphSchema,
@@ -4155,35 +4156,85 @@ export function projectSemanticArchitecture(
 
     for (const item of roster) {
       const childId = stableId("extractor", item.id);
-      if (nodes.has(childId)) continue;
-      const child: ArchitectureNode = {
-        id: childId,
-        kind: "service",
-        label: item.id,
-        technology: item.id,
-        parentId: extractorsSystem.id,
-        metadata: {
+      const capabilityEvidence = projectionEvidence(
+        item.file,
+        `${item.id} capability on the Extractors roster`,
+      );
+      let child = nodes.get(childId);
+      if (!child) {
+        child = {
+          id: childId,
+          kind: "capability",
+          label: item.id,
+          technology: item.id,
+          parentId: extractorsSystem.id,
+          metadata: {
+            role: "extractor",
+            extractorId: item.id,
+            projectedSystem: "extractors",
+            collapsedInOverview: true,
+            capabilityKind: "extractor",
+          },
+          evidence: [capabilityEvidence],
+        };
+        nodes.set(childId, child);
+        const contains = edgeFrom(
+          "contains",
+          extractorsSystem.id,
+          childId,
+          capabilityEvidence,
+        );
+        edges.set(contains.id, contains);
+        extractorsSystem.evidence.push(capabilityEvidence);
+      } else {
+        // Upgrade legacy extractor roster services to capability nodes.
+        child.kind = "capability";
+        child.metadata = {
+          ...child.metadata,
           role: "extractor",
           extractorId: item.id,
           projectedSystem: "extractors",
           collapsedInOverview: true,
-        },
-        evidence: [
-          projectionEvidence(
-            item.file,
-            `${item.id} language extractor on the Extractors roster`,
-          ),
-        ],
-      };
-      nodes.set(childId, child);
-      const contains = edgeFrom(
-        "contains",
-        extractorsSystem.id,
-        childId,
-        child.evidence[0]!,
-      );
-      edges.set(contains.id, contains);
-      extractorsSystem.evidence.push(child.evidence[0]!);
+          capabilityKind: "extractor",
+        };
+        nodes.set(childId, child);
+      }
+
+      // Deterministic detection surface: what this capability understands.
+      const surfaces = detectionSurfacesForExtractor(item.id);
+      for (const surface of surfaces) {
+        const surfaceId = stableId("detection", item.id, surface.id);
+        if (nodes.has(surfaceId)) continue;
+        const surfaceNode: ArchitectureNode = {
+          id: surfaceId,
+          kind: "config",
+          label: surface.label,
+          technology: item.id,
+          parentId: childId,
+          metadata: {
+            role: "detection-surface",
+            detectionSurface: true,
+            extractorId: item.id,
+            surfaceId: surface.id,
+            collapsedInOverview: true,
+            detail: surface.detail,
+          },
+          evidence: [
+            projectionEvidence(
+              item.file,
+              `${item.id} detects: ${surface.label} — ${surface.detail}`,
+            ),
+          ],
+        };
+        nodes.set(surfaceId, surfaceNode);
+        const surfaceEdge = edgeFrom(
+          "contains",
+          childId,
+          surfaceId,
+          surfaceNode.evidence[0]!,
+        );
+        edges.set(surfaceEdge.id, surfaceEdge);
+      }
     }
     extractorsSystem.evidence = dedupeEvidence(extractorsSystem.evidence);
     nodes.set(extractorsSystem.id, extractorsSystem);

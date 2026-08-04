@@ -569,16 +569,17 @@ if (missingExtractorFiles.length > 0) {
 const extractorChildren = selfGraph.nodes.filter(
   (node) =>
     node.parentId === extractorsSystem?.id &&
+    node.kind === "capability" &&
     node.metadata?.role === "extractor" &&
     requiredExtractors.includes(node.label),
 );
 if (extractorChildren.length < requiredExtractors.length) {
   fail(
-    `expected Extractors child labels ${requiredExtractors.join(", ")}, found ${JSON.stringify(extractorChildren.map((node) => node.label))}`,
+    `expected Extractors capability children ${requiredExtractors.join(", ")}, found ${JSON.stringify(extractorChildren.map((node) => `${node.kind}:${node.label}`))}`,
   );
 } else {
   pass(
-    `Extractors child labels: ${extractorChildren.map((node) => node.label).sort().join(", ")}`,
+    `Extractors capabilities: ${extractorChildren.map((node) => node.label).sort().join(", ")}`,
   );
 }
 
@@ -1429,6 +1430,13 @@ function intermediateFocusNodes(graph, rootId) {
     ) {
       return false;
     }
+    // Surfaces only inside their owning capability focus (mirror viewer).
+    if (
+      node.metadata?.role === "detection-surface" ||
+      node.metadata?.detectionSurface
+    ) {
+      if (node.parentId !== rootId && node.id !== rootId) return false;
+    }
     const isOverviewHub = node.metadata?.overviewHub === true;
     if (beginnerAdvancedKinds.has(node.kind) && !isOverviewHub) return false;
     return true;
@@ -1472,7 +1480,7 @@ if (!focusExtractorsSystem) {
   !selfExtractorsFocusLabels.has("typescript") ||
   !selfExtractorsFocusLabels.has("prisma")
 ) {
-  fail("Extractors Intermediate neighborhood should include extractor services");
+  fail("Extractors Intermediate neighborhood should include extractor capabilities");
 } else if (
   !selfExtractorsFocusLabels.has("Compile pipeline") &&
   !selfExtractorsFocusLabels.has("Schema contract") &&
@@ -1971,18 +1979,33 @@ function resolveWalkFocusForGraph(graph, clickedId) {
   return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
 }
 
-const selfTypescriptService = selfGraph.nodes.find(
-  (node) => node.kind === "service" && node.label === "typescript",
+// Capability Attempt: extractor capabilities expose deterministic detection surfaces.
+const selfTypescriptCapability = selfGraph.nodes.find(
+  (node) => node.kind === "capability" && node.label === "typescript",
 );
-const typescriptServiceWalk = selfTypescriptService
-  ? resolveWalkFocusForGraph(selfGraph, selfTypescriptService.id)
+const selfKubernetesCapability = selfGraph.nodes.find(
+  (node) => node.kind === "capability" && node.label === "kubernetes",
+);
+const typescriptCapabilitySurfaces = selfTypescriptCapability
+  ? selfGraph.nodes.filter(
+      (node) =>
+        node.parentId === selfTypescriptCapability.id &&
+        node.metadata?.role === "detection-surface",
+    )
+  : [];
+const kubernetesCapabilitySurfaces = selfKubernetesCapability
+  ? selfGraph.nodes.filter(
+      (node) =>
+        node.parentId === selfKubernetesCapability.id &&
+        node.metadata?.role === "detection-surface",
+    )
+  : [];
+const typescriptCapabilityWalk = selfTypescriptCapability
+  ? resolveWalkFocusForGraph(selfGraph, selfTypescriptCapability.id)
   : null;
-const typescriptServiceFocusNode = typescriptServiceWalk
-  ? selfGraph.nodes.find((node) => node.id === typescriptServiceWalk.focusId)
-  : null;
-const typescriptServiceAdvModules = typescriptServiceWalk
-  ? advancedFocusNodes(selfGraph, typescriptServiceWalk.focusId).filter(
-      (node) => node.kind === "module",
+const typescriptFocusSurfaces = selfTypescriptCapability
+  ? intermediateFocusNodes(selfGraph, selfTypescriptCapability.id).filter(
+      (node) => node.metadata?.role === "detection-surface",
     )
   : [];
 const extractorsDirectWalk = focusExtractorsSystem
@@ -2002,27 +2025,51 @@ const cliAdvModules = cliWalk
       (node) => node.kind === "module",
     )
   : [];
+const capabilityCount = selfGraph.nodes.filter(
+  (node) => node.kind === "capability",
+).length;
+const detectionSurfaceCount = selfGraph.nodes.filter(
+  (node) => node.metadata?.role === "detection-surface",
+).length;
 
-if (!selfTypescriptService) {
-  fail("self-map should have typescript extractor service for dead-end escalation floor");
-} else if (!typescriptServiceWalk || !typescriptServiceFocusNode) {
-  fail("typescript service resolveWalkFocus should return a focus root");
-} else if (typescriptServiceWalk.focusId === selfTypescriptService.id) {
+if (!viewerHtml.includes('name: "Detects"') || !viewerHtml.includes("isDetectionSurface")) {
+  fail("viewer must expose a Detects lane for capability detection surfaces");
+} else if (!selfTypescriptCapability || !selfKubernetesCapability) {
+  fail("self-map should project typescript and kubernetes extractor capabilities");
+} else if (typescriptCapabilitySurfaces.length < 4) {
   fail(
-    "typescript service Intermediate is a dead end — resolveWalkFocus must escalate off the service",
+    `typescript capability should own detection surfaces, found ${typescriptCapabilitySurfaces.length}`,
   );
 } else if (
-  typescriptServiceFocusNode.label !== "Extractors" ||
-  typescriptServiceWalk.tier !== "advanced"
+  !typescriptCapabilitySurfaces.some((node) => node.label === "HTTP routes") ||
+  !typescriptCapabilitySurfaces.some((node) => node.label === "Modules")
 ) {
   fail(
-    `typescript service should escalate to Extractors Advanced, got ${typescriptServiceFocusNode.kind}:${typescriptServiceFocusNode.label} tier=${typescriptServiceWalk.tier}`,
+    `typescript detection surfaces missing Modules/HTTP routes: ${typescriptCapabilitySurfaces.map((n) => n.label).join(", ")}`,
   );
-} else if (typescriptServiceWalk.selectedId !== selfTypescriptService.id) {
-  fail("typescript service escalation should keep the service selected");
-} else if (typescriptServiceAdvModules.length < 8) {
+} else if (kubernetesCapabilitySurfaces.length < 3) {
   fail(
-    `escalated Extractors Advanced should show modules, found ${typescriptServiceAdvModules.length}`,
+    `kubernetes capability should own detection surfaces, found ${kubernetesCapabilitySurfaces.length}`,
+  );
+} else if (
+  !kubernetesCapabilitySurfaces.some((node) => node.label === "Deployment") ||
+  !kubernetesCapabilitySurfaces.some((node) => node.label === "Service") ||
+  !kubernetesCapabilitySurfaces.some((node) => node.label === "Ingress")
+) {
+  fail(
+    `kubernetes detection surfaces missing Deployment/Service/Ingress: ${kubernetesCapabilitySurfaces.map((n) => n.label).join(", ")}`,
+  );
+} else if (
+  !typescriptCapabilityWalk ||
+  typescriptCapabilityWalk.focusId !== selfTypescriptCapability.id ||
+  typescriptCapabilityWalk.tier !== "intermediate"
+) {
+  fail(
+    `typescript capability should open Intermediate (detection room), got focus=${typescriptCapabilityWalk?.focusId} tier=${typescriptCapabilityWalk?.tier}`,
+  );
+} else if (typescriptFocusSurfaces.length < 4) {
+  fail(
+    `typescript Intermediate focus should show detection surfaces, found ${typescriptFocusSurfaces.length}`,
   );
 } else if (
   !extractorsDirectWalk ||
@@ -2030,7 +2077,7 @@ if (!selfTypescriptService) {
   extractorsDirectWalk.tier !== "intermediate"
 ) {
   fail(
-    `Extractors system double-click should stay Intermediate (rich neighborhood), got focus=${extractorsDirectWalk?.focusId} tier=${extractorsDirectWalk?.tier}`,
+    `Extractors system double-click should stay Intermediate (capability roster), got focus=${extractorsDirectWalk?.focusId} tier=${extractorsDirectWalk?.tier}`,
   );
 } else if (
   !typescriptModuleWalk ||
@@ -2051,9 +2098,13 @@ if (!selfTypescriptService) {
   );
 } else if (!cliAdvModules.some((node) => node.label === "src/cli.ts")) {
   fail("CLI Advanced should reveal src/cli.ts module");
+} else if (capabilityCount < 10 || detectionSurfaceCount < 30) {
+  fail(
+    `expected capability roster + surfaces on self-map, got capabilities=${capabilityCount} surfaces=${detectionSurfaceCount}`,
+  );
 } else {
   pass(
-    `Dead-end + thin-room walks: typescript service → Extractors Advanced (${typescriptServiceAdvModules.length} modules); Extractors Intermediate; CLI Advanced (src/cli.ts); module stays Advanced`,
+    `Thin-room + Capability: Extractors Intermediate; CLI Advanced (src/cli.ts); typescript Intermediate surfaces=${typescriptFocusSurfaces.length}; ${capabilityCount} capabilities / ${detectionSurfaceCount} surfaces`,
   );
 }
 
