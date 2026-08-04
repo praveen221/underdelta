@@ -1,6 +1,7 @@
 "use client";
 
 import { createPost } from "../app/actions/posts.js";
+import { Button } from "./ui/Button.js";
 
 export function PostForm() {
   return (
@@ -14,7 +15,7 @@ export function PostForm() {
     >
       <input name="title" placeholder="Title" />
       <textarea name="body" placeholder="Write something" />
-      <button type="submit">Publish</button>
+      <Button>Publish</Button>
     </form>
   );
 }

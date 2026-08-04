@@ -71,6 +71,12 @@ The browser is a walk, not a dump of every function.
 
 **Back** / **Esc** steps toward Intermediate, then Beginner; **Overview** jumps home. Reloading the same project keeps your last view, focus, and selection for the tab session.
 
+### How to read FE / BE maps
+
+- **Frontend (Next / Vue):** Beginner shows **route/page molecules** (Home, Dashboard, …) — not a single UI blob and not every Card/Button. Leaf chrome stays collapsed; page-owned feature roots appear when you drill a route molecule.
+- **Backend:** Beginner prefers **API → Data → Jobs** (plus pipelines when present) with story edges (`reads` / `writes` / `routes-to` / `triggers`…). Focusing a table at Intermediate answers who writes or reads it from those molecules, with file:line evidence.
+- **This repo (self-map):** stays the compiler story (CLI → … → Viewer) — no invented FE page dump.
+
 ## Core contract
 
 `architecture.json` contains typed nodes and relationships:

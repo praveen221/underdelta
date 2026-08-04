@@ -402,6 +402,11 @@ const flowOrderPreference: string[] = [
 ];
 
 function flowOrderRank(key: string): number {
+  // App Router page molecules occupy the UI slot, ordered among themselves by key.
+  if (key.startsWith("page:")) {
+    const uiIndex = flowOrderPreference.indexOf("ui");
+    return uiIndex === -1 ? flowOrderPreference.length : uiIndex;
+  }
   const index = flowOrderPreference.indexOf(key);
   return index === -1 ? flowOrderPreference.length : index;
 }
@@ -866,8 +871,41 @@ function quietNonCompilerProductChrome(
     }
   }
 
-  // Drop flows-to / collab edges that point at collapsed chrome so the IR
-  // matches what the overview tells (no ghost API→Data story).
+  // Compose/K8s/Helm/Kustomize-led apps may still grow a module-only UI blob
+  // (path-role `views/` / `components/` chrome with no page atoms). Without
+  // route molecules that steals the Deploy North-star cold-read — collapse it.
+  const ui = systems.get("ui");
+  if (
+    ui &&
+    (hasComposeServices ||
+      hasKubernetesUnits ||
+      hasHelmUnits ||
+      hasKustomizeUnits)
+  ) {
+    const hasRouteMolecules = [...systems.keys()].some((key) =>
+      key.startsWith("page:"),
+    );
+    const hasPageAtoms = [...nodes.values()].some(
+      (node) =>
+        node.kind === "page" &&
+        (node.metadata?.next === "page" ||
+          node.metadata?.vue === "page" ||
+          node.metadata?.framework === "next" ||
+          node.metadata?.framework === "vue"),
+    );
+    if (!hasRouteMolecules && !hasPageAtoms) {
+      ui.metadata = {
+        ...ui.metadata,
+        collapsedInOverview: true,
+      };
+      nodes.set(ui.id, ui);
+    }
+  }
+
+  // Drop flows-to / collab edges that point at collapsed *semantic* chrome
+  // systems so the IR matches the overview (no ghost API→Data story).
+  // Atom leaves (pages/feature roots) stay collapsedInOverview for Beginner,
+  // but their renders/calls story edges must survive for Intermediate drill.
   for (const [edgeId, edge] of [...edges.entries()]) {
     if (
       edge.kind !== "flows-to" &&
@@ -881,10 +919,13 @@ function quietNonCompilerProductChrome(
     }
     const source = nodes.get(edge.source);
     const target = nodes.get(edge.target);
-    if (
-      source?.metadata?.collapsedInOverview === true ||
-      target?.metadata?.collapsedInOverview === true
-    ) {
+    const sourceChrome =
+      source?.metadata?.collapsedInOverview === true &&
+      source.metadata?.projection === "semantic";
+    const targetChrome =
+      target?.metadata?.collapsedInOverview === true &&
+      target.metadata?.projection === "semantic";
+    if (sourceChrome || targetChrome) {
       edges.delete(edgeId);
     }
   }
@@ -1034,10 +1075,17 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
   }
   // Top-level `components/` / `ui/` (no leading slash) must match too —
   // Next fixtures often keep client widgets beside `app/`, not under `src/`.
-  // Skip Kustomize `components/` overlays — those are deploy patches, not UI.
+  // Vue Router page SFCs live under `src/views/` or `views/*View` / `*.vue` —
+  // not every `*/views/*.js` (Compose apps ship result/views angular chrome).
+  // Router modules are FE routing. Skip Kustomize `components/` overlays.
   if (
     !/(^|\/)kustomize\//.test(file) &&
-    /(^|\/)(ui|components)\//.test(file)
+    (/(^|\/)(ui|components)\//.test(file) ||
+      /(^|\/)src\/views\//.test(file) ||
+      /(^|\/)views\/[^/]*view[^/]*\.(vue|[cm]?[jt]sx?)$/.test(file) ||
+      /\.vue$/.test(file) ||
+      /(^|\/)router\.[cm]?[jt]sx?$/.test(file) ||
+      file.includes("/router/"))
   ) {
     return { key: "ui", label: "UI", kind: "ui" };
   }
@@ -1456,6 +1504,153 @@ export function humanizeGraphqlOperationLabel(
  * App Router URL paths → product page labels for the North star non-coder.
  * `/dashboard/activity` → `Dashboard · Activity`, `/sign-in` → `Sign in`.
  */
+/**
+ * Presentational UI-kit names (shadcn-style Card/Button/…) — Intermediate
+ * system-design maps keep feature roots only; these stay Advanced/code.
+ */
+const PRESENTATIONAL_COMPONENT_NAME =
+  /^(?:App)?(?:Card|Button|Icon|Badge|Skeleton|Toggle|Avatar|Spinner|Separator|Divider|Input|Label|Textarea|Checkbox|Switch|Tooltip|Dialog|Modal|Sheet|Popover|Dropdown|Select|Slider|Progress|Toast|Alert|Link|Image|Spacer|Container|Wrapper|Provider|Theme|Portal|Overlay|Backdrop|Close|Chevron|Menu|Nav|Header|Footer|Sidebar|Toolbar|Tab|Tabs|Pill|Chip|Tag|Kbd|Code|Pre|Table|Row|Cell|Grid|Stack|Flex|Box|Slot|VisuallyHidden)(?:[A-Z].*)?$/;
+
+function isPresentationalComponentName(label: string): boolean {
+  const trimmed = label.trim();
+  if (!trimmed) return false;
+  // Humanized labels ("Post list") are never presentational chrome names.
+  if (/\s/.test(trimmed)) return false;
+  return PRESENTATIONAL_COMPONENT_NAME.test(trimmed);
+}
+
+function isAppRouterPageOrLayoutFile(file: string): boolean {
+  const normalized = normalizePath(file);
+  return /(?:^|\/)(?:src\/)?app\/(?:.*\/)?(page|layout)\.[cm]?[jt]sx?$/i.test(
+    normalized,
+  );
+}
+
+/**
+ * FE atom catalog: feature-root components (one hop from page/layout via
+ * imports/renders) stay Intermediate-visible; leaf presentational chrome
+ * (Card/Button, stories, deeper hops) is marked leafChrome for Advanced only.
+ */
+function markFeFeatureRootsAndLeafChrome(
+  nodes: Map<string, ArchitectureNode>,
+  graph: ArchitectureGraph,
+): void {
+  const pageOrLayoutOwners = new Set<string>();
+  for (const node of nodes.values()) {
+    if (node.metadata?.next === "page" || node.metadata?.next === "layout") {
+      pageOrLayoutOwners.add(node.id);
+    }
+    if (node.kind === "module") {
+      const file = normalizePath(node.qualifiedName ?? node.label);
+      if (isAppRouterPageOrLayoutFile(file)) {
+        pageOrLayoutOwners.add(node.id);
+      }
+    }
+    if (
+      (node.kind === "component" || node.kind === "page") &&
+      node.evidence.some((item) => isAppRouterPageOrLayoutFile(item.file))
+    ) {
+      pageOrLayoutOwners.add(node.id);
+    }
+  }
+
+  const moduleComponentIds = new Map<string, string[]>();
+  for (const node of nodes.values()) {
+    if (node.kind !== "component") continue;
+    const file = normalizePath(node.evidence[0]?.file ?? "");
+    if (!file) continue;
+    const moduleId = stableId("module", file);
+    const list = moduleComponentIds.get(moduleId) ?? [];
+    list.push(node.id);
+    moduleComponentIds.set(moduleId, list);
+    // Also index by observed module node ids (hash-stable via same file).
+    if (node.parentId) {
+      const parentList = moduleComponentIds.get(node.parentId) ?? [];
+      parentList.push(node.id);
+      moduleComponentIds.set(node.parentId, parentList);
+    }
+  }
+  for (const node of nodes.values()) {
+    if (node.kind !== "module") continue;
+    const file = normalizePath(node.qualifiedName ?? node.label);
+    const fromEvidence = [...nodes.values()].filter(
+      (candidate) =>
+        candidate.kind === "component" &&
+        candidate.evidence.some(
+          (item) => normalizePath(item.file) === file,
+        ),
+    );
+    if (fromEvidence.length) {
+      moduleComponentIds.set(
+        node.id,
+        fromEvidence.map((candidate) => candidate.id),
+      );
+    }
+  }
+
+  const featureRootIds = new Set<string>();
+  for (const edge of graph.edges) {
+    if (edge.kind !== "imports" && edge.kind !== "renders") continue;
+    if (!pageOrLayoutOwners.has(edge.source)) continue;
+    const target = nodes.get(edge.target);
+    if (!target) continue;
+    if (target.kind === "component") {
+      featureRootIds.add(target.id);
+      continue;
+    }
+    if (target.kind === "module") {
+      for (const id of moduleComponentIds.get(target.id) ?? []) {
+        featureRootIds.add(id);
+      }
+      const file = normalizePath(target.qualifiedName ?? target.label);
+      for (const node of nodes.values()) {
+        if (
+          node.kind === "component" &&
+          node.evidence.some((item) => normalizePath(item.file) === file)
+        ) {
+          featureRootIds.add(node.id);
+        }
+      }
+    }
+  }
+
+  for (const node of nodes.values()) {
+    if (node.kind !== "component") continue;
+    if (node.metadata?.projection === "semantic") continue;
+
+    // App Router page/layout convention atoms + default-export bodies stay
+    // Intermediate atoms — they are not leaf UI chrome.
+    if (node.metadata?.next === "page" || node.metadata?.next === "layout") {
+      node.metadata = {
+        ...node.metadata,
+        collapsedInOverview: true,
+      };
+      nodes.set(node.id, node);
+      continue;
+    }
+
+    const evidenceFile = normalizePath(node.evidence[0]?.file ?? "");
+    const isStories = /\.stories\./i.test(evidenceFile);
+    const presentational = isPresentationalComponentName(node.label);
+    const oneHopFromPage = featureRootIds.has(node.id);
+
+    if (oneHopFromPage && !presentational && !isStories) {
+      node.metadata = {
+        ...node.metadata,
+        featureRoot: true,
+        collapsedInOverview: true,
+      };
+    } else {
+      node.metadata = {
+        ...node.metadata,
+        leafChrome: true,
+        collapsedInOverview: true,
+      };
+    }
+    nodes.set(node.id, node);
+  }
+}
+
 export function humanizeAppPathLabel(path: string): string {
   const trimmed = path.trim();
   if (!trimmed || trimmed === "/") return "Home";
@@ -1466,6 +1661,519 @@ export function humanizeAppPathLabel(path: string): string {
     .filter((segment) => !segment.startsWith("(") && !segment.startsWith("@"));
   if (!segments.length) return "Home";
   return segments.map((segment) => humanizeIdentifierLabel(segment)).join(" · ");
+}
+
+/**
+ * Top-level App Router segment for FE molecules.
+ * `/dashboard/activity` → `/dashboard`; `/` → `/`.
+ */
+export function appRouterRouteSegment(path: string): string {
+  const trimmed = path.trim() || "/";
+  if (!trimmed.startsWith("/")) return `/${trimmed}`;
+  if (trimmed === "/") return "/";
+  const segments = trimmed
+    .split("/")
+    .filter(Boolean)
+    .filter((segment) => !segment.startsWith("(") && !segment.startsWith("@"));
+  if (!segments.length) return "/";
+  return `/${segments[0]}`;
+}
+
+function pageMoleculeSystemKey(segment: string): string {
+  return `page:${segment}`;
+}
+
+/** True when a page atom is a Next App Router or Vue Router product page. */
+function isFeRoutePageAtom(node: ArchitectureNode): boolean {
+  if (node.kind !== "page" || typeof node.metadata?.path !== "string") {
+    return false;
+  }
+  return (
+    node.metadata.next === "page" ||
+    node.metadata.vue === "page" ||
+    node.metadata.framework === "next" ||
+    node.metadata.framework === "vue"
+  );
+}
+
+function fePageFramework(page: ArchitectureNode): "next" | "vue" | undefined {
+  if (page.metadata?.framework === "vue" || page.metadata?.vue === "page") {
+    return "vue";
+  }
+  if (page.metadata?.framework === "next" || page.metadata?.next === "page") {
+    return "next";
+  }
+  return undefined;
+}
+
+/**
+ * FE molecules: one semantic `ui` hub per top-level route segment (Next App
+ * Router or Vue Router). Nest page atoms + page-owned feature roots under the
+ * hub; collapse the aggregate UI system so Beginner reads Home / Dashboard —
+ * not one UI blob.
+ */
+function projectFeRouteSegmentMolecules(
+  systems: Map<string, ArchitectureNode>,
+  nodes: Map<string, ArchitectureNode>,
+  edges: Map<string, ArchitectureEdge>,
+  productId: string,
+  attachToSystem: (nodeId: string, systemId: string, evidence: Evidence) => void,
+): string[] {
+  const pageAtoms = [...nodes.values()].filter(isFeRoutePageAtom);
+  if (pageAtoms.length < 2) return [];
+
+  const bySegment = new Map<string, ArchitectureNode[]>();
+  for (const page of pageAtoms) {
+    const path = String(page.metadata!.path);
+    const segment = appRouterRouteSegment(path);
+    const bucket = bySegment.get(segment) ?? [];
+    bucket.push(page);
+    bySegment.set(segment, bucket);
+  }
+  if (bySegment.size < 2) return [];
+
+  // Page atoms own modules by evidence file; feature roots are reached via
+  // module-level imports/renders (page.tsx → PostList.tsx), not page-atom edges.
+  // Vue Router pages live in the router module — also own bound view modules.
+  const pageFileToSegment = new Map<string, string>();
+  for (const page of pageAtoms) {
+    const path = String(page.metadata!.path);
+    const segment = appRouterRouteSegment(path);
+    for (const item of page.evidence) {
+      if (item.file && item.file !== ".") {
+        pageFileToSegment.set(normalizePath(item.file), segment);
+      }
+    }
+  }
+  const ownerIdsToSegment = new Map<string, string>();
+  for (const page of pageAtoms) {
+    const segment = appRouterRouteSegment(String(page.metadata!.path));
+    ownerIdsToSegment.set(page.id, segment);
+  }
+  for (const node of nodes.values()) {
+    if (node.kind !== "module") continue;
+    const file = modulePath(node);
+    const segment = pageFileToSegment.get(file);
+    if (segment) ownerIdsToSegment.set(node.id, segment);
+  }
+  // Default-export page bodies (Home page) also count as owners when they import.
+  for (const node of nodes.values()) {
+    if (node.kind !== "component" && node.kind !== "function") continue;
+    const parent = node.parentId ? nodes.get(node.parentId) : undefined;
+    if (
+      parent &&
+      parent.kind === "page" &&
+      typeof parent.metadata?.path === "string"
+    ) {
+      ownerIdsToSegment.set(
+        node.id,
+        appRouterRouteSegment(parent.metadata.path),
+      );
+    }
+  }
+  // Vue Router: page -[routes-to]-> view module owns that segment's features.
+  for (const edge of edges.values()) {
+    if (edge.kind !== "routes-to") continue;
+    const page = nodes.get(edge.source);
+    if (!page || !isFeRoutePageAtom(page)) continue;
+    const segment = appRouterRouteSegment(String(page.metadata!.path));
+    ownerIdsToSegment.set(edge.target, segment);
+  }
+
+  const pageOwnedFeatureRoots = new Map<string, Set<string>>();
+  const addFeature = (segment: string, featureId: string): void => {
+    const bucket = pageOwnedFeatureRoots.get(segment) ?? new Set<string>();
+    bucket.add(featureId);
+    pageOwnedFeatureRoots.set(segment, bucket);
+  };
+  for (const edge of edges.values()) {
+    if (edge.kind !== "imports" && edge.kind !== "renders") continue;
+    const segment = ownerIdsToSegment.get(edge.source);
+    if (!segment) continue;
+    const target = nodes.get(edge.target);
+    if (!target) continue;
+    if (target.kind === "component" && target.metadata?.featureRoot === true) {
+      addFeature(segment, target.id);
+      continue;
+    }
+    if (target.kind === "module") {
+      const targetFile = modulePath(target);
+      for (const node of nodes.values()) {
+        if (node.kind !== "component" || node.metadata?.featureRoot !== true) {
+          continue;
+        }
+        if (
+          node.parentId === target.id ||
+          node.evidence.some(
+            (item) => normalizePath(item.file) === targetFile,
+          )
+        ) {
+          addFeature(segment, node.id);
+        }
+      }
+    }
+  }
+
+  const moleculeKeys: string[] = [];
+  const sortedSegments = [...bySegment.keys()].sort((a, b) =>
+    a.localeCompare(b),
+  );
+
+  for (const segment of sortedSegments) {
+    const pages = bySegment.get(segment)!;
+    const key = pageMoleculeSystemKey(segment);
+    const systemId = stableId("system", key);
+    const label = humanizeAppPathLabel(segment);
+    const framework = fePageFramework(pages[0]!) ?? "next";
+    const evidence = dedupeEvidence(
+      pages.flatMap((page) => page.evidence).slice(0, 8),
+    );
+    const seedEvidence =
+      evidence[0] ??
+      projectionEvidence(
+        pages[0]?.evidence[0]?.file ?? ".",
+        `FE route molecule ${segment}`,
+      );
+
+    let molecule = systems.get(key);
+    if (!molecule) {
+      molecule = {
+        id: systemId,
+        kind: "ui",
+        label,
+        technology: "semantic",
+        metadata: {
+          projection: "semantic",
+          systemKey: key,
+          routeMolecule: true,
+          path: segment,
+          framework,
+        },
+        evidence: [
+          {
+            ...seedEvidence,
+            detail:
+              seedEvidence.detail ??
+              `FE molecule for route segment ${segment}`,
+          },
+        ],
+      };
+      systems.set(key, molecule);
+      nodes.set(molecule.id, molecule);
+      const productEdge = edgeFrom(
+        "contains",
+        productId,
+        molecule.id,
+        seedEvidence,
+      );
+      edges.set(productEdge.id, productEdge);
+    } else {
+      molecule.label = label;
+      molecule.metadata = {
+        ...molecule.metadata,
+        routeMolecule: true,
+        path: segment,
+        framework,
+      };
+      molecule.evidence = dedupeEvidence([...molecule.evidence, ...evidence]);
+      nodes.set(molecule.id, molecule);
+    }
+    moleculeKeys.push(key);
+
+    for (const page of pages) {
+      attachToSystem(page.id, molecule.id, page.evidence[0] ?? seedEvidence);
+      page.metadata = {
+        ...page.metadata,
+        projectedSystem: key,
+        routeMolecule: key,
+      };
+      nodes.set(page.id, page);
+    }
+
+    // Matching layout atoms (same segment path) live with the route molecule.
+    for (const node of [...nodes.values()]) {
+      if (node.metadata?.next !== "layout") continue;
+      if (typeof node.metadata.path !== "string") continue;
+      if (appRouterRouteSegment(node.metadata.path) !== segment) continue;
+      attachToSystem(node.id, molecule.id, node.evidence[0] ?? seedEvidence);
+      node.metadata = {
+        ...node.metadata,
+        projectedSystem: key,
+        routeMolecule: key,
+      };
+      nodes.set(node.id, node);
+    }
+
+    for (const featureId of pageOwnedFeatureRoots.get(segment) ?? []) {
+      const feature = nodes.get(featureId);
+      if (!feature) continue;
+      attachToSystem(featureId, molecule.id, feature.evidence[0] ?? seedEvidence);
+      feature.metadata = {
+        ...feature.metadata,
+        projectedSystem: key,
+        routeMolecule: key,
+      };
+      nodes.set(featureId, feature);
+    }
+
+    molecule.evidence = dedupeEvidence(molecule.evidence);
+    nodes.set(molecule.id, molecule);
+  }
+
+  return moleculeKeys;
+}
+
+/** Collapse aggregate UI once route molecules own the Beginner band. */
+function collapseAggregateUiBehindRouteMolecules(
+  systems: Map<string, ArchitectureNode>,
+  nodes: Map<string, ArchitectureNode>,
+): void {
+  const pageMoleculeCount = [...systems.keys()].filter((key) =>
+    key.startsWith("page:"),
+  ).length;
+  const ui = systems.get("ui");
+  if (!ui || pageMoleculeCount < 2) return;
+  ui.metadata = {
+    ...ui.metadata,
+    collapsedInOverview: true,
+    replacedByRouteMolecules: true,
+  };
+  nodes.set(ui.id, ui);
+}
+
+/** Server-action label → story edge kind (mutations write; getters read). */
+function serverActionStoryEdgeKind(label: string): "reads" | "writes" {
+  const normalized = label.toLowerCase();
+  if (
+    /\b(get|list|find|fetch|load|read|query|show|select)\b/.test(normalized)
+  ) {
+    return "reads";
+  }
+  return "writes";
+}
+
+/**
+ * FE story edges from pages (deterministic, evidence-backed):
+ * - `renders` page atom → page-owned feature root (lifted from page-body JSX)
+ * - `reads`/`writes` page molecule → API when a owned feature root calls a
+ *   server action nested under the API system
+ */
+function liftFePageStoryEdges(
+  nodes: Map<string, ArchitectureNode>,
+  edges: Map<string, ArchitectureEdge>,
+  systems: Map<string, ArchitectureNode>,
+): void {
+  const api = systems.get("api");
+
+  // page body component id → owning page atom
+  const pageBodyToPage = new Map<string, string>();
+  for (const node of nodes.values()) {
+    if (node.kind !== "component" || !node.parentId) continue;
+    const parent = nodes.get(node.parentId);
+    if (parent?.kind === "page") {
+      pageBodyToPage.set(node.id, parent.id);
+    }
+  }
+
+  // Lift JSX renders onto the page atom so the catalog edge is page→feature.
+  for (const edge of [...edges.values()]) {
+    if (edge.kind !== "renders") continue;
+    const pageId = pageBodyToPage.get(edge.source);
+    if (!pageId) continue;
+    const target = nodes.get(edge.target);
+    if (!target || target.kind !== "component") continue;
+    if (target.metadata?.featureRoot !== true) continue;
+    const page = nodes.get(pageId);
+    if (!page) continue;
+    const seed = edge.evidence[0]!;
+    const lifted = edgeFrom(
+      "renders",
+      pageId,
+      target.id,
+      {
+        ...seed,
+        extractor: "projection",
+        certainty: "derived",
+        detail:
+          seed.detail ??
+          `${page.label} page renders feature root ${target.label}`,
+      },
+      edge.label,
+    );
+    if (!edges.has(lifted.id)) edges.set(lifted.id, lifted);
+  }
+
+  if (!api) return;
+
+  // Page molecule → API reads/writes from featureRoot → serverAction calls.
+  for (const edge of [...edges.values()]) {
+    if (edge.kind !== "calls") continue;
+    const source = nodes.get(edge.source);
+    const target = nodes.get(edge.target);
+    if (!source || !target) continue;
+    if (source.metadata?.featureRoot !== true) continue;
+    if (target.metadata?.serverAction !== true) continue;
+    if (target.parentId !== api.id) continue;
+
+    const moleculeKey =
+      typeof source.metadata?.routeMolecule === "string"
+        ? source.metadata.routeMolecule
+        : typeof source.metadata?.projectedSystem === "string" &&
+            String(source.metadata.projectedSystem).startsWith("page:")
+          ? String(source.metadata.projectedSystem)
+          : undefined;
+    if (!moleculeKey) continue;
+    const molecule = systems.get(moleculeKey);
+    if (!molecule) continue;
+
+    const kind = serverActionStoryEdgeKind(target.label);
+    const seed = edge.evidence[0]!;
+    const lifted = edgeFrom(
+      kind,
+      molecule.id,
+      api.id,
+      {
+        ...seed,
+        extractor: "projection",
+        certainty: "derived",
+        detail: `${molecule.label} ${kind} ${api.label} via ${source.label} → ${target.label}`,
+      },
+      target.label,
+    );
+    if (!edges.has(lifted.id)) edges.set(lifted.id, lifted);
+  }
+}
+
+/** Walk parentId until a semantic system/molecule hub. */
+function semanticOwnerOf(
+  nodeId: string,
+  nodes: Map<string, ArchitectureNode>,
+): ArchitectureNode | undefined {
+  let current: string | undefined = nodeId;
+  const seen = new Set<string>();
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    const node = nodes.get(current);
+    if (!node) return undefined;
+    if (node.metadata?.projection === "semantic") return node;
+    current = node.parentId;
+  }
+  return undefined;
+}
+
+/**
+ * BE story edges API/Jobs → Data + tables (deterministic, evidence-backed):
+ * - When an API-owned function `reads`/`writes` a table under Data, lift the
+ *   molecule edge (API→Data) and the table insight edge (API→table).
+ * - When a Data-owned function does the Prisma I/O but an API function `calls`
+ *   it (Checkout → fulfillOrder → Order), lift through that call bridge.
+ * - When Jobs `schedules` a function that `reads`/`writes` Data, lift Jobs→Data
+ *   and Jobs→table so Intermediate table focus answers “who writes this?”.
+ */
+function liftBeApiDataStoryEdges(
+  nodes: Map<string, ArchitectureNode>,
+  edges: Map<string, ArchitectureEdge>,
+  systems: Map<string, ArchitectureNode>,
+): void {
+  const api = systems.get("api");
+  const data = systems.get("data");
+  const jobs = systems.get("jobs");
+  if (!data) return;
+
+  const liftedKinds = new Set<string>();
+
+  const addLifted = (
+    kind: "reads" | "writes",
+    from: ArchitectureNode,
+    to: ArchitectureNode,
+    viaCaller: ArchitectureNode | undefined,
+    viaFn: ArchitectureNode,
+    seed: Evidence,
+  ): void => {
+    const dedupeKey = `${kind}:${from.id}:${to.id}`;
+    if (liftedKinds.has(dedupeKey)) return;
+    const detail = viaCaller
+      ? `${from.label} ${kind} ${to.label} via ${viaCaller.label} → ${viaFn.label}`
+      : `${from.label} ${kind} ${to.label} via ${viaFn.label}`;
+    const lifted = edgeFrom(
+      kind,
+      from.id,
+      to.id,
+      {
+        ...seed,
+        extractor: "projection",
+        certainty: "derived",
+        detail,
+      },
+      viaFn.label,
+    );
+    if (!edges.has(lifted.id)) edges.set(lifted.id, lifted);
+    liftedKinds.add(dedupeKey);
+  };
+
+  const liftOwnerStory = (
+    kind: "reads" | "writes",
+    from: ArchitectureNode,
+    table: ArchitectureNode,
+    viaCaller: ArchitectureNode | undefined,
+    viaFn: ArchitectureNode,
+    seed: Evidence,
+  ): void => {
+    addLifted(kind, from, data, viaCaller, viaFn, seed);
+    addLifted(kind, from, table, viaCaller, viaFn, seed);
+  };
+
+  for (const edge of [...edges.values()]) {
+    if (edge.kind !== "reads" && edge.kind !== "writes") continue;
+    const source = nodes.get(edge.source);
+    const target = nodes.get(edge.target);
+    if (!source || !target) continue;
+    if (target.kind !== "table" && target.kind !== "collection") continue;
+    const tableOwner = semanticOwnerOf(target.id, nodes);
+    if (!tableOwner || tableOwner.id !== data.id) continue;
+
+    const sourceOwner = semanticOwnerOf(source.id, nodes);
+    const seed = edge.evidence[0]!;
+
+    // Direct: API-owned function touches a Data table.
+    if (api && sourceOwner?.id === api.id) {
+      liftOwnerStory(edge.kind, api, target, undefined, source, seed);
+      continue;
+    }
+
+    // Bridge: API function calls a Data-owned reader/writer (mini-stack Checkout).
+    if (api && sourceOwner?.id === data.id) {
+      for (const call of edges.values()) {
+        if (call.kind !== "calls") continue;
+        if (call.target !== source.id) continue;
+        const caller = nodes.get(call.source);
+        if (!caller) continue;
+        const callerOwner = semanticOwnerOf(caller.id, nodes);
+        if (callerOwner?.id !== api.id) continue;
+        liftOwnerStory(edge.kind, api, target, caller, source, seed);
+        break;
+      }
+    }
+
+    // Jobs schedule a function that reads/writes Data tables.
+    if (jobs && (sourceOwner?.id === data.id || sourceOwner?.id === jobs.id)) {
+      for (const sched of edges.values()) {
+        if (sched.kind !== "schedules" && sched.kind !== "triggers") continue;
+        if (sched.target !== source.id) continue;
+        const scheduler = nodes.get(sched.source);
+        if (!scheduler) continue;
+        const schedulerOwner = semanticOwnerOf(scheduler.id, nodes);
+        if (
+          schedulerOwner?.id !== jobs.id &&
+          scheduler.id !== jobs.id
+        ) {
+          continue;
+        }
+        liftOwnerStory(edge.kind, jobs, target, scheduler, source, seed);
+        break;
+      }
+    }
+  }
 }
 
 /**
@@ -2824,6 +3532,10 @@ export function projectSemanticArchitecture(
     nodes.set(node.id, node);
   }
 
+  // FE atom catalog: mark page-owned feature roots vs leaf presentational chrome
+  // (Card/Button/stories). Intermediate shows feature roots; Advanced keeps leaves.
+  markFeFeatureRootsAndLeafChrome(nodes, graph);
+
   // Quiet Python/JS file-module chrome once product systems exist — API + Data
   // (and UI) tell the story; modules stay available via Details/search.
   if (systems.size > 0) {
@@ -2844,7 +3556,12 @@ export function projectSemanticArchitecture(
     if (node.metadata?.projection === "semantic") continue;
     let nextLabel: string | undefined;
 
-    if (node.kind === "page" && node.metadata?.next === "page") {
+    if (
+      node.kind === "page" &&
+      (node.metadata?.next === "page" ||
+        node.metadata?.vue === "page" ||
+        node.metadata?.framework === "vue")
+    ) {
       const path =
         typeof node.metadata.path === "string" ? node.metadata.path : node.label;
       nextLabel = humanizeAppPathLabel(path);
@@ -3021,6 +3738,19 @@ export function projectSemanticArchitecture(
     node.label = nextLabel;
     nodes.set(node.id, node);
   }
+
+  // FE molecules: Home `/`, Dashboard `/dashboard`, … — Beginner route hubs.
+  projectFeRouteSegmentMolecules(
+    systems,
+    nodes,
+    edges,
+    product.id,
+    attachToSystem,
+  );
+
+  // FE story edges: page -[renders]-> feature roots; page molecule
+  // -[reads|writes]-> API from static featureRoot → server-action calls.
+  liftFePageStoryEdges(nodes, edges, systems);
 
   // Auth + billing mutations are the SaaS product story beside UI→API→Data.
   // Keep them visible on overview like messaging/cron hubs (not buried in Details).
@@ -3889,10 +4619,21 @@ export function projectSemanticArchitecture(
   const systemsByKey = new Map(
     [...systems.entries()].map(([key, node]) => [key, node.id]),
   );
-  for (const [fromKey, toKey] of preferredFlows) {
+  const pageMoleculeKeys = [...systems.keys()]
+    .filter((key) => key.startsWith("page:"))
+    .sort((a, b) => a.localeCompare(b));
+  const flowPairs: Array<[string, string]> = [...preferredFlows];
+  if (systemsByKey.has("api")) {
+    for (const pageKey of pageMoleculeKeys) {
+      flowPairs.push([pageKey, "api"]);
+    }
+  }
+  for (const [fromKey, toKey] of flowPairs) {
     const from = systemsByKey.get(fromKey);
     const to = systemsByKey.get(toKey);
     if (!from || !to) continue;
+    // Aggregate UI→API flow stays in IR when UI is collapsed; page molecules
+    // carry the visible Beginner band via their own flows-to edges.
     const flow = edgeFrom(
       "flows-to",
       from,
@@ -3910,6 +4651,8 @@ export function projectSemanticArchitecture(
 
   // Collaboration edges describe how systems work together (uses/renders/…),
   // complementary to the left-to-right flows-to story band.
+  // Inferred API/Jobs → Data reads/uses may be replaced after README labels
+  // once evidence-lifted reads/writes land (see liftBeApiDataStoryEdges).
   for (const collab of collaborationEdges) {
     const from = systemsByKey.get(collab.from);
     const to = systemsByKey.get(collab.to);
@@ -3939,6 +4682,29 @@ export function projectSemanticArchitecture(
       collab.label,
     );
     if (!edges.has(edge.id)) edges.set(edge.id, edge);
+  }
+
+  // Route molecules collaborate with HTTP API the same way aggregate UI did.
+  if (systemsByKey.has("api") && pageMoleculeKeys.length) {
+    const apiId = systemsByKey.get("api")!;
+    for (const pageKey of pageMoleculeKeys) {
+      const fromId = systemsByKey.get(pageKey);
+      if (!fromId) continue;
+      const molecule = systems.get(pageKey);
+      const edge = edgeFrom(
+        "uses",
+        fromId,
+        apiId,
+        {
+          file: ".",
+          extractor: "projection",
+          certainty: "inferred",
+          detail: `${molecule?.label ?? pageKey} calls the HTTP API and server actions`,
+        },
+        "fetch",
+      );
+      if (!edges.has(edge.id)) edges.set(edge.id, edge);
+    }
   }
 
   // Project package.json bin / exports into the product map.
@@ -4050,6 +4816,33 @@ export function projectSemanticArchitecture(
   // from docs. Never invent systems from README alone.
   applyReadmeHeadingHints(systems, options.readmeHints);
 
+  // BE story edges after tables nest under Data + README labels: API/Jobs
+  // -[reads|writes]-> Data from Prisma evidence + call/schedule bridges.
+  liftBeApiDataStoryEdges(nodes, edges, systems);
+  // Prefer derived API/Jobs → Data story edges over inferred collab twins.
+  for (const [edgeId, edge] of [...edges.entries()]) {
+    if (
+      edge.kind !== "reads" &&
+      edge.kind !== "writes" &&
+      edge.kind !== "uses"
+    ) {
+      continue;
+    }
+    if (!edge.evidence.some((item) => item.certainty === "inferred")) continue;
+    const hasDerivedStory = [...edges.values()].some(
+      (other) =>
+        other.id !== edge.id &&
+        other.source === edge.source &&
+        other.target === edge.target &&
+        (other.kind === "reads" || other.kind === "writes") &&
+        other.evidence.some(
+          (item) =>
+            item.certainty === "derived" && item.extractor === "projection",
+        ),
+    );
+    if (hasDerivedStory) edges.delete(edgeId);
+  }
+
   // Queue publisher/consumer lists were snapshotted before README rename.
   // Rebuild labels from lifted publishes/consumes so Messaging shows
   // "Checkout API" / "Fulfillment workers", not thin path-role defaults.
@@ -4124,7 +4917,11 @@ export function projectSemanticArchitecture(
   // Overlays own the cold-read. Chart-led repos without product overlays keep hubs.
   quietHelmBesideKustomizeOverlays(nodes);
 
-  assignFlowOrder(systems, preferredFlows);
+  // After chrome quieting (which drops edges to collapsed systems): hide the
+  // aggregate UI blob so Beginner flowOrder is route molecules → API → …
+  collapseAggregateUiBehindRouteMolecules(systems, nodes);
+
+  assignFlowOrder(systems, flowPairs);
 
   // Surface the language-extractor roster on the Extractors system so the
   // default map answers "which extractors power this architecture?"

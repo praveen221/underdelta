@@ -25,6 +25,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const fixtureRoot = path.join(repoRoot, "verification", "mini-stack");
 const miniNextRoot = path.join(repoRoot, "verification", "mini-next");
+const miniVueRoot = path.join(repoRoot, "verification", "mini-vue");
 const miniPythonRoot = path.join(repoRoot, "verification", "mini-python");
 const miniMongoRoot = path.join(repoRoot, "verification", "mini-mongo");
 const miniOpenapiRoot = path.join(repoRoot, "verification", "mini-openapi");
@@ -114,6 +115,7 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file.includes("/verification/") ||
         file.includes("mini-stack/") ||
         file.includes("mini-next/") ||
+        file.includes("mini-vue/") ||
         file.includes("mini-python/") ||
         file.includes("mini-mongo/") ||
         file.includes("mini-openapi/") ||
@@ -752,14 +754,68 @@ requireFixtureCollab(
   "reads",
   "api",
   "data",
-  "Checkout API reads Catalog data",
+  "Checkout API reads Catalog data via createCheckout → fulfillOrder",
 );
 requireFixtureCollab(
-  "uses",
+  "writes",
+  "api",
+  "data",
+  "Checkout API writes Catalog data via createCheckout → fulfillOrder",
+);
+requireFixtureCollab(
+  "writes",
   "jobs",
   "data",
-  "Reconciliation jobs use Catalog data",
+  "Reconciliation jobs writes Catalog data via Reconcile payments",
 );
+
+// System-design molecules: BE API↔Data story edges are derived (not inferred).
+const fixtureApiDataReads = fixtureGraph.edges.find(
+  (edge) =>
+    edge.kind === "reads" &&
+    edge.source === fixtureByKey.get("api")?.id &&
+    edge.target === fixtureByKey.get("data")?.id,
+);
+if (
+  !fixtureApiDataReads?.evidence?.some(
+    (item) =>
+      item.certainty === "derived" &&
+      item.extractor === "projection" &&
+      typeof item.file === "string" &&
+      item.file.includes("orders.ts"),
+  )
+) {
+  fail(
+    `mini-stack expected derived Checkout API -[reads]-> Catalog data citing orders.ts (got ${JSON.stringify(
+      fixtureApiDataReads?.evidence?.[0] ?? null,
+    )})`,
+  );
+} else {
+  pass("mini-stack story edge: Checkout API -[reads]-> Catalog data (derived, orders.ts)");
+}
+const fixtureApiDataWrites = fixtureGraph.edges.find(
+  (edge) =>
+    edge.kind === "writes" &&
+    edge.source === fixtureByKey.get("api")?.id &&
+    edge.target === fixtureByKey.get("data")?.id,
+);
+if (
+  !fixtureApiDataWrites?.evidence?.some(
+    (item) =>
+      item.certainty === "derived" &&
+      item.extractor === "projection" &&
+      typeof item.file === "string" &&
+      item.file.includes("orders.ts"),
+  )
+) {
+  fail(
+    `mini-stack expected derived Checkout API -[writes]-> Catalog data citing orders.ts (got ${JSON.stringify(
+      fixtureApiDataWrites?.evidence?.[0] ?? null,
+    )})`,
+  );
+} else {
+  pass("mini-stack story edge: Checkout API -[writes]-> Catalog data (derived, orders.ts)");
+}
 
 const fixtureTables = fixtureGraph.nodes.filter((node) => node.kind === "table");
 // After projection, Order/order/orders and Payment/payment/payments collapse.
@@ -1252,7 +1308,8 @@ function beginnerColdOpenNodes(graph) {
     if (
       node.metadata?.relationOnly ||
       node.metadata?.joinTable ||
-      node.metadata?.exampleChrome
+      node.metadata?.exampleChrome ||
+      node.metadata?.leafChrome
     ) {
       return false;
     }
@@ -1337,6 +1394,29 @@ if (selfBeginner.length < 6) {
       `Beginner cold open calm: self-map ${selfBeginner.length} flow nodes (${selfBeginnerLabels.join(" → ")}), mini-stack ${fixtureBeginner.length} flow nodes (no intermediate/advanced leaks)`,
     );
   }
+}
+
+// System-design molecules: mini-stack Beginner keeps distinct API + Data + Jobs.
+const fixtureBeginnerLabels = fixtureBeginner
+  .slice()
+  .sort(
+    (a, b) =>
+      (a.metadata?.flowOrder ?? 999) - (b.metadata?.flowOrder ?? 999) ||
+      String(a.label).localeCompare(String(b.label)),
+  )
+  .map((node) => String(node.label));
+const requiredBeMolecules = ["Checkout API", "Catalog data", "Reconciliation jobs"];
+const missingBeMolecules = requiredBeMolecules.filter(
+  (label) => !fixtureBeginnerLabels.includes(label),
+);
+if (missingBeMolecules.length) {
+  fail(
+    `mini-stack Beginner missing distinct BE molecules: ${missingBeMolecules.join(", ")} (got ${fixtureBeginnerLabels.join(" → ")})`,
+  );
+} else {
+  pass(
+    `mini-stack Beginner BE molecules: ${requiredBeMolecules.join(" + ")} (${fixtureBeginnerLabels.join(" → ")})`,
+  );
 }
 
 // Intermediate without focus must stay calm (no global hub/leaf dump).
@@ -1426,7 +1506,8 @@ function intermediateFocusNodes(graph, rootId) {
     if (
       node.metadata?.relationOnly ||
       node.metadata?.joinTable ||
-      node.metadata?.exampleChrome
+      node.metadata?.exampleChrome ||
+      node.metadata?.leafChrome
     ) {
       return false;
     }
@@ -1518,15 +1599,107 @@ if (!focusExtractorsSystem) {
       .map((node) => `${node.kind}:${node.label}`)
       .join(", ")}`,
   );
-} else if (
-  fixtureCheckoutFocus.some((node) => node.label === "Order" || node.label === "Payment")
-) {
+} else if (!fixtureCheckoutFocusLabels.has("Order")) {
   fail(
-    "Checkout API Intermediate neighborhood should not pull Catalog tables until Catalog is focused",
+    "Checkout API Intermediate neighborhood should include Order via writes/reads story edge",
+  );
+} else if (fixtureCheckoutFocusLabels.has("Payment")) {
+  fail(
+    "Checkout API Intermediate neighborhood should not pull Payment (Jobs writer, not API)",
   );
 } else {
   pass(
-    `Intermediate focus neighborhoods: Extractors ${selfExtractorsFocus.length} nodes, Checkout API ${fixtureCheckoutFocus.length} nodes (children + collab, no advanced dump)`,
+    `Intermediate focus neighborhoods: Extractors ${selfExtractorsFocus.length} nodes, Checkout API ${fixtureCheckoutFocus.length} nodes (routes + Order writer path, no advanced dump)`,
+  );
+}
+
+// Insight drill: Intermediate focus on a table surfaces who writes/reads it.
+const focusOrderTable = fixtureGraph.nodes.find(
+  (node) => node.kind === "table" && node.label === "Order",
+);
+const focusPaymentTable = fixtureGraph.nodes.find(
+  (node) => node.kind === "table" && node.label === "Payment",
+);
+const fixtureOrderFocus = focusOrderTable
+  ? intermediateFocusNodes(fixtureGraph, focusOrderTable.id)
+  : [];
+const fixturePaymentFocus = focusPaymentTable
+  ? intermediateFocusNodes(fixtureGraph, focusPaymentTable.id)
+  : [];
+const fixtureOrderFocusLabels = new Set(
+  fixtureOrderFocus.map((node) => String(node.label)),
+);
+const fixturePaymentFocusLabels = new Set(
+  fixturePaymentFocus.map((node) => String(node.label)),
+);
+const fixtureApiWritesOrder = focusOrderTable
+  ? fixtureGraph.edges.find(
+      (edge) =>
+        edge.kind === "writes" &&
+        edge.source === fixtureByKey.get("api")?.id &&
+        edge.target === focusOrderTable.id,
+    )
+  : undefined;
+const fixtureJobsWritesPayment = focusPaymentTable
+  ? fixtureGraph.edges.find(
+      (edge) =>
+        edge.kind === "writes" &&
+        edge.source === fixtureByKey.get("jobs")?.id &&
+        edge.target === focusPaymentTable.id,
+    )
+  : undefined;
+if (!focusOrderTable || !focusPaymentTable) {
+  fail("mini-stack missing Order/Payment tables for writer insight drill");
+} else if (!fixtureOrderFocusLabels.has("Checkout API")) {
+  fail(
+    `Order Intermediate focus should include Checkout API writer (got ${[...fixtureOrderFocusLabels].join(", ")})`,
+  );
+} else if (
+  !fixtureApiWritesOrder?.evidence?.some(
+    (item) =>
+      item.certainty === "derived" &&
+      item.extractor === "projection" &&
+      typeof item.file === "string" &&
+      item.file.includes("orders.ts"),
+  )
+) {
+  fail(
+    `expected derived Checkout API -[writes]-> Order citing orders.ts (got ${JSON.stringify(
+      fixtureApiWritesOrder?.evidence?.[0] ?? null,
+    )})`,
+  );
+} else if (!fixturePaymentFocusLabels.has("Reconciliation jobs")) {
+  fail(
+    `Payment Intermediate focus should include Reconciliation jobs writer (got ${[...fixturePaymentFocusLabels].join(", ")})`,
+  );
+} else if (
+  !fixtureJobsWritesPayment?.evidence?.some(
+    (item) =>
+      item.certainty === "derived" &&
+      item.extractor === "projection" &&
+      typeof item.file === "string" &&
+      item.file.includes("reconcile.ts"),
+  )
+) {
+  fail(
+    `expected derived Reconciliation jobs -[writes]-> Payment citing reconcile.ts (got ${JSON.stringify(
+      fixtureJobsWritesPayment?.evidence?.[0] ?? null,
+    )})`,
+  );
+} else if (
+  fixtureOrderFocus.some(
+    (node) =>
+      beginnerAdvancedKinds.has(node.kind) && !node.metadata?.overviewHub,
+  ) ||
+  fixturePaymentFocus.some(
+    (node) =>
+      beginnerAdvancedKinds.has(node.kind) && !node.metadata?.overviewHub,
+  )
+) {
+  fail("table Intermediate focus leaked advanced kinds (functions/columns)");
+} else {
+  pass(
+    "table writer insight: Order ← Checkout API writes (orders.ts); Payment ← Reconciliation jobs writes (reconcile.ts)",
   );
 }
 
@@ -2118,6 +2291,7 @@ const usesInKinds = viewerHtml.indexOf('"uses"', collaborationKindsDecl);
 const rendersInKinds = viewerHtml.indexOf('"renders"', collaborationKindsDecl);
 const exposesInKinds = viewerHtml.indexOf('"exposes"', collaborationKindsDecl);
 const readsInKinds = viewerHtml.indexOf('"reads"', collaborationKindsDecl);
+const writesInKinds = viewerHtml.indexOf('"writes"', collaborationKindsDecl);
 const triggersInKinds = viewerHtml.indexOf('"triggers"', collaborationKindsDecl);
 const importsFilter = viewerHtml.indexOf(
   "importsAndCalls = connections.filter",
@@ -2134,9 +2308,10 @@ if (
   rendersInKinds < 0 ||
   exposesInKinds < 0 ||
   readsInKinds < 0 ||
+  writesInKinds < 0 ||
   triggersInKinds < 0
 ) {
-  fail("viewer missing collaborationKinds set for inspector (uses/renders/exposes/triggers/reads)");
+  fail("viewer missing collaborationKinds set for inspector (uses/renders/exposes/triggers/reads/writes)");
 } else if (importsFilter < 0 || importsFilter < collaborationKindsDecl) {
   fail("viewer inspector should split importsAndCalls after collaborationKinds");
 } else if (collaborationHeading < 0 || importsHeading < 0 || collaborationHeading > importsHeading) {
@@ -2467,18 +2642,111 @@ if (
   pass("mini-next server actions: Create post, Delete post");
 }
 
-const miniNextLayout = miniNextGraph.nodes.find(
+const miniNextLayouts = miniNextGraph.nodes.filter(
   (node) =>
     node.metadata?.next === "layout" &&
     node.kind === "component" &&
     typeof node.metadata?.path === "string",
 );
-if (!miniNextLayout || miniNextLayout.label !== "App layout") {
+const miniNextRootLayout = miniNextLayouts.find(
+  (node) => node.metadata.path === "/",
+);
+const miniNextDashboardLayout = miniNextLayouts.find(
+  (node) => node.metadata.path === "/dashboard",
+);
+if (!miniNextRootLayout || miniNextRootLayout.label !== "App layout") {
   fail(
-    `mini-next expected App layout label, found '${miniNextLayout?.label ?? "(missing)"}'`,
+    `mini-next expected App layout label at path /, found '${miniNextRootLayout?.label ?? "(missing)"}'`,
   );
 } else {
   pass("mini-next layout humanized: App layout");
+}
+if (!miniNextDashboardLayout || miniNextDashboardLayout.label !== "Dashboard layout") {
+  fail(
+    `mini-next expected nested Dashboard layout at path /dashboard, found '${miniNextDashboardLayout?.label ?? "(missing)"}' (layouts: ${miniNextLayouts
+      .map((node) => `${node.label}@${node.metadata.path}`)
+      .join(", ") || "(none)"})`,
+  );
+} else {
+  pass("mini-next nested layout: Dashboard layout @ /dashboard");
+}
+
+// System-design molecules gate: App Router page/layout atoms carry URL path metadata.
+const miniNextPageByPath = new Map(
+  miniNextPages
+    .filter((node) => typeof node.metadata?.path === "string")
+    .map((node) => [node.metadata.path, node]),
+);
+const miniNextHomePath = miniNextPageByPath.get("/");
+const miniNextDashboardPath = miniNextPageByPath.get("/dashboard");
+if (
+  !miniNextHomePath ||
+  miniNextHomePath.label !== "Home" ||
+  miniNextHomePath.metadata?.next !== "page" ||
+  miniNextHomePath.metadata?.framework !== "next"
+) {
+  fail(
+    `mini-next Home page atom missing path=/ metadata (found ${miniNextHomePath ? JSON.stringify({
+      label: miniNextHomePath.label,
+      path: miniNextHomePath.metadata?.path,
+      next: miniNextHomePath.metadata?.next,
+      framework: miniNextHomePath.metadata?.framework,
+    }) : "(missing)"})`,
+  );
+} else {
+  pass("mini-next Home page atom: path=/ framework=next");
+}
+if (
+  !miniNextDashboardPath ||
+  miniNextDashboardPath.label !== "Dashboard" ||
+  miniNextDashboardPath.metadata?.next !== "page" ||
+  miniNextDashboardPath.metadata?.framework !== "next"
+) {
+  fail(
+    `mini-next Dashboard page atom missing path=/dashboard metadata (found ${miniNextDashboardPath ? JSON.stringify({
+      label: miniNextDashboardPath.label,
+      path: miniNextDashboardPath.metadata?.path,
+      next: miniNextDashboardPath.metadata?.next,
+      framework: miniNextDashboardPath.metadata?.framework,
+    }) : "(missing)"})`,
+  );
+} else {
+  pass("mini-next Dashboard page atom: path=/dashboard framework=next");
+}
+const miniNextPagePathsMissing = miniNextPages.filter(
+  (node) =>
+    typeof node.metadata?.path !== "string" ||
+    !String(node.metadata.path).startsWith("/") ||
+    node.metadata?.next !== "page" ||
+    node.metadata?.framework !== "next",
+);
+if (miniNextPagePathsMissing.length) {
+  fail(
+    `mini-next page atoms missing App Router path metadata: ${miniNextPagePathsMissing
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass(
+    `mini-next ${miniNextPages.length} page atoms lock path + next=page + framework=next`,
+  );
+}
+const miniNextLayoutPathsMissing = miniNextLayouts.filter(
+  (node) =>
+    typeof node.metadata?.path !== "string" ||
+    !String(node.metadata.path).startsWith("/") ||
+    node.metadata?.framework !== "next",
+);
+if (miniNextLayoutPathsMissing.length || miniNextLayouts.length < 2) {
+  fail(
+    `mini-next layout atoms expected >=2 with path metadata, found ${miniNextLayouts.length} (bad: ${miniNextLayoutPathsMissing
+      .map((node) => node.label)
+      .join(", ") || "none"})`,
+  );
+} else {
+  pass(
+    `mini-next ${miniNextLayouts.length} layout atoms lock path + next=layout + framework=next`,
+  );
 }
 
 const miniNextSystems = miniNextGraph.nodes.filter(
@@ -2507,33 +2775,66 @@ if (miniNextByKey.get("api")?.label !== "Posts API") {
 const miniNextFlow = miniNextSystems
   .filter((node) => typeof node.metadata?.flowOrder === "number")
   .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
-const miniNextFlowKeys = miniNextFlow.map((node) => node.metadata.systemKey);
+const miniNextFlowLabels = miniNextFlow.map((node) => node.label);
+const miniNextHomeMolecule = miniNextByKey.get("page:/");
+const miniNextDashboardMolecule = miniNextByKey.get("page:/dashboard");
+const miniNextApi = miniNextByKey.get("api");
+const miniNextUi = miniNextByKey.get("ui");
 if (
-  miniNextFlowKeys.indexOf("ui") < 0 ||
-  miniNextFlowKeys.indexOf("api") < 0 ||
-  miniNextFlowKeys.indexOf("ui") > miniNextFlowKeys.indexOf("api")
+  !miniNextHomeMolecule ||
+  !miniNextDashboardMolecule ||
+  miniNextHomeMolecule.metadata?.routeMolecule !== true ||
+  miniNextDashboardMolecule.metadata?.routeMolecule !== true
 ) {
   fail(
-    `mini-next flowOrder expected UI → API, got ${miniNextFlow.map((node) => node.label).join(" → ") || "(none)"}`,
+    `mini-next expected Home + Dashboard route molecules, found keys=${[...miniNextByKey.keys()].join(", ")}`,
+  );
+} else if (
+  miniNextFlowLabels.indexOf("Home") < 0 ||
+  miniNextFlowLabels.indexOf("Dashboard") < 0 ||
+  miniNextFlowLabels.indexOf("Posts API") < 0 ||
+  miniNextFlowLabels.indexOf("Home") > miniNextFlowLabels.indexOf("Posts API") ||
+  miniNextFlowLabels.indexOf("Dashboard") > miniNextFlowLabels.indexOf("Posts API")
+) {
+  fail(
+    `mini-next flowOrder expected Home + Dashboard → Posts API, got ${miniNextFlowLabels.join(" → ") || "(none)"}`,
+  );
+} else if (miniNextFlowLabels.includes("Journal UI")) {
+  fail(
+    `mini-next Beginner must not keep Journal UI blob in flowOrder; got ${miniNextFlowLabels.join(" → ")}`,
+  );
+} else {
+  pass(`mini-next flowOrder: ${miniNextFlowLabels.join(" → ")}`);
+}
+
+if (miniNextUi?.metadata?.collapsedInOverview !== true) {
+  fail("mini-next aggregate Journal UI should collapse behind route molecules");
+} else {
+  pass("mini-next Journal UI collapsed behind Home/Dashboard molecules");
+}
+
+// Home prefers derived writes (from PostForm→Create post); inferred uses is
+// dropped when a derived reads/writes twin exists. Dashboard keeps uses.
+const miniNextHomeStoryToApi = miniNextGraph.edges.some(
+  (edge) =>
+    (edge.kind === "uses" || edge.kind === "writes" || edge.kind === "reads") &&
+    edge.source === miniNextHomeMolecule?.id &&
+    edge.target === miniNextApi?.id,
+);
+const miniNextDashboardUsesApi = miniNextGraph.edges.some(
+  (edge) =>
+    edge.kind === "uses" &&
+    edge.source === miniNextDashboardMolecule?.id &&
+    edge.target === miniNextApi?.id,
+);
+if (!miniNextHomeStoryToApi || !miniNextDashboardUsesApi) {
+  fail(
+    "mini-next missing Home -[uses|writes|reads]-> / Dashboard -[uses]-> Posts API collaboration",
   );
 } else {
   pass(
-    `mini-next flowOrder: ${miniNextFlow.map((node) => node.label).join(" → ")}`,
+    "mini-next collaboration: Home story→Posts API + Dashboard -[uses]-> Posts API",
   );
-}
-
-const miniNextUi = miniNextByKey.get("ui");
-const miniNextApi = miniNextByKey.get("api");
-const miniNextUiUsesApi = miniNextGraph.edges.some(
-  (edge) =>
-    edge.kind === "uses" &&
-    edge.source === miniNextUi?.id &&
-    edge.target === miniNextApi?.id,
-);
-if (!miniNextUiUsesApi) {
-  fail("mini-next missing Journal UI -[uses]-> Posts API collaboration");
-} else {
-  pass("mini-next collaboration: Journal UI -[uses]-> Posts API");
 }
 
 const miniNextCommerceNoise = miniNextGraph.edges.some((edge) =>
@@ -2562,21 +2863,25 @@ if (miniNextRoutesUnderApi.length < 3) {
   pass(`mini-next ${miniNextRoutesUnderApi.length} routes nested under Posts API`);
 }
 
-const miniNextPagesUnderUi = miniNextPages.filter(
-  (node) => node.parentId === miniNextUi?.id,
+const miniNextPagesUnderMolecules = miniNextPages.filter(
+  (node) =>
+    node.parentId === miniNextHomeMolecule?.id ||
+    node.parentId === miniNextDashboardMolecule?.id,
 );
-if (miniNextPagesUnderUi.length < 2) {
+if (miniNextPagesUnderMolecules.length < 2) {
   fail(
-    `mini-next expected pages nested under Journal UI, found ${miniNextPagesUnderUi.length}`,
+    `mini-next expected pages nested under Home/Dashboard molecules, found ${miniNextPagesUnderMolecules.length}`,
   );
 } else {
-  pass(`mini-next ${miniNextPagesUnderUi.length} pages nested under Journal UI`);
+  pass(
+    `mini-next ${miniNextPagesUnderMolecules.length} pages nested under route molecules`,
+  );
 }
 
 const miniNextCollapsedRoutes = miniNextRoutesUnderApi.filter(
   (node) => node.metadata?.collapsedInOverview === true,
 );
-const miniNextCollapsedPages = miniNextPagesUnderUi.filter(
+const miniNextCollapsedPages = miniNextPagesUnderMolecules.filter(
   (node) => node.metadata?.collapsedInOverview === true,
 );
 if (miniNextCollapsedRoutes.length < 3 || miniNextCollapsedPages.length < 2) {
@@ -2598,15 +2903,83 @@ if (miniNextActionsUnderApi.length < 2) {
   pass("mini-next server actions nested under Posts API");
 }
 
-const miniNextClientsUnderUi = miniNextClientComponents.filter(
-  (node) => node.parentId === miniNextUi?.id,
+const miniNextClientsUnderHome = miniNextClientComponents.filter(
+  (node) => node.parentId === miniNextHomeMolecule?.id,
 );
-if (miniNextClientsUnderUi.length < 2) {
+if (miniNextClientsUnderHome.length < 2) {
   fail(
-    `mini-next expected client components nested under Journal UI, found ${miniNextClientsUnderUi.length}`,
+    `mini-next expected client feature roots nested under Home molecule, found ${miniNextClientsUnderHome.length}`,
   );
 } else {
-  pass("mini-next client components nested under Journal UI");
+  pass("mini-next client feature roots nested under Home molecule");
+}
+
+// System-design molecules: FE story edges from page (renders / writes).
+const miniNextPostForm = miniNextGraph.nodes.find(
+  (node) => node.kind === "component" && node.label === "Post form",
+);
+const miniNextHomePageAtom = miniNextPages.find((node) => node.label === "Home");
+const miniNextHomeRendersPostForm = miniNextGraph.edges.some(
+  (edge) =>
+    edge.kind === "renders" &&
+    edge.source === miniNextHomePageAtom?.id &&
+    edge.target === miniNextPostForm?.id,
+);
+if (!miniNextHomeRendersPostForm) {
+  fail(
+    `mini-next expected Home page -[renders]-> Post form story edge (found renders=${miniNextGraph.edges
+      .filter((edge) => edge.kind === "renders")
+      .map((edge) => {
+        const source = miniNextGraph.nodes.find((node) => node.id === edge.source);
+        const target = miniNextGraph.nodes.find((node) => node.id === edge.target);
+        return `${source?.label ?? "?"}→${target?.label ?? "?"}`;
+      })
+      .join(", ") || "(none)"})`,
+  );
+} else {
+  pass("mini-next story edge: Home -[renders]-> Post form");
+}
+
+const miniNextHomeWritesApi = miniNextGraph.edges.find(
+  (edge) =>
+    edge.kind === "writes" &&
+    edge.source === miniNextHomeMolecule?.id &&
+    edge.target === miniNextApi?.id,
+);
+if (
+  !miniNextHomeWritesApi ||
+  !miniNextHomeWritesApi.evidence?.some(
+    (item) =>
+      item.certainty === "derived" &&
+      typeof item.detail === "string" &&
+      item.detail.includes("Post form") &&
+      item.detail.includes("Create post"),
+  )
+) {
+  fail(
+    `mini-next expected Home molecule -[writes]-> Posts API via Post form → Create post (found ${
+      miniNextHomeWritesApi
+        ? JSON.stringify(miniNextHomeWritesApi.evidence?.[0] ?? null)
+        : "no writes edge"
+    })`,
+  );
+} else {
+  pass("mini-next story edge: Home -[writes]-> Posts API via Post form → Create post");
+}
+
+// Dashboard has no server-action caller — do not invent a writes edge.
+const miniNextDashboardWritesApi = miniNextGraph.edges.some(
+  (edge) =>
+    edge.kind === "writes" &&
+    edge.source === miniNextDashboardMolecule?.id &&
+    edge.target === miniNextApi?.id,
+);
+if (miniNextDashboardWritesApi) {
+  fail(
+    "mini-next Dashboard must not invent -[writes]-> Posts API without a static server-action call",
+  );
+} else {
+  pass("mini-next Dashboard has no invented writes→API edge");
 }
 
 const miniNextHome = miniNextPages.find((node) => node.label === "Home");
@@ -2625,6 +2998,420 @@ if (!miniNextHomeChild) {
   );
 } else {
   pass("mini-next Home page keeps Home page child nested (not flattened onto UI)");
+}
+
+// System-design molecules: leaf presentational chrome omitted from Intermediate.
+const miniNextLeafChrome = miniNextGraph.nodes.filter(
+  (node) => node.kind === "component" && node.metadata?.leafChrome === true,
+);
+const miniNextFeatureRoots = miniNextGraph.nodes.filter(
+  (node) => node.kind === "component" && node.metadata?.featureRoot === true,
+);
+const miniNextLeafLabels = new Set(
+  miniNextLeafChrome.map((node) => String(node.label)),
+);
+const miniNextFeatureLabels = new Set(
+  miniNextFeatureRoots.map((node) => String(node.label)),
+);
+if (!miniNextLeafLabels.has("Card") || !miniNextLeafLabels.has("Button")) {
+  fail(
+    `mini-next expected Card + Button marked leafChrome, found leaf=[${[...miniNextLeafLabels].join(", ") || "(none)"}]`,
+  );
+} else {
+  pass("mini-next presentational Card + Button marked leafChrome");
+}
+if (
+  !miniNextFeatureLabels.has("Post list") ||
+  !miniNextFeatureLabels.has("Post form")
+) {
+  fail(
+    `mini-next expected Post list + Post form marked featureRoot, found roots=[${[...miniNextFeatureLabels].join(", ") || "(none)"}]`,
+  );
+} else {
+  pass("mini-next page-owned Post list + Post form marked featureRoot");
+}
+if (
+  miniNextFeatureRoots.some((node) => node.metadata?.leafChrome === true) ||
+  miniNextLeafChrome.some((node) => node.metadata?.featureRoot === true)
+) {
+  fail("mini-next featureRoot and leafChrome must be mutually exclusive");
+} else {
+  pass("mini-next featureRoot ⊥ leafChrome");
+}
+
+const miniNextHomeFocus = miniNextHomeMolecule
+  ? intermediateFocusNodes(miniNextGraph, miniNextHomeMolecule.id)
+  : [];
+const miniNextHomeFocusLabels = new Set(
+  miniNextHomeFocus.map((node) => String(node.label)),
+);
+if (
+  miniNextHomeFocusLabels.has("Card") ||
+  miniNextHomeFocusLabels.has("Button")
+) {
+  fail(
+    `mini-next Home Intermediate must not dump Card/Button leaf chrome; found ${[...miniNextHomeFocusLabels].join(", ")}`,
+  );
+} else if (
+  !miniNextHomeFocusLabels.has("Post list") ||
+  !miniNextHomeFocusLabels.has("Post form") ||
+  !miniNextHomeFocusLabels.has("Home")
+) {
+  fail(
+    `mini-next Home Intermediate should keep page + feature roots; found ${[...miniNextHomeFocusLabels].join(", ") || "(none)"}`,
+  );
+} else {
+  pass(
+    "mini-next Home Intermediate keeps page + feature roots, omits Card/Button leaf chrome",
+  );
+}
+
+const miniNextBeginner = beginnerColdOpenNodes(miniNextGraph);
+const miniNextBeginnerLabels = miniNextBeginner.map((node) => String(node.label));
+const miniNextBeginnerDump = miniNextBeginner.filter((node) =>
+  ["Card", "Button", "Post list", "Post form", "Journal UI"].includes(
+    String(node.label),
+  ),
+);
+if (miniNextBeginnerDump.length) {
+  fail(
+    `mini-next Beginner must not show UI blob/component dump: ${miniNextBeginnerDump
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else if (
+  !miniNextBeginnerLabels.includes("Home") ||
+  !miniNextBeginnerLabels.includes("Dashboard") ||
+  !miniNextBeginnerLabels.includes("Posts API")
+) {
+  fail(
+    `mini-next Beginner should show Home + Dashboard + Posts API molecules, found ${miniNextBeginnerLabels.join(", ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `mini-next Beginner route molecules: ${miniNextBeginnerLabels.join(" → ")}`,
+  );
+}
+
+if (
+  !viewerHtml.includes("leafChrome") ||
+  !viewerHtml.includes("featureRoot")
+) {
+  fail("viewer must honor leafChrome / featureRoot FE omission metadata");
+} else {
+  pass("viewer wires leafChrome + featureRoot FE omission");
+}
+
+// ---------------------------------------------------------------------------
+// Vue Router fixture (verification/mini-vue): page atoms + route molecules.
+// ---------------------------------------------------------------------------
+const miniVueGraph = await compileRepository(miniVueRoot);
+const miniVueCounts = countByKind(miniVueGraph.nodes);
+console.log(
+  `Mini-vue graph: ${miniVueGraph.nodes.length} nodes, ${miniVueGraph.edges.length} edges`,
+);
+requireKind(miniVueCounts, "page", 2);
+
+const miniVuePages = miniVueGraph.nodes.filter((node) => node.kind === "page");
+const miniVueHome = miniVuePages.find(
+  (node) =>
+    node.metadata?.path === "/" &&
+    node.metadata?.framework === "vue" &&
+    node.metadata?.vue === "page",
+);
+const miniVueDashboard = miniVuePages.find(
+  (node) =>
+    node.metadata?.path === "/dashboard" &&
+    node.metadata?.framework === "vue" &&
+    node.metadata?.vue === "page",
+);
+if (!miniVueHome || miniVueHome.label !== "Home") {
+  fail(
+    `mini-vue Home page atom missing path=/ framework=vue (found ${
+      miniVueHome
+        ? JSON.stringify({
+            label: miniVueHome.label,
+            path: miniVueHome.metadata?.path,
+            framework: miniVueHome.metadata?.framework,
+            vue: miniVueHome.metadata?.vue,
+          })
+        : "(missing)"
+    })`,
+  );
+} else {
+  pass("mini-vue Home page atom: path=/ framework=vue");
+}
+if (!miniVueDashboard || miniVueDashboard.label !== "Dashboard") {
+  fail(
+    `mini-vue Dashboard page atom missing path=/dashboard framework=vue (found ${
+      miniVueDashboard
+        ? JSON.stringify({
+            label: miniVueDashboard.label,
+            path: miniVueDashboard.metadata?.path,
+            framework: miniVueDashboard.metadata?.framework,
+            vue: miniVueDashboard.metadata?.vue,
+          })
+        : "(missing)"
+    })`,
+  );
+} else {
+  pass("mini-vue Dashboard page atom: path=/dashboard framework=vue");
+}
+
+const miniVuePageEvidence = [miniVueHome, miniVueDashboard].every((page) =>
+  page?.evidence.some(
+    (item) =>
+      item.extractor === "typescript" &&
+      item.certainty === "observed" &&
+      String(item.file).includes("router"),
+  ),
+);
+if (!miniVuePageEvidence) {
+  fail("mini-vue page atoms must cite observed Vue Router table evidence");
+} else {
+  pass("mini-vue page atoms cite createRouter route table evidence");
+}
+
+const miniVueHomeRoutesToView = miniVueGraph.edges.some(
+  (edge) =>
+    edge.kind === "routes-to" &&
+    edge.source === miniVueHome?.id &&
+    miniVueGraph.nodes.some(
+      (node) =>
+        node.id === edge.target &&
+        node.kind === "module" &&
+        String(node.label).includes("HomeView"),
+    ),
+);
+if (!miniVueHomeRoutesToView) {
+  fail("mini-vue expected Home -[routes-to]-> HomeView module");
+} else {
+  pass("mini-vue story edge: Home -[routes-to]-> HomeView");
+}
+
+const miniVueSystems = miniVueGraph.nodes.filter(
+  (node) => node.metadata?.projection === "semantic",
+);
+const miniVueByKey = new Map(
+  miniVueSystems
+    .filter((node) => typeof node.metadata?.systemKey === "string")
+    .map((node) => [node.metadata.systemKey, node]),
+);
+const miniVueHomeMolecule = miniVueByKey.get("page:/");
+const miniVueDashboardMolecule = miniVueByKey.get("page:/dashboard");
+const miniVueUi = miniVueByKey.get("ui");
+if (
+  !miniVueHomeMolecule ||
+  !miniVueDashboardMolecule ||
+  miniVueHomeMolecule.metadata?.routeMolecule !== true ||
+  miniVueDashboardMolecule.metadata?.routeMolecule !== true ||
+  miniVueHomeMolecule.metadata?.framework !== "vue" ||
+  miniVueDashboardMolecule.metadata?.framework !== "vue"
+) {
+  fail(
+    `mini-vue expected Home + Dashboard Vue route molecules, found keys=${[...miniVueByKey.keys()].join(", ")}`,
+  );
+} else {
+  pass("mini-vue route molecules: Home `/` + Dashboard `/dashboard`");
+}
+
+if (miniVueUi?.label !== "Board UI") {
+  fail(
+    `mini-vue UI label expected 'Board UI' from README, found '${miniVueUi?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-vue UI labeled Board UI");
+}
+
+if (miniVueUi?.metadata?.collapsedInOverview !== true) {
+  fail("mini-vue aggregate Board UI should collapse behind route molecules");
+} else {
+  pass("mini-vue Board UI collapsed behind Home/Dashboard molecules");
+}
+
+const miniVueFlow = miniVueSystems
+  .filter((node) => typeof node.metadata?.flowOrder === "number")
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+const miniVueFlowLabels = miniVueFlow.map((node) => node.label);
+if (
+  miniVueFlowLabels.indexOf("Home") < 0 ||
+  miniVueFlowLabels.indexOf("Dashboard") < 0 ||
+  miniVueFlowLabels.includes("Board UI")
+) {
+  fail(
+    `mini-vue flowOrder expected Home + Dashboard molecules (no Board UI blob), got ${miniVueFlowLabels.join(" → ") || "(none)"}`,
+  );
+} else {
+  pass(`mini-vue flowOrder: ${miniVueFlowLabels.join(" → ")}`);
+}
+
+const miniVuePagesUnderMolecules = miniVuePages.filter(
+  (page) =>
+    page.parentId === miniVueHomeMolecule?.id ||
+    page.parentId === miniVueDashboardMolecule?.id,
+);
+if (miniVuePagesUnderMolecules.length < 2) {
+  fail(
+    `mini-vue expected pages nested under Home/Dashboard molecules, found ${miniVuePagesUnderMolecules.length}`,
+  );
+} else {
+  pass(
+    `mini-vue ${miniVuePagesUnderMolecules.length} pages nested under route molecules`,
+  );
+}
+
+const miniVueBeginner = beginnerColdOpenNodes(miniVueGraph);
+const miniVueBeginnerLabels = miniVueBeginner.map((node) => String(node.label));
+if (
+  miniVueBeginnerLabels.includes("Board UI") ||
+  !miniVueBeginnerLabels.includes("Home") ||
+  !miniVueBeginnerLabels.includes("Dashboard")
+) {
+  fail(
+    `mini-vue Beginner should show Home + Dashboard molecules (not Board UI blob), found ${miniVueBeginnerLabels.join(", ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `mini-vue Beginner route molecules: ${miniVueBeginnerLabels.join(" → ")}`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// System-design molecules dogfood plug (acceptance gates — every ACTIVE tick).
+// Locks self-map compiler story + Extractors Intermediate + FE route molecules
+// on mini-next / mini-vue without inventing structure.
+// ---------------------------------------------------------------------------
+const dogfoodSelfBeginnerChain = selfBeginner
+  .slice()
+  .sort(
+    (a, b) =>
+      (a.metadata?.flowOrder ?? 999) - (b.metadata?.flowOrder ?? 999) ||
+      String(a.label).localeCompare(String(b.label)),
+  )
+  .map((node) => String(node.label));
+const dogfoodRequiredSelfChain = [
+  "CLI",
+  "Compile pipeline",
+  "Schema contract",
+  "Extractors",
+  "Graph assembly",
+  "architecture.json",
+  "Viewer",
+  "index.html",
+];
+const dogfoodSelfChainOk =
+  dogfoodRequiredSelfChain.length === dogfoodSelfBeginnerChain.length &&
+  dogfoodRequiredSelfChain.every(
+    (label, index) => dogfoodSelfBeginnerChain[index] === label,
+  );
+const dogfoodSelfPageAtoms = selfGraph.nodes.filter(
+  (node) => node.kind === "page",
+);
+const dogfoodSelfFeDump = selfBeginner.filter((node) =>
+  ["Card", "Button", "Home", "Dashboard", "Journal UI", "Board UI"].includes(
+    String(node.label),
+  ),
+);
+const dogfoodExtractorsOk =
+  Boolean(focusExtractorsSystem) &&
+  selfExtractorsFocusLabels.has("typescript") &&
+  selfExtractorsFocusLabels.has("prisma") &&
+  selfExtractorsFocus.length >= 8 &&
+  selfExtractorsFocus.length <= 40;
+const dogfoodMiniNextOk =
+  miniNextBeginnerLabels.includes("Home") &&
+  miniNextBeginnerLabels.includes("Dashboard") &&
+  miniNextBeginnerLabels.includes("Posts API") &&
+  !miniNextBeginnerLabels.includes("Journal UI") &&
+  !miniNextBeginnerLabels.includes("Card") &&
+  !miniNextBeginnerLabels.includes("Button") &&
+  miniNextHomeMolecule?.metadata?.routeMolecule === true &&
+  miniNextDashboardMolecule?.metadata?.routeMolecule === true;
+const dogfoodMiniVueOk =
+  miniVueBeginnerLabels.includes("Home") &&
+  miniVueBeginnerLabels.includes("Dashboard") &&
+  !miniVueBeginnerLabels.includes("Board UI") &&
+  miniVueHomeMolecule?.metadata?.routeMolecule === true &&
+  miniVueDashboardMolecule?.metadata?.routeMolecule === true &&
+  miniVueHomeMolecule?.metadata?.framework === "vue" &&
+  miniVueDashboardMolecule?.metadata?.framework === "vue";
+const dogfoodBeStoryOk =
+  fixtureBeginnerLabels.includes("Checkout API") &&
+  fixtureBeginnerLabels.includes("Catalog data") &&
+  fixtureBeginnerLabels.includes("Reconciliation jobs");
+
+if (!dogfoodSelfChainOk) {
+  fail(
+    `dogfood self-map Beginner chain expected ${dogfoodRequiredSelfChain.join(" → ")}, got ${dogfoodSelfBeginnerChain.join(" → ") || "(none)"}`,
+  );
+} else if (dogfoodSelfPageAtoms.length > 0) {
+  fail(
+    `dogfood self-map must not invent FE page atoms (compiler story); found ${dogfoodSelfPageAtoms
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else if (dogfoodSelfFeDump.length > 0) {
+  fail(
+    `dogfood self-map Beginner must not dump FE UI chrome: ${dogfoodSelfFeDump
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else if (!dogfoodExtractorsOk) {
+  fail(
+    "dogfood Extractors Intermediate focus missing typescript/prisma capabilities or size out of band",
+  );
+} else if (!dogfoodMiniNextOk) {
+  fail(
+    `dogfood mini-next Beginner must keep Home + Dashboard + Posts API route molecules (no Journal UI/Card dump); found ${miniNextBeginnerLabels.join(", ") || "(none)"}`,
+  );
+} else if (!dogfoodMiniVueOk) {
+  fail(
+    `dogfood mini-vue Beginner must keep Home + Dashboard Vue route molecules (no Board UI blob); found ${miniVueBeginnerLabels.join(", ") || "(none)"}`,
+  );
+} else if (!dogfoodBeStoryOk) {
+  fail(
+    `dogfood mini-stack Beginner must keep Checkout API + Catalog data + Reconciliation jobs; found ${fixtureBeginnerLabels.join(", ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `dogfood plug: self-map ${dogfoodSelfBeginnerChain.join(" → ")}; Extractors Intermediate ${selfExtractorsFocus.length} nodes; mini-next ${miniNextBeginnerLabels.join(" → ")}; mini-vue ${miniVueBeginnerLabels.join(" → ")}; mini-stack ${fixtureBeginnerLabels.join(" → ")}`,
+  );
+}
+
+// mini-next / mini-vue Intermediate molecule drill: page atom inside hub.
+const dogfoodMiniNextHomeFocus = miniNextHomeMolecule
+  ? intermediateFocusNodes(miniNextGraph, miniNextHomeMolecule.id)
+  : [];
+const dogfoodMiniNextHomeFocusLabels = new Set(
+  dogfoodMiniNextHomeFocus.map((node) => String(node.label)),
+);
+const dogfoodMiniVueHomeFocus = miniVueHomeMolecule
+  ? intermediateFocusNodes(miniVueGraph, miniVueHomeMolecule.id)
+  : [];
+const dogfoodMiniVueHomeFocusLabels = new Set(
+  dogfoodMiniVueHomeFocus.map((node) => String(node.label)),
+);
+if (
+  !dogfoodMiniNextHomeFocusLabels.has("Home") ||
+  !dogfoodMiniNextHomeFocusLabels.has("Post list") ||
+  !dogfoodMiniNextHomeFocusLabels.has("Post form")
+) {
+  fail(
+    `dogfood mini-next Home Intermediate should keep page + feature roots; found ${[...dogfoodMiniNextHomeFocusLabels].join(", ") || "(none)"}`,
+  );
+} else if (
+  dogfoodMiniNextHomeFocusLabels.has("Card") ||
+  dogfoodMiniNextHomeFocusLabels.has("Button")
+) {
+  fail("dogfood mini-next Home Intermediate must omit Card/Button leaf chrome");
+} else if (!dogfoodMiniVueHomeFocusLabels.has("Home")) {
+  fail(
+    `dogfood mini-vue Home Intermediate should keep Home page atom; found ${[...dogfoodMiniVueHomeFocusLabels].join(", ") || "(none)"}`,
+  );
+} else {
+  pass(
+    "dogfood FE Intermediate drills: mini-next Home (page+features) + mini-vue Home page",
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -3156,32 +3943,56 @@ if (nextRealRoot) {
         `next-real-repo App Router pages: ${expectedNextPages.join(", ")}`,
       );
     }
-    if (nextUi) {
-      const orphanPages = nextPages.filter((node) => node.parentId !== nextUi.id);
+    const nextRouteMolecules = nextSemantic.filter(
+      (node) => node.metadata?.routeMolecule === true,
+    );
+    const nextRouteMoleculeIds = new Set(nextRouteMolecules.map((node) => node.id));
+    if (nextRouteMolecules.length < 4) {
+      fail(
+        `next-real-repo expected ≥4 FE route molecules, found ${nextRouteMolecules.length} (${nextRouteMolecules.map((node) => node.label).join(", ") || "none"})`,
+      );
+    } else {
+      pass(
+        `next-real-repo ${nextRouteMolecules.length} FE route molecules: ${nextRouteMolecules.map((node) => node.label).join(", ")}`,
+      );
+    }
+    if (nextUi?.metadata?.collapsedInOverview !== true) {
+      fail("next-real-repo aggregate UI should collapse behind route molecules");
+    } else {
+      pass("next-real-repo aggregate UI collapsed behind route molecules");
+    }
+    {
+      const orphanPages = nextPages.filter(
+        (node) => !nextRouteMoleculeIds.has(node.parentId),
+      );
       if (orphanPages.length) {
         fail(
-          `next-real-repo pages not nested under UI: ${orphanPages
+          `next-real-repo pages not nested under route molecules: ${orphanPages
             .map((node) => node.label)
             .join(", ")}`,
         );
       } else if (nextPages.length < 8) {
         fail(
-          `next-real-repo expected ≥8 pages nested under UI, found ${nextPages.length}`,
+          `next-real-repo expected ≥8 pages nested under route molecules, found ${nextPages.length}`,
         );
       } else {
-        pass(`next-real-repo ${nextPages.length} pages nested under UI`);
+        pass(
+          `next-real-repo ${nextPages.length} pages nested under route molecules`,
+        );
       }
       const uncollapsedPages = nextPages.filter(
         (node) => node.metadata?.collapsedInOverview !== true,
       );
       if (uncollapsedPages.length) {
         fail(
-          `next-real-repo pages should collapse on overview under UI: ${uncollapsedPages
+          `next-real-repo pages should collapse on overview under route molecules: ${uncollapsedPages
             .map((node) => node.label)
             .join(", ")}`,
         );
       } else {
-        pass("next-real-repo pages collapsed on overview (UI tells the story)");
+        pass(
+          "next-real-repo pages collapsed on overview (route molecules tell the story)",
+        );
       }
     }
 
@@ -3477,17 +4288,24 @@ if (nextRealRoot) {
       .filter((node) => typeof node.metadata?.flowOrder === "number")
       .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder)
       .map((node) => node.label);
-    const uiIdx = nextFlowWithData.indexOf("UI");
+    const nextFlowMoleculeLabels = nextRouteMolecules.map((node) => node.label);
+    const firstMoleculeIdx = Math.min(
+      ...nextFlowMoleculeLabels.map((label) => nextFlowWithData.indexOf(label)),
+    );
     const apiIdx = nextFlowWithData.indexOf("HTTP API");
     const dataIdx = nextFlowWithData.indexOf("Data access");
+    const missingFlowMolecules = nextFlowMoleculeLabels.filter(
+      (label) => !nextFlowWithData.includes(label),
+    );
     if (
-      uiIdx < 0 ||
+      missingFlowMolecules.length ||
       apiIdx < 0 ||
       dataIdx < 0 ||
-      !(uiIdx < apiIdx && apiIdx < dataIdx)
+      !(firstMoleculeIdx < apiIdx && apiIdx < dataIdx) ||
+      nextFlowWithData.includes("UI")
     ) {
       fail(
-        `next-real-repo flowOrder should be UI → HTTP API → Data access, got ${nextFlowWithData.join(" → ") || "(none)"}`,
+        `next-real-repo flowOrder should be route molecules → HTTP API → Data access (no UI blob), got ${nextFlowWithData.join(" → ") || "(none)"}`,
       );
     } else {
       pass(`next-real-repo flowOrder: ${nextFlowWithData.join(" → ")}`);
