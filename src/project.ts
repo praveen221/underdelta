@@ -1145,6 +1145,11 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
   ) {
     return { key: "api", label: "HTTP API", kind: "api" };
   }
+  // Client API modules (`src/apis/**`, `apis/**`) — Next/SaaS apps call the
+  // backend here (axios/fetch). Not the same as `/api/` path substring.
+  if (/(^|\/)apis\//.test(file)) {
+    return { key: "api", label: "HTTP API", kind: "api" };
+  }
   // Next.js App Router pages/layouts are the product UI (before generic /api/).
   if (
     /(?:^|\/)(?:src\/)?app\/(?:.+\/)?(page|layout|loading|error|template|default)\.[cm]?[jt]sx?$/.test(
@@ -2367,15 +2372,37 @@ function projectApiRouteDomainGroups(
   nodes.set(more.id, more);
 }
 
-/** Server-action label → story edge kind (mutations write; getters read). */
+/** Server-action / client-API label → story edge kind (mutations write; getters read). */
 function serverActionStoryEdgeKind(label: string): "reads" | "writes" {
   const normalized = label.toLowerCase();
+  // Word tokens ("List posts") and camelCase / snake prefixes (listPosts, get_user).
   if (
-    /\b(get|list|find|fetch|load|read|query|show|select)\b/.test(normalized)
+    /\b(get|list|find|fetch|load|read|query|show|select)\b/.test(normalized) ||
+    /^(get|list|find|fetch|load|read|query|show|select)([a-z0-9]|_)/i.test(
+      label.replace(/\s+/g, ""),
+    )
   ) {
     return "reads";
   }
   return "writes";
+}
+
+/** Client API helpers under `apis/**` (axios/fetch wrappers), not server actions. */
+function isClientApiFunction(
+  node: ArchitectureNode,
+  nodes: Map<string, ArchitectureNode>,
+): boolean {
+  if (node.metadata?.serverAction === true) return false;
+  if (node.kind !== "function" && node.kind !== "hook") return false;
+  for (const item of node.evidence) {
+    const file = normalizePath(item.file);
+    if (/(^|\/)apis\//.test(file)) return true;
+  }
+  const parent = node.parentId ? nodes.get(node.parentId) : undefined;
+  if (parent?.kind === "module" && /(^|\/)apis\//.test(modulePath(parent))) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -2383,6 +2410,8 @@ function serverActionStoryEdgeKind(label: string): "reads" | "writes" {
  * - `renders` page atom → page-owned feature root (lifted from page-body JSX)
  * - `reads`/`writes` page molecule → API when a owned feature root calls a
  *   server action nested under the API system
+ * - `reads`/`writes` page molecule → API when a owned feature root calls a
+ *   client `apis/**` helper (Next/SaaS axios/fetch wrappers)
  */
 function liftFePageStoryEdges(
   nodes: Map<string, ArchitectureNode>,
@@ -2431,6 +2460,40 @@ function liftFePageStoryEdges(
 
   if (!api) return;
 
+  const liftMoleculeApiStory = (
+    source: ArchitectureNode,
+    target: ArchitectureNode,
+    seed: Evidence,
+    via: string,
+  ): void => {
+    const moleculeKey =
+      typeof source.metadata?.routeMolecule === "string"
+        ? source.metadata.routeMolecule
+        : typeof source.metadata?.projectedSystem === "string" &&
+            String(source.metadata.projectedSystem).startsWith("page:")
+          ? String(source.metadata.projectedSystem)
+          : undefined;
+    if (!moleculeKey) return;
+    const molecule = systems.get(moleculeKey);
+    if (!molecule) return;
+
+    const targetLabel = humanizeIdentifierLabel(target.label);
+    const kind = serverActionStoryEdgeKind(targetLabel);
+    const lifted = edgeFrom(
+      kind,
+      molecule.id,
+      api.id,
+      {
+        ...seed,
+        extractor: "projection",
+        certainty: "derived",
+        detail: `${molecule.label} ${kind} ${api.label} via ${source.label} → ${targetLabel} (${via})`,
+      },
+      targetLabel,
+    );
+    if (!edges.has(lifted.id)) edges.set(lifted.id, lifted);
+  };
+
   // Page molecule → API reads/writes from featureRoot → serverAction calls.
   for (const edge of [...edges.values()]) {
     if (edge.kind !== "calls") continue;
@@ -2440,33 +2503,28 @@ function liftFePageStoryEdges(
     if (source.metadata?.featureRoot !== true) continue;
     if (target.metadata?.serverAction !== true) continue;
     if (target.parentId !== api.id) continue;
-
-    const moleculeKey =
-      typeof source.metadata?.routeMolecule === "string"
-        ? source.metadata.routeMolecule
-        : typeof source.metadata?.projectedSystem === "string" &&
-            String(source.metadata.projectedSystem).startsWith("page:")
-          ? String(source.metadata.projectedSystem)
-          : undefined;
-    if (!moleculeKey) continue;
-    const molecule = systems.get(moleculeKey);
-    if (!molecule) continue;
-
-    const kind = serverActionStoryEdgeKind(target.label);
-    const seed = edge.evidence[0]!;
-    const lifted = edgeFrom(
-      kind,
-      molecule.id,
-      api.id,
-      {
-        ...seed,
-        extractor: "projection",
-        certainty: "derived",
-        detail: `${molecule.label} ${kind} ${api.label} via ${source.label} → ${target.label}`,
-      },
-      target.label,
+    liftMoleculeApiStory(
+      source,
+      target,
+      edge.evidence[0]!,
+      "server action",
     );
-    if (!edges.has(lifted.id)) edges.set(lifted.id, lifted);
+  }
+
+  // Page molecule → API from featureRoot → client `apis/**` helpers.
+  for (const edge of [...edges.values()]) {
+    if (edge.kind !== "calls") continue;
+    const source = nodes.get(edge.source);
+    const target = nodes.get(edge.target);
+    if (!source || !target) continue;
+    if (source.metadata?.featureRoot !== true) continue;
+    if (!isClientApiFunction(target, nodes)) continue;
+    liftMoleculeApiStory(
+      source,
+      target,
+      edge.evidence[0]!,
+      "client apis module",
+    );
   }
 }
 
@@ -4108,6 +4166,12 @@ export function projectSemanticArchitecture(
     } else if (node.metadata?.serverAction === true) {
       // checkoutAction → Checkout (drop trailing Action factory chrome).
       nextLabel = humanizeServerActionLabel(node.label);
+    } else if (
+      (node.kind === "function" || node.kind === "hook") &&
+      isClientApiFunction(node, nodes)
+    ) {
+      // Client apis/** helpers: listPosts → List posts (same vocabulary as actions).
+      nextLabel = humanizeIdentifierLabel(node.label);
     } else if (node.kind === "job") {
       // Celery send_digest → Send digest
       nextLabel = humanizeIdentifierLabel(

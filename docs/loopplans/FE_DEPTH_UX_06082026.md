@@ -113,12 +113,12 @@ If Shree missing: `Dogfood: Shree unavailable — fixtures only` (allowed mid-lo
 - [x] Prior whiteboard loop landed on this branch base (compression, Heart labels/groups, junk C/Col, Scholar uiOnly)  
 - [x] This plan created  
 - [x] Soft-stop documented  
+- [x] **Learn FE→API story edges** — lift page-molecule `reads`/`writes` when feature roots call `apis/**` helpers; mini-next fixture + verify; shree-learn Temp tutor/student hubs show evidenced edges  
 
 ### In progress / next
 
 Keep **≥ 3 unchecked** until LOOP COMPLETE:
 
-- [ ] **Learn FE→API story edges** from pages/hubs to route handlers / server actions / typed client API modules (static only); fixture + shree-learn dogfood  
 - [ ] **Temp* vs product ranking polish** — Beginner should prefer Student/Tutor/Home/Login mix, not eight temp shells (score tweak; still ≤8)  
 - [ ] **Heart API label fix** — stop OpenAPI title “API Documentation” owning the API molecule label  
 - [ ] **Heart Intermediate API room** — domain groups visible on focus; quiet modules at Intermediate; verify  
@@ -138,7 +138,7 @@ Keep **≥ 3 unchecked** until LOOP COMPLETE:
 
 ### Next focus (edit every tick)
 
-> **Next focus:** Lift Learn FE→API story edges (static fetch / server actions / app route handlers) with evidence + verify fixture. Do not start inspector chrome yet. No AI. After green verify + shree-learn dogfood edge count, stop the tick.
+> **Next focus:** Temp* vs product ranking polish on Learn Beginner (prefer Student/Tutor/Home/Login mix over eight temp shells; still ≤8). Fixture + shree-learn dogfood. No inspector yet. No AI.
 
 ### Learning log
 
@@ -146,6 +146,7 @@ Keep **≥ 3 unchecked** until LOOP COMPLETE:
 - YYYY-MM-DD HH:MM UTC | Done: … | Next: … | Learned: … | Dogfood: … | Browser: …
 ```
 
+- 2026-08-06 16:29 UTC | Done: Lift FE→API story edges from featureRoot → `apis/**` client helpers (camelCase read verbs); nest `apis/` under HTTP API; mini-next PostList→listPosts reads floor | Next: Temp* ranking polish | Learned: Learn has 0 serverActions — path-convention `apis/` lift is the real FE→API story; `listPosts` needed camelCase kind detect + humanize | Dogfood: learn Beginner Demo→Login→6 temp*→HTTP API; Temp tutor -[reads]-> Get file URL + Temp student -[writes]-> Resolve certificate href (client apis); +3 off-flow page molecules; scholar 9 hubs uiOnly clientApiStory=0; heart API Documentation→Data access; verify green | Browser: n/a this tick (IR + verify; browser gate later)  
 - 2026-08-06 | Plan created after Shree browser dogfood of whiteboard tip | Next: Learn FE→API edges | Learned: fixtures ≠ Shree browser; Heart Intermediate still heavy; users need stack-aware edges + inspector value before token-saving claims | Dogfood: n/a (plan) | Browser: learn ≤8 temp-heavy; heart API Documentation→Data; scholar 8 hubs uiOnly  
 
 ---

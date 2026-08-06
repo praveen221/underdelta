@@ -1,12 +1,15 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { listPosts } from "../apis/listPosts.js";
 import { Card } from "./ui/Card.js";
 
 export function PostList() {
-  const posts = [
-    { id: "1", title: "Hello" },
-    { id: "2", title: "Second thoughts" },
-  ];
+  const [posts, setPosts] = useState<{ id: string; title: string }[]>([]);
+
+  useEffect(() => {
+    void listPosts().then(setPosts);
+  }, []);
 
   return (
     <ul>

@@ -3144,6 +3144,67 @@ if (
   pass("mini-next story edge: Home -[writes]-> Posts API via Post form → Create post");
 }
 
+// Client `apis/**` helper — Learn-style page→API reads without server actions.
+const miniNextHomeReadsApi = miniNextGraph.edges.find(
+  (edge) =>
+    edge.kind === "reads" &&
+    edge.source === miniNextHomeMolecule?.id &&
+    edge.target === miniNextApi?.id,
+);
+if (
+  !miniNextHomeReadsApi ||
+  !miniNextHomeReadsApi.evidence?.some(
+    (item) =>
+      item.certainty === "derived" &&
+      typeof item.detail === "string" &&
+      item.detail.includes("Post list") &&
+      item.detail.includes("List posts") &&
+      item.detail.includes("client apis module"),
+  )
+) {
+  fail(
+    `mini-next expected Home molecule -[reads]-> Posts API via Post list → List posts (found ${
+      miniNextHomeReadsApi
+        ? JSON.stringify(miniNextHomeReadsApi.evidence?.[0] ?? null)
+        : "no reads edge"
+    })`,
+  );
+} else {
+  pass("mini-next story edge: Home -[reads]-> Posts API via Post list → List posts");
+}
+
+const miniNextApisUnderApi = miniNextGraph.nodes.filter(
+  (node) =>
+    node.parentId === miniNextApi?.id &&
+    node.kind === "module" &&
+    /apis\//.test(String(node.metadata?.path ?? node.label ?? "")),
+);
+if (miniNextApisUnderApi.length < 1) {
+  // Module may nest by file path label — also accept function under API.
+  const miniNextListPostsFn = miniNextGraph.nodes.find(
+    (node) =>
+      (node.kind === "function" || node.kind === "hook") &&
+      /list posts/i.test(node.label) &&
+      (node.parentId === miniNextApi?.id ||
+        miniNextGraph.nodes.some(
+          (parent) =>
+            parent.id === node.parentId &&
+            parent.parentId === miniNextApi?.id,
+        )),
+  );
+  if (!miniNextListPostsFn) {
+    fail(
+      `mini-next expected apis/listPosts nested under Posts API (modules=${miniNextApisUnderApi
+        .map((node) => node.label)
+        .join(", ") || "(none)"})`,
+    );
+  } else {
+    pass("mini-next client apis helper nested under Posts API");
+  }
+} else {
+  pass(`mini-next ${miniNextApisUnderApi.length} apis module(s) nested under Posts API`);
+}
+
 // Dashboard has no server-action caller — do not invent a writes edge.
 const miniNextDashboardWritesApi = miniNextGraph.edges.some(
   (edge) =>
