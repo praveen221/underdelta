@@ -187,12 +187,45 @@ const thinSystemLabels = new Set([
 ]);
 
 /**
+ * README project-structure liturgy — numbered layers, file globs, folder maps.
+ * These must never become Product Flow system labels (Shree Heart field fail:
+ * `1. Route Layer (.route.ts)` → API).
+ */
+export function isReadmeStructureHeading(heading: string): boolean {
+  const text = heading.trim();
+  if (!text) return false;
+
+  const hasLayerWord = /\blayers?\b/i.test(text);
+  const numbered = /^\d+[\.\):]\s+/.test(text);
+  // File / folder pattern chrome in parens or backticks: (.route.ts), (*.ts), (models/)
+  const hasPathChrome =
+    /\([^)]*\.(?:ts|tsx|js|jsx|mjs|cjs|py|go|rs)[^)]*\)/i.test(text) ||
+    /\(\s*\*\.[a-z0-9]+[^)]*\)/i.test(text) ||
+    /`[^`]*\.[a-z0-9]+`/i.test(text) ||
+    /\(\s*[a-z0-9_.*/-]+\/\s*\)/i.test(text);
+
+  // "1. Route Layer (.route.ts)", "5. Data Access Layer (models/)", "5. Data Access Layer…"
+  if (numbered && hasLayerWord) return true;
+  if (hasLayerWord && hasPathChrome) return true;
+
+  // Bare folder/file map lines without "Layer": "2. Controllers (*.controller.ts)"
+  if (numbered && hasPathChrome) return true;
+
+  return false;
+}
+
+/**
  * Map a markdown heading onto a known system key. Returns undefined when the
  * heading is generic docs chrome (Status, License, …) or does not name a role.
  */
 export function inferSystemKeyFromHeading(heading: string): string | undefined {
   const text = heading.trim().toLowerCase();
   if (!text) return undefined;
+
+  // Numbered Layer / file-glob structure docs are not product system names.
+  if (isReadmeStructureHeading(heading)) {
+    return undefined;
+  }
 
   // Skip common README scaffolding that should never rename product systems.
   if (
@@ -323,6 +356,13 @@ function applyReadmeHeadingHints(
 ): void {
   if (!hints?.length) return;
   for (const hint of hints) {
+    // Defense in depth: never paint structure liturgy onto the canvas.
+    if (
+      isReadmeStructureHeading(hint.label) ||
+      isReadmeStructureHeading(hint.heading)
+    ) {
+      continue;
+    }
     const system = systems.get(hint.key);
     if (!system) continue;
     const current = system.label;

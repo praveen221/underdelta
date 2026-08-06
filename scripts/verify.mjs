@@ -5,6 +5,10 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { compileRepository } from "../dist/compile.js";
+import {
+  isReadmeStructureHeading,
+  parseReadmeHeadingHints,
+} from "../dist/project.js";
 import { renderArchitectureHtml } from "../dist/viewer.js";
 import {
   ensureRealRepo,
@@ -28,6 +32,11 @@ const miniNextRoot = path.join(repoRoot, "verification", "mini-next");
 const miniVueRoot = path.join(repoRoot, "verification", "mini-vue");
 const miniPythonRoot = path.join(repoRoot, "verification", "mini-python");
 const miniMongoRoot = path.join(repoRoot, "verification", "mini-mongo");
+const miniReadmeStructureRoot = path.join(
+  repoRoot,
+  "verification",
+  "mini-readme-structure",
+);
 const miniOpenapiRoot = path.join(repoRoot, "verification", "mini-openapi");
 const miniGraphqlRoot = path.join(repoRoot, "verification", "mini-graphql");
 const miniDockerRoot = path.join(repoRoot, "verification", "mini-docker");
@@ -118,6 +127,8 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file.includes("mini-vue/") ||
         file.includes("mini-python/") ||
         file.includes("mini-mongo/") ||
+        file.includes("mini-readme-structure/") ||
+        file.includes("mini-next-many/") ||
         file.includes("mini-openapi/") ||
         file.includes("mini-graphql/") ||
         file.includes("mini-docker/") ||
@@ -5203,6 +5214,160 @@ if (!miniMongoPipelineUsesCollection) {
   fail("mini-mongo expected aggregate pipeline -[uses:query]-> collection");
 } else {
   pass("mini-mongo aggregate pipeline -[uses:query]-> collection");
+}
+
+// ---------------------------------------------------------------------------
+// Shree Heart label hygiene: README numbered Layer / file-glob headings must
+// not become API/Data Product Flow labels (verification/mini-readme-structure).
+// Good product headings (Notes API / Catalog data) still refine labels.
+// ---------------------------------------------------------------------------
+const heartStyleStructureHeadings = [
+  "1. Route Layer (.route.ts)",
+  "2. Controller Layer (.controller.ts)",
+  "5. Data Access Layer (models/)",
+  "5. Data Access Layer…",
+  "Route Layer (*.route.ts)",
+];
+for (const heading of heartStyleStructureHeadings) {
+  if (!isReadmeStructureHeading(heading)) {
+    fail(`expected isReadmeStructureHeading(${JSON.stringify(heading)})`);
+  }
+}
+const productStyleHeadings = ["Notes API", "Catalog data", "Checkout API"];
+for (const heading of productStyleHeadings) {
+  if (isReadmeStructureHeading(heading)) {
+    fail(
+      `product heading ${JSON.stringify(heading)} must not count as README structure liturgy`,
+    );
+  }
+}
+pass("README structure liturgy detector covers Heart-style Layer/glob headings");
+
+const heartStyleReadme = `# Mini Heart
+
+## Project Structure
+
+### 1. Route Layer (.route.ts)
+Routes.
+
+### 5. Data Access Layer (models/)
+Models.
+`;
+const heartStyleHints = parseReadmeHeadingHints(heartStyleReadme);
+if (heartStyleHints.length > 0) {
+  fail(
+    `Heart-style Layer README must yield zero system-label hints, got ${JSON.stringify(heartStyleHints)}`,
+  );
+} else {
+  pass("Heart-style Layer README yields no system-label hints");
+}
+
+const goodReadmeHints = parseReadmeHeadingHints(`# Mini
+
+## Notes API
+Routes.
+
+## Catalog data
+Models.
+`);
+const goodHintLabels = Object.fromEntries(
+  goodReadmeHints.map((hint) => [hint.key, hint.label]),
+);
+if (
+  goodHintLabels.api !== "Notes API" ||
+  goodHintLabels.data !== "Catalog data"
+) {
+  fail(
+    `good product README headings must still refine labels, got ${JSON.stringify(goodHintLabels)}`,
+  );
+} else {
+  pass("good product README headings still map to Notes API / Catalog data");
+}
+
+const miniReadmeStructureGraph = await compileRepository(
+  miniReadmeStructureRoot,
+);
+const miniReadmeStructureSystems = miniReadmeStructureGraph.nodes.filter(
+  (node) => node.metadata?.projection === "semantic",
+);
+const miniReadmeStructureByKey = new Map(
+  miniReadmeStructureSystems
+    .filter((node) => typeof node.metadata?.systemKey === "string")
+    .map((node) => [node.metadata.systemKey, node]),
+);
+const miniReadmeStructureApi = miniReadmeStructureByKey.get("api");
+const miniReadmeStructureData = miniReadmeStructureByKey.get("data");
+const miniReadmeStructureProduct = miniReadmeStructureGraph.nodes.find(
+  (node) => node.kind === "product",
+);
+
+if (
+  !miniReadmeStructureProduct ||
+  miniReadmeStructureProduct.label !== "Mini Heart"
+) {
+  fail(
+    `mini-readme-structure product expected 'Mini Heart', found '${miniReadmeStructureProduct?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-readme-structure product labeled Mini Heart");
+}
+
+if (!miniReadmeStructureApi || miniReadmeStructureApi.label !== "HTTP API") {
+  fail(
+    `mini-readme-structure API must stay path-role 'HTTP API' (not Route Layer liturgy), found '${miniReadmeStructureApi?.label ?? "(missing)"}'`,
+  );
+} else if (miniReadmeStructureApi.metadata?.labelSource === "readme") {
+  fail(
+    "mini-readme-structure API must not record labelSource=readme from Layer headings",
+  );
+} else {
+  pass("mini-readme-structure API labeled HTTP API (structure liturgy suppressed)");
+}
+
+if (
+  !miniReadmeStructureData ||
+  miniReadmeStructureData.label !== "Data access"
+) {
+  fail(
+    `mini-readme-structure Data must stay path-role 'Data access' (not Data Access Layer liturgy), found '${miniReadmeStructureData?.label ?? "(missing)"}'`,
+  );
+} else if (miniReadmeStructureData.metadata?.labelSource === "readme") {
+  fail(
+    "mini-readme-structure Data must not record labelSource=readme from Layer headings",
+  );
+} else {
+  pass(
+    "mini-readme-structure Data labeled Data access (structure liturgy suppressed)",
+  );
+}
+
+const miniReadmeStructureFlow = miniReadmeStructureSystems
+  .filter((node) => typeof node.metadata?.flowOrder === "number")
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder)
+  .map((node) => node.label);
+if (
+  miniReadmeStructureFlow.includes("1. Route Layer (.route.ts)") ||
+  miniReadmeStructureFlow.some((label) =>
+    /\blayer\b/i.test(label) && /\.(route|controller|service|repository)\.?t/i.test(label),
+  ) ||
+  miniReadmeStructureFlow.some((label) =>
+    /^\d+[\.\):]\s+/.test(label),
+  )
+) {
+  fail(
+    `mini-readme-structure Product Flow still shows README Layer liturgy: ${miniReadmeStructureFlow.join(" → ")}`,
+  );
+} else if (
+  !miniReadmeStructureFlow.includes("HTTP API") ||
+  !miniReadmeStructureFlow.includes("Data access")
+) {
+  fail(
+    `mini-readme-structure Product Flow expected HTTP API → Data access, got ${miniReadmeStructureFlow.join(" → ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `mini-readme-structure Product Flow: ${miniReadmeStructureFlow.join(" → ")}`,
+  );
 }
 
 // ---------------------------------------------------------------------------
