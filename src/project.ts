@@ -154,6 +154,45 @@ export function isSampleBoilerplateTitle(title: string): boolean {
 }
 
 /**
+ * OpenAPI/Swagger docs chrome that must not own the Product Flow API hub
+ * (Shree Heart field fail: info.title / README "## API Documentation").
+ * Prefer path-role `HTTP API` or a real product heading ("Notes API").
+ */
+export function isGenericApiDocsTitle(title: string): boolean {
+  const text = title.trim().toLowerCase().replace(/\s+/g, " ");
+  if (!text) return false;
+
+  // Bare swagger/openapi tooling names without a product noun.
+  if (
+    /^(?:openapi|swagger)(?:\s+(?:ui|spec(?:ification)?|definition|docs?|documentation))?$/.test(
+      text,
+    )
+  ) {
+    return true;
+  }
+
+  // "API Documentation", "REST API Docs", "HTTP API Reference", …
+  if (
+    /^(?:(?:rest|http|web)\s+)?api(?:\s+(?:docs?|documentation|reference|spec(?:ification)?|definition|description))?$/.test(
+      text,
+    )
+  ) {
+    return true;
+  }
+
+  // "OpenAPI Documentation", "Swagger API Docs", "OAS Spec", …
+  if (
+    /^(?:openapi|swagger|oas)(?:\s+api)?(?:\s+(?:docs?|documentation|reference|spec(?:ification)?|definition))?$/.test(
+      text,
+    )
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * OpenAPI `info.title` often appends version chrome ("Swagger Petstore - OpenAPI 3.0").
  * Strip that so the canvas brand reads as the product.
  */
@@ -224,6 +263,11 @@ export function inferSystemKeyFromHeading(heading: string): string | undefined {
 
   // Numbered Layer / file-glob structure docs are not product system names.
   if (isReadmeStructureHeading(heading)) {
+    return undefined;
+  }
+
+  // OpenAPI/Swagger docs chrome ("API Documentation") must not rename HTTP API.
+  if (isGenericApiDocsTitle(heading)) {
     return undefined;
   }
 
@@ -356,10 +400,12 @@ function applyReadmeHeadingHints(
 ): void {
   if (!hints?.length) return;
   for (const hint of hints) {
-    // Defense in depth: never paint structure liturgy onto the canvas.
+    // Defense in depth: never paint structure liturgy or docs chrome onto the canvas.
     if (
       isReadmeStructureHeading(hint.label) ||
-      isReadmeStructureHeading(hint.heading)
+      isReadmeStructureHeading(hint.heading) ||
+      isGenericApiDocsTitle(hint.label) ||
+      isGenericApiDocsTitle(hint.heading)
     ) {
       continue;
     }
@@ -3600,7 +3646,8 @@ export function projectSemanticArchitecture(
   if (!product) return graph;
 
   // OpenAPI/Swagger specs carry the real product name when the README is
-  // sample/demo boilerplate ("Swagger Petstore Sample").
+  // sample/demo boilerplate ("Swagger Petstore Sample"). Skip docs chrome
+  // titles ("API Documentation") — those are not a product brand.
   const openapiInfoTitle = [...nodes.values()]
     .map((node) =>
       node.metadata?.openapiSpec === true &&
@@ -3608,7 +3655,10 @@ export function projectSemanticArchitecture(
         ? cleanOpenApiInfoTitle(node.metadata.openapiTitle)
         : undefined,
     )
-    .find((title) => title && title.length > 0);
+    .find(
+      (title) =>
+        title && title.length > 0 && !isGenericApiDocsTitle(title),
+    );
 
   // Prefer a cleaned README H1 when package.json name is scoped/non-descriptive.
   // When README is sample boilerplate and an OpenAPI info.title exists, prefer

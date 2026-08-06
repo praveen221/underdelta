@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { compileRepository } from "../dist/compile.js";
 import {
+  isGenericApiDocsTitle,
   isReadmeStructureHeading,
   isTrivialMongoAggregateLabel,
   INTERMEDIATE_NAKED_ROUTE_CAP,
@@ -5527,8 +5528,29 @@ for (const heading of productStyleHeadings) {
       `product heading ${JSON.stringify(heading)} must not count as README structure liturgy`,
     );
   }
+  if (isGenericApiDocsTitle(heading)) {
+    fail(
+      `product heading ${JSON.stringify(heading)} must not count as generic API docs chrome`,
+    );
+  }
 }
 pass("README structure liturgy detector covers Heart-style Layer/glob headings");
+
+const genericApiDocsTitles = [
+  "API Documentation",
+  "API Docs",
+  "REST API Documentation",
+  "HTTP API Reference",
+  "Swagger",
+  "OpenAPI Documentation",
+  "Swagger API Docs",
+];
+for (const title of genericApiDocsTitles) {
+  if (!isGenericApiDocsTitle(title)) {
+    fail(`expected isGenericApiDocsTitle(${JSON.stringify(title)})`);
+  }
+}
+pass("generic API docs title detector covers OpenAPI/Swagger chrome");
 
 const heartStyleReadme = `# Mini Heart
 
@@ -5547,6 +5569,30 @@ if (heartStyleHints.length > 0) {
   );
 } else {
   pass("Heart-style Layer README yields no system-label hints");
+}
+
+const apiDocsChromeReadme = `# Mini Heart
+
+## API Documentation
+Swagger docs.
+
+## Catalog data
+Models.
+`;
+const apiDocsChromeHints = parseReadmeHeadingHints(apiDocsChromeReadme);
+const apiDocsChromeLabels = Object.fromEntries(
+  apiDocsChromeHints.map((hint) => [hint.key, hint.label]),
+);
+if (apiDocsChromeLabels.api) {
+  fail(
+    `API Documentation README must not hint api system, got ${JSON.stringify(apiDocsChromeLabels)}`,
+  );
+} else if (apiDocsChromeLabels.data !== "Catalog data") {
+  fail(
+    `API Documentation README should still allow Catalog data, got ${JSON.stringify(apiDocsChromeLabels)}`,
+  );
+} else {
+  pass("API Documentation README chrome yields no api system hint");
 }
 
 const goodReadmeHints = parseReadmeHeadingHints(`# Mini
@@ -5601,14 +5647,18 @@ if (
 
 if (!miniReadmeStructureApi || miniReadmeStructureApi.label !== "HTTP API") {
   fail(
-    `mini-readme-structure API must stay path-role 'HTTP API' (not Route Layer liturgy), found '${miniReadmeStructureApi?.label ?? "(missing)"}'`,
+    `mini-readme-structure API must stay path-role 'HTTP API' (not Route Layer / API Documentation chrome), found '${miniReadmeStructureApi?.label ?? "(missing)"}'`,
   );
 } else if (miniReadmeStructureApi.metadata?.labelSource === "readme") {
   fail(
-    "mini-readme-structure API must not record labelSource=readme from Layer headings",
+    "mini-readme-structure API must not record labelSource=readme from Layer or API Documentation headings",
+  );
+} else if (/api documentation/i.test(miniReadmeStructureApi.label)) {
+  fail(
+    `mini-readme-structure API must not be titled 'API Documentation', found '${miniReadmeStructureApi.label}'`,
   );
 } else {
-  pass("mini-readme-structure API labeled HTTP API (structure liturgy suppressed)");
+  pass("mini-readme-structure API labeled HTTP API (structure liturgy + API Documentation suppressed)");
 }
 
 if (
