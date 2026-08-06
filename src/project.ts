@@ -3185,6 +3185,64 @@ function isScreamingSnakeBinding(name: string): boolean {
   return /^[A-Z][A-Z0-9]*(_[A-Z0-9]+)+$/.test(name);
 }
 
+/**
+ * Collection-handle crumbs that become junk overview hubs
+ * (`C pipeline`, `Col pipeline`) on foreign Mongo apps (Shree Heart).
+ * Real product stems (Note, Search chunks, Tag) stay.
+ */
+const TRIVIAL_MONGO_AGGREGATE_HANDLES = new Set([
+  "c",
+  "col",
+  "coll",
+  "cols",
+  "colls",
+  "doc",
+  "docs",
+  "row",
+  "rows",
+  "cur",
+  "cursor",
+  "agg",
+  "tmp",
+  "temp",
+  "res",
+  "obj",
+  "arr",
+  "val",
+  "item",
+  "items",
+  "data",
+  "db",
+  "rec",
+  "recs",
+  "ent",
+  "ents",
+  "mod",
+  "model",
+  "models",
+  "schema",
+]);
+
+/**
+ * True when a mongo aggregate pipeline label is a short variable/handle crumb
+ * rather than a product collection story (Shree Heart field gate).
+ */
+export function isTrivialMongoAggregateLabel(label: string): boolean {
+  const stem = label.replace(/\s+pipeline$/i, "").trim();
+  if (!stem) return true;
+  const compact = stem.replace(/\s+/g, "");
+  if (/^[A-Za-z]$/.test(compact)) return true;
+  if (TRIVIAL_MONGO_AGGREGATE_HANDLES.has(compact.toLowerCase())) return true;
+  // Two-letter alpha crumbs (cx, tx) — keep known product acronyms (AI, DB).
+  if (
+    /^[A-Za-z]{2}$/.test(compact) &&
+    !PRODUCT_ACRONYMS.has(compact.toLowerCase())
+  ) {
+    return true;
+  }
+  return false;
+}
+
 function preferredCollectionLabel(bucket: ArchitectureNode[]): string {
   const ranked = [...bucket].sort((a, b) => {
     const rankDiff = collectionRank(b) - collectionRank(a);
@@ -4459,10 +4517,21 @@ export function projectSemanticArchitecture(
         dataSystem.id,
         node.evidence[0] ?? projectionEvidence("."),
       );
+      // Junk handle crumbs (`C pipeline`, `Col pipeline`) stay off
+      // Beginner/overview — real product aggregates remain overview hubs.
+      const trivial = isTrivialMongoAggregateLabel(nextLabel);
       node.metadata = {
         ...node.metadata,
-        overviewHub: true,
-        collapsedInOverview: false,
+        ...(trivial
+          ? {
+              trivialMongoAggregate: true,
+              overviewHub: false,
+              collapsedInOverview: true,
+            }
+          : {
+              overviewHub: true,
+              collapsedInOverview: false,
+            }),
       };
       nodes.set(node.id, node);
       // Stage leaves (Filter/Group/Sort) stay Details-only — the hub label

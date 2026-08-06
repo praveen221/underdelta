@@ -879,6 +879,15 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         if (node.metadata && node.metadata.leafChrome && !isAdvancedTier()) {
           return false;
         }
+        // Trivial Mongo aggregate crumbs (C pipeline / Col pipeline) stay
+        // off Beginner/Intermediate; Advanced-in-focus may still reveal them.
+        if (
+          node.metadata &&
+          node.metadata.trivialMongoAggregate &&
+          !isAdvancedTier()
+        ) {
+          return false;
+        }
         // Detection surfaces live under capabilities — only show inside that
         // capability focus (never flood Extractors Intermediate with every surface).
         if (isDetectionSurface(node)) {

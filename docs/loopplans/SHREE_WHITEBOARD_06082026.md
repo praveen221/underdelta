@@ -144,13 +144,13 @@ Learning log **must** include (one line OK):
 - [x] Soft-stop / LOOP COMPLETE idle protocol documented  
 - [x] **Learn Beginner compression:** `compressFeBeginnerRouteMolecules` — cap 8, score>10 only (no marketing fill); `verification/mini-next-many` floors; shree-learn dogfood ≤8 page hubs  
 - [x] **Heart label hygiene:** `isReadmeStructureHeading` rejects numbered Layer / file-glob / folder-map README lines; API/Data stay path-role product vocabulary (`HTTP API` / `Data access`); good headings (Notes API / Catalog data) still refine; `verification/mini-readme-structure` + verify floors  
+- [x] **Heart Intermediate route groups:** `projectApiRouteDomainGroups` + `INTERMEDIATE_NAKED_ROUTE_CAP` (24); OpenAPI/GraphQL contract surfaces skipped; `verification/mini-routes-many` floors  
+- [x] **Kill junk pipelines:** `isTrivialMongoAggregateLabel` + `trivialMongoAggregate` collapse; C/Col crumbs off Beginner/overview; product aggregates stay hubs; mini-mongo fixture + verify floors  
 
 ### In progress / next
 
 Keep **≥ 3 unchecked** until LOOP COMPLETE:
 
-- [ ] **Heart Intermediate route groups:** group Express/Heart routes by module/prefix domain; cap naked route visibility; verify floor  
-- [ ] **Kill junk pipelines:** suppress trivial Mongo aggregate pipeline nodes on overview/Beginner; verify floor on mini-mongo / heart  
 - [ ] **Scholar calm + honesty:** keep ≤ 12 hubs; API neighbor only with evidence, else UI-only note in Learning log  
 - [ ] **Shree dogfood floors in verify (optional proxy):** if CI cannot see Shree, fixtures alone must encode gates 1–4; document path in Learning log  
 - [ ] **Final LOOP COMPLETE gate pass** (gates 1–8 in one tick)
@@ -164,7 +164,7 @@ Keep **≥ 3 unchecked** until LOOP COMPLETE:
 
 ### Next focus (edit every tick)
 
-> **Next focus:** Heart label hygiene done (Layer/glob README liturgy suppressed; mini-readme-structure locks HTTP API → Data access). Now Heart Intermediate route groups — group Express/Heart routes by module/prefix domain; cap naked route visibility (suggest ≤24); verify floor. Do not start junk-pipeline kill yet. No AI. Stop after green verify + Shree dogfood note.
+> **Next focus:** Junk Mongo pipelines suppressed (C/Col crumbs collapsed; Search chunks / Note stay hubs; mini-mongo floors). Now Scholar calm + honesty — keep ≤12 Beginner hubs; add API/Data neighbor only with static evidence, else Learning-log UI-only (no invented Jobs/Data). No AI. Stop after green verify + Shree dogfood note.
 
 ### Learning log (append every tick)
 
@@ -175,6 +175,7 @@ Keep **≥ 3 unchecked** until LOOP COMPLETE:
 - 2026-08-06 | Plan created from Shree field scans (learn 34 flow hubs; heart README-layer labels + junk pipelines; scholar FE-only) | Next: Learn Beginner compression | Learned: molecules loop fixed fixtures; foreign Next apps still flood Beginner; Heart README structure is poisoning system labels | Dogfood: learn=34 flow, heart=API→Data with layer names, scholar=11 hubs
 - 2026-08-06 15:33 UTC | Done: Beginner route-molecule compression (cap 8, never fill with score≤10 marketing); mini-next-many fixture + verify; mini-next 2-hub path unchanged | Next: Heart label hygiene | Learned: cap must be a maximum not a fill target — filling to 8 re-admits exam pages; temp* shells outrank /student on learn (seed polish) | Dogfood: shree-learn page hubs=8 (Demo → Login → Temp applicant dashboard → Temp demo → Tempsignin → Temp student → Temp tutor → Temp welcome → HTTP API); omitted 25; verify passed
 - 2026-08-06 15:36 UTC | Done: Heart label hygiene — `isReadmeStructureHeading` + mini-readme-structure fixture; API/Data stay HTTP API → Data access; good README product headings unchanged | Next: Heart Intermediate route groups | Learned: first-match README hints meant Route Layer won the api key before any human product heading could; reject structure liturgy entirely rather than sanitize Layer wording | Dogfood: Shree paths unavailable — fixture floors only; mini-readme-structure flow=HTTP API → Data access; verify passed
+- 2026-08-06 15:48 UTC | Done: reconciled Heart Intermediate route groups (prior commits: domain groups + naked cap 24 + skip OpenAPI/GraphQL) + kill junk Mongo pipelines (`isTrivialMongoAggregateLabel` / `trivialMongoAggregate`; mini-mongo C/Col crumbs collapsed; product hubs kept) | Next: Scholar calm + honesty | Learned: short receiver handles (`C` / `col`) mint overview hubs unless projection treats label quality separately from extraction; keep product aggregates visible | Dogfood: Shree paths unavailable — fixture floors only; verify pending in this tick
 
 ---
 

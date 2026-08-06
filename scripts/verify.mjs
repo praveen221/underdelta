@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { compileRepository } from "../dist/compile.js";
 import {
   isReadmeStructureHeading,
+  isTrivialMongoAggregateLabel,
   INTERMEDIATE_NAKED_ROUTE_CAP,
   parseReadmeHeadingHints,
 } from "../dist/project.js";
@@ -5185,6 +5186,25 @@ if (miniMongoVisibleChrome.length > 0) {
 }
 
 // Mongo `.aggregate([...])` → pipeline hubs under Catalog data (RAG/query story).
+// Product aggregates stay overview hubs; handle crumbs (`C` / `Col`) collapse.
+for (const [label, expectTrivial] of [
+  ["C pipeline", true],
+  ["Col pipeline", true],
+  ["Note pipeline", false],
+  ["Search chunks pipeline", false],
+  ["Tag pipeline", false],
+]) {
+  if (isTrivialMongoAggregateLabel(label) !== expectTrivial) {
+    fail(
+      `isTrivialMongoAggregateLabel(${JSON.stringify(label)}) expected ${expectTrivial}`,
+    );
+  } else {
+    pass(
+      `isTrivialMongoAggregateLabel(${JSON.stringify(label)}) → ${expectTrivial}`,
+    );
+  }
+}
+
 const miniMongoAggregates = miniMongoGraph.nodes.filter(
   (node) =>
     node.kind === "pipeline" && node.metadata?.mongoAggregate === true,
@@ -5202,12 +5222,23 @@ for (const expected of ["Search chunks pipeline", "Note pipeline"]) {
   }
 }
 
+const miniMongoJunkAggregateLabels = ["C pipeline", "Col pipeline"];
+for (const expected of miniMongoJunkAggregateLabels) {
+  if (!miniMongoAggregateLabels.has(expected)) {
+    fail(
+      `mini-mongo missing junk-handle aggregate ${expected} (fixture must exercise suppression); found ${[...miniMongoAggregateLabels].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-mongo extracts junk-handle aggregate ${expected}`);
+  }
+}
+
 const miniMongoAggregatesUnderData = miniMongoAggregates.filter(
   (node) => node.parentId === miniMongoData?.id,
 );
-if (miniMongoAggregatesUnderData.length !== 2) {
+if (miniMongoAggregatesUnderData.length < 4) {
   fail(
-    `mini-mongo expected exactly 2 aggregate pipelines nested under Catalog data, found ${miniMongoAggregatesUnderData.length} (${[...miniMongoAggregateLabels].join(", ")})`,
+    `mini-mongo expected ≥4 aggregate pipelines nested under Catalog data (2 product + 2 junk), found ${miniMongoAggregatesUnderData.length} (${[...miniMongoAggregateLabels].join(", ")})`,
   );
 } else {
   pass(
@@ -5215,18 +5246,47 @@ if (miniMongoAggregatesUnderData.length !== 2) {
   );
 }
 
+const miniMongoProductAggregates = miniMongoAggregatesUnderData.filter(
+  (node) => node.metadata?.trivialMongoAggregate !== true,
+);
+const miniMongoJunkAggregates = miniMongoAggregatesUnderData.filter(
+  (node) => node.metadata?.trivialMongoAggregate === true,
+);
 if (
-  miniMongoAggregatesUnderData.some(
+  miniMongoProductAggregates.length !== 2 ||
+  miniMongoProductAggregates.some(
     (node) =>
       node.metadata?.overviewHub !== true ||
       node.metadata?.collapsedInOverview === true,
   )
 ) {
   fail(
-    "mini-mongo aggregate pipelines should stay visible on overview (overviewHub)",
+    `mini-mongo product aggregates should stay visible on overview (overviewHub); found ${miniMongoProductAggregates.map((n) => n.label).join(", ") || "(none)"}`,
   );
 } else {
-  pass("mini-mongo aggregate pipelines visible as overview hubs under Catalog data");
+  pass(
+    "mini-mongo product aggregate pipelines visible as overview hubs under Catalog data",
+  );
+}
+
+if (
+  miniMongoJunkAggregates.length < 2 ||
+  miniMongoJunkAggregates.some(
+    (node) =>
+      node.metadata?.overviewHub === true ||
+      node.metadata?.collapsedInOverview !== true,
+  ) ||
+  !miniMongoJunkAggregateLabels.every((label) =>
+    miniMongoJunkAggregates.some((node) => node.label === label),
+  )
+) {
+  fail(
+    `mini-mongo junk aggregates (C/Col) must be trivialMongoAggregate + collapsed off overview; found ${miniMongoJunkAggregates.map((n) => `${n.label} hub=${n.metadata?.overviewHub} collapsed=${n.metadata?.collapsedInOverview}`).join("; ") || "(none)"}`,
+  );
+} else {
+  pass(
+    "mini-mongo junk C/Col aggregate pipelines suppressed on Beginner/overview",
+  );
 }
 
 const miniMongoAggregateSteps = miniMongoGraph.nodes.filter(
@@ -5272,6 +5332,16 @@ if (
   );
 } else {
   pass("mini-mongo browser routes mongo aggregate hubs into Data & automation");
+}
+if (
+  !miniMongoHtml.includes("trivialMongoAggregate") ||
+  !miniMongoHtml.includes("node.metadata.trivialMongoAggregate")
+) {
+  fail(
+    "mini-mongo browser must hide trivialMongoAggregate crumbs on Beginner/Intermediate",
+  );
+} else {
+  pass("mini-mongo browser wires trivialMongoAggregate suppression");
 }
 
 const miniMongoPipelineUsesCollection = miniMongoGraph.edges.some(

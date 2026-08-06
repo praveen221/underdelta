@@ -81,6 +81,17 @@ export async function countNotesByAuthor() {
   ]);
 }
 
+/**
+ * Junk handle crumbs (Shree Heart field fail): short receivers must not become
+ * Beginner/overview hubs like `C pipeline` / `Col pipeline`.
+ */
+export async function junkHandleAggregates() {
+  const C = db.collection("scratch_c");
+  const col = db.collection("scratch_col");
+  await C.aggregate([{ $match: { ok: true } }]);
+  await col.aggregate([{ $group: { _id: "$k", n: { $sum: 1 } } }]);
+}
+
 export function listNotes(
   _req: { body: Record<string, unknown> },
   res: { json: (value: unknown) => void },
