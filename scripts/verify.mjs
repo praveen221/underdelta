@@ -2813,6 +2813,68 @@ if (miniNextUi?.metadata?.collapsedInOverview !== true) {
   pass("mini-next Journal UI collapsed behind Home/Dashboard molecules");
 }
 
+// ---------------------------------------------------------------------------
+// Shree whiteboard: Beginner route-molecule compression (many marketing pages).
+// ---------------------------------------------------------------------------
+const miniNextManyRoot = path.join(repoRoot, "verification", "mini-next-many");
+const miniNextManyGraph = await compileRepository(miniNextManyRoot);
+const miniNextManyPageMolecules = miniNextManyGraph.nodes.filter(
+  (node) =>
+    node.metadata?.projection === "semantic" &&
+    typeof node.metadata?.systemKey === "string" &&
+    String(node.metadata.systemKey).startsWith("page:"),
+);
+const miniNextManyFlow = miniNextManyGraph.nodes
+  .filter(
+    (node) =>
+      node.metadata?.projection === "semantic" &&
+      typeof node.metadata?.flowOrder === "number" &&
+      typeof node.metadata?.systemKey === "string" &&
+      String(node.metadata.systemKey).startsWith("page:"),
+  )
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+const miniNextManyOmitted = miniNextManyPageMolecules.filter(
+  (node) =>
+    node.metadata?.beginnerOmitted === true ||
+    node.metadata?.collapsedInOverview === true,
+);
+const miniNextManyFlowLabels = miniNextManyFlow.map((node) => node.label);
+const miniNextManyHasProduct =
+  miniNextManyFlowLabels.includes("Home") &&
+  miniNextManyFlowLabels.includes("Login") &&
+  miniNextManyFlowLabels.includes("Dashboard") &&
+  miniNextManyFlowLabels.includes("Student");
+const miniNextManyMarketingOnFlow = miniNextManyFlowLabels.filter((label) =>
+  /Maths|English|Science|Coding|Career|Faqs|Reviews|Elevenplusexam|Gcseexam/i.test(
+    label,
+  ),
+);
+if (miniNextManyPageMolecules.length < 12) {
+  fail(
+    `mini-next-many expected ≥12 page molecules, found ${miniNextManyPageMolecules.length}`,
+  );
+} else if (miniNextManyFlow.length > 8) {
+  fail(
+    `mini-next-many Beginner page hubs must be ≤8, got ${miniNextManyFlow.length}: ${miniNextManyFlowLabels.join(" → ")}`,
+  );
+} else if (!miniNextManyHasProduct) {
+  fail(
+    `mini-next-many should keep product hubs Home/Login/Dashboard/Student on flow, got ${miniNextManyFlowLabels.join(" → ")}`,
+  );
+} else if (miniNextManyMarketingOnFlow.length > 0) {
+  fail(
+    `mini-next-many marketing/exam pages must leave Beginner flow, still on flow: ${miniNextManyMarketingOnFlow.join(", ")}`,
+  );
+} else if (miniNextManyOmitted.length < 4) {
+  fail(
+    `mini-next-many expected omitted marketing page molecules, found ${miniNextManyOmitted.length}`,
+  );
+} else {
+  pass(
+    `mini-next-many Beginner compression: ${miniNextManyFlow.length} hubs (${miniNextManyFlowLabels.join(" → ")}); omitted ${miniNextManyOmitted.length} marketing/cap pages`,
+  );
+}
+
 // Home prefers derived writes (from PostForm→Create post); inferred uses is
 // dropped when a derived reads/writes twin exists. Dashboard keeps uses.
 const miniNextHomeStoryToApi = miniNextGraph.edges.some(

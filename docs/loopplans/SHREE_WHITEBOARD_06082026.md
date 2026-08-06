@@ -142,12 +142,12 @@ Learning log **must** include (one line OK):
 - [x] Field scan baseline on master (learn / heart / scholar) recorded in this plan  
 - [x] This loop plan created on `shree-whiteboard-06082026`  
 - [x] Soft-stop / LOOP COMPLETE idle protocol documented  
+- [x] **Learn Beginner compression:** `compressFeBeginnerRouteMolecules` — cap 8, score>10 only (no marketing fill); `verification/mini-next-many` floors; shree-learn dogfood ≤8 page hubs  
 
 ### In progress / next
 
 Keep **≥ 3 unchecked** until LOOP COMPLETE:
 
-- [ ] **Learn Beginner compression:** rank/cap Product Flow page molecules (product roles over marketing); ≤ 8 hubs on shree-learn; verify multi-page fixture floor  
 - [ ] **Heart label hygiene:** stop promoting README “N. Layer (`*.ts`)” lines to system labels; product-facing API/Data names; verify README-structure fixture  
 - [ ] **Heart Intermediate route groups:** group Express/Heart routes by module/prefix domain; cap naked route visibility; verify floor  
 - [ ] **Kill junk pipelines:** suppress trivial Mongo aggregate pipeline nodes on overview/Beginner; verify floor on mini-mongo / heart  
@@ -159,12 +159,12 @@ Keep **≥ 3 unchecked** until LOOP COMPLETE:
 
 - Cross-repo Shree map (learn→heart) — out of single-repo scan unless trivial  
 - Jobs molecule for Heart when real cron/workers evidenced  
-- Temp* vs production route ranking polish beyond the ≤8 cap  
+- Temp* vs production route ranking polish beyond the ≤8 cap (Home/Student/Tutor vs temp* shells)  
 - React Router / other Shree FE repos after learn+heart+scholar green  
 
 ### Next focus (edit every tick)
 
-> **Next focus:** Implement Learn Beginner compression — Product Flow ≤ 8 hubs on shree-learn (product roles over marketing exam pages) + verify floor on a multi-page fixture. Do not touch Heart labels yet. No AI. After green verify + Shree dogfood note, stop the tick.
+> **Next focus:** This work is done (Learn Beginner ≤8 hubs via score>10 cap). Now Heart label hygiene — stop README “N. Layer (`*.glob`)” lines becoming API/Data system labels; product-facing names + README-structure fixture. Do not start route grouping yet. No AI. Stop after green verify + Shree dogfood note.
 
 ### Learning log (append every tick)
 
@@ -173,6 +173,7 @@ Keep **≥ 3 unchecked** until LOOP COMPLETE:
 ```
 
 - 2026-08-06 | Plan created from Shree field scans (learn 34 flow hubs; heart README-layer labels + junk pipelines; scholar FE-only) | Next: Learn Beginner compression | Learned: molecules loop fixed fixtures; foreign Next apps still flood Beginner; Heart README structure is poisoning system labels | Dogfood: learn=34 flow, heart=API→Data with layer names, scholar=11 hubs
+- 2026-08-06 15:33 UTC | Done: Beginner route-molecule compression (cap 8, never fill with score≤10 marketing); mini-next-many fixture + verify; mini-next 2-hub path unchanged | Next: Heart label hygiene | Learned: cap must be a maximum not a fill target — filling to 8 re-admits exam pages; temp* shells outrank /student on learn (seed polish) | Dogfood: shree-learn page hubs=8 (Demo → Login → Temp applicant dashboard → Temp demo → Tempsignin → Temp student → Temp tutor → Temp welcome → HTTP API); omitted 25; verify passed
 
 ---
 

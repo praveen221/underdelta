@@ -1941,6 +1941,112 @@ function collapseAggregateUiBehindRouteMolecules(
   nodes.set(ui.id, ui);
 }
 
+/** Max FE route molecules on Beginner Product Flow (Shree learn field gate). */
+export const BEGINNER_ROUTE_MOLECULE_CAP = 8;
+
+/**
+ * Score a route-segment path for Beginner priority (higher = keep on flow).
+ * Product shells / auth / temp dashboards beat marketing & exam landings.
+ */
+export function feRouteMoleculeBeginnerScore(path: string): number {
+  const raw = path.trim() || "/";
+  const p = raw.toLowerCase();
+  const segment = appRouterRouteSegment(raw).toLowerCase();
+
+  if (
+    /tempsignin|temp-signin/.test(p) ||
+    /^\/(signin|login|signup|auth)(\/|$)/.test(p)
+  ) {
+    return 100;
+  }
+  if (/temp(student|tutor|demo|applicant|welcome)/.test(p)) return 95;
+  if (segment.startsWith("/temp")) return 94;
+  if (
+    /^\/(student|tutor|demo|applicant|dashboard|onboarding|profile|welcome)(\/|$)/.test(
+      p,
+    ) ||
+    /^\/(student|tutor|demo|applicant|dashboard|onboarding|profile|welcome)$/.test(
+      segment,
+    )
+  ) {
+    return 90;
+  }
+  if (p === "/" || segment === "/") return 85;
+  if (/book-demo|be-a-tutor|pricing|quiz|result|blogs|schools|counties|syllabus/.test(p)) {
+    return 45;
+  }
+  if (
+    /exam|maths|english|science|coding|career|faq|review|study-material|staar|gcse|national|nineplus|elevenplus|thirteenplus/.test(
+      p,
+    )
+  ) {
+    return 10;
+  }
+  return 50;
+}
+
+/**
+ * Cap Beginner FE route molecules so foreign Next apps (shree-learn) do not
+ * dump every marketing page onto Product Flow. Excess stay Intermediate/Find
+ * via collapsedInOverview.
+ */
+function compressFeBeginnerRouteMolecules(
+  systems: Map<string, ArchitectureNode>,
+  nodes: Map<string, ArchitectureNode>,
+): void {
+  const pageEntries = [...systems.entries()].filter(([key, node]) =>
+    key.startsWith("page:") && node.metadata?.routeMolecule === true,
+  );
+  if (pageEntries.length <= BEGINNER_ROUTE_MOLECULE_CAP) return;
+
+  const ranked = pageEntries
+    .map(([key, node]) => {
+      const path =
+        typeof node.metadata?.path === "string" ? node.metadata.path : key.slice(5);
+      return {
+        key,
+        node,
+        path,
+        score: feRouteMoleculeBeginnerScore(path),
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        a.path.localeCompare(b.path) ||
+        a.key.localeCompare(b.key),
+    );
+
+  // Cap is a maximum. Prefer product/medium hubs (score > 10); do not fill
+  // remaining slots with marketing/exam landings just to reach 8.
+  const eligible = ranked.filter((item) => item.score > 10);
+  const keep = new Set(
+    eligible.slice(0, BEGINNER_ROUTE_MOLECULE_CAP).map((item) => item.key),
+  );
+  for (const item of ranked) {
+    if (keep.has(item.key)) {
+      item.node.metadata = {
+        ...item.node.metadata,
+        beginnerRouteHub: true,
+        collapsedInOverview: false,
+      };
+      nodes.set(item.node.id, item.node);
+      systems.set(item.key, item.node);
+      continue;
+    }
+    item.node.metadata = {
+      ...item.node.metadata,
+      collapsedInOverview: true,
+      beginnerRouteHub: false,
+      beginnerOmitted: true,
+      beginnerOmitReason:
+        item.score <= 10 ? "marketing-or-content" : "beginner-cap",
+    };
+    nodes.set(item.node.id, item.node);
+    systems.set(item.key, item.node);
+  }
+}
+
 /** Server-action label → story edge kind (mutations write; getters read). */
 function serverActionStoryEdgeKind(label: string): "reads" | "writes" {
   const normalized = label.toLowerCase();
@@ -4920,6 +5026,10 @@ export function projectSemanticArchitecture(
   // After chrome quieting (which drops edges to collapsed systems): hide the
   // aggregate UI blob so Beginner flowOrder is route molecules → API → …
   collapseAggregateUiBehindRouteMolecules(systems, nodes);
+
+  // Foreign Next apps (shree-learn) can mint dozens of page molecules — keep
+  // product hubs on Beginner; collapse marketing/excess for Intermediate/Find.
+  compressFeBeginnerRouteMolecules(systems, nodes);
 
   assignFlowOrder(systems, flowPairs);
 
