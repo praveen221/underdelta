@@ -107,19 +107,19 @@ Learning log must include verify + what changed for trust.
 - [x] Philosophy one-pager shipped on master (`docs/index.html`) for GitHub Pages  
 - [x] Gate Underdelta-specific artifact + self-tooling projection (`isUnderdeltaToolingRepo`)  
 - [x] Decoy filename fixture + verify (`verification/mini-decoy-tooling`)  
+- [x] Product label hardening (README poison) + verify (`mini-readme-poison`)  
 
 ### In progress / next
 
 Keep **≥ 3** unchecked items.
 
-- [ ] Product label hardening (README poison) + verify  
-- [ ] Re-scan openclaw or t3code; log hub list before/after  
-- [ ] Confirm Underdelta self-map unchanged / still complete (spot-check after label work)  
-- [ ] hermes-agent hub title cleanup (README slogan) if still poisoned after label gate  
+- [ ] Re-scan openclaw or t3code; log hub list before/after (confirm Underdelta hubs gone)  
+- [ ] Confirm Underdelta self-map unchanged / still complete  
+- [ ] hermes-agent hub title cleanup (README slogan on flow band)  
+- [ ] Vendor/monorepo ignore expansions if still drowning after gates  
 
 ### Seed backlog (refill when In progress < 3)
 
-- Vendor/monorepo ignore expansions if still drowning after gates  
 - Size/time soft-cap warning diagnostic on huge repos  
 - Docs: Pages enable note in README if missing  
 - Do **not** start landing marketing beyond the one-pager  
@@ -127,7 +127,7 @@ Keep **≥ 3** unchecked items.
 
 ### Next focus (edit every tick)
 
-> **Next focus:** Harden product labels against README install/marketing poison; add/extend verify floor; then re-scan openclaw or t3code and log hubs before/after.
+> **Next focus:** Re-scan openclaw (or t3code); log flow hubs before/after Underdelta gate; confirm self-map still complete; then hermes-agent slogan hub cleanup if time.
 
 ### Learning log
 
@@ -137,6 +137,7 @@ Keep **≥ 3** unchecked items.
 
 - 2026-08-07 | Done: plan created; one-pager on master | Next: gate Underdelta-only projection | Learned: dogfood showed path-role projection invents Underdelta systems on any repo with similar filenames; trust > new extractors | Dogfood: prior folder scan (27 repos)
 - 2026-08-06 ~21:00 UTC | Done: gate compile/viewer/extractors/graph/schema + artifacts behind `isUnderdeltaToolingRepo`; mini-decoy-tooling verify floors; nest bare schema.ts under HTTP API without inventing Schema contract | Next: README label poison | Learned: gating Schema contract broke GraphQL schema.ts nesting — fold orphans into API instead of inventing a hub | Dogfood: npm run verify green (self-map + decoy + graphql-real)
+- 2026-08-06 ~21:25 UTC | Done: HTML `<h1>` + strip fenced `#` comments + `isPoisonedProductTitle`; mini-readme-poison fixture | Next: openclaw/t3code re-scan | Learned: TrackNotch product was a bash comment inside ``` because parseReadmeTitle ignored HTML h1 | Dogfood: tracknotch product → TrackNotch (was Install Claude Code…)
 
 ---
 

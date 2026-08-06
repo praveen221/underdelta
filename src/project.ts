@@ -76,25 +76,71 @@ export function sanitizeMarkdownHeadingText(raw: string): string {
   return text;
 }
 
+/**
+ * README "titles" that are install/setup chrome, not the product name
+ * (TrackNotch dogfood: shell comment `# Install Claude Code if you haven't already`).
+ */
+export function isPoisonedProductTitle(title: string): boolean {
+  const text = title.trim();
+  if (!text) return true;
+  const lower = text.toLowerCase();
+
+  // Imperative how-to / install lines.
+  if (
+    /^(to\s+)?(generate|install|run|create|configure|deploy|build|test|clone|download|add|update|set\s*up|make|enable|start|seed|apply|migrate|push|pull|open|visit|follow|copy|paste|replace|remove|delete|drop|reset)\b/i.test(
+      lower,
+    )
+  ) {
+    return true;
+  }
+
+  // Docs asides that sneak in as H1s from code comments or setup sections.
+  if (
+    /\bif you haven'?t already\b/i.test(lower) ||
+    /\bvia\s+(?:npm|pnpm|yarn|brew|curl|docker)\b/i.test(lower) ||
+    /^(?:usage|getting started|quick\s*start|installation)\b/i.test(lower)
+  ) {
+    return true;
+  }
+
+  // Full-sentence instructions are never product brands.
+  if (/\b(if you|you need to|make sure|don'?t forget)\b/i.test(lower)) {
+    return true;
+  }
+
+  return false;
+}
+
+function usableProductTitle(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const title = sanitizeMarkdownHeadingText(raw.replace(/\s+#+\s*$/, ""));
+  if (!title || /^https?:\/\//i.test(title) || title.length > 80) {
+    return undefined;
+  }
+  if (isPoisonedProductTitle(title)) return undefined;
+  return title;
+}
+
 /** First H1 in a README, sanitized — product-title territory, not system hints. */
 export function parseReadmeTitle(markdown: string): string | undefined {
-  const match = /^#\s+(.+?)\s*$/m.exec(markdown);
+  // Drop fenced code so shell comments (`# Install …`) never win as the product H1.
+  const withoutFences = markdown.replace(/```[\s\S]*?```/g, "\n");
+
+  // HTML <h1> (centered brand logos / TrackNotch-style READMEs) before markdown.
+  const htmlH1 =
+    /<h1\b[^>]*>\s*([\s\S]*?)\s*<\/h1>/i.exec(withoutFences)?.[1];
+  const fromHtml = usableProductTitle(htmlH1);
+  if (fromHtml) return fromHtml;
+
+  const match = /^#\s+(.+?)\s*$/m.exec(withoutFences);
   if (match?.[1]) {
-    const title = sanitizeMarkdownHeadingText(
-      match[1].replace(/\s+#+\s*$/, ""),
-    );
-    if (
-      title &&
-      !/^https?:\/\//i.test(title) &&
-      title.length <= 80
-    ) {
-      return title;
-    }
+    const fromMd = usableProductTitle(match[1]);
+    if (fromMd) return fromMd;
   }
 
   // No usable H1 — accept a leading bold brand used as the product name
   // (`**Online Boutique** is a cloud-first…`) after stripping comments/badges.
-  const head = markdown
+  const head = withoutFences
     .replace(/<!--[\s\S]*?-->/g, "")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
     .slice(0, 2500);
@@ -102,11 +148,7 @@ export function parseReadmeTitle(markdown: string): string | undefined {
     /^\s*\*\*([^*]{2,60})\*\*\s+is\b/im.exec(head) ??
     /\n\s*\*\*([^*]{2,60})\*\*\s+is\b/i.exec(head);
   if (!bold?.[1]) return undefined;
-  const boldTitle = sanitizeMarkdownHeadingText(bold[1]);
-  if (!boldTitle || /^https?:\/\//i.test(boldTitle) || boldTitle.length > 80) {
-    return undefined;
-  }
-  return boldTitle;
+  return usableProductTitle(bold[1]);
 }
 
 /**
@@ -154,14 +196,17 @@ export function preferProductLabel(
   if (pkg && !pkg.includes("/")) {
     return /[-_]/.test(pkg) ? humanizePackageName(pkg) : pkg;
   }
-  if (readmeTitle) {
-    const title = readmeTitle.trim();
+  const cleanedReadme =
+    readmeTitle && !isPoisonedProductTitle(readmeTitle)
+      ? readmeTitle.trim()
+      : undefined;
+  if (cleanedReadme) {
     // Plain lowercase README brands (`podinfo`) read as product names once
     // title-cased; multi-word / already-cased titles stay as authored.
-    if (/^[a-z][a-z0-9]*$/.test(title)) {
-      return humanizePackageName(title);
+    if (/^[a-z][a-z0-9]*$/.test(cleanedReadme)) {
+      return humanizePackageName(cleanedReadme);
     }
-    return title;
+    return cleanedReadme;
   }
   if (pkg) return humanizePackageName(pkg);
   const base = fallback.trim();
