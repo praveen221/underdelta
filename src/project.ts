@@ -2230,6 +2230,13 @@ function compressFeBeginnerRouteMolecules(
 export const INTERMEDIATE_NAKED_ROUTE_CAP = 24;
 
 /**
+ * When domain groups already exist, Intermediate should lead with Users /
+ * Articles hubs — not 24 leftover singleton misc routes. Prefer probes; fold
+ * the rest under "More routes".
+ */
+export const INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP = 8;
+
+/**
  * Domain key for HTTP route grouping: `/api/users/:id` → `users`,
  * `/articles` → `articles`. Strips leading `api` / `vN`. Probes (`/health`)
  * and empty roots return null so they stay naked under the API hub.
@@ -2284,7 +2291,8 @@ function isContractSurfaceRoute(node: ArchitectureNode): boolean {
  * Intermediate API calm: group Express/Heart-style routes by path-prefix domain
  * under hubs (Users / Articles / …). Nested route atoms stay off the API
  * Intermediate canvas until the group is focused (viewer mirrors detection
- * surfaces). Cap leftover naked routes at INTERMEDIATE_NAKED_ROUTE_CAP.
+ * surfaces). Cap leftover naked routes — tighter when domain groups already
+ * tell the Intermediate story (modules/functions stay Advanced).
  */
 function projectApiRouteDomainGroups(
   systems: Map<string, ArchitectureNode>,
@@ -2381,11 +2389,13 @@ function projectApiRouteDomainGroups(
     return group;
   };
 
+  let domainGroupCount = 0;
   for (const [domain, members] of byDomain) {
     if (members.length < 2) {
       naked.push(...members);
       continue;
     }
+    domainGroupCount += 1;
     const group = ensureGroup(
       domain,
       humanizeIdentifierLabel(domain),
@@ -2410,7 +2420,12 @@ function projectApiRouteDomainGroups(
   }
 
   // Cap leftover naked routes under the API hub — excess nest under More routes.
-  if (naked.length <= INTERMEDIATE_NAKED_ROUTE_CAP) return;
+  // Groups-first: when domain hubs exist, keep only a short probe/sample strip.
+  const nakedCap =
+    domainGroupCount >= 1
+      ? INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP
+      : INTERMEDIATE_NAKED_ROUTE_CAP;
+  if (naked.length <= nakedCap) return;
 
   const ranked = [...naked].sort((a, b) => {
     const pathA =
@@ -2423,7 +2438,7 @@ function projectApiRouteDomainGroups(
       a.id.localeCompare(b.id)
     );
   });
-  const overflow = ranked.slice(INTERMEDIATE_NAKED_ROUTE_CAP);
+  const overflow = ranked.slice(nakedCap);
   if (!overflow.length) return;
   const more = ensureGroup("_more", "More routes", overflow);
   for (const route of overflow) {
@@ -5563,7 +5578,8 @@ export function projectSemanticArchitecture(
   compressFeBeginnerRouteMolecules(systems, nodes);
 
   // Heart / Express Intermediate calm: domain route groups + naked-route cap
-  // so API focus is Users/Articles hubs (or ≤24 samples), not a route phonebook.
+  // so API focus is Users/Articles hubs (≤8 leftover samples when grouped),
+  // not a route phonebook; modules/functions wait for Advanced.
   projectApiRouteDomainGroups(systems, nodes, edges, attachToSystem);
 
   // Scholar / FE-only honesty: when pages exist but no static API/Data/Jobs

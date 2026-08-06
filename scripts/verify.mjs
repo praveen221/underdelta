@@ -9,6 +9,7 @@ import {
   isGenericApiDocsTitle,
   isReadmeStructureHeading,
   isTrivialMongoAggregateLabel,
+  INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP,
   INTERMEDIATE_NAKED_ROUTE_CAP,
   SCHOLAR_BEGINNER_HUB_MAX,
   parseReadmeHeadingHints,
@@ -2162,6 +2163,10 @@ function resolveWalkFocusForGraph(graph, clickedId) {
   const interNodes = inter(clickedId);
   const roomOthers = room(clickedId).filter((node) => node.id !== clickedId);
   if (roomOthers.length >= 3) {
+    return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
+  }
+  // Domain route groups are Intermediate furniture — prefer over Advanced modules.
+  if (roomOthers.some((node) => node.metadata?.routeGroup === true)) {
     return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
   }
   if (countAdvancedContainsForGraph(graph, clickedId) >= 1) {
@@ -5766,6 +5771,18 @@ const expectedRouteGroups = [
 const missingRouteGroups = expectedRouteGroups.filter(
   (label) => !miniRoutesManyGroupLabels.includes(label),
 );
+const miniRoutesManyApiFocusModules = miniRoutesManyApiFocus.filter(
+  (node) => node.kind === "module",
+);
+const miniRoutesManyApiFocusFunctions = miniRoutesManyApiFocus.filter(
+  (node) => node.kind === "function",
+);
+const miniRoutesManyApiWalk = miniRoutesManyApi
+  ? resolveWalkFocusForGraph(miniRoutesManyGraph, miniRoutesManyApi.id)
+  : null;
+const miniRoutesManyModuleCount = miniRoutesManyGraph.nodes.filter(
+  (node) => node.kind === "module",
+).length;
 if (!miniRoutesManyApi) {
   fail("mini-routes-many missing HTTP API system");
 } else if (miniRoutesManyRoutes.length < 40) {
@@ -5780,15 +5797,15 @@ if (!miniRoutesManyApi) {
   fail(
     `mini-routes-many missing domain groups ${missingRouteGroups.join(", ")}; found ${miniRoutesManyGroupLabels.join(", ") || "(none)"}`,
   );
-} else if (miniRoutesManyNaked.length > INTERMEDIATE_NAKED_ROUTE_CAP) {
+} else if (miniRoutesManyNaked.length > INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP) {
   fail(
-    `mini-routes-many naked routes under API must be ≤${INTERMEDIATE_NAKED_ROUTE_CAP}, found ${miniRoutesManyNaked.length}`,
+    `mini-routes-many naked routes under API must be ≤${INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP} when domain groups exist, found ${miniRoutesManyNaked.length}`,
   );
 } else if (
-  miniRoutesManyApiFocusRoutes.length > INTERMEDIATE_NAKED_ROUTE_CAP
+  miniRoutesManyApiFocusRoutes.length > INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP
 ) {
   fail(
-    `mini-routes-many API Intermediate must show ≤${INTERMEDIATE_NAKED_ROUTE_CAP} naked routes, found ${miniRoutesManyApiFocusRoutes.length}`,
+    `mini-routes-many API Intermediate must show ≤${INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP} naked routes (groups-first), found ${miniRoutesManyApiFocusRoutes.length}`,
   );
 } else if (miniRoutesManyApiFocusGroups.length < 8) {
   fail(
@@ -5800,18 +5817,36 @@ if (!miniRoutesManyApi) {
   fail(
     "mini-routes-many API Intermediate must not dump route-group members (focus the Users/Articles hub)",
   );
+} else if (miniRoutesManyApiFocusModules.length > 0) {
+  fail(
+    `mini-routes-many API Intermediate must keep modules Advanced, found ${miniRoutesManyApiFocusModules.map((n) => n.label).join(", ")}`,
+  );
+} else if (miniRoutesManyApiFocusFunctions.length > 0) {
+  fail(
+    `mini-routes-many API Intermediate must keep functions Advanced, found ${miniRoutesManyApiFocusFunctions.length}`,
+  );
+} else if (miniRoutesManyModuleCount < 1) {
+  fail("mini-routes-many expected ≥1 module under API to prove Advanced quieting");
+} else if (
+  !miniRoutesManyApiWalk ||
+  miniRoutesManyApiWalk.tier !== "intermediate" ||
+  miniRoutesManyApiWalk.focusId !== miniRoutesManyApi.id
+) {
+  fail(
+    `mini-routes-many API double-click must open Intermediate (groups), got focus=${miniRoutesManyApiWalk?.focusId} tier=${miniRoutesManyApiWalk?.tier}`,
+  );
 } else if (miniRoutesManyUsersFocusRoutes.length < 4) {
   fail(
     `mini-routes-many Users Intermediate should reveal user routes, found ${miniRoutesManyUsersFocusRoutes.length}`,
   );
 } else if (
   miniRoutesManyGroupLabels.includes("More routes") === false &&
-  miniRoutesManyRoutes.length > INTERMEDIATE_NAKED_ROUTE_CAP + 20
+  miniRoutesManyRoutes.length > INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP + 20
 ) {
-  fail("mini-routes-many expected More routes overflow group when past naked cap");
+  fail("mini-routes-many expected More routes overflow group when past grouped naked cap");
 } else {
   pass(
-    `mini-routes-many Intermediate route groups: ${miniRoutesManyApiFocusGroups.length} hubs (${miniRoutesManyApiFocusGroups.map((n) => n.label).sort().join(", ")}); naked≤${INTERMEDIATE_NAKED_ROUTE_CAP} (${miniRoutesManyApiFocusRoutes.length}); Users focus ${miniRoutesManyUsersFocusRoutes.length} routes`,
+    `mini-routes-many Intermediate route groups: ${miniRoutesManyApiFocusGroups.length} hubs (${miniRoutesManyApiFocusGroups.map((n) => n.label).sort().join(", ")}); naked≤${INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP} (${miniRoutesManyApiFocusRoutes.length}); modules/functions Advanced; walk=${miniRoutesManyApiWalk.tier}; Users focus ${miniRoutesManyUsersFocusRoutes.length} routes`,
   );
 }
 

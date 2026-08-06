@@ -806,6 +806,14 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       if (roomOthers.length >= 3) {
         return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
       }
+      // Heart API Intermediate payoff is domain route groups (Users / Articles).
+      // Prefer that room over a thin-room Advanced module dump.
+      const routeGroupFurniture = roomOthers.filter(
+        (node) => node.metadata && node.metadata.routeGroup === true,
+      );
+      if (routeGroupFurniture.length >= 1) {
+        return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
+      }
 
       // Thin room with code under it → Advanced (CLI → src/cli.ts, not 4 lonely nodes).
       if (countAdvancedContains(clickedId) >= 1) {
