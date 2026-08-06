@@ -6,8 +6,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { compileRepository } from "../dist/compile.js";
 import {
+  isClientApisOnlyHttpApi,
+  isGenericApiDocsTitle,
   isReadmeStructureHeading,
   isTrivialMongoAggregateLabel,
+  INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP,
   INTERMEDIATE_NAKED_ROUTE_CAP,
   SCHOLAR_BEGINNER_HUB_MAX,
   parseReadmeHeadingHints,
@@ -154,6 +157,7 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file.includes("mini-readme-structure/") ||
         file.includes("mini-next-many/") ||
         file.includes("mini-scholar/") ||
+        file.includes("mini-scholar-apis/") ||
         file.includes("mini-routes-many/") ||
         file.includes("mini-openapi/") ||
         file.includes("mini-graphql/") ||
@@ -2163,6 +2167,10 @@ function resolveWalkFocusForGraph(graph, clickedId) {
   if (roomOthers.length >= 3) {
     return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
   }
+  // Domain route groups are Intermediate furniture — prefer over Advanced modules.
+  if (roomOthers.some((node) => node.metadata?.routeGroup === true)) {
+    return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
+  }
   if (countAdvancedContainsForGraph(graph, clickedId) >= 1) {
     return { focusId: clickedId, tier: "advanced", selectedId: clickedId };
   }
@@ -2328,7 +2336,7 @@ if (!viewerHtml.includes('name: "Detects"') || !viewerHtml.includes("isDetection
 }
 
 
-const collaborationHeading = viewerHtml.indexOf("<h3>Collaboration</h3>");
+const storyHeading = viewerHtml.indexOf("<h3>In the story</h3>");
 const importsHeading = viewerHtml.indexOf("Imports &amp; calls");
 const collaborationKindsDecl = viewerHtml.indexOf(
   'const collaborationKinds = new Set([',
@@ -2345,9 +2353,9 @@ const importsFilter = viewerHtml.indexOf(
 const collaborationItemFn = viewerHtml.indexOf("function collaborationItem");
 const edgeDetailTextFn = viewerHtml.indexOf("function edgeDetailText");
 const collabDetailClass = viewerHtml.indexOf('class="collab-detail"');
-const collabUsesCollaborationItem = viewerHtml.includes(
-  "collaboration.slice(0, 16).map((edge) => collaborationItem(edge, id))",
-);
+const collabUsesCollaborationItem =
+  viewerHtml.includes("storyNeighbors.slice(0, 8).map((edge) => collaborationItem(edge, id))") ||
+  viewerHtml.includes("collaboration.slice(0, 16).map((edge) => collaborationItem(edge, id))");
 if (
   collaborationKindsDecl < 0 ||
   usesInKinds < 0 ||
@@ -2360,10 +2368,10 @@ if (
   fail("viewer missing collaborationKinds set for inspector (uses/renders/exposes/triggers/reads/writes)");
 } else if (importsFilter < 0 || importsFilter < collaborationKindsDecl) {
   fail("viewer inspector should split importsAndCalls after collaborationKinds");
-} else if (collaborationHeading < 0 || importsHeading < 0 || collaborationHeading > importsHeading) {
-  // Headings are template strings inside selectNode; both must appear and Collaboration first.
+} else if (storyHeading < 0 || importsHeading < 0 || storyHeading > importsHeading) {
+  // Headings are template strings inside selectNode; story neighbors lead Imports & calls.
   fail(
-    `viewer inspector should render Collaboration before Imports & calls (collab=${collaborationHeading}, imports=${importsHeading})`,
+    `viewer inspector should render In the story before Imports & calls (story=${storyHeading}, imports=${importsHeading})`,
   );
 } else if (
   collaborationItemFn < 0 ||
@@ -2375,7 +2383,7 @@ if (
     "viewer inspector should render collaboration edge detail text via collaborationItem/collab-detail",
   );
 } else {
-  pass("viewer inspector surfaces Collaboration detail text before Imports & calls");
+  pass("viewer inspector surfaces In the story detail text before Imports & calls");
 }
 
 // Canvas: collaboration edges styled apart from import/call hairlines.
@@ -2584,7 +2592,12 @@ const messagingOwnedPubSub =
   fixtureViewerHtml.includes('"messagingHub"');
 const messagingInInspector =
   fixtureViewerHtml.includes("const messaging = messagingRolesHtml(node)") &&
-  fixtureViewerHtml.includes("tableSources + tableRelations + messaging");
+  (fixtureViewerHtml.includes("tableSources + tableRelations + messaging") ||
+    (fixtureViewerHtml.includes("tableSources") &&
+      fixtureViewerHtml.includes("tableRelations") &&
+      fixtureViewerHtml.includes("messaging") &&
+      fixtureViewerHtml.includes("tableSourcesHtml(node, incomingEdges)") &&
+      fixtureViewerHtml.includes("tableRelationsHtml(node, connections)")));
 if (messagingRolesFn < 0 || messagingHeading < 0) {
   fail("viewer inspector missing Messaging section for queue hubs");
 } else if (publishersRoleLabel < 0 || consumersRoleLabel < 0 || messagingHubNote < 0) {
@@ -2609,6 +2622,87 @@ if (!hideCompilerMetaPills) {
   );
 } else {
   pass("viewer inspector hides projection/systemKey/flowOrder metadata pills");
+}
+
+// Inspector value: story-first panel (role → story neighbors → evidence).
+const plainLanguageRoleFn = fixtureViewerHtml.indexOf("function plainLanguageRole");
+const inspectorRoleClass = fixtureViewerHtml.indexOf('class="inspector-role"');
+const storyFirstHeading = fixtureViewerHtml.indexOf("<h3>In the story</h3>");
+const evidenceHeading = fixtureViewerHtml.indexOf("<h3>Evidence</h3>");
+const storyNeighborRank = fixtureViewerHtml.indexOf("storyNeighborRank");
+const hidePathFrameworkPills =
+  fixtureViewerHtml.includes('"path"') &&
+  fixtureViewerHtml.includes('"framework"') &&
+  fixtureViewerHtml.includes('"readmeHeading"') &&
+  fixtureViewerHtml.includes('"packageName"');
+// Assembly order in selectNode (string literal positions differ from runtime order).
+const storyFirstAssembly = fixtureViewerHtml.indexOf(
+  "roleHtml +\n        collaborationHtml +\n        evidenceHtml",
+);
+const noKindTechLead =
+  !fixtureViewerHtml.includes(
+    'inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>"',
+  ) &&
+  fixtureViewerHtml.includes("plainLanguageRole(node)") &&
+  fixtureViewerHtml.includes("Story-first panel");
+if (
+  plainLanguageRoleFn < 0 ||
+  inspectorRoleClass < 0 ||
+  storyFirstHeading < 0 ||
+  evidenceHeading < 0 ||
+  storyNeighborRank < 0
+) {
+  fail(
+    "viewer inspector value pass missing plainLanguageRole / In the story / Evidence lead",
+  );
+} else if (storyFirstAssembly < 0 || !noKindTechLead) {
+  fail(
+    "viewer inspector must lead with role → In the story → Evidence (not kind·tech / metadata dump)",
+  );
+} else if (!hidePathFrameworkPills) {
+  fail(
+    "viewer inspector should fold path/framework/readmeHeading/packageName into role (hide as pills)",
+  );
+} else {
+  pass(
+    "viewer inspector story-first: plain-language role, In the story neighbors, Evidence file:line",
+  );
+}
+
+// Product Flow layout calm: wrap at 4 cols so 6–8 hubs stay in-viewport width.
+const flowWrapCols = fixtureViewerHtml.includes("const FLOW_WRAP_COLS = 4");
+const flowWrapPlace =
+  fixtureViewerHtml.includes("index % FLOW_WRAP_COLS") &&
+  fixtureViewerHtml.includes("Math.floor(index / FLOW_WRAP_COLS)") &&
+  fixtureViewerHtml.includes("row * flowRowY");
+const flowWrapGap =
+  fixtureViewerHtml.includes("const flowGapX = 200") &&
+  fixtureViewerHtml.includes("const flowRowY = 96");
+// Single-row legacy: index * flowGap at fixed y=34 — must not remain the only layout.
+const legacySingleRow =
+  fixtureViewerHtml.includes("const flowGap = 220") &&
+  fixtureViewerHtml.includes("const x = index * flowGap");
+if (!flowWrapCols || !flowWrapPlace || !flowWrapGap) {
+  fail(
+    "viewer Product Flow must wrap at FLOW_WRAP_COLS=4 (col/row + flowGapX/flowRowY)",
+  );
+} else if (legacySingleRow) {
+  fail(
+    "viewer Product Flow must not keep single-row index*flowGap layout for 6–8 hubs",
+  );
+} else {
+  // Width floor: 8 hubs wrap to 2×4 → ≤4*gapX + system width + pad (~1090), not 7*220.
+  const wrappedMaxX = 3 * 200 + 210 + 80;
+  const singleRowMaxX = 7 * 220 + 210 + 80;
+  if (wrappedMaxX >= 1200 || wrappedMaxX >= singleRowMaxX * 0.75) {
+    fail(
+      `Product Flow wrap width floor drifted (wrapped=${wrappedMaxX}, single=${singleRowMaxX})`,
+    );
+  } else {
+    pass(
+      `viewer Product Flow wraps at 4 cols (8 hubs ≤${wrappedMaxX}px vs single-row ${singleRowMaxX}px)`,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -2889,15 +2983,22 @@ const miniNextManyHasProduct =
   miniNextManyFlowLabels.includes("Home") &&
   miniNextManyFlowLabels.includes("Login") &&
   miniNextManyFlowLabels.includes("Dashboard") &&
-  miniNextManyFlowLabels.includes("Student");
+  miniNextManyFlowLabels.includes("Student") &&
+  miniNextManyFlowLabels.includes("Tutor");
+const miniNextManyTempOnFlow = miniNextManyFlowLabels.filter((label) =>
+  /^Temp/i.test(label),
+);
+const miniNextManyTempOmitted = miniNextManyOmitted.filter((node) =>
+  /^Temp/i.test(node.label),
+);
 const miniNextManyMarketingOnFlow = miniNextManyFlowLabels.filter((label) =>
   /Maths|English|Science|Coding|Career|Faqs|Reviews|Elevenplusexam|Gcseexam/i.test(
     label,
   ),
 );
-if (miniNextManyPageMolecules.length < 12) {
+if (miniNextManyPageMolecules.length < 20) {
   fail(
-    `mini-next-many expected ≥12 page molecules, found ${miniNextManyPageMolecules.length}`,
+    `mini-next-many expected ≥20 page molecules (product + temp* + marketing), found ${miniNextManyPageMolecules.length}`,
   );
 } else if (miniNextManyFlow.length > 8) {
   fail(
@@ -2905,19 +3006,27 @@ if (miniNextManyPageMolecules.length < 12) {
   );
 } else if (!miniNextManyHasProduct) {
   fail(
-    `mini-next-many should keep product hubs Home/Login/Dashboard/Student on flow, got ${miniNextManyFlowLabels.join(" → ")}`,
+    `mini-next-many should keep product hubs Home/Login/Dashboard/Student/Tutor on flow, got ${miniNextManyFlowLabels.join(" → ")}`,
+  );
+} else if (miniNextManyTempOnFlow.length > 3) {
+  fail(
+    `mini-next-many temp* shells must not crowd out product hubs (≤3 temp on flow), got ${miniNextManyTempOnFlow.length}: ${miniNextManyFlowLabels.join(" → ")}`,
+  );
+} else if (miniNextManyTempOmitted.length < 3) {
+  fail(
+    `mini-next-many expected temp* shells omitted by product-preferring rank, found ${miniNextManyTempOmitted.length}`,
   );
 } else if (miniNextManyMarketingOnFlow.length > 0) {
   fail(
     `mini-next-many marketing/exam pages must leave Beginner flow, still on flow: ${miniNextManyMarketingOnFlow.join(", ")}`,
   );
-} else if (miniNextManyOmitted.length < 4) {
+} else if (miniNextManyOmitted.length < 8) {
   fail(
-    `mini-next-many expected omitted marketing page molecules, found ${miniNextManyOmitted.length}`,
+    `mini-next-many expected omitted marketing/temp page molecules, found ${miniNextManyOmitted.length}`,
   );
 } else {
   pass(
-    `mini-next-many Beginner compression: ${miniNextManyFlow.length} hubs (${miniNextManyFlowLabels.join(" → ")}); omitted ${miniNextManyOmitted.length} marketing/cap pages`,
+    `mini-next-many Beginner compression: ${miniNextManyFlow.length} hubs (${miniNextManyFlowLabels.join(" → ")}); product over temp* (${miniNextManyTempOnFlow.length} temp on flow); omitted ${miniNextManyOmitted.length}`,
   );
 }
 
@@ -2986,6 +3095,150 @@ if (miniScholarPageMolecules.length < 8) {
 } else {
   pass(
     `mini-scholar UI-only honesty: ${miniScholarFlow.length} Beginner hubs (${miniScholarFlowLabels.join(" → ") || "(none)"}); no invented backend; uiOnly locked`,
+  );
+}
+
+// Reinforce: pure Scholar has no src/apis modules and no page→API story edges.
+const miniScholarApisModules = miniScholarGraph.nodes.filter(
+  (node) =>
+    node.kind === "module" &&
+    /(^|\/)apis\//.test(String(node.metadata?.path ?? node.qualifiedName ?? node.label ?? "")),
+);
+const miniScholarClientApiStory = miniScholarGraph.edges.filter(
+  (edge) =>
+    (edge.kind === "reads" || edge.kind === "writes") &&
+    edge.evidence?.some(
+      (item) =>
+        item.certainty === "derived" &&
+        typeof item.detail === "string" &&
+        item.detail.includes("client apis module"),
+    ),
+);
+if (miniScholarApisModules.length > 0) {
+  fail(
+    `mini-scholar must stay FE-only (no apis/ modules); found ${miniScholarApisModules
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else if (miniScholarClientApiStory.length > 0) {
+  fail(
+    `mini-scholar must not invent client-api story edges without apis/; found ${miniScholarClientApiStory.length}`,
+  );
+} else {
+  pass(
+    "mini-scholar reinforce uiOnly: 0 apis/ modules, 0 clientApiStory edges (no static server surface)",
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Scholar OR-branch: client src/apis → external Heart — evidenced edges, no Jobs/Data.
+// ---------------------------------------------------------------------------
+const miniScholarApisRoot = path.join(
+  repoRoot,
+  "verification",
+  "mini-scholar-apis",
+);
+const miniScholarApisGraph = await compileRepository(miniScholarApisRoot);
+const miniScholarApisProduct = miniScholarApisGraph.nodes.find(
+  (node) => node.kind === "product",
+);
+const miniScholarApisApi = miniScholarApisGraph.nodes.find(
+  (node) =>
+    node.metadata?.projection === "semantic" &&
+    node.metadata?.systemKey === "api",
+);
+const miniScholarApisNodesById = new Map(
+  miniScholarApisGraph.nodes.map((node) => [node.id, node]),
+);
+const miniScholarApisFlow = miniScholarApisGraph.nodes
+  .filter(
+    (node) =>
+      node.metadata?.projection === "semantic" &&
+      typeof node.metadata?.flowOrder === "number" &&
+      typeof node.metadata?.systemKey === "string" &&
+      (String(node.metadata.systemKey).startsWith("page:") ||
+        node.metadata.systemKey === "api"),
+  )
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+const miniScholarApisFlowLabels = miniScholarApisFlow.map((node) => node.label);
+const miniScholarApisDashboard = miniScholarApisGraph.nodes.find(
+  (node) =>
+    node.metadata?.projection === "semantic" &&
+    node.metadata?.systemKey === "page:/dashboard",
+);
+const miniScholarApisHome = miniScholarApisGraph.nodes.find(
+  (node) =>
+    node.metadata?.projection === "semantic" &&
+    node.metadata?.systemKey === "page:/",
+);
+const miniScholarApisInventedBackend = miniScholarApisGraph.nodes.filter(
+  (node) =>
+    node.metadata?.projection === "semantic" &&
+    ["data", "jobs", "workers", "pipelines"].includes(node.metadata?.systemKey) &&
+    node.metadata?.collapsedInOverview !== true,
+);
+const miniScholarApisDashboardReads = miniScholarApisGraph.edges.find(
+  (edge) =>
+    edge.kind === "reads" &&
+    edge.source === miniScholarApisDashboard?.id &&
+    edge.target === miniScholarApisApi?.id,
+);
+const miniScholarApisHomeUsesApi = miniScholarApisGraph.edges.some(
+  (edge) =>
+    edge.kind === "uses" &&
+    edge.source === miniScholarApisHome?.id &&
+    edge.target === miniScholarApisApi?.id &&
+    edge.evidence?.some((item) => item.certainty === "inferred"),
+);
+const miniScholarApisClientOnly =
+  miniScholarApisApi &&
+  isClientApisOnlyHttpApi(miniScholarApisApi, miniScholarApisNodesById);
+
+if (!miniScholarApisApi) {
+  fail("mini-scholar-apis expected visible HTTP API from src/apis/** helpers");
+} else if (miniScholarApisProduct?.metadata?.uiOnly === true) {
+  fail(
+    "mini-scholar-apis must not be uiOnly when static client apis/ evidence exists",
+  );
+} else if (!miniScholarApisClientOnly) {
+  fail(
+    "mini-scholar-apis HTTP API must be client-apis-only (no route/serverAction/OpenAPI surface)",
+  );
+} else if (miniScholarApisInventedBackend.length > 0) {
+  fail(
+    `mini-scholar-apis must not invent Data/Jobs; found ${miniScholarApisInventedBackend
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else if (miniScholarApisFlow.length > SCHOLAR_BEGINNER_HUB_MAX) {
+  fail(
+    `mini-scholar-apis Beginner hubs must be ≤${SCHOLAR_BEGINNER_HUB_MAX}, got ${miniScholarApisFlow.length}: ${miniScholarApisFlowLabels.join(" → ")}`,
+  );
+} else if (
+  !miniScholarApisDashboardReads ||
+  !miniScholarApisDashboardReads.evidence?.some(
+    (item) =>
+      item.certainty === "derived" &&
+      typeof item.detail === "string" &&
+      item.detail.includes("Course list") &&
+      item.detail.includes("List courses") &&
+      item.detail.includes("client apis module"),
+  )
+) {
+  fail(
+    `mini-scholar-apis expected Dashboard -[reads]-> HTTP API via Course list → List courses (found ${
+      miniScholarApisDashboardReads
+        ? JSON.stringify(miniScholarApisDashboardReads.evidence?.[0] ?? null)
+        : "no reads edge"
+    })`,
+  );
+} else if (miniScholarApisHomeUsesApi) {
+  fail(
+    "mini-scholar-apis must not invent Home -[uses]-> HTTP API when only Dashboard calls src/apis",
+  );
+} else {
+  pass(
+    `mini-scholar-apis client-API honesty: Dashboard -[reads]-> HTTP API; no invented uses/Data/Jobs; flow ${miniScholarApisFlowLabels.join(" → ")}`,
   );
 }
 
@@ -3142,6 +3395,67 @@ if (
   );
 } else {
   pass("mini-next story edge: Home -[writes]-> Posts API via Post form → Create post");
+}
+
+// Client `apis/**` helper — Learn-style page→API reads without server actions.
+const miniNextHomeReadsApi = miniNextGraph.edges.find(
+  (edge) =>
+    edge.kind === "reads" &&
+    edge.source === miniNextHomeMolecule?.id &&
+    edge.target === miniNextApi?.id,
+);
+if (
+  !miniNextHomeReadsApi ||
+  !miniNextHomeReadsApi.evidence?.some(
+    (item) =>
+      item.certainty === "derived" &&
+      typeof item.detail === "string" &&
+      item.detail.includes("Post list") &&
+      item.detail.includes("List posts") &&
+      item.detail.includes("client apis module"),
+  )
+) {
+  fail(
+    `mini-next expected Home molecule -[reads]-> Posts API via Post list → List posts (found ${
+      miniNextHomeReadsApi
+        ? JSON.stringify(miniNextHomeReadsApi.evidence?.[0] ?? null)
+        : "no reads edge"
+    })`,
+  );
+} else {
+  pass("mini-next story edge: Home -[reads]-> Posts API via Post list → List posts");
+}
+
+const miniNextApisUnderApi = miniNextGraph.nodes.filter(
+  (node) =>
+    node.parentId === miniNextApi?.id &&
+    node.kind === "module" &&
+    /apis\//.test(String(node.metadata?.path ?? node.label ?? "")),
+);
+if (miniNextApisUnderApi.length < 1) {
+  // Module may nest by file path label — also accept function under API.
+  const miniNextListPostsFn = miniNextGraph.nodes.find(
+    (node) =>
+      (node.kind === "function" || node.kind === "hook") &&
+      /list posts/i.test(node.label) &&
+      (node.parentId === miniNextApi?.id ||
+        miniNextGraph.nodes.some(
+          (parent) =>
+            parent.id === node.parentId &&
+            parent.parentId === miniNextApi?.id,
+        )),
+  );
+  if (!miniNextListPostsFn) {
+    fail(
+      `mini-next expected apis/listPosts nested under Posts API (modules=${miniNextApisUnderApi
+        .map((node) => node.label)
+        .join(", ") || "(none)"})`,
+    );
+  } else {
+    pass("mini-next client apis helper nested under Posts API");
+  }
+} else {
+  pass(`mini-next ${miniNextApisUnderApi.length} apis module(s) nested under Posts API`);
 }
 
 // Dashboard has no server-action caller — do not invent a writes edge.
@@ -5256,13 +5570,19 @@ if (miniMongoVisibleChrome.length > 0) {
 }
 
 // Mongo `.aggregate([...])` → pipeline hubs under Catalog data (RAG/query story).
-// Product aggregates stay overview hubs; handle crumbs (`C` / `Col`) collapse.
+// Product aggregates stay overview hubs; handle crumbs (`C` / `Col` / `Qcol` /
+// `Testscollection`) collapse.
 for (const [label, expectTrivial] of [
   ["C pipeline", true],
   ["Col pipeline", true],
+  ["Qcol pipeline", true],
+  ["Q col pipeline", true],
+  ["Testscollection pipeline", true],
+  ["Tests collection pipeline", true],
   ["Note pipeline", false],
   ["Search chunks pipeline", false],
   ["Tag pipeline", false],
+  ["RAG Collection pipeline", false],
 ]) {
   if (isTrivialMongoAggregateLabel(label) !== expectTrivial) {
     fail(
@@ -5292,7 +5612,14 @@ for (const expected of ["Search chunks pipeline", "Note pipeline"]) {
   }
 }
 
-const miniMongoJunkAggregateLabels = ["C pipeline", "Col pipeline"];
+// Projected labels: qCol→Qcol, testsCollection/Testscollection→Testscollection
+// (titleCaseSingular on camelCase collectionName crumbs).
+const miniMongoJunkAggregateLabels = [
+  "C pipeline",
+  "Col pipeline",
+  "Qcol pipeline",
+  "Testscollection pipeline",
+];
 for (const expected of miniMongoJunkAggregateLabels) {
   if (!miniMongoAggregateLabels.has(expected)) {
     fail(
@@ -5302,13 +5629,25 @@ for (const expected of miniMongoJunkAggregateLabels) {
     pass(`mini-mongo extracts junk-handle aggregate ${expected}`);
   }
 }
+const miniMongoJunkAggregateCount = miniMongoAggregates.filter((node) =>
+  miniMongoJunkAggregateLabels.includes(node.label),
+).length;
+if (miniMongoJunkAggregateCount < 5) {
+  fail(
+    `mini-mongo expected ≥5 junk-handle aggregate nodes (C/Col/Qcol/testsCollection/Testscollection), found ${miniMongoJunkAggregateCount} (${[...miniMongoAggregateLabels].join(", ")})`,
+  );
+} else {
+  pass(
+    `mini-mongo ${miniMongoJunkAggregateCount} junk-handle aggregate nodes extracted for suppression`,
+  );
+}
 
 const miniMongoAggregatesUnderData = miniMongoAggregates.filter(
   (node) => node.parentId === miniMongoData?.id,
 );
-if (miniMongoAggregatesUnderData.length < 4) {
+if (miniMongoAggregatesUnderData.length < 7) {
   fail(
-    `mini-mongo expected ≥4 aggregate pipelines nested under Catalog data (2 product + 2 junk), found ${miniMongoAggregatesUnderData.length} (${[...miniMongoAggregateLabels].join(", ")})`,
+    `mini-mongo expected ≥7 aggregate pipelines nested under Catalog data (2 product + 5 junk), found ${miniMongoAggregatesUnderData.length} (${[...miniMongoAggregateLabels].join(", ")})`,
   );
 } else {
   pass(
@@ -5340,7 +5679,7 @@ if (
 }
 
 if (
-  miniMongoJunkAggregates.length < 2 ||
+  miniMongoJunkAggregates.length < 5 ||
   miniMongoJunkAggregates.some(
     (node) =>
       node.metadata?.overviewHub === true ||
@@ -5351,11 +5690,11 @@ if (
   )
 ) {
   fail(
-    `mini-mongo junk aggregates (C/Col) must be trivialMongoAggregate + collapsed off overview; found ${miniMongoJunkAggregates.map((n) => `${n.label} hub=${n.metadata?.overviewHub} collapsed=${n.metadata?.collapsedInOverview}`).join("; ") || "(none)"}`,
+    `mini-mongo junk aggregates (C/Col/Qcol/*collection) must be trivialMongoAggregate + collapsed off overview; found ${miniMongoJunkAggregates.map((n) => `${n.label} hub=${n.metadata?.overviewHub} collapsed=${n.metadata?.collapsedInOverview}`).join("; ") || "(none)"}`,
   );
 } else {
   pass(
-    "mini-mongo junk C/Col aggregate pipelines suppressed on Beginner/overview",
+    "mini-mongo junk C/Col/Qcol/*collection aggregate pipelines suppressed on Beginner/overview",
   );
 }
 
@@ -5451,8 +5790,29 @@ for (const heading of productStyleHeadings) {
       `product heading ${JSON.stringify(heading)} must not count as README structure liturgy`,
     );
   }
+  if (isGenericApiDocsTitle(heading)) {
+    fail(
+      `product heading ${JSON.stringify(heading)} must not count as generic API docs chrome`,
+    );
+  }
 }
 pass("README structure liturgy detector covers Heart-style Layer/glob headings");
+
+const genericApiDocsTitles = [
+  "API Documentation",
+  "API Docs",
+  "REST API Documentation",
+  "HTTP API Reference",
+  "Swagger",
+  "OpenAPI Documentation",
+  "Swagger API Docs",
+];
+for (const title of genericApiDocsTitles) {
+  if (!isGenericApiDocsTitle(title)) {
+    fail(`expected isGenericApiDocsTitle(${JSON.stringify(title)})`);
+  }
+}
+pass("generic API docs title detector covers OpenAPI/Swagger chrome");
 
 const heartStyleReadme = `# Mini Heart
 
@@ -5471,6 +5831,30 @@ if (heartStyleHints.length > 0) {
   );
 } else {
   pass("Heart-style Layer README yields no system-label hints");
+}
+
+const apiDocsChromeReadme = `# Mini Heart
+
+## API Documentation
+Swagger docs.
+
+## Catalog data
+Models.
+`;
+const apiDocsChromeHints = parseReadmeHeadingHints(apiDocsChromeReadme);
+const apiDocsChromeLabels = Object.fromEntries(
+  apiDocsChromeHints.map((hint) => [hint.key, hint.label]),
+);
+if (apiDocsChromeLabels.api) {
+  fail(
+    `API Documentation README must not hint api system, got ${JSON.stringify(apiDocsChromeLabels)}`,
+  );
+} else if (apiDocsChromeLabels.data !== "Catalog data") {
+  fail(
+    `API Documentation README should still allow Catalog data, got ${JSON.stringify(apiDocsChromeLabels)}`,
+  );
+} else {
+  pass("API Documentation README chrome yields no api system hint");
 }
 
 const goodReadmeHints = parseReadmeHeadingHints(`# Mini
@@ -5525,14 +5909,18 @@ if (
 
 if (!miniReadmeStructureApi || miniReadmeStructureApi.label !== "HTTP API") {
   fail(
-    `mini-readme-structure API must stay path-role 'HTTP API' (not Route Layer liturgy), found '${miniReadmeStructureApi?.label ?? "(missing)"}'`,
+    `mini-readme-structure API must stay path-role 'HTTP API' (not Route Layer / API Documentation chrome), found '${miniReadmeStructureApi?.label ?? "(missing)"}'`,
   );
 } else if (miniReadmeStructureApi.metadata?.labelSource === "readme") {
   fail(
-    "mini-readme-structure API must not record labelSource=readme from Layer headings",
+    "mini-readme-structure API must not record labelSource=readme from Layer or API Documentation headings",
+  );
+} else if (/api documentation/i.test(miniReadmeStructureApi.label)) {
+  fail(
+    `mini-readme-structure API must not be titled 'API Documentation', found '${miniReadmeStructureApi.label}'`,
   );
 } else {
-  pass("mini-readme-structure API labeled HTTP API (structure liturgy suppressed)");
+  pass("mini-readme-structure API labeled HTTP API (structure liturgy + API Documentation suppressed)");
 }
 
 if (
@@ -5640,6 +6028,18 @@ const expectedRouteGroups = [
 const missingRouteGroups = expectedRouteGroups.filter(
   (label) => !miniRoutesManyGroupLabels.includes(label),
 );
+const miniRoutesManyApiFocusModules = miniRoutesManyApiFocus.filter(
+  (node) => node.kind === "module",
+);
+const miniRoutesManyApiFocusFunctions = miniRoutesManyApiFocus.filter(
+  (node) => node.kind === "function",
+);
+const miniRoutesManyApiWalk = miniRoutesManyApi
+  ? resolveWalkFocusForGraph(miniRoutesManyGraph, miniRoutesManyApi.id)
+  : null;
+const miniRoutesManyModuleCount = miniRoutesManyGraph.nodes.filter(
+  (node) => node.kind === "module",
+).length;
 if (!miniRoutesManyApi) {
   fail("mini-routes-many missing HTTP API system");
 } else if (miniRoutesManyRoutes.length < 40) {
@@ -5654,15 +6054,15 @@ if (!miniRoutesManyApi) {
   fail(
     `mini-routes-many missing domain groups ${missingRouteGroups.join(", ")}; found ${miniRoutesManyGroupLabels.join(", ") || "(none)"}`,
   );
-} else if (miniRoutesManyNaked.length > INTERMEDIATE_NAKED_ROUTE_CAP) {
+} else if (miniRoutesManyNaked.length > INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP) {
   fail(
-    `mini-routes-many naked routes under API must be ≤${INTERMEDIATE_NAKED_ROUTE_CAP}, found ${miniRoutesManyNaked.length}`,
+    `mini-routes-many naked routes under API must be ≤${INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP} when domain groups exist, found ${miniRoutesManyNaked.length}`,
   );
 } else if (
-  miniRoutesManyApiFocusRoutes.length > INTERMEDIATE_NAKED_ROUTE_CAP
+  miniRoutesManyApiFocusRoutes.length > INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP
 ) {
   fail(
-    `mini-routes-many API Intermediate must show ≤${INTERMEDIATE_NAKED_ROUTE_CAP} naked routes, found ${miniRoutesManyApiFocusRoutes.length}`,
+    `mini-routes-many API Intermediate must show ≤${INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP} naked routes (groups-first), found ${miniRoutesManyApiFocusRoutes.length}`,
   );
 } else if (miniRoutesManyApiFocusGroups.length < 8) {
   fail(
@@ -5674,18 +6074,36 @@ if (!miniRoutesManyApi) {
   fail(
     "mini-routes-many API Intermediate must not dump route-group members (focus the Users/Articles hub)",
   );
+} else if (miniRoutesManyApiFocusModules.length > 0) {
+  fail(
+    `mini-routes-many API Intermediate must keep modules Advanced, found ${miniRoutesManyApiFocusModules.map((n) => n.label).join(", ")}`,
+  );
+} else if (miniRoutesManyApiFocusFunctions.length > 0) {
+  fail(
+    `mini-routes-many API Intermediate must keep functions Advanced, found ${miniRoutesManyApiFocusFunctions.length}`,
+  );
+} else if (miniRoutesManyModuleCount < 1) {
+  fail("mini-routes-many expected ≥1 module under API to prove Advanced quieting");
+} else if (
+  !miniRoutesManyApiWalk ||
+  miniRoutesManyApiWalk.tier !== "intermediate" ||
+  miniRoutesManyApiWalk.focusId !== miniRoutesManyApi.id
+) {
+  fail(
+    `mini-routes-many API double-click must open Intermediate (groups), got focus=${miniRoutesManyApiWalk?.focusId} tier=${miniRoutesManyApiWalk?.tier}`,
+  );
 } else if (miniRoutesManyUsersFocusRoutes.length < 4) {
   fail(
     `mini-routes-many Users Intermediate should reveal user routes, found ${miniRoutesManyUsersFocusRoutes.length}`,
   );
 } else if (
   miniRoutesManyGroupLabels.includes("More routes") === false &&
-  miniRoutesManyRoutes.length > INTERMEDIATE_NAKED_ROUTE_CAP + 20
+  miniRoutesManyRoutes.length > INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP + 20
 ) {
-  fail("mini-routes-many expected More routes overflow group when past naked cap");
+  fail("mini-routes-many expected More routes overflow group when past grouped naked cap");
 } else {
   pass(
-    `mini-routes-many Intermediate route groups: ${miniRoutesManyApiFocusGroups.length} hubs (${miniRoutesManyApiFocusGroups.map((n) => n.label).sort().join(", ")}); naked≤${INTERMEDIATE_NAKED_ROUTE_CAP} (${miniRoutesManyApiFocusRoutes.length}); Users focus ${miniRoutesManyUsersFocusRoutes.length} routes`,
+    `mini-routes-many Intermediate route groups: ${miniRoutesManyApiFocusGroups.length} hubs (${miniRoutesManyApiFocusGroups.map((n) => n.label).sort().join(", ")}); naked≤${INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP} (${miniRoutesManyApiFocusRoutes.length}); modules/functions Advanced; walk=${miniRoutesManyApiWalk.tier}; Users focus ${miniRoutesManyUsersFocusRoutes.length} routes`,
   );
 }
 

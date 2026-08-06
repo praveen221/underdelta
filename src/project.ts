@@ -154,6 +154,45 @@ export function isSampleBoilerplateTitle(title: string): boolean {
 }
 
 /**
+ * OpenAPI/Swagger docs chrome that must not own the Product Flow API hub
+ * (Shree Heart field fail: info.title / README "## API Documentation").
+ * Prefer path-role `HTTP API` or a real product heading ("Notes API").
+ */
+export function isGenericApiDocsTitle(title: string): boolean {
+  const text = title.trim().toLowerCase().replace(/\s+/g, " ");
+  if (!text) return false;
+
+  // Bare swagger/openapi tooling names without a product noun.
+  if (
+    /^(?:openapi|swagger)(?:\s+(?:ui|spec(?:ification)?|definition|docs?|documentation))?$/.test(
+      text,
+    )
+  ) {
+    return true;
+  }
+
+  // "API Documentation", "REST API Docs", "HTTP API Reference", …
+  if (
+    /^(?:(?:rest|http|web)\s+)?api(?:\s+(?:docs?|documentation|reference|spec(?:ification)?|definition|description))?$/.test(
+      text,
+    )
+  ) {
+    return true;
+  }
+
+  // "OpenAPI Documentation", "Swagger API Docs", "OAS Spec", …
+  if (
+    /^(?:openapi|swagger|oas)(?:\s+api)?(?:\s+(?:docs?|documentation|reference|spec(?:ification)?|definition))?$/.test(
+      text,
+    )
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * OpenAPI `info.title` often appends version chrome ("Swagger Petstore - OpenAPI 3.0").
  * Strip that so the canvas brand reads as the product.
  */
@@ -224,6 +263,11 @@ export function inferSystemKeyFromHeading(heading: string): string | undefined {
 
   // Numbered Layer / file-glob structure docs are not product system names.
   if (isReadmeStructureHeading(heading)) {
+    return undefined;
+  }
+
+  // OpenAPI/Swagger docs chrome ("API Documentation") must not rename HTTP API.
+  if (isGenericApiDocsTitle(heading)) {
     return undefined;
   }
 
@@ -356,10 +400,12 @@ function applyReadmeHeadingHints(
 ): void {
   if (!hints?.length) return;
   for (const hint of hints) {
-    // Defense in depth: never paint structure liturgy onto the canvas.
+    // Defense in depth: never paint structure liturgy or docs chrome onto the canvas.
     if (
       isReadmeStructureHeading(hint.label) ||
-      isReadmeStructureHeading(hint.heading)
+      isReadmeStructureHeading(hint.heading) ||
+      isGenericApiDocsTitle(hint.label) ||
+      isGenericApiDocsTitle(hint.heading)
     ) {
       continue;
     }
@@ -1143,6 +1189,11 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
     /(?:^|\/)(?:src\/)?app\/.*\/actions\.[cm]?[jt]sx?$/.test(file) ||
     /(^|\/)actions\.[cm]?[jt]sx?$/.test(file)
   ) {
+    return { key: "api", label: "HTTP API", kind: "api" };
+  }
+  // Client API modules (`src/apis/**`, `apis/**`) — Next/SaaS apps call the
+  // backend here (axios/fetch). Not the same as `/api/` path substring.
+  if (/(^|\/)apis\//.test(file)) {
     return { key: "api", label: "HTTP API", kind: "api" };
   }
   // Next.js App Router pages/layouts are the product UI (before generic /api/).
@@ -2041,33 +2092,61 @@ function markUiOnlyProductHonesty(
 }
 
 /**
+ * Temp* App Router shells (prototypes / alternate dashboards). Kept on the
+ * product side of marketing, but ranked below real Student/Tutor/Home/Login
+ * so Beginner is not eight temp hubs.
+ */
+function isFeTempRouteShell(path: string, segment: string): boolean {
+  const p = path.toLowerCase();
+  const seg = segment.toLowerCase();
+  return seg.startsWith("/temp") || /tempsignin|temp-signin/.test(p);
+}
+
+/**
  * Score a route-segment path for Beginner priority (higher = keep on flow).
- * Product shells / auth / temp dashboards beat marketing & exam landings.
+ * Real product shells / auth beat temp* dashboards; both beat marketing & exams.
  */
 export function feRouteMoleculeBeginnerScore(path: string): number {
   const raw = path.trim() || "/";
   const p = raw.toLowerCase();
   const segment = appRouterRouteSegment(raw).toLowerCase();
+  const tempShell = isFeTempRouteShell(p, segment);
 
+  // Product auth — not Tempsignin / temp-signin shells.
   if (
-    /tempsignin|temp-signin/.test(p) ||
+    !tempShell &&
     /^\/(signin|login|signup|auth)(\/|$)/.test(p)
   ) {
     return 100;
   }
-  if (/temp(student|tutor|demo|applicant|welcome)/.test(p)) return 95;
-  if (segment.startsWith("/temp")) return 94;
+
+  // Core product hubs — prefer over temp* when the cap is tight.
   if (
-    /^\/(student|tutor|demo|applicant|dashboard|onboarding|profile|welcome)(\/|$)/.test(
-      p,
-    ) ||
-    /^\/(student|tutor|demo|applicant|dashboard|onboarding|profile|welcome)$/.test(
-      segment,
-    )
+    !tempShell &&
+    (p === "/" ||
+      segment === "/" ||
+      /^\/(student|tutor|home)(\/|$)/.test(p) ||
+      /^\/(student|tutor|home)$/.test(segment))
   ) {
-    return 90;
+    return 98;
   }
-  if (p === "/" || segment === "/") return 85;
+
+  // Other durable product surfaces (demo / dashboard / onboarding…).
+  if (
+    !tempShell &&
+    (/^\/(demo|applicant|dashboard|onboarding|profile|welcome)(\/|$)/.test(p) ||
+      /^\/(demo|applicant|dashboard|onboarding|profile|welcome)$/.test(segment))
+  ) {
+    return 96;
+  }
+
+  // Temp shells fill remaining Beginner slots after product hubs.
+  if (tempShell) {
+    if (/tempsignin|temp-signin/.test(p)) return 72;
+    if (/temp(student|tutor|demo|applicant|welcome)/.test(p)) return 70;
+    return 68;
+  }
+
   if (/book-demo|be-a-tutor|pricing|quiz|result|blogs|schools|counties|syllabus/.test(p)) {
     return 45;
   }
@@ -2151,6 +2230,13 @@ function compressFeBeginnerRouteMolecules(
 export const INTERMEDIATE_NAKED_ROUTE_CAP = 24;
 
 /**
+ * When domain groups already exist, Intermediate should lead with Users /
+ * Articles hubs — not 24 leftover singleton misc routes. Prefer probes; fold
+ * the rest under "More routes".
+ */
+export const INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP = 8;
+
+/**
  * Domain key for HTTP route grouping: `/api/users/:id` → `users`,
  * `/articles` → `articles`. Strips leading `api` / `vN`. Probes (`/health`)
  * and empty roots return null so they stay naked under the API hub.
@@ -2205,7 +2291,8 @@ function isContractSurfaceRoute(node: ArchitectureNode): boolean {
  * Intermediate API calm: group Express/Heart-style routes by path-prefix domain
  * under hubs (Users / Articles / …). Nested route atoms stay off the API
  * Intermediate canvas until the group is focused (viewer mirrors detection
- * surfaces). Cap leftover naked routes at INTERMEDIATE_NAKED_ROUTE_CAP.
+ * surfaces). Cap leftover naked routes — tighter when domain groups already
+ * tell the Intermediate story (modules/functions stay Advanced).
  */
 function projectApiRouteDomainGroups(
   systems: Map<string, ArchitectureNode>,
@@ -2302,11 +2389,13 @@ function projectApiRouteDomainGroups(
     return group;
   };
 
+  let domainGroupCount = 0;
   for (const [domain, members] of byDomain) {
     if (members.length < 2) {
       naked.push(...members);
       continue;
     }
+    domainGroupCount += 1;
     const group = ensureGroup(
       domain,
       humanizeIdentifierLabel(domain),
@@ -2331,7 +2420,12 @@ function projectApiRouteDomainGroups(
   }
 
   // Cap leftover naked routes under the API hub — excess nest under More routes.
-  if (naked.length <= INTERMEDIATE_NAKED_ROUTE_CAP) return;
+  // Groups-first: when domain hubs exist, keep only a short probe/sample strip.
+  const nakedCap =
+    domainGroupCount >= 1
+      ? INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP
+      : INTERMEDIATE_NAKED_ROUTE_CAP;
+  if (naked.length <= nakedCap) return;
 
   const ranked = [...naked].sort((a, b) => {
     const pathA =
@@ -2344,7 +2438,7 @@ function projectApiRouteDomainGroups(
       a.id.localeCompare(b.id)
     );
   });
-  const overflow = ranked.slice(INTERMEDIATE_NAKED_ROUTE_CAP);
+  const overflow = ranked.slice(nakedCap);
   if (!overflow.length) return;
   const more = ensureGroup("_more", "More routes", overflow);
   for (const route of overflow) {
@@ -2367,15 +2461,88 @@ function projectApiRouteDomainGroups(
   nodes.set(more.id, more);
 }
 
-/** Server-action label → story edge kind (mutations write; getters read). */
+/** Server-action / client-API label → story edge kind (mutations write; getters read). */
 function serverActionStoryEdgeKind(label: string): "reads" | "writes" {
   const normalized = label.toLowerCase();
+  // Word tokens ("List posts") and camelCase / snake prefixes (listPosts, get_user).
   if (
-    /\b(get|list|find|fetch|load|read|query|show|select)\b/.test(normalized)
+    /\b(get|list|find|fetch|load|read|query|show|select)\b/.test(normalized) ||
+    /^(get|list|find|fetch|load|read|query|show|select)([a-z0-9]|_)/i.test(
+      label.replace(/\s+/g, ""),
+    )
   ) {
     return "reads";
   }
   return "writes";
+}
+
+/** Client API helpers under `apis/**` (axios/fetch wrappers), not server actions. */
+function isClientApiFunction(
+  node: ArchitectureNode,
+  nodes: Map<string, ArchitectureNode>,
+): boolean {
+  if (node.metadata?.serverAction === true) return false;
+  if (node.kind !== "function" && node.kind !== "hook") return false;
+  for (const item of node.evidence) {
+    const file = normalizePath(item.file);
+    if (/(^|\/)apis\//.test(file)) return true;
+  }
+  const parent = node.parentId ? nodes.get(node.parentId) : undefined;
+  if (parent?.kind === "module" && /(^|\/)apis\//.test(modulePath(parent))) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * True when HTTP API is only client `apis/**` helpers (axios/fetch wrappers to a
+ * remote backend) — no in-repo route handlers, server actions, or OpenAPI/GraphQL
+ * contracts. Scholar-style FE twins use this shape; they must not invent
+ * page→API `uses` for hubs that never call a helper.
+ */
+export function isClientApisOnlyHttpApi(
+  api: ArchitectureNode,
+  nodes: Map<string, ArchitectureNode>,
+): boolean {
+  if (api.metadata?.systemKey !== "api") return false;
+
+  const ownedByApi = (nodeId: string): boolean => {
+    let current: string | undefined = nodeId;
+    const seen = new Set<string>();
+    while (current && !seen.has(current)) {
+      seen.add(current);
+      if (current === api.id) return true;
+      const node = nodes.get(current);
+      if (!node) return false;
+      current = node.parentId;
+    }
+    return false;
+  };
+
+  let sawClientApi = false;
+  let sawServerSurface = false;
+  for (const node of nodes.values()) {
+    if (node.id === api.id) continue;
+    if (!ownedByApi(node.id)) continue;
+
+    if (
+      node.kind === "route" ||
+      node.metadata?.serverAction === true ||
+      node.metadata?.openapi === true ||
+      node.metadata?.graphql === true
+    ) {
+      sawServerSurface = true;
+      break;
+    }
+    if (isClientApiFunction(node, nodes)) {
+      sawClientApi = true;
+      continue;
+    }
+    if (node.kind === "module" && /(^|\/)apis\//.test(modulePath(node))) {
+      sawClientApi = true;
+    }
+  }
+  return sawClientApi && !sawServerSurface;
 }
 
 /**
@@ -2383,6 +2550,8 @@ function serverActionStoryEdgeKind(label: string): "reads" | "writes" {
  * - `renders` page atom → page-owned feature root (lifted from page-body JSX)
  * - `reads`/`writes` page molecule → API when a owned feature root calls a
  *   server action nested under the API system
+ * - `reads`/`writes` page molecule → API when a owned feature root calls a
+ *   client `apis/**` helper (Next/SaaS axios/fetch wrappers)
  */
 function liftFePageStoryEdges(
   nodes: Map<string, ArchitectureNode>,
@@ -2431,6 +2600,40 @@ function liftFePageStoryEdges(
 
   if (!api) return;
 
+  const liftMoleculeApiStory = (
+    source: ArchitectureNode,
+    target: ArchitectureNode,
+    seed: Evidence,
+    via: string,
+  ): void => {
+    const moleculeKey =
+      typeof source.metadata?.routeMolecule === "string"
+        ? source.metadata.routeMolecule
+        : typeof source.metadata?.projectedSystem === "string" &&
+            String(source.metadata.projectedSystem).startsWith("page:")
+          ? String(source.metadata.projectedSystem)
+          : undefined;
+    if (!moleculeKey) return;
+    const molecule = systems.get(moleculeKey);
+    if (!molecule) return;
+
+    const targetLabel = humanizeIdentifierLabel(target.label);
+    const kind = serverActionStoryEdgeKind(targetLabel);
+    const lifted = edgeFrom(
+      kind,
+      molecule.id,
+      api.id,
+      {
+        ...seed,
+        extractor: "projection",
+        certainty: "derived",
+        detail: `${molecule.label} ${kind} ${api.label} via ${source.label} → ${targetLabel} (${via})`,
+      },
+      targetLabel,
+    );
+    if (!edges.has(lifted.id)) edges.set(lifted.id, lifted);
+  };
+
   // Page molecule → API reads/writes from featureRoot → serverAction calls.
   for (const edge of [...edges.values()]) {
     if (edge.kind !== "calls") continue;
@@ -2440,33 +2643,28 @@ function liftFePageStoryEdges(
     if (source.metadata?.featureRoot !== true) continue;
     if (target.metadata?.serverAction !== true) continue;
     if (target.parentId !== api.id) continue;
-
-    const moleculeKey =
-      typeof source.metadata?.routeMolecule === "string"
-        ? source.metadata.routeMolecule
-        : typeof source.metadata?.projectedSystem === "string" &&
-            String(source.metadata.projectedSystem).startsWith("page:")
-          ? String(source.metadata.projectedSystem)
-          : undefined;
-    if (!moleculeKey) continue;
-    const molecule = systems.get(moleculeKey);
-    if (!molecule) continue;
-
-    const kind = serverActionStoryEdgeKind(target.label);
-    const seed = edge.evidence[0]!;
-    const lifted = edgeFrom(
-      kind,
-      molecule.id,
-      api.id,
-      {
-        ...seed,
-        extractor: "projection",
-        certainty: "derived",
-        detail: `${molecule.label} ${kind} ${api.label} via ${source.label} → ${target.label}`,
-      },
-      target.label,
+    liftMoleculeApiStory(
+      source,
+      target,
+      edge.evidence[0]!,
+      "server action",
     );
-    if (!edges.has(lifted.id)) edges.set(lifted.id, lifted);
+  }
+
+  // Page molecule → API from featureRoot → client `apis/**` helpers.
+  for (const edge of [...edges.values()]) {
+    if (edge.kind !== "calls") continue;
+    const source = nodes.get(edge.source);
+    const target = nodes.get(edge.target);
+    if (!source || !target) continue;
+    if (source.metadata?.featureRoot !== true) continue;
+    if (!isClientApiFunction(target, nodes)) continue;
+    liftMoleculeApiStory(
+      source,
+      target,
+      edge.evidence[0]!,
+      "client apis module",
+    );
   }
 }
 
@@ -3252,6 +3450,8 @@ const TRIVIAL_MONGO_AGGREGATE_HANDLES = new Set([
   "coll",
   "cols",
   "colls",
+  "collection",
+  "collections",
   "doc",
   "docs",
   "row",
@@ -3277,16 +3477,31 @@ const TRIVIAL_MONGO_AGGREGATE_HANDLES = new Set([
   "model",
   "models",
   "schema",
+  "test",
+  "tests",
+  "scratch",
+  "junk",
+  "mock",
+  "dummy",
+  "sample",
+  "foo",
+  "bar",
+  "baz",
+  "misc",
 ]);
 
+/** Trailing driver-handle suffixes glued onto short prefixes (`Qcol`, `Testscollection`). */
+const TRIVIAL_MONGO_HANDLE_SUFFIX =
+  /(?:collections?|colls?|cols?)$/i;
+
 /**
- * True when a mongo aggregate pipeline label is a short variable/handle crumb
- * rather than a product collection story (Shree Heart field gate).
+ * True when a stem (after stripping col/collection) is itself a short/generic
+ * handle rather than a product word (Note, Search chunks).
  */
-export function isTrivialMongoAggregateLabel(label: string): boolean {
-  const stem = label.replace(/\s+pipeline$/i, "").trim();
+function isTrivialMongoAggregateStem(stem: string): boolean {
   if (!stem) return true;
   const compact = stem.replace(/\s+/g, "");
+  if (!compact) return true;
   if (/^[A-Za-z]$/.test(compact)) return true;
   if (TRIVIAL_MONGO_AGGREGATE_HANDLES.has(compact.toLowerCase())) return true;
   // Two-letter alpha crumbs (cx, tx) — keep known product acronyms (AI, DB).
@@ -3296,6 +3511,50 @@ export function isTrivialMongoAggregateLabel(label: string): boolean {
   ) {
     return true;
   }
+  return false;
+}
+
+/**
+ * True when a mongo aggregate pipeline label is a short variable/handle crumb
+ * rather than a product collection story (Shree Heart field gate).
+ *
+ * Covers bare handles (`C`, `Col`), prefixed crumbs (`Qcol`, `Q Col`), and
+ * glued `*collection` leftovers (`Testscollection`, `Tests Collection`).
+ */
+export function isTrivialMongoAggregateLabel(label: string): boolean {
+  const stem = label.replace(/\s+pipeline$/i, "").trim();
+  if (!stem) return true;
+  if (isTrivialMongoAggregateStem(stem)) return true;
+
+  const compact = stem.replace(/\s+/g, "");
+  // Prefixed / glued handle crumbs: Qcol, XColl, Testscollection.
+  if (TRIVIAL_MONGO_HANDLE_SUFFIX.test(compact)) {
+    const withoutSuffix = compact.replace(TRIVIAL_MONGO_HANDLE_SUFFIX, "");
+    if (isTrivialMongoAggregateStem(withoutSuffix)) return true;
+    // Glued identifier crumbs (`Testscollection`) — short non-product prefix
+    // with no spaces in the original stem means a variable leftover, not a
+    // titled product collection hub.
+    if (
+      !/\s/.test(stem) &&
+      withoutSuffix.length > 0 &&
+      withoutSuffix.length <= 8 &&
+      /^[A-Za-z]+$/i.test(withoutSuffix)
+    ) {
+      return true;
+    }
+  }
+
+  // Spaced "... Collection" where the leading words are generic handles
+  // (`Tests Collection` from testsCollection).
+  const words = stem.split(/\s+/);
+  if (
+    words.length >= 2 &&
+    /^collections?$/i.test(words[words.length - 1] ?? "")
+  ) {
+    const prefix = words.slice(0, -1).join("");
+    if (isTrivialMongoAggregateStem(prefix)) return true;
+  }
+
   return false;
 }
 
@@ -3514,7 +3773,8 @@ export function projectSemanticArchitecture(
   if (!product) return graph;
 
   // OpenAPI/Swagger specs carry the real product name when the README is
-  // sample/demo boilerplate ("Swagger Petstore Sample").
+  // sample/demo boilerplate ("Swagger Petstore Sample"). Skip docs chrome
+  // titles ("API Documentation") — those are not a product brand.
   const openapiInfoTitle = [...nodes.values()]
     .map((node) =>
       node.metadata?.openapiSpec === true &&
@@ -3522,7 +3782,10 @@ export function projectSemanticArchitecture(
         ? cleanOpenApiInfoTitle(node.metadata.openapiTitle)
         : undefined,
     )
-    .find((title) => title && title.length > 0);
+    .find(
+      (title) =>
+        title && title.length > 0 && !isGenericApiDocsTitle(title),
+    );
 
   // Prefer a cleaned README H1 when package.json name is scoped/non-descriptive.
   // When README is sample boilerplate and an OpenAPI info.title exists, prefer
@@ -4108,6 +4371,12 @@ export function projectSemanticArchitecture(
     } else if (node.metadata?.serverAction === true) {
       // checkoutAction → Checkout (drop trailing Action factory chrome).
       nextLabel = humanizeServerActionLabel(node.label);
+    } else if (
+      (node.kind === "function" || node.kind === "hook") &&
+      isClientApiFunction(node, nodes)
+    ) {
+      // Client apis/** helpers: listPosts → List posts (same vocabulary as actions).
+      nextLabel = humanizeIdentifierLabel(node.label);
     } else if (node.kind === "job") {
       // Celery send_digest → Send digest
       nextLabel = humanizeIdentifierLabel(
@@ -5180,25 +5449,32 @@ export function projectSemanticArchitecture(
   }
 
   // Route molecules collaborate with HTTP API the same way aggregate UI did.
+  // Client-apis-only surfaces (Scholar FE → remote Heart) skip this blanket:
+  // evidenced reads/writes from liftFePageStoryEdges already tell the story.
   if (systemsByKey.has("api") && pageMoleculeKeys.length) {
     const apiId = systemsByKey.get("api")!;
-    for (const pageKey of pageMoleculeKeys) {
-      const fromId = systemsByKey.get(pageKey);
-      if (!fromId) continue;
-      const molecule = systems.get(pageKey);
-      const edge = edgeFrom(
-        "uses",
-        fromId,
-        apiId,
-        {
-          file: ".",
-          extractor: "projection",
-          certainty: "inferred",
-          detail: `${molecule?.label ?? pageKey} calls the HTTP API and server actions`,
-        },
-        "fetch",
-      );
-      if (!edges.has(edge.id)) edges.set(edge.id, edge);
+    const apiSystem = systems.get("api");
+    const clientApisOnly =
+      apiSystem !== undefined && isClientApisOnlyHttpApi(apiSystem, nodes);
+    if (!clientApisOnly) {
+      for (const pageKey of pageMoleculeKeys) {
+        const fromId = systemsByKey.get(pageKey);
+        if (!fromId) continue;
+        const molecule = systems.get(pageKey);
+        const edge = edgeFrom(
+          "uses",
+          fromId,
+          apiId,
+          {
+            file: ".",
+            extractor: "projection",
+            certainty: "inferred",
+            detail: `${molecule?.label ?? pageKey} calls the HTTP API and server actions`,
+          },
+          "fetch",
+        );
+        if (!edges.has(edge.id)) edges.set(edge.id, edge);
+      }
     }
   }
 
@@ -5421,7 +5697,8 @@ export function projectSemanticArchitecture(
   compressFeBeginnerRouteMolecules(systems, nodes);
 
   // Heart / Express Intermediate calm: domain route groups + naked-route cap
-  // so API focus is Users/Articles hubs (or ≤24 samples), not a route phonebook.
+  // so API focus is Users/Articles hubs (≤8 leftover samples when grouped),
+  // not a route phonebook; modules/functions wait for Advanced.
   projectApiRouteDomainGroups(systems, nodes, edges, attachToSystem);
 
   // Scholar / FE-only honesty: when pages exist but no static API/Data/Jobs

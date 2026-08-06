@@ -135,6 +135,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     aside h3 { margin: 20px 0 8px; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
     aside p { color: var(--muted); margin: 4px 0 12px; overflow-wrap: anywhere; }
     .pill { display: inline-block; border: 1px solid var(--line); border-radius: 999px; padding: 2px 7px; margin: 2px 4px 2px 0; font-size: 11px; color: var(--muted); }
+    .inspector-role { color: var(--text); margin: 4px 0 14px; font-size: 13px; line-height: 1.4; }
+    .inspector-more { margin-top: 8px; opacity: .85; }
     .collab-edge { margin: 0 0 10px; }
     .collab-edge .pill { margin-bottom: 2px; }
     .collab-detail { margin: 2px 0 0; font-size: 12px; line-height: 1.35; color: var(--text); }
@@ -806,6 +808,14 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       if (roomOthers.length >= 3) {
         return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
       }
+      // Heart API Intermediate payoff is domain route groups (Users / Articles).
+      // Prefer that room over a thin-room Advanced module dump.
+      const routeGroupFurniture = roomOthers.filter(
+        (node) => node.metadata && node.metadata.routeGroup === true,
+      );
+      if (routeGroupFurniture.length >= 1) {
+        return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
+      }
 
       // Thin room with code under it → Advanced (CLI → src/cli.ts, not 4 lonely nodes).
       if (countAdvancedContains(clickedId) >= 1) {
@@ -1044,7 +1054,11 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         }
       }
       const laneWidth = 240;
-      const flowGap = 220;
+      // Product Flow wrap: ≤4 hubs per row so 6–8 Beginner hubs stay scannable
+      // without a long horizontal hunt (second row + slightly tighter gap).
+      const FLOW_WRAP_COLS = 4;
+      const flowGapX = 200;
+      const flowRowY = 96;
       let maxHeight = 0;
       let maxWidth = activeLanes.length * laneWidth + 200;
 
@@ -1062,13 +1076,16 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         label.style.top = "0px";
         nodesLayer.appendChild(label);
         flowNodes.forEach((node, index) => {
-          const x = index * flowGap;
-          const y = 34;
+          const col = index % FLOW_WRAP_COLS;
+          const row = Math.floor(index / FLOW_WRAP_COLS);
+          const x = col * flowGapX;
+          const y = 34 + row * flowRowY;
           placeNode(node, x, y);
           maxHeight = Math.max(maxHeight, y + 70);
           maxWidth = Math.max(maxWidth, x + widthForKind(node.kind) + 80);
         });
-        laneTop = 130;
+        const flowRows = Math.ceil(flowNodes.length / FLOW_WRAP_COLS);
+        laneTop = 34 + flowRows * flowRowY + 28;
       }
 
       activeLanes.forEach((lane, laneIndex) => {
@@ -1429,6 +1446,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     // Structured inspector sections own these keys (avoid raw pill dump).
     // Compiler internals (projection/systemKey/flowOrder) stay hidden — North-star
     // founders need product evidence, not projection machinery chrome.
+    // path/framework/readme* fold into plainLanguageRole — not leftover pills.
     const structuredMetaKeys = new Set([
       "keyFiles", "binEntries", "binCommands", "packageExports", "extractorRoster",
       "prismaName", "sqlName", "sources", "aliases", "normalizedTable",
@@ -1461,7 +1479,76 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       "beginnerRouteHub", "beginnerOmitted", "beginnerOmitReason",
       "replacedByRouteMolecules",
       "uiOnly", "uiOnlyReason",
+      "path", "framework", "readmeHeading", "readmeTitle",
+      "fileCount", "packageName",
     ]);
+
+    // Plain-language hub role for the inspector lead (not kind · semantic chrome).
+    function plainLanguageRole(node) {
+      const meta = node.metadata || {};
+      if (meta.uiOnly === true) {
+        return "UI-only product — no static API, Data, or Jobs evidence";
+      }
+      if (meta.routeMolecule === true) {
+        const path = typeof meta.path === "string" && meta.path ? meta.path : "";
+        const fw = typeof meta.framework === "string" && meta.framework ? meta.framework : "";
+        if (path && fw) return "Front-end page (" + fw + ") · " + path;
+        if (path) return "Front-end page · " + path;
+        return "Front-end page hub";
+      }
+      if (typeof meta.pathRoleLabel === "string" && meta.pathRoleLabel) {
+        return String(meta.pathRoleLabel);
+      }
+      const key = typeof meta.systemKey === "string" ? meta.systemKey : "";
+      if (key === "api") return "HTTP API";
+      if (key === "data") return "Data access";
+      if (key === "jobs") return "Scheduled jobs";
+      if (key === "workers") return "Queue workers";
+      if (key === "pipelines") return "Pipelines";
+      if (key === "ui") return "Front-end";
+      if (key === "deploy") return "Deploy";
+      if (key.startsWith("page:")) {
+        const path = typeof meta.path === "string" && meta.path
+          ? meta.path
+          : key.slice("page:".length);
+        return path ? "Front-end page · " + path : "Front-end page hub";
+      }
+      if (meta.docker) return "Container service";
+      if (meta.kubernetes) return "Kubernetes workload";
+      if (meta.helm) return "Helm chart unit";
+      if (meta.kustomization) {
+        return meta.kustomizeRole === "base" ? "Kustomize base" : "Kustomize overlay";
+      }
+      if (node.kind === "product") {
+        const pkg = typeof meta.packageName === "string" && meta.packageName
+          ? meta.packageName
+          : "";
+        return pkg ? "Product · " + pkg : "Product root";
+      }
+      if (node.kind === "table") return "Database table";
+      if (node.kind === "collection") return "Document collection";
+      if (node.kind === "route") return "HTTP route";
+      if (node.kind === "page") return "Page";
+      if (node.kind === "module") return "Source module";
+      if (node.kind === "function") return "Function";
+      const tech =
+        node.technology && node.technology !== "semantic"
+          ? " · " + node.technology
+          : "";
+      return node.kind + tech;
+    }
+
+    // Prefer read/write/use story edges before weaker collaboration kinds.
+    const storyNeighborRank = {
+      reads: 0,
+      writes: 1,
+      uses: 2,
+      renders: 3,
+      "flows-to": 4,
+      exposes: 5,
+      triggers: 6,
+      configures: 7,
+    };
 
     function connectionButton(edge, id) {
       const other = byId.get(edge.source === id ? edge.target : edge.source);
@@ -1765,6 +1852,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         return true;
       });
       const metadataEntries = Object.entries(node.metadata || {}).filter(([key]) => !structuredMetaKeys.has(key));
+      // Leftover IR pills are de-emphasized under More — never lead the panel.
       const metadata = metadataEntries.map(([key, value]) => '<span class="pill">' + key + ": " + String(value) + "</span>").join("");
       const containerStory = containerStoryHtml(node, connections);
       const workloadStory = workloadStoryHtml(node, connections);
@@ -1772,7 +1860,16 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const overlayStory = overlayStoryHtml(node);
       const tableSources = tableSourcesHtml(node, incomingEdges);
       const tableRelations = tableRelationsHtml(node, connections);
-      const collabLinks = collaboration.slice(0, 16).map((edge) => collaborationItem(edge, id)).join("");
+      // Story-first: rank read/write/use neighbors, show a short top list.
+      const storyNeighbors = [...collaboration].sort((a, b) => {
+        const ar = storyNeighborRank[a.kind];
+        const br = storyNeighborRank[b.kind];
+        const av = typeof ar === "number" ? ar : 99;
+        const bv = typeof br === "number" ? br : 99;
+        if (av !== bv) return av - bv;
+        return (a.kind || "").localeCompare(b.kind || "");
+      });
+      const collabLinks = storyNeighbors.slice(0, 8).map((edge) => collaborationItem(edge, id)).join("");
       // Compose depends_on / Kubernetes selector needs are owned by Container/Workload.
       const otherLinks = importsAndCalls
         .filter((edge) => {
@@ -1804,8 +1901,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         .slice(0, 20)
         .map((edge) => connectionButton(edge, id))
         .join("");
+      // "In the story" leads the panel; Imports & calls stay secondary.
       const collaborationHtml = collabLinks
-        ? "<h3>Collaboration</h3>" + collabLinks
+        ? "<h3>In the story</h3>" + collabLinks
         : "";
       const structuredSections = containerStory || workloadStory || chartStory || overlayStory || tableSources || tableRelations || messaging || collabLinks;
       const otherHtml = otherLinks
@@ -1850,12 +1948,41 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         isDetectionSurface(node) && node.metadata && node.metadata.detail
           ? "<h3>Detection surface</h3><p>" + escapeHtml(String(node.metadata.detail)) + "</p>"
           : "";
-      const evidence = node.evidence.map((item) => {
+      const evidenceItems = Array.isArray(node.evidence) ? node.evidence : [];
+      const evidence = evidenceItems.map((item) => {
         const line = item.range?.startLine || 1;
         const href = "vscode://file/" + graph.project.root.replace(/\\/$/, "") + "/" + item.file + ":" + line;
         return '<div class="evidence"><a href="' + href + '">' + item.file + ":" + line + '</a><div class="certainty ' + item.certainty + '">' + item.certainty + " · " + item.extractor + "</div>" + (item.detail ? "<p>" + item.detail + "</p>" : "") + "</div>";
       }).join("");
-      inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>" + metadata + surfaceHtml + capabilityHtml + containerStory + workloadStory + chartStory + overlayStory + tableSources + tableRelations + messaging + binHtml + rosterHtml + keyFiles + collaborationHtml + otherHtml + "<h3>Source evidence</h3>" + evidence;
+      const evidenceHtml = evidence
+        ? "<h3>Evidence</h3>" + evidence
+        : "<h3>Evidence</h3><p>No file evidence</p>";
+      const moreHtml = metadata
+        ? '<div class="inspector-more"><h3>More</h3>' + metadata + "</div>"
+        : "";
+      const roleHtml =
+        '<p class="inspector-role">' + escapeHtml(plainLanguageRole(node)) + "</p>";
+      // Story-first panel: role → story neighbors → evidence → secondary sections.
+      // Never lead with kind·semantic or projection/systemKey/flowOrder pills.
+      inspector.innerHTML =
+        "<h2></h2>" +
+        roleHtml +
+        collaborationHtml +
+        evidenceHtml +
+        surfaceHtml +
+        capabilityHtml +
+        containerStory +
+        workloadStory +
+        chartStory +
+        overlayStory +
+        tableSources +
+        tableRelations +
+        messaging +
+        binHtml +
+        rosterHtml +
+        keyFiles +
+        otherHtml +
+        moreHtml;
       inspector.querySelector("h2").textContent = node.label;
       inspector.querySelectorAll(".connection").forEach((button) => {
         button.onclick = () => selectNode(button.dataset.id);

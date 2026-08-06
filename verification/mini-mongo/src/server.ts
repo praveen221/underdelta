@@ -83,13 +83,23 @@ export async function countNotesByAuthor() {
 
 /**
  * Junk handle crumbs (Shree Heart field fail): short receivers must not become
- * Beginner/overview hubs like `C pipeline` / `Col pipeline`.
+ * Beginner/overview hubs like `C pipeline` / `Col pipeline`, nor leftover
+ * prefixed crumbs (`Qcol`, `Testscollection` / `testsCollection`).
  */
 export async function junkHandleAggregates() {
   const C = db.collection("scratch_c");
   const col = db.collection("scratch_col");
+  const qCol = db.collection("scratch_qcol");
+  const testsCollection = db.collection("scratch_tests");
+  // Glued identifier leftover (no camelCase boundary) — Heart-style crumb.
+  const Testscollection = db.collection("scratch_testscollection");
   await C.aggregate([{ $match: { ok: true } }]);
   await col.aggregate([{ $group: { _id: "$k", n: { $sum: 1 } } }]);
+  await qCol.aggregate([{ $match: { q: true } }]);
+  await testsCollection.aggregate([
+    { $group: { _id: "$suite", n: { $sum: 1 } } },
+  ]);
+  await Testscollection.aggregate([{ $match: { leftover: true } }]);
 }
 
 export function listNotes(
