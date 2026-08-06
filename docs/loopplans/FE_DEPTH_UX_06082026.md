@@ -3,7 +3,7 @@
 Living plan for a **scoped** Autopilot / cloud-agent loop.
 
 **Branch lock:** `fe-depth-ux-06082026` only  
-**Base:** `shree-whiteboard-06082026` tip (`3e413c2`) — includes Learn compression, Heart label/route/pipeline fixes, Scholar uiOnly.  
+**Base:** `master` (after shree-whiteboard merge `e2995e6` / PR #9)  
 **Do not** open a second PR for this work — update the existing draft PR for this branch  
 **Loop interval:** 15 minutes (or whatever the human arms)  
 **This file:** read at the start of every tick; update at the end of every successful tick  
