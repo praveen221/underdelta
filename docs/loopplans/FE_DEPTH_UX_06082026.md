@@ -118,12 +118,12 @@ If Shree missing: `Dogfood: Shree unavailable — fixtures only` (allowed mid-lo
 - [x] **Heart API label fix** — reject OpenAPI/Swagger docs chrome (`API Documentation`, …); path-role `HTTP API` / product headings win; mini-readme-structure + verify floors  
 - [x] **Heart Intermediate API room** — domain groups Intermediate payoff; grouped naked cap 8; modules/functions stay Advanced; walk prefers Intermediate over module dump; mini-routes-many floors  
 - [x] **Extend trivial aggregate suppression** — Qcol / *collection crumb pipelines off Beginner; `isTrivialMongoAggregateLabel` strips col/coll/collection suffixes + generic stems; mini-mongo floors  
+- [x] **Scholar client-API edges or reinforce uiOnly** — pure mini-scholar stays uiOnly (0 apis/, 0 clientApiStory); mini-scholar-apis lifts Dashboard -[reads]-> HTTP API via `src/apis`; client-apis-only skips blanket page `uses`; no invented Data/Jobs  
 
 ### In progress / next
 
 Keep **≥ 3 unchecked** until LOOP COMPLETE:
 
-- [ ] **Scholar client-API edges or reinforce uiOnly** — follow static evidence in `src/apis/*`  
 - [ ] **Inspector value pass** — story-first panel; evidence; hide IR chrome pills  
 - [ ] **Product Flow layout for 6–8 hubs** — wrap or compact so Beginner is scannable  
 - [ ] **Final LOOP COMPLETE** — gates 1–9 + browser dogfood note  
@@ -138,7 +138,7 @@ Keep **≥ 3 unchecked** until LOOP COMPLETE:
 
 ### Next focus (edit every tick)
 
-> **Next focus:** Scholar client-API edges or reinforce uiOnly — follow static evidence in `src/apis/*` (mini-scholar); no invented Jobs/Data. No AI.
+> **Next focus:** Inspector value pass — story-first panel on Beginner hub select (plain-language role, top story neighbors, ≥1 evidence file:line); hide/de-emphasize projection/systemKey/flowOrder pills. Verify string floors. No AI.
 
 ### Learning log
 
@@ -146,6 +146,7 @@ Keep **≥ 3 unchecked** until LOOP COMPLETE:
 - YYYY-MM-DD HH:MM UTC | Done: … | Next: … | Learned: … | Dogfood: … | Browser: …
 ```
 
+- 2026-08-06 16:50 UTC | Done: Scholar honesty both branches — reinforce mini-scholar uiOnly (0 apis/, 0 clientApiStory); mini-scholar-apis Dashboard -[reads]-> HTTP API via listCourses; `isClientApisOnlyHttpApi` skips blanket page→API uses | Next: Inspector value pass | Learned: client `src/apis` alone is honest HTTP API evidence, but inferred uses from every page hub lied when only Dashboard called the helper — gate uses on server-surface vs client-apis-only | Dogfood: Shree unavailable — fixtures only; mini-scholar uiOnly; mini-scholar-apis flow pages+HTTP API, no Data/Jobs | Browser: n/a this tick  
 - 2026-08-06 16:55 UTC | Done: Extended trivial mongo aggregate suppression for Qcol / *collection crumbs — suffix strip + generic stems (`tests`/`scratch`/…); mini-mongo adds qCol/testsCollection/Testscollection; product Note/Search chunks hubs kept | Next: Scholar client-API edges or uiOnly honesty | Learned: camelCase crumbs project via titleCaseSingular to glued labels (`qCol`→`Qcol`, `testsCollection`→`Testscollection`) so suffix rules must hit compact form, not only spaced humanize | Dogfood: Shree unavailable — fixtures only; mini-mongo junk≥5 collapsed, 2 product hubs | Browser: n/a this tick  
 - 2026-08-06 16:45 UTC | Done: Heart API label closed (prior tick) + Intermediate groups-first — `INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP=8`; walk prefers route-group Intermediate over Advanced modules; mini-routes-many floors (0 modules/functions; walk=intermediate) | Next: trivial aggregate Qcol/*collection | Learned: with domain groups, ≤24 naked misc still felt like a phonebook — tighten leftover strip once groups exist | Dogfood: Shree unavailable — fixtures only; mini-routes-many Intermediate = domain hubs + ≤8 naked | Browser: n/a this tick  
 - 2026-08-06 16:35 UTC | Done: Temp* demoted below product auth/shells in `feRouteMoleculeBeginnerScore`; mini-next-many gains tutor + 7 temp* pages; verify floors product mix + ≤3 temp on flow | Next: Heart API label fix | Learned: prior scores put temp* at 95–100 over /student at 90 — demote temp to ~70 and boost Home/Student/Tutor to 98 | Dogfood: Shree unavailable — fixtures only; mini-next-many Beginner Home→Dashboard→Login→Student→Tempapplicant→Tempdemo→Tempsignin→Tutor (≤3 temp) | Browser: n/a this tick  

@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { compileRepository } from "../dist/compile.js";
 import {
+  isClientApisOnlyHttpApi,
   isGenericApiDocsTitle,
   isReadmeStructureHeading,
   isTrivialMongoAggregateLabel,
@@ -156,6 +157,7 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file.includes("mini-readme-structure/") ||
         file.includes("mini-next-many/") ||
         file.includes("mini-scholar/") ||
+        file.includes("mini-scholar-apis/") ||
         file.includes("mini-routes-many/") ||
         file.includes("mini-openapi/") ||
         file.includes("mini-graphql/") ||
@@ -3007,6 +3009,150 @@ if (miniScholarPageMolecules.length < 8) {
 } else {
   pass(
     `mini-scholar UI-only honesty: ${miniScholarFlow.length} Beginner hubs (${miniScholarFlowLabels.join(" → ") || "(none)"}); no invented backend; uiOnly locked`,
+  );
+}
+
+// Reinforce: pure Scholar has no src/apis modules and no page→API story edges.
+const miniScholarApisModules = miniScholarGraph.nodes.filter(
+  (node) =>
+    node.kind === "module" &&
+    /(^|\/)apis\//.test(String(node.metadata?.path ?? node.qualifiedName ?? node.label ?? "")),
+);
+const miniScholarClientApiStory = miniScholarGraph.edges.filter(
+  (edge) =>
+    (edge.kind === "reads" || edge.kind === "writes") &&
+    edge.evidence?.some(
+      (item) =>
+        item.certainty === "derived" &&
+        typeof item.detail === "string" &&
+        item.detail.includes("client apis module"),
+    ),
+);
+if (miniScholarApisModules.length > 0) {
+  fail(
+    `mini-scholar must stay FE-only (no apis/ modules); found ${miniScholarApisModules
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else if (miniScholarClientApiStory.length > 0) {
+  fail(
+    `mini-scholar must not invent client-api story edges without apis/; found ${miniScholarClientApiStory.length}`,
+  );
+} else {
+  pass(
+    "mini-scholar reinforce uiOnly: 0 apis/ modules, 0 clientApiStory edges (no static server surface)",
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Scholar OR-branch: client src/apis → external Heart — evidenced edges, no Jobs/Data.
+// ---------------------------------------------------------------------------
+const miniScholarApisRoot = path.join(
+  repoRoot,
+  "verification",
+  "mini-scholar-apis",
+);
+const miniScholarApisGraph = await compileRepository(miniScholarApisRoot);
+const miniScholarApisProduct = miniScholarApisGraph.nodes.find(
+  (node) => node.kind === "product",
+);
+const miniScholarApisApi = miniScholarApisGraph.nodes.find(
+  (node) =>
+    node.metadata?.projection === "semantic" &&
+    node.metadata?.systemKey === "api",
+);
+const miniScholarApisNodesById = new Map(
+  miniScholarApisGraph.nodes.map((node) => [node.id, node]),
+);
+const miniScholarApisFlow = miniScholarApisGraph.nodes
+  .filter(
+    (node) =>
+      node.metadata?.projection === "semantic" &&
+      typeof node.metadata?.flowOrder === "number" &&
+      typeof node.metadata?.systemKey === "string" &&
+      (String(node.metadata.systemKey).startsWith("page:") ||
+        node.metadata.systemKey === "api"),
+  )
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+const miniScholarApisFlowLabels = miniScholarApisFlow.map((node) => node.label);
+const miniScholarApisDashboard = miniScholarApisGraph.nodes.find(
+  (node) =>
+    node.metadata?.projection === "semantic" &&
+    node.metadata?.systemKey === "page:/dashboard",
+);
+const miniScholarApisHome = miniScholarApisGraph.nodes.find(
+  (node) =>
+    node.metadata?.projection === "semantic" &&
+    node.metadata?.systemKey === "page:/",
+);
+const miniScholarApisInventedBackend = miniScholarApisGraph.nodes.filter(
+  (node) =>
+    node.metadata?.projection === "semantic" &&
+    ["data", "jobs", "workers", "pipelines"].includes(node.metadata?.systemKey) &&
+    node.metadata?.collapsedInOverview !== true,
+);
+const miniScholarApisDashboardReads = miniScholarApisGraph.edges.find(
+  (edge) =>
+    edge.kind === "reads" &&
+    edge.source === miniScholarApisDashboard?.id &&
+    edge.target === miniScholarApisApi?.id,
+);
+const miniScholarApisHomeUsesApi = miniScholarApisGraph.edges.some(
+  (edge) =>
+    edge.kind === "uses" &&
+    edge.source === miniScholarApisHome?.id &&
+    edge.target === miniScholarApisApi?.id &&
+    edge.evidence?.some((item) => item.certainty === "inferred"),
+);
+const miniScholarApisClientOnly =
+  miniScholarApisApi &&
+  isClientApisOnlyHttpApi(miniScholarApisApi, miniScholarApisNodesById);
+
+if (!miniScholarApisApi) {
+  fail("mini-scholar-apis expected visible HTTP API from src/apis/** helpers");
+} else if (miniScholarApisProduct?.metadata?.uiOnly === true) {
+  fail(
+    "mini-scholar-apis must not be uiOnly when static client apis/ evidence exists",
+  );
+} else if (!miniScholarApisClientOnly) {
+  fail(
+    "mini-scholar-apis HTTP API must be client-apis-only (no route/serverAction/OpenAPI surface)",
+  );
+} else if (miniScholarApisInventedBackend.length > 0) {
+  fail(
+    `mini-scholar-apis must not invent Data/Jobs; found ${miniScholarApisInventedBackend
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else if (miniScholarApisFlow.length > SCHOLAR_BEGINNER_HUB_MAX) {
+  fail(
+    `mini-scholar-apis Beginner hubs must be ≤${SCHOLAR_BEGINNER_HUB_MAX}, got ${miniScholarApisFlow.length}: ${miniScholarApisFlowLabels.join(" → ")}`,
+  );
+} else if (
+  !miniScholarApisDashboardReads ||
+  !miniScholarApisDashboardReads.evidence?.some(
+    (item) =>
+      item.certainty === "derived" &&
+      typeof item.detail === "string" &&
+      item.detail.includes("Course list") &&
+      item.detail.includes("List courses") &&
+      item.detail.includes("client apis module"),
+  )
+) {
+  fail(
+    `mini-scholar-apis expected Dashboard -[reads]-> HTTP API via Course list → List courses (found ${
+      miniScholarApisDashboardReads
+        ? JSON.stringify(miniScholarApisDashboardReads.evidence?.[0] ?? null)
+        : "no reads edge"
+    })`,
+  );
+} else if (miniScholarApisHomeUsesApi) {
+  fail(
+    "mini-scholar-apis must not invent Home -[uses]-> HTTP API when only Dashboard calls src/apis",
+  );
+} else {
+  pass(
+    `mini-scholar-apis client-API honesty: Dashboard -[reads]-> HTTP API; no invented uses/Data/Jobs; flow ${miniScholarApisFlowLabels.join(" → ")}`,
   );
 }
 

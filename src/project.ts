@@ -2495,6 +2495,57 @@ function isClientApiFunction(
 }
 
 /**
+ * True when HTTP API is only client `apis/**` helpers (axios/fetch wrappers to a
+ * remote backend) — no in-repo route handlers, server actions, or OpenAPI/GraphQL
+ * contracts. Scholar-style FE twins use this shape; they must not invent
+ * page→API `uses` for hubs that never call a helper.
+ */
+export function isClientApisOnlyHttpApi(
+  api: ArchitectureNode,
+  nodes: Map<string, ArchitectureNode>,
+): boolean {
+  if (api.metadata?.systemKey !== "api") return false;
+
+  const ownedByApi = (nodeId: string): boolean => {
+    let current: string | undefined = nodeId;
+    const seen = new Set<string>();
+    while (current && !seen.has(current)) {
+      seen.add(current);
+      if (current === api.id) return true;
+      const node = nodes.get(current);
+      if (!node) return false;
+      current = node.parentId;
+    }
+    return false;
+  };
+
+  let sawClientApi = false;
+  let sawServerSurface = false;
+  for (const node of nodes.values()) {
+    if (node.id === api.id) continue;
+    if (!ownedByApi(node.id)) continue;
+
+    if (
+      node.kind === "route" ||
+      node.metadata?.serverAction === true ||
+      node.metadata?.openapi === true ||
+      node.metadata?.graphql === true
+    ) {
+      sawServerSurface = true;
+      break;
+    }
+    if (isClientApiFunction(node, nodes)) {
+      sawClientApi = true;
+      continue;
+    }
+    if (node.kind === "module" && /(^|\/)apis\//.test(modulePath(node))) {
+      sawClientApi = true;
+    }
+  }
+  return sawClientApi && !sawServerSurface;
+}
+
+/**
  * FE story edges from pages (deterministic, evidence-backed):
  * - `renders` page atom → page-owned feature root (lifted from page-body JSX)
  * - `reads`/`writes` page molecule → API when a owned feature root calls a
@@ -5398,25 +5449,32 @@ export function projectSemanticArchitecture(
   }
 
   // Route molecules collaborate with HTTP API the same way aggregate UI did.
+  // Client-apis-only surfaces (Scholar FE → remote Heart) skip this blanket:
+  // evidenced reads/writes from liftFePageStoryEdges already tell the story.
   if (systemsByKey.has("api") && pageMoleculeKeys.length) {
     const apiId = systemsByKey.get("api")!;
-    for (const pageKey of pageMoleculeKeys) {
-      const fromId = systemsByKey.get(pageKey);
-      if (!fromId) continue;
-      const molecule = systems.get(pageKey);
-      const edge = edgeFrom(
-        "uses",
-        fromId,
-        apiId,
-        {
-          file: ".",
-          extractor: "projection",
-          certainty: "inferred",
-          detail: `${molecule?.label ?? pageKey} calls the HTTP API and server actions`,
-        },
-        "fetch",
-      );
-      if (!edges.has(edge.id)) edges.set(edge.id, edge);
+    const apiSystem = systems.get("api");
+    const clientApisOnly =
+      apiSystem !== undefined && isClientApisOnlyHttpApi(apiSystem, nodes);
+    if (!clientApisOnly) {
+      for (const pageKey of pageMoleculeKeys) {
+        const fromId = systemsByKey.get(pageKey);
+        if (!fromId) continue;
+        const molecule = systems.get(pageKey);
+        const edge = edgeFrom(
+          "uses",
+          fromId,
+          apiId,
+          {
+            file: ".",
+            extractor: "projection",
+            certainty: "inferred",
+            detail: `${molecule?.label ?? pageKey} calls the HTTP API and server actions`,
+          },
+          "fetch",
+        );
+        if (!edges.has(edge.id)) edges.set(edge.id, edge);
+      }
     }
   }
 
