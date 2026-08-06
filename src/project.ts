@@ -2046,33 +2046,61 @@ function markUiOnlyProductHonesty(
 }
 
 /**
+ * Temp* App Router shells (prototypes / alternate dashboards). Kept on the
+ * product side of marketing, but ranked below real Student/Tutor/Home/Login
+ * so Beginner is not eight temp hubs.
+ */
+function isFeTempRouteShell(path: string, segment: string): boolean {
+  const p = path.toLowerCase();
+  const seg = segment.toLowerCase();
+  return seg.startsWith("/temp") || /tempsignin|temp-signin/.test(p);
+}
+
+/**
  * Score a route-segment path for Beginner priority (higher = keep on flow).
- * Product shells / auth / temp dashboards beat marketing & exam landings.
+ * Real product shells / auth beat temp* dashboards; both beat marketing & exams.
  */
 export function feRouteMoleculeBeginnerScore(path: string): number {
   const raw = path.trim() || "/";
   const p = raw.toLowerCase();
   const segment = appRouterRouteSegment(raw).toLowerCase();
+  const tempShell = isFeTempRouteShell(p, segment);
 
+  // Product auth — not Tempsignin / temp-signin shells.
   if (
-    /tempsignin|temp-signin/.test(p) ||
+    !tempShell &&
     /^\/(signin|login|signup|auth)(\/|$)/.test(p)
   ) {
     return 100;
   }
-  if (/temp(student|tutor|demo|applicant|welcome)/.test(p)) return 95;
-  if (segment.startsWith("/temp")) return 94;
+
+  // Core product hubs — prefer over temp* when the cap is tight.
   if (
-    /^\/(student|tutor|demo|applicant|dashboard|onboarding|profile|welcome)(\/|$)/.test(
-      p,
-    ) ||
-    /^\/(student|tutor|demo|applicant|dashboard|onboarding|profile|welcome)$/.test(
-      segment,
-    )
+    !tempShell &&
+    (p === "/" ||
+      segment === "/" ||
+      /^\/(student|tutor|home)(\/|$)/.test(p) ||
+      /^\/(student|tutor|home)$/.test(segment))
   ) {
-    return 90;
+    return 98;
   }
-  if (p === "/" || segment === "/") return 85;
+
+  // Other durable product surfaces (demo / dashboard / onboarding…).
+  if (
+    !tempShell &&
+    (/^\/(demo|applicant|dashboard|onboarding|profile|welcome)(\/|$)/.test(p) ||
+      /^\/(demo|applicant|dashboard|onboarding|profile|welcome)$/.test(segment))
+  ) {
+    return 96;
+  }
+
+  // Temp shells fill remaining Beginner slots after product hubs.
+  if (tempShell) {
+    if (/tempsignin|temp-signin/.test(p)) return 72;
+    if (/temp(student|tutor|demo|applicant|welcome)/.test(p)) return 70;
+    return 68;
+  }
+
   if (/book-demo|be-a-tutor|pricing|quiz|result|blogs|schools|counties|syllabus/.test(p)) {
     return 45;
   }

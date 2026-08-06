@@ -2889,15 +2889,22 @@ const miniNextManyHasProduct =
   miniNextManyFlowLabels.includes("Home") &&
   miniNextManyFlowLabels.includes("Login") &&
   miniNextManyFlowLabels.includes("Dashboard") &&
-  miniNextManyFlowLabels.includes("Student");
+  miniNextManyFlowLabels.includes("Student") &&
+  miniNextManyFlowLabels.includes("Tutor");
+const miniNextManyTempOnFlow = miniNextManyFlowLabels.filter((label) =>
+  /^Temp/i.test(label),
+);
+const miniNextManyTempOmitted = miniNextManyOmitted.filter((node) =>
+  /^Temp/i.test(node.label),
+);
 const miniNextManyMarketingOnFlow = miniNextManyFlowLabels.filter((label) =>
   /Maths|English|Science|Coding|Career|Faqs|Reviews|Elevenplusexam|Gcseexam/i.test(
     label,
   ),
 );
-if (miniNextManyPageMolecules.length < 12) {
+if (miniNextManyPageMolecules.length < 20) {
   fail(
-    `mini-next-many expected ≥12 page molecules, found ${miniNextManyPageMolecules.length}`,
+    `mini-next-many expected ≥20 page molecules (product + temp* + marketing), found ${miniNextManyPageMolecules.length}`,
   );
 } else if (miniNextManyFlow.length > 8) {
   fail(
@@ -2905,19 +2912,27 @@ if (miniNextManyPageMolecules.length < 12) {
   );
 } else if (!miniNextManyHasProduct) {
   fail(
-    `mini-next-many should keep product hubs Home/Login/Dashboard/Student on flow, got ${miniNextManyFlowLabels.join(" → ")}`,
+    `mini-next-many should keep product hubs Home/Login/Dashboard/Student/Tutor on flow, got ${miniNextManyFlowLabels.join(" → ")}`,
+  );
+} else if (miniNextManyTempOnFlow.length > 3) {
+  fail(
+    `mini-next-many temp* shells must not crowd out product hubs (≤3 temp on flow), got ${miniNextManyTempOnFlow.length}: ${miniNextManyFlowLabels.join(" → ")}`,
+  );
+} else if (miniNextManyTempOmitted.length < 3) {
+  fail(
+    `mini-next-many expected temp* shells omitted by product-preferring rank, found ${miniNextManyTempOmitted.length}`,
   );
 } else if (miniNextManyMarketingOnFlow.length > 0) {
   fail(
     `mini-next-many marketing/exam pages must leave Beginner flow, still on flow: ${miniNextManyMarketingOnFlow.join(", ")}`,
   );
-} else if (miniNextManyOmitted.length < 4) {
+} else if (miniNextManyOmitted.length < 8) {
   fail(
-    `mini-next-many expected omitted marketing page molecules, found ${miniNextManyOmitted.length}`,
+    `mini-next-many expected omitted marketing/temp page molecules, found ${miniNextManyOmitted.length}`,
   );
 } else {
   pass(
-    `mini-next-many Beginner compression: ${miniNextManyFlow.length} hubs (${miniNextManyFlowLabels.join(" → ")}); omitted ${miniNextManyOmitted.length} marketing/cap pages`,
+    `mini-next-many Beginner compression: ${miniNextManyFlow.length} hubs (${miniNextManyFlowLabels.join(" → ")}); product over temp* (${miniNextManyTempOnFlow.length} temp on flow); omitted ${miniNextManyOmitted.length}`,
   );
 }
 
