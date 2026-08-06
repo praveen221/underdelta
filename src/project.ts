@@ -2133,6 +2133,19 @@ export function nakedRouteIntermediateScore(path: string): number {
 }
 
 /**
+ * OpenAPI / Swagger / GraphQL contract ops already carry calm summary labels.
+ * Domain-group only runtime HTTP routes (Express / FastAPI / …) so Heart's
+ * Intermediate phonebook shrinks without re-parenting contract surfaces.
+ */
+function isContractSurfaceRoute(node: ArchitectureNode): boolean {
+  if (node.metadata?.openapi === true || node.metadata?.graphql === true) {
+    return true;
+  }
+  const tech = String(node.technology ?? "").toLowerCase();
+  return tech === "openapi" || tech === "swagger" || tech === "graphql";
+}
+
+/**
  * Intermediate API calm: group Express/Heart-style routes by path-prefix domain
  * under hubs (Users / Articles / …). Nested route atoms stay off the API
  * Intermediate canvas until the group is focused (viewer mirrors detection
@@ -2155,7 +2168,8 @@ function projectApiRouteDomainGroups(
     (node) =>
       node.kind === "route" &&
       node.parentId === api.id &&
-      node.metadata?.projection !== "semantic",
+      node.metadata?.projection !== "semantic" &&
+      !isContractSurfaceRoute(node),
   );
   if (routes.length < 2) return;
 
