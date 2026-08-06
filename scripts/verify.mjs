@@ -2669,6 +2669,42 @@ if (
   );
 }
 
+// Product Flow layout calm: wrap at 4 cols so 6–8 hubs stay in-viewport width.
+const flowWrapCols = fixtureViewerHtml.includes("const FLOW_WRAP_COLS = 4");
+const flowWrapPlace =
+  fixtureViewerHtml.includes("index % FLOW_WRAP_COLS") &&
+  fixtureViewerHtml.includes("Math.floor(index / FLOW_WRAP_COLS)") &&
+  fixtureViewerHtml.includes("row * flowRowY");
+const flowWrapGap =
+  fixtureViewerHtml.includes("const flowGapX = 200") &&
+  fixtureViewerHtml.includes("const flowRowY = 96");
+// Single-row legacy: index * flowGap at fixed y=34 — must not remain the only layout.
+const legacySingleRow =
+  fixtureViewerHtml.includes("const flowGap = 220") &&
+  fixtureViewerHtml.includes("const x = index * flowGap");
+if (!flowWrapCols || !flowWrapPlace || !flowWrapGap) {
+  fail(
+    "viewer Product Flow must wrap at FLOW_WRAP_COLS=4 (col/row + flowGapX/flowRowY)",
+  );
+} else if (legacySingleRow) {
+  fail(
+    "viewer Product Flow must not keep single-row index*flowGap layout for 6–8 hubs",
+  );
+} else {
+  // Width floor: 8 hubs wrap to 2×4 → ≤4*gapX + system width + pad (~1090), not 7*220.
+  const wrappedMaxX = 3 * 200 + 210 + 80;
+  const singleRowMaxX = 7 * 220 + 210 + 80;
+  if (wrappedMaxX >= 1200 || wrappedMaxX >= singleRowMaxX * 0.75) {
+    fail(
+      `Product Flow wrap width floor drifted (wrapped=${wrappedMaxX}, single=${singleRowMaxX})`,
+    );
+  } else {
+    pass(
+      `viewer Product Flow wraps at 4 cols (8 hubs ≤${wrappedMaxX}px vs single-row ${singleRowMaxX}px)`,
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Capability ladder rung 2: Next.js App Router fixture (verification/mini-next).
 // Smoke + golden floors: pages/layouts, route handlers, client/server split,

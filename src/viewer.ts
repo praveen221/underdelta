@@ -1054,7 +1054,11 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         }
       }
       const laneWidth = 240;
-      const flowGap = 220;
+      // Product Flow wrap: ≤4 hubs per row so 6–8 Beginner hubs stay scannable
+      // without a long horizontal hunt (second row + slightly tighter gap).
+      const FLOW_WRAP_COLS = 4;
+      const flowGapX = 200;
+      const flowRowY = 96;
       let maxHeight = 0;
       let maxWidth = activeLanes.length * laneWidth + 200;
 
@@ -1072,13 +1076,16 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         label.style.top = "0px";
         nodesLayer.appendChild(label);
         flowNodes.forEach((node, index) => {
-          const x = index * flowGap;
-          const y = 34;
+          const col = index % FLOW_WRAP_COLS;
+          const row = Math.floor(index / FLOW_WRAP_COLS);
+          const x = col * flowGapX;
+          const y = 34 + row * flowRowY;
           placeNode(node, x, y);
           maxHeight = Math.max(maxHeight, y + 70);
           maxWidth = Math.max(maxWidth, x + widthForKind(node.kind) + 80);
         });
-        laneTop = 130;
+        const flowRows = Math.ceil(flowNodes.length / FLOW_WRAP_COLS);
+        laneTop = 34 + flowRows * flowRowY + 28;
       }
 
       activeLanes.forEach((lane, laneIndex) => {
