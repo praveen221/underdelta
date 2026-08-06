@@ -70,18 +70,20 @@ Once **Loop status = LOOP COMPLETE**, idle ticks must **not invent, commit, or p
 5. **Pipeline noise** — Heart (or mini-mongo) does not surface leftover crumb aggregates (`Qcol`, `Testscollection`, …) on Beginner/overview unless product-evidenced; extend trivial-aggregate rules.  
 6. **Inspector value** — selecting a Beginner hub shows: plain-language role, top story neighbors, ≥1 evidence citation; hide/de-emphasize projection/systemKey/flowOrder pills (strengthen existing hide rules). Verify string floors + Learning-log browser note.  
 7. **Flow layout calm** — Product Flow with ≥6 hubs does not require horizontal hunt off-canvas as the only layout (wrap / second row / tighter gaps — pick one deterministic approach); verify floor or dogfood screenshot note in Learning log.  
-8. **Dogfood** — every ACTIVE tick: `npm run verify`; when Shree exists, re-scan learn+scholar+heart and log hub counts + new edge counts; **browser Beginner spot-check** at least once before LOOP COMPLETE (Learning log: `Browser: …`).  
+8. **Dogfood** — every ACTIVE tick: `npm run verify`; when Shree exists, re-scan learn+scholar+heart and log hub counts + new edge counts; **browser Beginner spot-check** at least once before LOOP COMPLETE (Learning log: `Browser: …`). Fixture twins satisfy mid-loop; **final gate 8 needs a human-local Shree pass** (cloud agents do not have `/Users/praveen/Documents/GitHub/shree`).  
 9. **Status board** — mandatory items done or cancelled with reason.
 
 ### Loop status
 
 ```text
-ACTIVE
+LOOP COMPLETE
 ```
 
 ### Idle protocol
 
 Re-check gates; regression → ACTIVE + fix + push; else `IDLE: LOOP COMPLETE — no push`.
+
+**Shree-missing wait (historical footgun):** If gate 8 was the only open item and Shree paths were absent, cloud ticks must **not** commit/push “still unavailable” log spam. Exit `IDLE: waiting on local Shree dogfood — no push` until a human runs the scan. This loop closed after a local Shree pass.
 
 ---
 
@@ -91,7 +93,7 @@ Re-check gates; regression → ACTIVE + fix + push; else `IDLE: LOOP COMPLETE �
 npm run build && npm run verify
 ```
 
-When Shree exists:
+When Shree exists **on this machine**:
 
 ```bash
 node dist/cli.js scan "$SHREE_ROOT/shree-learn" -o "$SHREE_ROOT/shree-learn/.underdelta"
@@ -102,7 +104,7 @@ node dist/cli.js scan "$SHREE_ROOT/shree-heart" -o "$SHREE_ROOT/shree-heart/.und
 Learning log must include Learn/Scholar/Heart one-liners + verify.  
 Before declaring LOOP COMPLETE: open Beginner HTML (or headless screenshot) for learn+heart and note what a human sees.
 
-If Shree missing: `Dogfood: Shree unavailable — fixtures only` (allowed mid-loop; **not** allowed for final gate 8).
+If Shree missing: `Dogfood: Shree unavailable — fixtures only` (allowed mid-loop). **Do not commit wait ticks.** Final gate 8 requires a local Shree pass (or human cancel with reason).
 
 ---
 
@@ -123,14 +125,13 @@ If Shree missing: `Dogfood: Shree unavailable — fixtures only` (allowed mid-lo
 - [x] **Product Flow layout for 6–8 hubs** — wrap at `FLOW_WRAP_COLS=4` with `flowGapX=200` / `flowRowY=96`; 8 hubs → 2×4 (~890px) vs single-row ~1830px; verify wrap floor  
 - [x] **Browser Beginner spot-check** — fixture HTML: mini-next-many + mini-routes-many; wrap + inspector story-first + Heart HTTP API / Intermediate groups noted  
 - [x] **Regression sweep before complete** — `npm run build` + `npm run verify` green after layout wrap; gates 1–7 fixture floors still hold  
+- [x] **Shree dogfood (gate 8)** — local `/Users/praveen/Documents/GitHub/shree` scans of learn+scholar+heart; hubs/edges logged; Browser note on real Beginner  
+- [x] **Final LOOP COMPLETE** — gates 1–9 green after local Shree pass  
+- [x] **Post-Shree gate re-check** — verify green; Heart label `HTTP API` (not API Documentation); Learn product-mix Beginner; client-apis story edges present  
 
 ### In progress / next
 
-Keep **≥ 3 unchecked** until LOOP COMPLETE:
-
-- [ ] **Shree dogfood (gate 8 blocker)** — when `SHREE_ROOT` / shree paths exist: scan learn+scholar+heart; log hub + new edge counts; Browser note on real Beginner (fixtures already spot-checked)  
-- [ ] **Final LOOP COMPLETE** — gates 1–9 all green including Shree dogfood (fixtures-only **not** enough for gate 8)  
-- [ ] **Post-Shree gate re-check** — after Shree scans, confirm gates 1–7 still green + Learning-log Browser line on learn+heart  
+*None — LOOP COMPLETE. Idle ticks: re-check gates only; no invent / commit / push unless regression.*
 
 ### Seed backlog (optional)
 
@@ -139,10 +140,11 @@ Keep **≥ 3 unchecked** until LOOP COMPLETE:
 - Cross-repo learn→heart federation  
 - React Router beyond Next  
 - Jobs molecule for Heart cron/workers  
+- Stop cloud agents from treating local-only Shree as a pollable blocker (prefer fixture close like whiteboard, or human-local gate)
 
 ### Next focus (edit every tick)
 
-> **Next focus:** Shree dogfood for gate 8 — if `SHREE_ROOT` (or `/Users/praveen/Documents/GitHub/shree`) appears, scan learn+scholar+heart, log hubs/edges, Browser Beginner on learn+heart; then declare LOOP COMPLETE. If Shree still missing: log unavailable, do **not** invent chrome / do **not** mark LOOP COMPLETE. No AI.
+> **Next focus:** IDLE: LOOP COMPLETE — no invent, no commit, no push unless an acceptance gate regresses. Human should disable push-automation.
 
 ### Learning log
 
@@ -150,28 +152,17 @@ Keep **≥ 3 unchecked** until LOOP COMPLETE:
 - YYYY-MM-DD HH:MM UTC | Done: … | Next: … | Learned: … | Dogfood: … | Browser: …
 ```
 
-- 2026-08-06 17:13 UTC | Done: Gate-8 wait tick — no SHREE_ROOT / `/Users/praveen/Documents/GitHub/shree` / workspace shree; synced `fe-depth-ux-06082026` (master e2995e6 already merged); build+verify green; LOOP COMPLETE withheld | Next: Shree dogfood (gate 8) then LOOP COMPLETE | Learned: Next focus still forbids chrome invent / LOOP COMPLETE on fixtures; ACTIVE wait remains plan-log + verify until real Shree paths appear | Dogfood: Shree unavailable — fixtures only; verify green | Browser: n/a this tick (fixture spot-check already logged; real learn+heart Beginner still required)
-- 2026-08-06 17:12 UTC | Done: Gate-8 wait tick — no SHREE_ROOT / `/Users/praveen/Documents/GitHub/shree` / workspace shree; synced `fe-depth-ux-06082026` (master e2995e6 already merged); build+verify green; LOOP COMPLETE withheld | Next: Shree dogfood (gate 8) then LOOP COMPLETE | Learned: gate 8 still hard-requires real Shree; fixtures-only verify stays ACTIVE wait baseline — no chrome invent, no LOOP COMPLETE | Dogfood: Shree unavailable — fixtures only; verify green | Browser: n/a this tick (fixture spot-check already logged; real learn+heart Beginner still required)
-- 2026-08-06 17:11 UTC | Done: Gate-8 wait tick — no SHREE_ROOT / `/Users/praveen/Documents/GitHub/shree` / workspace shree; synced `fe-depth-ux-06082026` (master e2995e6 already merged); build+verify green; LOOP COMPLETE withheld | Next: Shree dogfood (gate 8) then LOOP COMPLETE | Learned: Next focus still forbids chrome invent / LOOP COMPLETE on fixtures; ACTIVE wait remains plan-log + verify until real Shree paths appear | Dogfood: Shree unavailable — fixtures only; verify green | Browser: n/a this tick (fixture spot-check already logged; real learn+heart Beginner still required)
-- 2026-08-06 17:10 UTC | Done: Gate-8 wait tick — no SHREE_ROOT / `/Users/praveen/Documents/GitHub/shree` / workspace shree; synced `fe-depth-ux-06082026` (master e2995e6 already merged); build+verify green; LOOP COMPLETE withheld | Next: Shree dogfood (gate 8) then LOOP COMPLETE | Learned: gate 8 still hard-requires real Shree; fixtures-only verify stays ACTIVE wait baseline — no chrome invent, no LOOP COMPLETE | Dogfood: Shree unavailable — fixtures only; verify green | Browser: n/a this tick (fixture spot-check already logged; real learn+heart Beginner still required)
-- 2026-08-06 17:09 UTC | Done: Gate-8 wait tick — no SHREE_ROOT / `/Users/praveen/Documents/GitHub/shree` / workspace shree; synced `fe-depth-ux-06082026` (master e2995e6 already merged); build+verify green; LOOP COMPLETE withheld | Next: Shree dogfood (gate 8) then LOOP COMPLETE | Learned: Next focus still forbids chrome invent / LOOP COMPLETE on fixtures; ACTIVE wait remains plan-log + verify until real Shree paths appear | Dogfood: Shree unavailable — fixtures only; verify green | Browser: n/a this tick (fixture spot-check already logged; real learn+heart Beginner still required)
-- 2026-08-06 17:08 UTC | Done: Gate-8 wait tick — no SHREE_ROOT / `/Users/praveen/Documents/GitHub/shree` / workspace shree; synced `fe-depth-ux-06082026` (master e2995e6 already merged); build+verify green; LOOP COMPLETE withheld | Next: Shree dogfood (gate 8) then LOOP COMPLETE | Learned: gate 8 still hard-requires real Shree; fixtures-only verify stays ACTIVE wait baseline — no chrome invent, no LOOP COMPLETE | Dogfood: Shree unavailable — fixtures only; verify green | Browser: n/a this tick (fixture spot-check already logged; real learn+heart Beginner still required)
-- 2026-08-06 17:07 UTC | Done: Gate-8 wait tick — no SHREE_ROOT / `/Users/praveen/Documents/GitHub/shree` / workspace shree; synced `fe-depth-ux-06082026` (0 behind master e2995e6); build+verify green; LOOP COMPLETE withheld | Next: Shree dogfood (gate 8) then LOOP COMPLETE | Learned: Next focus still forbids chrome invent / LOOP COMPLETE on fixtures; ACTIVE wait remains plan-log + verify until real Shree paths appear | Dogfood: Shree unavailable — fixtures only; verify green | Browser: n/a this tick (fixture spot-check already logged; real learn+heart Beginner still required)
-- 2026-08-06 17:06 UTC | Done: Gate-8 wait tick — no SHREE_ROOT / `/Users/praveen/Documents/GitHub/shree` / workspace shree; synced `fe-depth-ux-06082026` (master e2995e6 already merged); build+verify green; LOOP COMPLETE withheld | Next: Shree dogfood (gate 8) then LOOP COMPLETE | Learned: gate 8 remains the only open blocker; ACTIVE wait stays plan-log + verify-only — no chrome invention while Shree paths are absent | Dogfood: Shree unavailable — fixtures only; verify green | Browser: n/a this tick (fixture spot-check already logged; real learn+heart Beginner still required)
-- 2026-08-06 17:03 UTC | Done: Gate-8 wait tick — no SHREE_ROOT / `/Users/praveen/Documents/GitHub/shree` / workspace shree; synced `fe-depth-ux-06082026` (0 behind master); build+verify green; LOOP COMPLETE withheld | Next: Shree dogfood (gate 8) then LOOP COMPLETE | Learned: gate 8 still hard-requires real Shree paths; fixtures-only verify stays the ACTIVE wait baseline — no chrome, no LOOP COMPLETE | Dogfood: Shree unavailable — fixtures only; verify green | Browser: n/a this tick (fixture spot-check already logged; real learn+heart Beginner still required)
-- 2026-08-06 17:02 UTC | Done: Gate-8 wait tick — no SHREE_ROOT / `/Users/praveen/Documents/GitHub/shree` / workspace shree; synced `fe-depth-ux-06082026` (master already merged); build+verify green; LOOP COMPLETE withheld | Next: Shree dogfood (gate 8) then LOOP COMPLETE | Learned: Next focus still blocks chrome invention while gate 8 awaits real Shree — ACTIVE wait = plan log + verify only | Dogfood: Shree unavailable — fixtures only; verify green | Browser: n/a this tick (fixture spot-check already logged; real learn+heart Beginner still required)
-- 2026-08-06 17:01 UTC | Done: Gate-8 wait tick — no SHREE_ROOT / `/Users/praveen/Documents/GitHub/shree` / workspace shree; synced `fe-depth-ux-06082026` (master already merged); build+verify green; LOOP COMPLETE withheld | Next: Shree dogfood (gate 8) then LOOP COMPLETE | Learned: ACTIVE wait stays plan-log + verify-only until real Shree paths appear — inventing chrome or closing on fixtures would break gate 8 | Dogfood: Shree unavailable — fixtures only; verify green | Browser: n/a this tick (fixture spot-check already logged; real learn+heart Beginner still required)
-- 2026-08-06 17:00 UTC | Done: Gate-8 wait tick — no SHREE_ROOT / `/Users/praveen/Documents/GitHub/shree` / workspace shree; build+verify green; LOOP COMPLETE withheld | Next: Shree dogfood (gate 8) then LOOP COMPLETE | Learned: Next focus still blocks chrome invention while gate 8 awaits real Shree — ACTIVE wait = plan log + verify only | Dogfood: Shree unavailable — fixtures only; verify green | Browser: n/a this tick (fixture spot-check already logged; real learn+heart Beginner still required)
-- 2026-08-06 16:59 UTC | Done: Gate-8 wait tick — confirmed no SHREE_ROOT / shree paths; no chrome invented; LOOP COMPLETE withheld | Next: Shree dogfood (gate 8) then LOOP COMPLETE | Learned: cloud ticks cannot close gate 8; idle chrome would violate Next focus — plan update + verify-only is the correct ACTIVE wait | Dogfood: Shree unavailable — fixtures only; verify green | Browser: n/a this tick (fixture spot-check already logged; real learn+heart Beginner still required)
-- 2026-08-06 16:57 UTC | Done: Browser Beginner spot-check + regression verify | Next: Shree dogfood (gate 8) then LOOP COMPLETE | Learned: fixture twins are enough for wrap/inspector/Heart-label visual gates; this plan’s gate 8 still requires real Shree scans before LOOP COMPLETE (unlike whiteboard loop’s fixture-only close) | Dogfood: Shree unavailable — fixtures only; verify green | Browser: mini-next-many Beginner flow wraps 2×4+HTTP API, inspector story-first (role → In the story → Evidence file:line, no projection pills); mini-routes-many Beginner labeled HTTP API (not API Documentation), Intermediate domain groups (Admin/Articles/Auth/…), inspector keeps evidence style  
-- 2026-08-06 17:20 UTC | Done: Product Flow wrap — FLOW_WRAP_COLS=4, flowGapX=200, flowRowY=96; laneTop follows row count; verify wrap width floor | Next: Browser Beginner spot-check | Learned: single-row index*220 made 8 hubs ~1830px (horizontal hunt); 2×4 wrap + 200px gap keeps band under ~1100 without changing IR | Dogfood: Shree unavailable — fixtures only; verify pending this tick after push | Browser: n/a this tick (layout IR/viewer; browser gate next)  
-- 2026-08-06 17:05 UTC | Done: Inspector value pass — role → In the story → Evidence; hide path/framework/readme*/packageName pills with projection/systemKey/flowOrder; More demotes leftovers; verify story-first floors | Next: Product Flow layout calm | Learned: kind·semantic + path/framework pills were the “metadata dump” feel even after hiding projection keys — plainLanguageRole must own those fields or they reappear as chrome | Dogfood: Shree unavailable — fixtures only; verify green including inspector story-first floor | Browser: n/a this tick  
-- 2026-08-06 16:50 UTC | Done: Scholar honesty both branches — reinforce mini-scholar uiOnly (0 apis/, 0 clientApiStory); mini-scholar-apis Dashboard -[reads]-> HTTP API via listCourses; `isClientApisOnlyHttpApi` skips blanket page→API uses | Next: Inspector value pass | Learned: client `src/apis` alone is honest HTTP API evidence, but inferred uses from every page hub lied when only Dashboard called the helper — gate uses on server-surface vs client-apis-only | Dogfood: Shree unavailable — fixtures only; mini-scholar uiOnly; mini-scholar-apis flow pages+HTTP API, no Data/Jobs | Browser: n/a this tick  
-- 2026-08-06 16:55 UTC | Done: Extended trivial mongo aggregate suppression for Qcol / *collection crumbs — suffix strip + generic stems (`tests`/`scratch`/…); mini-mongo adds qCol/testsCollection/Testscollection; product Note/Search chunks hubs kept | Next: Scholar client-API edges or uiOnly honesty | Learned: camelCase crumbs project via titleCaseSingular to glued labels (`qCol`→`Qcol`, `testsCollection`→`Testscollection`) so suffix rules must hit compact form, not only spaced humanize | Dogfood: Shree unavailable — fixtures only; mini-mongo junk≥5 collapsed, 2 product hubs | Browser: n/a this tick  
-- 2026-08-06 16:45 UTC | Done: Heart API label closed (prior tick) + Intermediate groups-first — `INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP=8`; walk prefers route-group Intermediate over Advanced modules; mini-routes-many floors (0 modules/functions; walk=intermediate) | Next: trivial aggregate Qcol/*collection | Learned: with domain groups, ≤24 naked misc still felt like a phonebook — tighten leftover strip once groups exist | Dogfood: Shree unavailable — fixtures only; mini-routes-many Intermediate = domain hubs + ≤8 naked | Browser: n/a this tick  
-- 2026-08-06 16:35 UTC | Done: Temp* demoted below product auth/shells in `feRouteMoleculeBeginnerScore`; mini-next-many gains tutor + 7 temp* pages; verify floors product mix + ≤3 temp on flow | Next: Heart API label fix | Learned: prior scores put temp* at 95–100 over /student at 90 — demote temp to ~70 and boost Home/Student/Tutor to 98 | Dogfood: Shree unavailable — fixtures only; mini-next-many Beginner Home→Dashboard→Login→Student→Tempapplicant→Tempdemo→Tempsignin→Tutor (≤3 temp) | Browser: n/a this tick  
-- 2026-08-06 16:29 UTC | Done: Lift FE→API story edges from featureRoot → `apis/**` client helpers (camelCase read verbs); nest `apis/` under HTTP API; mini-next PostList→listPosts reads floor | Next: Temp* ranking polish | Learned: Learn has 0 serverActions — path-convention `apis/` lift is the real FE→API story; `listPosts` needed camelCase kind detect + humanize | Dogfood: learn Beginner Demo→Login→6 temp*→HTTP API; Temp tutor -[reads]-> Get file URL + Temp student -[writes]-> Resolve certificate href (client apis); +3 off-flow page molecules; scholar 9 hubs uiOnly clientApiStory=0; heart API Documentation→Data access; verify green | Browser: n/a this tick (IR + verify; browser gate later)  
-- 2026-08-06 | Plan created after Shree browser dogfood of whiteboard tip | Next: Learn FE→API edges | Learned: fixtures ≠ Shree browser; Heart Intermediate still heavy; users need stack-aware edges + inspector value before token-saving claims | Dogfood: n/a (plan) | Browser: learn ≤8 temp-heavy; heart API Documentation→Data; scholar 8 hubs uiOnly  
+- 2026-08-06 17:12 UTC | Done: Local Shree gate-8 dogfood + declared LOOP COMPLETE; stop cloud wait-spam | Next: IDLE | Learned: cloud automation cannot see `/Users/praveen/Documents/GitHub/shree` — hard-requiring it for LOOP COMPLETE caused ~10 empty “still unavailable” commits; local pass closes gate 8; future plans should idle-without-push or fixture-close like whiteboard | Dogfood: learn Home→Demo→Login→Student→Temp applicant→Tempsignin→Tutor→Welcome→HTTP API (1521n/3203e; client-apis reads/writes on Applicant/Study/Temp tutor/Quiz/Temp student; Beginner hubs also `uses`→HTTP API); scholar Home→…→HTTP API (723n/1470e; 0 clientApiStory); heart HTTP API→Data access (6190n/11895e; API domain groups Admin/Course/…); verify green | Browser: learn Beginner product-mix (Home/Student/Tutor + ≤2 temp) + HTTP API; heart Beginner HTTP API (not API Documentation) → Data access; Intermediate API owns domain groups (Admin, Course, Mock test, …)  
+- 2026-08-06 17:10 UTC | Done: Gate-8 wait tick (cloud) — Shree unavailable; verify green; LOOP COMPLETE withheld | Next: was Shree dogfood | Learned: wait ticks should not have pushed | Dogfood: Shree unavailable — fixtures only | Browser: n/a  
+- 2026-08-06 16:57 UTC | Done: Browser Beginner spot-check + regression verify | Next: Shree dogfood (gate 8) then LOOP COMPLETE | Learned: fixture twins are enough for wrap/inspector/Heart-label visual gates; this plan’s gate 8 still required real Shree scans before LOOP COMPLETE (unlike whiteboard loop’s fixture-only close) | Dogfood: Shree unavailable — fixtures only; verify green | Browser: mini-next-many Beginner flow wraps 2×4+HTTP API, inspector story-first; mini-routes-many Beginner labeled HTTP API (not API Documentation), Intermediate domain groups  
+- 2026-08-06 17:20 UTC | Done: Product Flow wrap — FLOW_WRAP_COLS=4 | Next: Browser spot-check | Learned: 2×4 wrap beats single-row horizontal hunt | Dogfood: fixtures only | Browser: n/a  
+- 2026-08-06 17:05 UTC | Done: Inspector value pass | Next: Flow layout | Learned: plainLanguageRole must own path/framework or pills return | Dogfood: fixtures only | Browser: n/a  
+- 2026-08-06 16:50 UTC | Done: Scholar honesty mini-scholar + mini-scholar-apis | Next: Inspector | Learned: client-apis-only must not invent blanket page uses | Dogfood: fixtures only | Browser: n/a  
+- 2026-08-06 16:55 UTC | Done: Qcol/*collection trivial aggregate suppression | Next: Scholar honesty | Learned: glued labels need suffix rules on compact form | Dogfood: fixtures only | Browser: n/a  
+- 2026-08-06 16:45 UTC | Done: Heart Intermediate groups-first naked cap 8 | Next: Qcol suppression | Learned: groups alone left a phonebook strip | Dogfood: fixtures only | Browser: n/a  
+- 2026-08-06 16:35 UTC | Done: Temp* demoted below product shells | Next: Heart API label | Learned: temp scores were beating /student | Dogfood: fixtures only | Browser: n/a  
+- 2026-08-06 16:29 UTC | Done: Lift FE→API story edges from `apis/**` | Next: Temp* ranking | Learned: Learn has 0 serverActions — `apis/` lift is the FE→API story | Dogfood: local learn Temp tutor/student edges | Browser: n/a  
+- 2026-08-06 | Plan created | Next: Learn FE→API edges | Learned: fixtures ≠ Shree browser | Dogfood: n/a (plan) | Browser: learn temp-heavy; heart API Documentation; scholar uiOnly  
 
 ---
 
@@ -221,14 +212,9 @@ AUTOPILOT MODE — Underdelta FE depth + whiteboard UX
 CANONICAL PLAN: `docs/loopplans/FE_DEPTH_UX_06082026.md`
 BRANCH LOCK: `fe-depth-ux-06082026` only. One draft PR.
 
-MISSION:
-Deepen deterministic stack-aware FE→API edges (Learn/Scholar) and finish Heart Beginner/Intermediate lies.
-Improve inspector value + Product Flow layout readability.
-NO AI naming. NO landing page. NO token-saving product this loop.
-LOOP COMPLETE → idle, no push.
-
-EACH TICK: sync → one Next focus → implement → build+verify → Shree dogfood when paths exist → update plan → push (unless idle complete).
-Final gate requires browser dogfood note on learn+heart Beginner.
+Loop status is LOOP COMPLETE.
+IDLE: re-check gates only. Do not invent, commit, or push unless a gate regresses.
+Do not poll for local-only Shree paths. Do not push “Shree unavailable” wait logs.
 ```
 
 ---
@@ -237,9 +223,9 @@ Final gate requires browser dogfood note on learn+heart Beginner.
 
 ### Arming
 
-1. Prefer **merge PR #9** (`shree-whiteboard`) into master first, then rebase this branch — or merge this PR later (it currently stacks on whiteboard commits).  
-2. Arm automation on `fe-depth-ux-06082026` with the prompt above.  
-3. Ask for first tick when ready (Learn FE→API edges).
+1. **Disable push-automation now** — loop is LOOP COMPLETE; further cloud wakes should idle.  
+2. Shree dogfood only exists on the local machine (`/Users/praveen/Documents/GitHub/shree`); cloud agents cannot close a hard Shree gate.  
+3. Prefer fixture twins for cloud-completeable gates (whiteboard pattern) on future loops.
 
 ### Why this loop (strategy)
 
