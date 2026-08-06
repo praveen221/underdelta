@@ -36,6 +36,26 @@ export interface ProjectOptions {
 }
 
 /**
+ * True when this repo is Underdelta itself (or explicitly ships an `underdelta`
+ * bin). Gates Compile/Viewer/Extractors/Graph/Schema-contract hubs and the
+ * architecture.json / index.html artifact projection so foreign repos with
+ * decoy filenames do not invent an Underdelta self-map.
+ */
+export function isUnderdeltaToolingRepo(options: ProjectOptions = {}): boolean {
+  const name = options.packageManifest?.name?.trim().toLowerCase();
+  if (name === "underdelta") return true;
+
+  const bin = options.packageManifest?.bin;
+  if (typeof bin === "string") {
+    return /(^|\/)underdelta(?:\.[cm]?js)?$/i.test(bin.trim());
+  }
+  if (bin && typeof bin === "object") {
+    return Object.keys(bin).some((key) => key.toLowerCase() === "underdelta");
+  }
+  return false;
+}
+
+/**
  * Strip markdown image/link chrome from a heading so alt/link text can be used
  * as a human label. `![Alt](img.png)` → `Alt`.
  */
@@ -820,6 +840,35 @@ function quietNonCompilerProductChrome(
       ),
     ]);
     nodes.set(api.id, api);
+  } else if (api && !schema) {
+    // Foreign repos no longer invent a Schema contract hub for bare schema.ts.
+    // Still nest those modules under HTTP API as collapsed chrome (GraphQL).
+    const dataId = systems.get("data")?.id;
+    for (const node of nodes.values()) {
+      if (!isFileModule(node)) continue;
+      const file = modulePath(node).toLowerCase();
+      if (!/(^|\/)schema\.[cm]?[jt]sx?$/.test(file)) continue;
+      if (/(^|\/)(db|database)\//.test(file)) continue;
+      if (node.parentId === dataId || node.parentId === api.id) continue;
+      node.parentId = api.id;
+      node.metadata = {
+        ...node.metadata,
+        projectedSystem: "api",
+        collapsedInOverview: true,
+      };
+      nodes.set(node.id, node);
+      moduleToSystem.set(node.id, api.id);
+      const contains = edgeFrom(
+        "contains",
+        api.id,
+        node.id,
+        projectionEvidence(
+          modulePath(node),
+          "Nested bare schema.ts under HTTP API (no Schema contract hub)",
+        ),
+      );
+      if (!edges.has(contains.id)) edges.set(contains.id, contains);
+    }
   }
 
   // Empty CLI from package.json bin with no child modules — hide on overview.
@@ -1144,20 +1193,32 @@ function modulePath(node: ArchitectureNode): string {
   return normalizePath(node.qualifiedName ?? node.label);
 }
 
-export function inferSystemRole(moduleFile: string): SystemRole | undefined {
+export function inferSystemRole(
+  moduleFile: string,
+  context: { underdeltaTooling?: boolean } = {},
+): SystemRole | undefined {
   const file = normalizePath(moduleFile).toLowerCase();
+  const underdeltaTooling = context.underdeltaTooling === true;
 
-  if (file.includes("/extractors/") || /(^|\/)extractor\.[cm]?[jt]sx?$/.test(file)) {
-    return { key: "extractors", label: "Extractors", kind: "system" };
+  // Underdelta self-map hubs only — foreign repos often have extractors/,
+  // compile.ts, viewer.ts, graph.ts, schema.ts without being this product.
+  if (underdeltaTooling) {
+    if (
+      file.includes("/extractors/") ||
+      /(^|\/)extractor\.[cm]?[jt]sx?$/.test(file)
+    ) {
+      return { key: "extractors", label: "Extractors", kind: "system" };
+    }
+    if (/(^|\/)compile\.[cm]?[jt]sx?$/.test(file)) {
+      return { key: "compile", label: "Compile pipeline", kind: "pipeline" };
+    }
+    if (/(^|\/)viewer\.[cm]?[jt]sx?$/.test(file)) {
+      return { key: "viewer", label: "Viewer", kind: "ui" };
+    }
   }
+
   if (/(^|\/)cli\.[cm]?[jt]sx?$/.test(file)) {
     return { key: "cli", label: "CLI", kind: "system" };
-  }
-  if (/(^|\/)compile\.[cm]?[jt]sx?$/.test(file)) {
-    return { key: "compile", label: "Compile pipeline", kind: "pipeline" };
-  }
-  if (/(^|\/)viewer\.[cm]?[jt]sx?$/.test(file)) {
-    return { key: "viewer", label: "Viewer", kind: "ui" };
   }
   // Top-level `components/` / `ui/` (no leading slash) must match too —
   // Next fixtures often keep client widgets beside `app/`, not under `src/`.
@@ -1175,7 +1236,7 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
   ) {
     return { key: "ui", label: "UI", kind: "ui" };
   }
-  if (/(^|\/)graph\.[cm]?[jt]sx?$/.test(file)) {
+  if (underdeltaTooling && /(^|\/)graph\.[cm]?[jt]sx?$/.test(file)) {
     return { key: "graph", label: "Graph assembly", kind: "system" };
   }
   // Next.js App Router: route handlers + server actions are the API surface.
@@ -1281,7 +1342,7 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
     return { key: "data", label: "Data access", kind: "system" };
   }
   // Architecture / compiler schema modules (Underdelta src/schema.ts), not ORM.
-  if (/(^|\/)schema\.[cm]?[jt]sx?$/.test(file)) {
+  if (underdeltaTooling && /(^|\/)schema\.[cm]?[jt]sx?$/.test(file)) {
     return { key: "schema", label: "Schema contract", kind: "system" };
   }
 
@@ -3851,10 +3912,11 @@ export function projectSemanticArchitecture(
 
   const systems = new Map<string, ArchitectureNode>();
   const moduleToSystem = new Map<string, string>();
+  const underdeltaTooling = isUnderdeltaToolingRepo(options);
 
   for (const node of [...nodes.values()]) {
     if (!isFileModule(node)) continue;
-    const role = inferSystemRole(modulePath(node));
+    const role = inferSystemRole(modulePath(node), { underdeltaTooling });
     if (!role) continue;
 
     const systemId = stableId("system", role.key);
@@ -5310,9 +5372,11 @@ export function projectSemanticArchitecture(
     if (!edges.has(dependency.id)) edges.set(dependency.id, dependency);
   }
 
-  // Synthesize scan output artifacts on tooling self-maps:
-  // architecture.json (IR) beside index.html (browser).
+  // Synthesize scan output artifacts on Underdelta self-maps only:
+  // architecture.json (IR) beside index.html (browser). Never invent these
+  // on foreign repos that happen to have cli/compile/viewer filenames.
   if (
+    underdeltaTooling &&
     (systems.has("compile") || systems.has("graph")) &&
     (systems.has("viewer") || systems.has("cli"))
   ) {

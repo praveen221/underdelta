@@ -43,6 +43,11 @@ const miniReadmeStructureRoot = path.join(
   "verification",
   "mini-readme-structure",
 );
+const miniDecoyToolingRoot = path.join(
+  repoRoot,
+  "verification",
+  "mini-decoy-tooling",
+);
 const miniRoutesManyRoot = path.join(
   repoRoot,
   "verification",
@@ -5764,6 +5769,69 @@ if (!miniMongoPipelineUsesCollection) {
   fail("mini-mongo expected aggregate pipeline -[uses:query]-> collection");
 } else {
   pass("mini-mongo aggregate pipeline -[uses:query]-> collection");
+}
+
+// ---------------------------------------------------------------------------
+// Foreign filename collisions must not invent Underdelta self-map hubs /
+// architecture.json artifacts (verification/mini-decoy-tooling).
+// ---------------------------------------------------------------------------
+const miniDecoyToolingGraph = await compileRepository(miniDecoyToolingRoot);
+const decoyForbiddenLabels = [
+  "Compile pipeline",
+  "Extractors",
+  "Viewer",
+  "Graph assembly",
+  "Schema contract",
+  "architecture.json",
+  "index.html",
+];
+const decoyForbiddenHits = miniDecoyToolingGraph.nodes.filter((node) =>
+  decoyForbiddenLabels.includes(node.label),
+);
+if (decoyForbiddenHits.length) {
+  fail(
+    `mini-decoy-tooling invented Underdelta hubs/artifacts: ${decoyForbiddenHits
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-decoy-tooling has no Underdelta compile/viewer/artifact hubs");
+}
+const decoyArtifactRole = miniDecoyToolingGraph.nodes.filter(
+  (node) =>
+    node.metadata?.role === "artifact" ||
+    node.metadata?.artifactKind === "architecture-ir" ||
+    node.metadata?.artifactKind === "browser",
+);
+if (decoyArtifactRole.length) {
+  fail(
+    `mini-decoy-tooling has artifact-role nodes: ${decoyArtifactRole
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-decoy-tooling has no architecture.json / index.html artifact roles");
+}
+const decoyForbiddenKeys = new Set([
+  "compile",
+  "extractors",
+  "viewer",
+  "graph",
+  "schema",
+  "artifact",
+  "browser",
+]);
+const decoyForbiddenKeyHits = miniDecoyToolingGraph.nodes.filter((node) =>
+  decoyForbiddenKeys.has(String(node.metadata?.systemKey ?? "")),
+);
+if (decoyForbiddenKeyHits.length) {
+  fail(
+    `mini-decoy-tooling has Underdelta systemKeys: ${decoyForbiddenKeyHits
+      .map((node) => `${node.label}(${node.metadata?.systemKey})`)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-decoy-tooling has no Underdelta systemKeys");
 }
 
 // ---------------------------------------------------------------------------
