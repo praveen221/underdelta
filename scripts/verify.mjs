@@ -5338,13 +5338,19 @@ if (miniMongoVisibleChrome.length > 0) {
 }
 
 // Mongo `.aggregate([...])` → pipeline hubs under Catalog data (RAG/query story).
-// Product aggregates stay overview hubs; handle crumbs (`C` / `Col`) collapse.
+// Product aggregates stay overview hubs; handle crumbs (`C` / `Col` / `Qcol` /
+// `Testscollection`) collapse.
 for (const [label, expectTrivial] of [
   ["C pipeline", true],
   ["Col pipeline", true],
+  ["Qcol pipeline", true],
+  ["Q col pipeline", true],
+  ["Testscollection pipeline", true],
+  ["Tests collection pipeline", true],
   ["Note pipeline", false],
   ["Search chunks pipeline", false],
   ["Tag pipeline", false],
+  ["RAG Collection pipeline", false],
 ]) {
   if (isTrivialMongoAggregateLabel(label) !== expectTrivial) {
     fail(
@@ -5374,7 +5380,14 @@ for (const expected of ["Search chunks pipeline", "Note pipeline"]) {
   }
 }
 
-const miniMongoJunkAggregateLabels = ["C pipeline", "Col pipeline"];
+// Projected labels: qCol→Qcol, testsCollection/Testscollection→Testscollection
+// (titleCaseSingular on camelCase collectionName crumbs).
+const miniMongoJunkAggregateLabels = [
+  "C pipeline",
+  "Col pipeline",
+  "Qcol pipeline",
+  "Testscollection pipeline",
+];
 for (const expected of miniMongoJunkAggregateLabels) {
   if (!miniMongoAggregateLabels.has(expected)) {
     fail(
@@ -5384,13 +5397,25 @@ for (const expected of miniMongoJunkAggregateLabels) {
     pass(`mini-mongo extracts junk-handle aggregate ${expected}`);
   }
 }
+const miniMongoJunkAggregateCount = miniMongoAggregates.filter((node) =>
+  miniMongoJunkAggregateLabels.includes(node.label),
+).length;
+if (miniMongoJunkAggregateCount < 5) {
+  fail(
+    `mini-mongo expected ≥5 junk-handle aggregate nodes (C/Col/Qcol/testsCollection/Testscollection), found ${miniMongoJunkAggregateCount} (${[...miniMongoAggregateLabels].join(", ")})`,
+  );
+} else {
+  pass(
+    `mini-mongo ${miniMongoJunkAggregateCount} junk-handle aggregate nodes extracted for suppression`,
+  );
+}
 
 const miniMongoAggregatesUnderData = miniMongoAggregates.filter(
   (node) => node.parentId === miniMongoData?.id,
 );
-if (miniMongoAggregatesUnderData.length < 4) {
+if (miniMongoAggregatesUnderData.length < 7) {
   fail(
-    `mini-mongo expected ≥4 aggregate pipelines nested under Catalog data (2 product + 2 junk), found ${miniMongoAggregatesUnderData.length} (${[...miniMongoAggregateLabels].join(", ")})`,
+    `mini-mongo expected ≥7 aggregate pipelines nested under Catalog data (2 product + 5 junk), found ${miniMongoAggregatesUnderData.length} (${[...miniMongoAggregateLabels].join(", ")})`,
   );
 } else {
   pass(
@@ -5422,7 +5447,7 @@ if (
 }
 
 if (
-  miniMongoJunkAggregates.length < 2 ||
+  miniMongoJunkAggregates.length < 5 ||
   miniMongoJunkAggregates.some(
     (node) =>
       node.metadata?.overviewHub === true ||
@@ -5433,11 +5458,11 @@ if (
   )
 ) {
   fail(
-    `mini-mongo junk aggregates (C/Col) must be trivialMongoAggregate + collapsed off overview; found ${miniMongoJunkAggregates.map((n) => `${n.label} hub=${n.metadata?.overviewHub} collapsed=${n.metadata?.collapsedInOverview}`).join("; ") || "(none)"}`,
+    `mini-mongo junk aggregates (C/Col/Qcol/*collection) must be trivialMongoAggregate + collapsed off overview; found ${miniMongoJunkAggregates.map((n) => `${n.label} hub=${n.metadata?.overviewHub} collapsed=${n.metadata?.collapsedInOverview}`).join("; ") || "(none)"}`,
   );
 } else {
   pass(
-    "mini-mongo junk C/Col aggregate pipelines suppressed on Beginner/overview",
+    "mini-mongo junk C/Col/Qcol/*collection aggregate pipelines suppressed on Beginner/overview",
   );
 }
 

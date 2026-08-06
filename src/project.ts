@@ -3399,6 +3399,8 @@ const TRIVIAL_MONGO_AGGREGATE_HANDLES = new Set([
   "coll",
   "cols",
   "colls",
+  "collection",
+  "collections",
   "doc",
   "docs",
   "row",
@@ -3424,16 +3426,31 @@ const TRIVIAL_MONGO_AGGREGATE_HANDLES = new Set([
   "model",
   "models",
   "schema",
+  "test",
+  "tests",
+  "scratch",
+  "junk",
+  "mock",
+  "dummy",
+  "sample",
+  "foo",
+  "bar",
+  "baz",
+  "misc",
 ]);
 
+/** Trailing driver-handle suffixes glued onto short prefixes (`Qcol`, `Testscollection`). */
+const TRIVIAL_MONGO_HANDLE_SUFFIX =
+  /(?:collections?|colls?|cols?)$/i;
+
 /**
- * True when a mongo aggregate pipeline label is a short variable/handle crumb
- * rather than a product collection story (Shree Heart field gate).
+ * True when a stem (after stripping col/collection) is itself a short/generic
+ * handle rather than a product word (Note, Search chunks).
  */
-export function isTrivialMongoAggregateLabel(label: string): boolean {
-  const stem = label.replace(/\s+pipeline$/i, "").trim();
+function isTrivialMongoAggregateStem(stem: string): boolean {
   if (!stem) return true;
   const compact = stem.replace(/\s+/g, "");
+  if (!compact) return true;
   if (/^[A-Za-z]$/.test(compact)) return true;
   if (TRIVIAL_MONGO_AGGREGATE_HANDLES.has(compact.toLowerCase())) return true;
   // Two-letter alpha crumbs (cx, tx) — keep known product acronyms (AI, DB).
@@ -3443,6 +3460,50 @@ export function isTrivialMongoAggregateLabel(label: string): boolean {
   ) {
     return true;
   }
+  return false;
+}
+
+/**
+ * True when a mongo aggregate pipeline label is a short variable/handle crumb
+ * rather than a product collection story (Shree Heart field gate).
+ *
+ * Covers bare handles (`C`, `Col`), prefixed crumbs (`Qcol`, `Q Col`), and
+ * glued `*collection` leftovers (`Testscollection`, `Tests Collection`).
+ */
+export function isTrivialMongoAggregateLabel(label: string): boolean {
+  const stem = label.replace(/\s+pipeline$/i, "").trim();
+  if (!stem) return true;
+  if (isTrivialMongoAggregateStem(stem)) return true;
+
+  const compact = stem.replace(/\s+/g, "");
+  // Prefixed / glued handle crumbs: Qcol, XColl, Testscollection.
+  if (TRIVIAL_MONGO_HANDLE_SUFFIX.test(compact)) {
+    const withoutSuffix = compact.replace(TRIVIAL_MONGO_HANDLE_SUFFIX, "");
+    if (isTrivialMongoAggregateStem(withoutSuffix)) return true;
+    // Glued identifier crumbs (`Testscollection`) — short non-product prefix
+    // with no spaces in the original stem means a variable leftover, not a
+    // titled product collection hub.
+    if (
+      !/\s/.test(stem) &&
+      withoutSuffix.length > 0 &&
+      withoutSuffix.length <= 8 &&
+      /^[A-Za-z]+$/i.test(withoutSuffix)
+    ) {
+      return true;
+    }
+  }
+
+  // Spaced "... Collection" where the leading words are generic handles
+  // (`Tests Collection` from testsCollection).
+  const words = stem.split(/\s+/);
+  if (
+    words.length >= 2 &&
+    /^collections?$/i.test(words[words.length - 1] ?? "")
+  ) {
+    const prefix = words.slice(0, -1).join("");
+    if (isTrivialMongoAggregateStem(prefix)) return true;
+  }
+
   return false;
 }
 
