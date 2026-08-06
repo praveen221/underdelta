@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Underdelta — What did I actually build?</title>
+    <meta
+      name="description"
+      content="Underdelta compiles a repository into an evidence-backed visual model of the product — not a call graph, not vibes. Source-linked architecture you can trust."
+    />
+    <meta property="og:title" content="Underdelta — What did I actually build?" />
+    <meta
+      property="og:description"
+      content="Open infrastructure that turns a codebase into a calm, evidence-backed product map."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="stylesheet" href="./site.css" />
+  </head>
+  <body>
+    <header class="hero wrap">
+      <h1 class="brand">Under<span>delta</span></h1>
+      <p class="lede">
+        After vibe coding, founders still ask one question. We compile the repo into an
+        evidence-backed map of the product — UI, APIs, data, jobs — with every claim tied to source.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/praveen221/underdelta">Open on GitHub</a>
+        <a class="btn btn-ghost" href="#try">Try a scan</a>
+      </div>
+    </header>
+
+    <section class="section wrap" id="philosophy">
+      <h2>Philosophy</h2>
+      <p class="support">
+        Underdelta is capability infrastructure, not a dashboard skin. The browser is the product:
+        a mind map for people who shipped with agents and need to see what is real.
+      </p>
+      <div class="principles">
+        <article class="principle">
+          <h3>Evidence over invention</h3>
+          <p>
+            Nodes and edges come from the repository. Certainty is marked observed, derived, or
+            inferred. Unknown frameworks are left blank — never hallucinated into a pretty lie.
+          </p>
+        </article>
+        <article class="principle">
+          <h3>Product story, not symbol soup</h3>
+          <p>
+            Default view collapses modules and functions into systems, pages, APIs, data, and jobs.
+            The map should answer “what did I build?” before anyone opens Details.
+          </p>
+        </article>
+        <article class="principle">
+          <h3>Twin engines</h3>
+          <p>
+            Capability extracts real stacks. Polish keeps the Beginner walk calm. A feature is not
+            done until the map is golden-locked and cold-readable.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section wrap" id="question">
+      <p class="quote">What did I <em>actually</em> build?</p>
+      <p class="support" style="margin-bottom: 0">
+        That is the whole product. Routes, components, databases, migrations, cron, queues,
+        pipelines — linked back to the file and line that justified them.
+      </p>
+    </section>
+
+    <section class="section wrap" id="not">
+      <h2>Not this</h2>
+      <p class="support">Clear refusals keep the map honest.</p>
+      <ul class="not-list">
+        <li>Not a raw call graph or IDE outline wearing new clothes</li>
+        <li>Not AI naming that invents services the code never declared</li>
+        <li>Not a sales funnel — open infrastructure you can run locally</li>
+        <li>Not a dump of tests, fixtures, or build output as “architecture”</li>
+      </ul>
+    </section>
+
+    <section class="section wrap" id="try">
+      <div class="try">
+        <div>
+          <h2>Try it</h2>
+          <p class="support">
+            Map any project without installing Underdelta into that project. Output lands in
+            <code>.underdelta/</code> as <code>index.html</code> + <code>architecture.json</code>.
+          </p>
+        </div>
+        <pre><code>cd /path/to/your/project
+curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/scripts/scan.sh | bash</code></pre>
+      </div>
+    </section>
+
+    <footer>
+      <div class="wrap">
+        <span>MIT · built in the open</span>
+        <span>
+          <a href="https://github.com/praveen221/underdelta">github.com/praveen221/underdelta</a>
+        </span>
+      </div>
+    </footer>
+  </body>
+</html>
