@@ -1,0 +1,221 @@
+# Loop plan — FE depth + whiteboard UX (stack-aware edges & inspector value)
+
+Living plan for a **scoped** Autopilot / cloud-agent loop.
+
+**Branch lock:** `fe-depth-ux-06082026` only  
+**Base:** `shree-whiteboard-06082026` tip (`3e413c2`) — includes Learn compression, Heart label/route/pipeline fixes, Scholar uiOnly.  
+**Do not** open a second PR for this work — update the existing draft PR for this branch  
+**Loop interval:** 15 minutes (or whatever the human arms)  
+**This file:** read at the start of every tick; update at the end of every successful tick  
+**Created:** 2026-08-06  
+
+Related:
+
+- [`SHREE_WHITEBOARD_06082026.md`](SHREE_WHITEBOARD_06082026.md) — prior field loop (LOOP COMPLETE; archaeology)  
+- [`SYSTEM_DESIGN_MOLECULES_04082026.md`](SYSTEM_DESIGN_MOLECULES_04082026.md) — atom/molecule vocabulary  
+- [`WALKABLE_GRAPH_CONTEXT.md`](../WALKABLE_GRAPH_CONTEXT.md) — tier walk  
+
+**Pitch:**  
+Exhaust **deterministic, stack-aware** FE/BE product nodes and edges (Next/React first on Shree Learn/Scholar; Heart as the Node API twin). Then make the **Beginner walk and inspector** earn their keep — neat flow, clear evidence value — before token-saving APIs or a marketing site.
+
+**Explicitly later (out of this loop):** landing page, public stats, Graphify-style token-budget query MCP. Those need a trusted IR first.
+
+---
+
+## Mission (read every tick)
+
+1. **Deeper FE truth** on `shree-learn` + `shree-scholar`: page/route molecules already exist; now draw **real product edges** to APIs (client `fetch` / `src/apis/*` / Next route handlers / server actions) with evidence.  
+2. **Heart still matters** (not “Next-only”): fix remaining Beginner lies (`API Documentation` naming; leftover aggregate pipeline noise; Intermediate API room still heavy).  
+3. **Viewer UX that serves the pitch:** when Product Flow has many hubs, layout must stay readable; edges must not spaghetti; **right inspector** must answer “why am I looking at this?” in one screen (evidence + story neighbors), not a metadata dump.  
+4. **No AI naming.** Deterministic extract + project only.
+
+**Twin engines:** IR correctness (edges/labels) and polish (layout/inspector). Prefer edges that change the story over chrome polish — but inspector/layout are in-scope when Next focus says so.
+
+**Never idle while End goal unmet.** Refill only from Seed backlog items that serve this mission.
+
+---
+
+## End goal
+
+With Shree paths present (`SHREE_ROOT` or `/Users/praveen/Documents/GitHub/shree`):
+
+| Surface | Done looks like |
+|---------|-----------------|
+| **Learn** | Beginner ≤8 hubs; ≥1 page/hub -[reads\|writes\|uses]-> API (or honest route-handler) with evidence; marketing still off flow |
+| **Scholar** | Beginner ≤8–12 hubs; uiOnly **or** real API edges if static client APIs resolve; no invented Jobs/Data |
+| **Heart** | Beginner API label is product vocabulary (not OpenAPI “API Documentation” / not Layer liturgy); trivial aggregates stay suppressed; Intermediate API focus shows **domain groups**, not hundreds of naked routes/modules |
+| **Viewer** | Product Flow with 6–8 hubs is scannable (wrapping/lanes OK); collaboration edges readable; inspector leads with **story + evidence file:line**, not projection/systemKey spam |
+| **Verify** | Fixture floors for new behaviors; `npm run build` + `npm run verify` green; self-map + mini-stack unbroken |
+
+### Definition of unfinished
+
+- Learn/Scholar still have almost no FE→API story edges despite static `apis/` / fetch usage  
+- Heart Beginner still says “API Documentation”  
+- Heart Intermediate still feels like a module/route dump after double-click API  
+- Inspector still fails the “what value am I getting?” sniff test on a page or API focus  
+- Next focus empty while End goal unmet  
+
+---
+
+## LOOP COMPLETE — soft stop
+
+Once **Loop status = LOOP COMPLETE**, idle ticks must **not invent, commit, or push**.
+
+### Acceptance gates (all required)
+
+1. **Learn FE→API edges** — ≥1 evidenced story edge from a Beginner hub or its page to API/route-handler; verify floor on fixture (extend mini-next or new mini-learn-apis).  
+2. **Scholar honesty with edges** — either keep uiOnly with Learning-log proof that no static server surface exists, **or** lift client-api → external/API edges when resolvable; verify floor.  
+3. **Heart API label** — Beginner API node is not titled solely from OpenAPI/Swagger “API Documentation”; prefer package/product short name or `HTTP API`; verify floor.  
+4. **Heart Intermediate room** — focusing API shows domain groups as the Intermediate payoff; modules/functions stay Advanced; naked routes remain capped/grouped (no regression to 373 visible). Verify floor.  
+5. **Pipeline noise** — Heart (or mini-mongo) does not surface leftover crumb aggregates (`Qcol`, `Testscollection`, …) on Beginner/overview unless product-evidenced; extend trivial-aggregate rules.  
+6. **Inspector value** — selecting a Beginner hub shows: plain-language role, top story neighbors, ≥1 evidence citation; hide/de-emphasize projection/systemKey/flowOrder pills (strengthen existing hide rules). Verify string floors + Learning-log browser note.  
+7. **Flow layout calm** — Product Flow with ≥6 hubs does not require horizontal hunt off-canvas as the only layout (wrap / second row / tighter gaps — pick one deterministic approach); verify floor or dogfood screenshot note in Learning log.  
+8. **Dogfood** — every ACTIVE tick: `npm run verify`; when Shree exists, re-scan learn+scholar+heart and log hub counts + new edge counts; **browser Beginner spot-check** at least once before LOOP COMPLETE (Learning log: `Browser: …`).  
+9. **Status board** — mandatory items done or cancelled with reason.
+
+### Loop status
+
+```text
+ACTIVE
+```
+
+### Idle protocol
+
+Re-check gates; regression → ACTIVE + fix + push; else `IDLE: LOOP COMPLETE — no push`.
+
+---
+
+## Dogfood plug (every ACTIVE tick)
+
+```bash
+npm run build && npm run verify
+```
+
+When Shree exists:
+
+```bash
+node dist/cli.js scan "$SHREE_ROOT/shree-learn" -o "$SHREE_ROOT/shree-learn/.underdelta"
+node dist/cli.js scan "$SHREE_ROOT/shree-scholar" -o "$SHREE_ROOT/shree-scholar/.underdelta"
+node dist/cli.js scan "$SHREE_ROOT/shree-heart" -o "$SHREE_ROOT/shree-heart/.underdelta"
+```
+
+Learning log must include Learn/Scholar/Heart one-liners + verify.  
+Before declaring LOOP COMPLETE: open Beginner HTML (or headless screenshot) for learn+heart and note what a human sees.
+
+If Shree missing: `Dogfood: Shree unavailable — fixtures only` (allowed mid-loop; **not** allowed for final gate 8).
+
+---
+
+## Status board
+
+### Done
+
+- [x] Prior whiteboard loop landed on this branch base (compression, Heart labels/groups, junk C/Col, Scholar uiOnly)  
+- [x] This plan created  
+- [x] Soft-stop documented  
+
+### In progress / next
+
+Keep **≥ 3 unchecked** until LOOP COMPLETE:
+
+- [ ] **Learn FE→API story edges** from pages/hubs to route handlers / server actions / typed client API modules (static only); fixture + shree-learn dogfood  
+- [ ] **Temp* vs product ranking polish** — Beginner should prefer Student/Tutor/Home/Login mix, not eight temp shells (score tweak; still ≤8)  
+- [ ] **Heart API label fix** — stop OpenAPI title “API Documentation” owning the API molecule label  
+- [ ] **Heart Intermediate API room** — domain groups visible on focus; quiet modules at Intermediate; verify  
+- [ ] **Extend trivial aggregate suppression** — Qcol / *collection crumb pipelines off Beginner  
+- [ ] **Scholar client-API edges or reinforce uiOnly** — follow static evidence in `src/apis/*`  
+- [ ] **Inspector value pass** — story-first panel; evidence; hide IR chrome pills  
+- [ ] **Product Flow layout for 6–8 hubs** — wrap or compact so Beginner is scannable  
+- [ ] **Final LOOP COMPLETE** — gates 1–9 + browser dogfood note  
+
+### Seed backlog (optional)
+
+- Fancy edge routing / bundling (not required if layout+quiet edges enough)  
+- Landing page / npm publish / token-saving query API  
+- Cross-repo learn→heart federation  
+- React Router beyond Next  
+- Jobs molecule for Heart cron/workers  
+
+### Next focus (edit every tick)
+
+> **Next focus:** Lift Learn FE→API story edges (static fetch / server actions / app route handlers) with evidence + verify fixture. Do not start inspector chrome yet. No AI. After green verify + shree-learn dogfood edge count, stop the tick.
+
+### Learning log
+
+```text
+- YYYY-MM-DD HH:MM UTC | Done: … | Next: … | Learned: … | Dogfood: … | Browser: …
+```
+
+- 2026-08-06 | Plan created after Shree browser dogfood of whiteboard tip | Next: Learn FE→API edges | Learned: fixtures ≠ Shree browser; Heart Intermediate still heavy; users need stack-aware edges + inspector value before token-saving claims | Dogfood: n/a (plan) | Browser: learn ≤8 temp-heavy; heart API Documentation→Data; scholar 8 hubs uiOnly  
+
+---
+
+## Tick protocol
+
+1. Concurrency skip if busy  
+2. Sync on `fe-depth-ux-06082026`; merge `origin/master` when needed; build+verify green  
+3. If LOOP COMPLETE → Idle (no push)  
+4. One Next focus only  
+5. Implement (edges/labels/projection > viewer polish when Next focus says so)  
+6. Verify + Shree dogfood when available  
+7. Update this plan in same commit  
+8. Commit + push this branch only  
+9. Stop  
+
+---
+
+## Priority order
+
+1. Green verify / conflicts  
+2. Learn FE→API edges  
+3. Temp* ranking polish  
+4. Heart label + Intermediate room + pipeline crumbs  
+5. Scholar edges / uiOnly honesty  
+6. Inspector value  
+7. Flow layout calm  
+8. **No** landing page, token MCP, Graphify call-graph chase  
+
+---
+
+## Out of scope (hard)
+
+- Other branches / direct master commits / second PRs  
+- LLM structure or naming  
+- Token-saving query product / MCP “context graph” shipping  
+- Marketing landing page  
+- Multi-repo federation as a blocker  
+- Pixel-perfect “fancy” graphs beyond readable Beginner flow  
+
+---
+
+## Copy-paste Autopilot prompt
+
+```text
+AUTOPILOT MODE — Underdelta FE depth + whiteboard UX
+
+CANONICAL PLAN: `docs/loopplans/FE_DEPTH_UX_06082026.md`
+BRANCH LOCK: `fe-depth-ux-06082026` only. One draft PR.
+
+MISSION:
+Deepen deterministic stack-aware FE→API edges (Learn/Scholar) and finish Heart Beginner/Intermediate lies.
+Improve inspector value + Product Flow layout readability.
+NO AI naming. NO landing page. NO token-saving product this loop.
+LOOP COMPLETE → idle, no push.
+
+EACH TICK: sync → one Next focus → implement → build+verify → Shree dogfood when paths exist → update plan → push (unless idle complete).
+Final gate requires browser dogfood note on learn+heart Beginner.
+```
+
+---
+
+## Human notes
+
+### Arming
+
+1. Prefer **merge PR #9** (`shree-whiteboard`) into master first, then rebase this branch — or merge this PR later (it currently stacks on whiteboard commits).  
+2. Arm automation on `fe-depth-ux-06082026` with the prompt above.  
+3. Ask for first tick when ready (Learn FE→API edges).
+
+### Why this loop (strategy)
+
+Graphify saves tokens on **functions/classes**. We earn the right to save tokens / blast-radius later on **pages, APIs, jobs, tables**. This loop makes FE/API edges and the human walk trustworthy enough that those later products aren’t bullshit.
