@@ -1985,6 +1985,62 @@ function collapseAggregateUiBehindRouteMolecules(
 export const BEGINNER_ROUTE_MOLECULE_CAP = 8;
 
 /**
+ * Scholar / FE-only calm gate: Beginner page hubs must stay ≤ this count.
+ * Learn compression uses the tighter {@link BEGINNER_ROUTE_MOLECULE_CAP};
+ * this is the field ceiling for UI-only apps (shree-scholar).
+ */
+export const SCHOLAR_BEGINNER_HUB_MAX = 12;
+
+/** Backend system keys that count as honest neighbors for FE product stories. */
+const HONEST_BACKEND_SYSTEM_KEYS = [
+  "api",
+  "data",
+  "jobs",
+  "workers",
+  "pipelines",
+] as const;
+
+/**
+ * True when a visible (non-collapsed) API / Data / Jobs-style system exists.
+ * Empty Data (modules only) and other quieted chrome do not count — FE apps
+ * must not invent a backend neighbor from README or path crumbs alone.
+ */
+export function hasHonestBackendNeighbor(
+  systems: Map<string, ArchitectureNode>,
+): boolean {
+  for (const key of HONEST_BACKEND_SYSTEM_KEYS) {
+    const system = systems.get(key);
+    if (!system) continue;
+    if (system.metadata?.collapsedInOverview === true) continue;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Mark FE products with no static API/Data/Jobs evidence as UI-only so
+ * Scholar-style apps stay honest (page hubs only; no invented backend).
+ */
+function markUiOnlyProductHonesty(
+  product: ArchitectureNode,
+  systems: Map<string, ArchitectureNode>,
+  nodes: Map<string, ArchitectureNode>,
+): void {
+  const hasFeSurface =
+    systems.has("ui") ||
+    [...systems.keys()].some((key) => key.startsWith("page:"));
+  if (!hasFeSurface) return;
+  if (hasHonestBackendNeighbor(systems)) return;
+
+  product.metadata = {
+    ...product.metadata,
+    uiOnly: true,
+    uiOnlyReason: "no-static-backend-evidence",
+  };
+  nodes.set(product.id, product);
+}
+
+/**
  * Score a route-segment path for Beginner priority (higher = keep on flow).
  * Product shells / auth / temp dashboards beat marketing & exam landings.
  */
@@ -5368,6 +5424,10 @@ export function projectSemanticArchitecture(
   // so API focus is Users/Articles hubs (or ≤24 samples), not a route phonebook.
   projectApiRouteDomainGroups(systems, nodes, edges, attachToSystem);
 
+  // Scholar / FE-only honesty: when pages exist but no static API/Data/Jobs
+  // surface survived quieting, mark the product UI-only (never invent backend).
+  markUiOnlyProductHonesty(product, systems, nodes);
+
   assignFlowOrder(systems, flowPairs);
 
   // Surface the language-extractor roster on the Extractors system so the
@@ -5513,6 +5573,7 @@ export function projectSemanticArchitecture(
     nodes.set(system.id, system);
   }
 
+  const uiOnly = product.metadata?.uiOnly === true;
   const projected: ArchitectureGraph = {
     ...graph,
     project: {
@@ -5528,6 +5589,16 @@ export function projectSemanticArchitecture(
         code: "semantic-projection",
         message: `Projected ${systems.size} product system(s) from module paths`,
       },
+      ...(uiOnly
+        ? [
+            {
+              severity: "info" as const,
+              code: "ui-only-product",
+              message:
+                "No static API/Data/Jobs evidence — Beginner stays UI-only (no invented backend)",
+            },
+          ]
+        : []),
     ],
   };
 

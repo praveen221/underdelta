@@ -1460,6 +1460,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       "intermediateOmitted", "intermediateOmitReason",
       "beginnerRouteHub", "beginnerOmitted", "beginnerOmitReason",
       "replacedByRouteMolecules",
+      "uiOnly", "uiOnlyReason",
     ]);
 
     function connectionButton(edge, id) {

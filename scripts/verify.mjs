@@ -9,6 +9,7 @@ import {
   isReadmeStructureHeading,
   isTrivialMongoAggregateLabel,
   INTERMEDIATE_NAKED_ROUTE_CAP,
+  SCHOLAR_BEGINNER_HUB_MAX,
   parseReadmeHeadingHints,
 } from "../dist/project.js";
 import { renderArchitectureHtml } from "../dist/viewer.js";
@@ -152,6 +153,7 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file.includes("mini-mongo/") ||
         file.includes("mini-readme-structure/") ||
         file.includes("mini-next-many/") ||
+        file.includes("mini-scholar/") ||
         file.includes("mini-routes-many/") ||
         file.includes("mini-openapi/") ||
         file.includes("mini-graphql/") ||
@@ -2916,6 +2918,74 @@ if (miniNextManyPageMolecules.length < 12) {
 } else {
   pass(
     `mini-next-many Beginner compression: ${miniNextManyFlow.length} hubs (${miniNextManyFlowLabels.join(" → ")}); omitted ${miniNextManyOmitted.length} marketing/cap pages`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shree whiteboard: Scholar calm + honesty (FE-only, no invented backend).
+// ---------------------------------------------------------------------------
+const miniScholarRoot = path.join(repoRoot, "verification", "mini-scholar");
+const miniScholarGraph = await compileRepository(miniScholarRoot);
+const miniScholarProduct = miniScholarGraph.nodes.find(
+  (node) => node.kind === "product",
+);
+const miniScholarPageMolecules = miniScholarGraph.nodes.filter(
+  (node) =>
+    node.metadata?.projection === "semantic" &&
+    typeof node.metadata?.systemKey === "string" &&
+    String(node.metadata.systemKey).startsWith("page:"),
+);
+const miniScholarFlow = miniScholarGraph.nodes
+  .filter(
+    (node) =>
+      node.metadata?.projection === "semantic" &&
+      typeof node.metadata?.flowOrder === "number" &&
+      typeof node.metadata?.systemKey === "string" &&
+      String(node.metadata.systemKey).startsWith("page:"),
+  )
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+const miniScholarFlowLabels = miniScholarFlow.map((node) => node.label);
+const miniScholarBackendSystems = miniScholarGraph.nodes.filter(
+  (node) =>
+    node.metadata?.projection === "semantic" &&
+    ["api", "data", "jobs", "workers", "pipelines"].includes(
+      node.metadata?.systemKey,
+    ) &&
+    node.metadata?.collapsedInOverview !== true,
+);
+const miniScholarUiOnlyDiag = miniScholarGraph.diagnostics?.some(
+  (item) => item.code === "ui-only-product",
+);
+const miniNextProduct = miniNextGraph.nodes.find((node) => node.kind === "product");
+if (miniScholarPageMolecules.length < 8) {
+  fail(
+    `mini-scholar expected ≥8 page molecules, found ${miniScholarPageMolecules.length}`,
+  );
+} else if (miniScholarFlow.length > SCHOLAR_BEGINNER_HUB_MAX) {
+  fail(
+    `mini-scholar Beginner page hubs must be ≤${SCHOLAR_BEGINNER_HUB_MAX}, got ${miniScholarFlow.length}: ${miniScholarFlowLabels.join(" → ")}`,
+  );
+} else if (miniScholarBackendSystems.length > 0) {
+  fail(
+    `mini-scholar must not invent visible API/Data/Jobs; found ${miniScholarBackendSystems
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else if (miniScholarProduct?.metadata?.uiOnly !== true) {
+  fail(
+    `mini-scholar product must mark uiOnly when no static backend evidence (got ${JSON.stringify(
+      miniScholarProduct?.metadata ?? null,
+    )})`,
+  );
+} else if (!miniScholarUiOnlyDiag) {
+  fail("mini-scholar expected ui-only-product diagnostic");
+} else if (miniNextProduct?.metadata?.uiOnly === true) {
+  fail(
+    "mini-next (FE+API) must not be marked uiOnly when Posts API evidence exists",
+  );
+} else {
+  pass(
+    `mini-scholar UI-only honesty: ${miniScholarFlow.length} Beginner hubs (${miniScholarFlowLabels.join(" → ") || "(none)"}); no invented backend; uiOnly locked`,
   );
 }
 
