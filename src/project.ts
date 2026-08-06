@@ -187,12 +187,45 @@ const thinSystemLabels = new Set([
 ]);
 
 /**
+ * README project-structure liturgy — numbered layers, file globs, folder maps.
+ * These must never become Product Flow system labels (Shree Heart field fail:
+ * `1. Route Layer (.route.ts)` → API).
+ */
+export function isReadmeStructureHeading(heading: string): boolean {
+  const text = heading.trim();
+  if (!text) return false;
+
+  const hasLayerWord = /\blayers?\b/i.test(text);
+  const numbered = /^\d+[\.\):]\s+/.test(text);
+  // File / folder pattern chrome in parens or backticks: (.route.ts), (*.ts), (models/)
+  const hasPathChrome =
+    /\([^)]*\.(?:ts|tsx|js|jsx|mjs|cjs|py|go|rs)[^)]*\)/i.test(text) ||
+    /\(\s*\*\.[a-z0-9]+[^)]*\)/i.test(text) ||
+    /`[^`]*\.[a-z0-9]+`/i.test(text) ||
+    /\(\s*[a-z0-9_.*/-]+\/\s*\)/i.test(text);
+
+  // "1. Route Layer (.route.ts)", "5. Data Access Layer (models/)", "5. Data Access Layer…"
+  if (numbered && hasLayerWord) return true;
+  if (hasLayerWord && hasPathChrome) return true;
+
+  // Bare folder/file map lines without "Layer": "2. Controllers (*.controller.ts)"
+  if (numbered && hasPathChrome) return true;
+
+  return false;
+}
+
+/**
  * Map a markdown heading onto a known system key. Returns undefined when the
  * heading is generic docs chrome (Status, License, …) or does not name a role.
  */
 export function inferSystemKeyFromHeading(heading: string): string | undefined {
   const text = heading.trim().toLowerCase();
   if (!text) return undefined;
+
+  // Numbered Layer / file-glob structure docs are not product system names.
+  if (isReadmeStructureHeading(heading)) {
+    return undefined;
+  }
 
   // Skip common README scaffolding that should never rename product systems.
   if (
@@ -323,6 +356,13 @@ function applyReadmeHeadingHints(
 ): void {
   if (!hints?.length) return;
   for (const hint of hints) {
+    // Defense in depth: never paint structure liturgy onto the canvas.
+    if (
+      isReadmeStructureHeading(hint.label) ||
+      isReadmeStructureHeading(hint.heading)
+    ) {
+      continue;
+    }
     const system = systems.get(hint.key);
     if (!system) continue;
     const current = system.label;
@@ -1941,6 +1981,392 @@ function collapseAggregateUiBehindRouteMolecules(
   nodes.set(ui.id, ui);
 }
 
+/** Max FE route molecules on Beginner Product Flow (Shree learn field gate). */
+export const BEGINNER_ROUTE_MOLECULE_CAP = 8;
+
+/**
+ * Scholar / FE-only calm gate: Beginner page hubs must stay ≤ this count.
+ * Learn compression uses the tighter {@link BEGINNER_ROUTE_MOLECULE_CAP};
+ * this is the field ceiling for UI-only apps (shree-scholar).
+ */
+export const SCHOLAR_BEGINNER_HUB_MAX = 12;
+
+/** Backend system keys that count as honest neighbors for FE product stories. */
+const HONEST_BACKEND_SYSTEM_KEYS = [
+  "api",
+  "data",
+  "jobs",
+  "workers",
+  "pipelines",
+] as const;
+
+/**
+ * True when a visible (non-collapsed) API / Data / Jobs-style system exists.
+ * Empty Data (modules only) and other quieted chrome do not count — FE apps
+ * must not invent a backend neighbor from README or path crumbs alone.
+ */
+export function hasHonestBackendNeighbor(
+  systems: Map<string, ArchitectureNode>,
+): boolean {
+  for (const key of HONEST_BACKEND_SYSTEM_KEYS) {
+    const system = systems.get(key);
+    if (!system) continue;
+    if (system.metadata?.collapsedInOverview === true) continue;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Mark FE products with no static API/Data/Jobs evidence as UI-only so
+ * Scholar-style apps stay honest (page hubs only; no invented backend).
+ */
+function markUiOnlyProductHonesty(
+  product: ArchitectureNode,
+  systems: Map<string, ArchitectureNode>,
+  nodes: Map<string, ArchitectureNode>,
+): void {
+  const hasFeSurface =
+    systems.has("ui") ||
+    [...systems.keys()].some((key) => key.startsWith("page:"));
+  if (!hasFeSurface) return;
+  if (hasHonestBackendNeighbor(systems)) return;
+
+  product.metadata = {
+    ...product.metadata,
+    uiOnly: true,
+    uiOnlyReason: "no-static-backend-evidence",
+  };
+  nodes.set(product.id, product);
+}
+
+/**
+ * Score a route-segment path for Beginner priority (higher = keep on flow).
+ * Product shells / auth / temp dashboards beat marketing & exam landings.
+ */
+export function feRouteMoleculeBeginnerScore(path: string): number {
+  const raw = path.trim() || "/";
+  const p = raw.toLowerCase();
+  const segment = appRouterRouteSegment(raw).toLowerCase();
+
+  if (
+    /tempsignin|temp-signin/.test(p) ||
+    /^\/(signin|login|signup|auth)(\/|$)/.test(p)
+  ) {
+    return 100;
+  }
+  if (/temp(student|tutor|demo|applicant|welcome)/.test(p)) return 95;
+  if (segment.startsWith("/temp")) return 94;
+  if (
+    /^\/(student|tutor|demo|applicant|dashboard|onboarding|profile|welcome)(\/|$)/.test(
+      p,
+    ) ||
+    /^\/(student|tutor|demo|applicant|dashboard|onboarding|profile|welcome)$/.test(
+      segment,
+    )
+  ) {
+    return 90;
+  }
+  if (p === "/" || segment === "/") return 85;
+  if (/book-demo|be-a-tutor|pricing|quiz|result|blogs|schools|counties|syllabus/.test(p)) {
+    return 45;
+  }
+  if (
+    /exam|maths|english|science|coding|career|faq|review|study-material|staar|gcse|national|nineplus|elevenplus|thirteenplus/.test(
+      p,
+    )
+  ) {
+    return 10;
+  }
+  return 50;
+}
+
+/**
+ * Cap Beginner FE route molecules so foreign Next apps (shree-learn) do not
+ * dump every marketing page onto Product Flow. Excess stay Intermediate/Find
+ * via collapsedInOverview.
+ */
+function compressFeBeginnerRouteMolecules(
+  systems: Map<string, ArchitectureNode>,
+  nodes: Map<string, ArchitectureNode>,
+): void {
+  const pageEntries = [...systems.entries()].filter(([key, node]) =>
+    key.startsWith("page:") && node.metadata?.routeMolecule === true,
+  );
+  if (pageEntries.length <= BEGINNER_ROUTE_MOLECULE_CAP) return;
+
+  const ranked = pageEntries
+    .map(([key, node]) => {
+      const path =
+        typeof node.metadata?.path === "string" ? node.metadata.path : key.slice(5);
+      return {
+        key,
+        node,
+        path,
+        score: feRouteMoleculeBeginnerScore(path),
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        a.path.localeCompare(b.path) ||
+        a.key.localeCompare(b.key),
+    );
+
+  // Cap is a maximum. Prefer product/medium hubs (score > 10); do not fill
+  // remaining slots with marketing/exam landings just to reach 8.
+  const eligible = ranked.filter((item) => item.score > 10);
+  const keep = new Set(
+    eligible.slice(0, BEGINNER_ROUTE_MOLECULE_CAP).map((item) => item.key),
+  );
+  for (const item of ranked) {
+    if (keep.has(item.key)) {
+      item.node.metadata = {
+        ...item.node.metadata,
+        beginnerRouteHub: true,
+        collapsedInOverview: false,
+      };
+      nodes.set(item.node.id, item.node);
+      systems.set(item.key, item.node);
+      continue;
+    }
+    item.node.metadata = {
+      ...item.node.metadata,
+      collapsedInOverview: true,
+      beginnerRouteHub: false,
+      beginnerOmitted: true,
+      beginnerOmitReason:
+        item.score <= 10 ? "marketing-or-content" : "beginner-cap",
+    };
+    nodes.set(item.node.id, item.node);
+    systems.set(item.key, item.node);
+  }
+}
+
+/**
+ * Max naked route atoms visible under an API Intermediate focus when they are
+ * not nested under a domain route group (Shree Heart field gate: no 373-route
+ * phonebook). Excess nest under a "More routes" group hub.
+ */
+export const INTERMEDIATE_NAKED_ROUTE_CAP = 24;
+
+/**
+ * Domain key for HTTP route grouping: `/api/users/:id` → `users`,
+ * `/articles` → `articles`. Strips leading `api` / `vN`. Probes (`/health`)
+ * and empty roots return null so they stay naked under the API hub.
+ */
+export function httpRouteDomainKey(path: string): string | null {
+  let raw = path.trim();
+  if (!raw) return null;
+  if (!raw.startsWith("/")) raw = `/${raw}`;
+  const noQuery = raw.split("?")[0] ?? raw;
+  const parts = noQuery.split("/").filter(Boolean);
+  while (parts.length && /^(api|v\d+)$/i.test(parts[0]!)) {
+    parts.shift();
+  }
+  if (!parts.length) return null;
+  let seg = parts[0]!;
+  // Param-only first segments are not domains.
+  if (/^[:{<]/.test(seg)) return null;
+  seg = seg.replace(/\{([^}]+)\}/g, "$1").replace(/^:/, "").toLowerCase();
+  if (/^(healthz?|readyz?|livez?|ping|status|favicon\.ico)$/.test(seg)) {
+    return null;
+  }
+  return seg;
+}
+
+function routeGroupSystemKey(domain: string): string {
+  return `routes:${domain}`;
+}
+
+/** Prefer short probe / root paths when capping naked Intermediate routes. */
+export function nakedRouteIntermediateScore(path: string): number {
+  if (isThinHttpRoutePath(path)) return 100;
+  const key = httpRouteDomainKey(path);
+  if (!key) return 80;
+  const len = path.trim().length;
+  return Math.max(10, 70 - Math.min(50, len));
+}
+
+/**
+ * OpenAPI / Swagger / GraphQL contract ops already carry calm summary labels.
+ * Domain-group only runtime HTTP routes (Express / FastAPI / …) so Heart's
+ * Intermediate phonebook shrinks without re-parenting contract surfaces.
+ */
+function isContractSurfaceRoute(node: ArchitectureNode): boolean {
+  if (node.metadata?.openapi === true || node.metadata?.graphql === true) {
+    return true;
+  }
+  const tech = String(node.technology ?? "").toLowerCase();
+  return tech === "openapi" || tech === "swagger" || tech === "graphql";
+}
+
+/**
+ * Intermediate API calm: group Express/Heart-style routes by path-prefix domain
+ * under hubs (Users / Articles / …). Nested route atoms stay off the API
+ * Intermediate canvas until the group is focused (viewer mirrors detection
+ * surfaces). Cap leftover naked routes at INTERMEDIATE_NAKED_ROUTE_CAP.
+ */
+function projectApiRouteDomainGroups(
+  systems: Map<string, ArchitectureNode>,
+  nodes: Map<string, ArchitectureNode>,
+  edges: Map<string, ArchitectureEdge>,
+  attachToSystem: (
+    nodeId: string,
+    systemId: string,
+    evidence: Evidence,
+  ) => void,
+): void {
+  const api = systems.get("api");
+  if (!api) return;
+
+  const routes = [...nodes.values()].filter(
+    (node) =>
+      node.kind === "route" &&
+      node.parentId === api.id &&
+      node.metadata?.projection !== "semantic" &&
+      !isContractSurfaceRoute(node),
+  );
+  if (routes.length < 2) return;
+
+  const byDomain = new Map<string, ArchitectureNode[]>();
+  const naked: ArchitectureNode[] = [];
+  for (const route of routes) {
+    const path =
+      typeof route.metadata?.path === "string" ? route.metadata.path : "";
+    const domain = path ? httpRouteDomainKey(path) : null;
+    if (!domain) {
+      naked.push(route);
+      continue;
+    }
+    const bucket = byDomain.get(domain) ?? [];
+    bucket.push(route);
+    byDomain.set(domain, bucket);
+  }
+
+  const ensureGroup = (
+    domain: string,
+    label: string,
+    members: ArchitectureNode[],
+  ): ArchitectureNode => {
+    const key = routeGroupSystemKey(domain);
+    const groupId = stableId("system", key);
+    const evidence = dedupeEvidence(
+      members.flatMap((route) => route.evidence).slice(0, 8),
+    );
+    const seed =
+      evidence[0] ??
+      projectionEvidence(
+        members[0]?.evidence[0]?.file ?? ".",
+        `API route domain group ${domain}`,
+      );
+    let group = nodes.get(groupId);
+    if (!group) {
+      group = {
+        id: groupId,
+        kind: "system",
+        label,
+        technology: "semantic",
+        parentId: api.id,
+        metadata: {
+          projection: "semantic",
+          systemKey: key,
+          routeGroup: true,
+          routeDomain: domain,
+          collapsedInOverview: true,
+        },
+        evidence: [
+          {
+            ...seed,
+            detail: seed.detail ?? `Route domain ${domain}`,
+          },
+        ],
+      };
+      nodes.set(group.id, group);
+      const contains = edgeFrom("contains", api.id, group.id, seed);
+      edges.set(contains.id, contains);
+    } else {
+      group.label = label;
+      group.parentId = api.id;
+      group.metadata = {
+        ...group.metadata,
+        projection: "semantic",
+        systemKey: key,
+        routeGroup: true,
+        routeDomain: domain,
+        collapsedInOverview: true,
+      };
+      group.evidence = dedupeEvidence([...group.evidence, ...evidence]);
+      nodes.set(group.id, group);
+    }
+    return group;
+  };
+
+  for (const [domain, members] of byDomain) {
+    if (members.length < 2) {
+      naked.push(...members);
+      continue;
+    }
+    const group = ensureGroup(
+      domain,
+      humanizeIdentifierLabel(domain),
+      members,
+    );
+    for (const route of members) {
+      attachToSystem(
+        route.id,
+        group.id,
+        route.evidence[0] ?? projectionEvidence("."),
+      );
+      route.metadata = {
+        ...route.metadata,
+        routeGroupMember: true,
+        routeGroup: routeGroupSystemKey(domain),
+        projectedSystem: routeGroupSystemKey(domain),
+      };
+      nodes.set(route.id, route);
+    }
+    group.evidence = dedupeEvidence(group.evidence);
+    nodes.set(group.id, group);
+  }
+
+  // Cap leftover naked routes under the API hub — excess nest under More routes.
+  if (naked.length <= INTERMEDIATE_NAKED_ROUTE_CAP) return;
+
+  const ranked = [...naked].sort((a, b) => {
+    const pathA =
+      typeof a.metadata?.path === "string" ? a.metadata.path : a.label;
+    const pathB =
+      typeof b.metadata?.path === "string" ? b.metadata.path : b.label;
+    return (
+      nakedRouteIntermediateScore(pathB) - nakedRouteIntermediateScore(pathA) ||
+      pathA.localeCompare(pathB) ||
+      a.id.localeCompare(b.id)
+    );
+  });
+  const overflow = ranked.slice(INTERMEDIATE_NAKED_ROUTE_CAP);
+  if (!overflow.length) return;
+  const more = ensureGroup("_more", "More routes", overflow);
+  for (const route of overflow) {
+    attachToSystem(
+      route.id,
+      more.id,
+      route.evidence[0] ?? projectionEvidence("."),
+    );
+    route.metadata = {
+      ...route.metadata,
+      routeGroupMember: true,
+      routeGroup: routeGroupSystemKey("_more"),
+      projectedSystem: routeGroupSystemKey("_more"),
+      intermediateOmitted: true,
+      intermediateOmitReason: "naked-route-cap",
+    };
+    nodes.set(route.id, route);
+  }
+  more.evidence = dedupeEvidence(more.evidence);
+  nodes.set(more.id, more);
+}
+
 /** Server-action label → story edge kind (mutations write; getters read). */
 function serverActionStoryEdgeKind(label: string): "reads" | "writes" {
   const normalized = label.toLowerCase();
@@ -2813,6 +3239,64 @@ function isMongoCollection(node: ArchitectureNode): boolean {
 /** SCREAMING_SNAKE const names used as `.collection(CONST)` args. */
 function isScreamingSnakeBinding(name: string): boolean {
   return /^[A-Z][A-Z0-9]*(_[A-Z0-9]+)+$/.test(name);
+}
+
+/**
+ * Collection-handle crumbs that become junk overview hubs
+ * (`C pipeline`, `Col pipeline`) on foreign Mongo apps (Shree Heart).
+ * Real product stems (Note, Search chunks, Tag) stay.
+ */
+const TRIVIAL_MONGO_AGGREGATE_HANDLES = new Set([
+  "c",
+  "col",
+  "coll",
+  "cols",
+  "colls",
+  "doc",
+  "docs",
+  "row",
+  "rows",
+  "cur",
+  "cursor",
+  "agg",
+  "tmp",
+  "temp",
+  "res",
+  "obj",
+  "arr",
+  "val",
+  "item",
+  "items",
+  "data",
+  "db",
+  "rec",
+  "recs",
+  "ent",
+  "ents",
+  "mod",
+  "model",
+  "models",
+  "schema",
+]);
+
+/**
+ * True when a mongo aggregate pipeline label is a short variable/handle crumb
+ * rather than a product collection story (Shree Heart field gate).
+ */
+export function isTrivialMongoAggregateLabel(label: string): boolean {
+  const stem = label.replace(/\s+pipeline$/i, "").trim();
+  if (!stem) return true;
+  const compact = stem.replace(/\s+/g, "");
+  if (/^[A-Za-z]$/.test(compact)) return true;
+  if (TRIVIAL_MONGO_AGGREGATE_HANDLES.has(compact.toLowerCase())) return true;
+  // Two-letter alpha crumbs (cx, tx) — keep known product acronyms (AI, DB).
+  if (
+    /^[A-Za-z]{2}$/.test(compact) &&
+    !PRODUCT_ACRONYMS.has(compact.toLowerCase())
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function preferredCollectionLabel(bucket: ArchitectureNode[]): string {
@@ -4089,10 +4573,21 @@ export function projectSemanticArchitecture(
         dataSystem.id,
         node.evidence[0] ?? projectionEvidence("."),
       );
+      // Junk handle crumbs (`C pipeline`, `Col pipeline`) stay off
+      // Beginner/overview — real product aggregates remain overview hubs.
+      const trivial = isTrivialMongoAggregateLabel(nextLabel);
       node.metadata = {
         ...node.metadata,
-        overviewHub: true,
-        collapsedInOverview: false,
+        ...(trivial
+          ? {
+              trivialMongoAggregate: true,
+              overviewHub: false,
+              collapsedInOverview: true,
+            }
+          : {
+              overviewHub: true,
+              collapsedInOverview: false,
+            }),
       };
       nodes.set(node.id, node);
       // Stage leaves (Filter/Group/Sort) stay Details-only — the hub label
@@ -4921,6 +5416,18 @@ export function projectSemanticArchitecture(
   // aggregate UI blob so Beginner flowOrder is route molecules → API → …
   collapseAggregateUiBehindRouteMolecules(systems, nodes);
 
+  // Foreign Next apps (shree-learn) can mint dozens of page molecules — keep
+  // product hubs on Beginner; collapse marketing/excess for Intermediate/Find.
+  compressFeBeginnerRouteMolecules(systems, nodes);
+
+  // Heart / Express Intermediate calm: domain route groups + naked-route cap
+  // so API focus is Users/Articles hubs (or ≤24 samples), not a route phonebook.
+  projectApiRouteDomainGroups(systems, nodes, edges, attachToSystem);
+
+  // Scholar / FE-only honesty: when pages exist but no static API/Data/Jobs
+  // surface survived quieting, mark the product UI-only (never invent backend).
+  markUiOnlyProductHonesty(product, systems, nodes);
+
   assignFlowOrder(systems, flowPairs);
 
   // Surface the language-extractor roster on the Extractors system so the
@@ -5066,6 +5573,7 @@ export function projectSemanticArchitecture(
     nodes.set(system.id, system);
   }
 
+  const uiOnly = product.metadata?.uiOnly === true;
   const projected: ArchitectureGraph = {
     ...graph,
     project: {
@@ -5081,6 +5589,16 @@ export function projectSemanticArchitecture(
         code: "semantic-projection",
         message: `Projected ${systems.size} product system(s) from module paths`,
       },
+      ...(uiOnly
+        ? [
+            {
+              severity: "info" as const,
+              code: "ui-only-product",
+              message:
+                "No static API/Data/Jobs evidence — Beginner stays UI-only (no invented backend)",
+            },
+          ]
+        : []),
     ],
   };
 

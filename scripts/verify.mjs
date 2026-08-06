@@ -5,6 +5,13 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { compileRepository } from "../dist/compile.js";
+import {
+  isReadmeStructureHeading,
+  isTrivialMongoAggregateLabel,
+  INTERMEDIATE_NAKED_ROUTE_CAP,
+  SCHOLAR_BEGINNER_HUB_MAX,
+  parseReadmeHeadingHints,
+} from "../dist/project.js";
 import { renderArchitectureHtml } from "../dist/viewer.js";
 import {
   ensureRealRepo,
@@ -28,7 +35,33 @@ const miniNextRoot = path.join(repoRoot, "verification", "mini-next");
 const miniVueRoot = path.join(repoRoot, "verification", "mini-vue");
 const miniPythonRoot = path.join(repoRoot, "verification", "mini-python");
 const miniMongoRoot = path.join(repoRoot, "verification", "mini-mongo");
+const miniReadmeStructureRoot = path.join(
+  repoRoot,
+  "verification",
+  "mini-readme-structure",
+);
+const miniRoutesManyRoot = path.join(
+  repoRoot,
+  "verification",
+  "mini-routes-many",
+);
 const miniOpenapiRoot = path.join(repoRoot, "verification", "mini-openapi");
+
+/**
+ * True when a route sits under an API hub directly or via a domain route group
+ * (Users / Articles / More routes).
+ */
+function routeNestedUnderApi(route, apiId, nodesById) {
+  if (!apiId || !route) return false;
+  let current = route;
+  const seen = new Set();
+  while (current && !seen.has(current.id)) {
+    if (current.parentId === apiId) return true;
+    seen.add(current.id);
+    current = current.parentId ? nodesById.get(current.parentId) : undefined;
+  }
+  return false;
+}
 const miniGraphqlRoot = path.join(repoRoot, "verification", "mini-graphql");
 const miniDockerRoot = path.join(repoRoot, "verification", "mini-docker");
 const miniTerraformRoot = path.join(repoRoot, "verification", "mini-terraform");
@@ -118,6 +151,10 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file.includes("mini-vue/") ||
         file.includes("mini-python/") ||
         file.includes("mini-mongo/") ||
+        file.includes("mini-readme-structure/") ||
+        file.includes("mini-next-many/") ||
+        file.includes("mini-scholar/") ||
+        file.includes("mini-routes-many/") ||
         file.includes("mini-openapi/") ||
         file.includes("mini-graphql/") ||
         file.includes("mini-docker/") ||
@@ -1183,7 +1220,9 @@ if (
 } else if (
   !viewerHtml.includes("function focusNeighborhood(rootId)") ||
   !viewerHtml.includes("focusNeighborhood(state.focus)") ||
-  !viewerHtml.includes("neighborhoodEdgeKinds")
+  !viewerHtml.includes("neighborhoodEdgeKinds") ||
+  !viewerHtml.includes("function routeGroupMemberVisible(node, focusId)") ||
+  !viewerHtml.includes("routeGroupMemberVisible(node, state.focus)")
 ) {
   fail(
     "viewer Intermediate focus must use focusNeighborhood (contains + story neighbors), not whole-repo uncollapse",
@@ -1515,6 +1554,13 @@ function intermediateFocusNodes(graph, rootId) {
     if (
       node.metadata?.role === "detection-surface" ||
       node.metadata?.detectionSurface
+    ) {
+      if (node.parentId !== rootId && node.id !== rootId) return false;
+    }
+    // Domain-grouped routes only inside their Users/Articles hub focus.
+    if (
+      node.kind === "route" &&
+      (node.metadata?.routeGroupMember === true || node.metadata?.routeGroup)
     ) {
       if (node.parentId !== rootId && node.id !== rootId) return false;
     }
@@ -2813,6 +2859,136 @@ if (miniNextUi?.metadata?.collapsedInOverview !== true) {
   pass("mini-next Journal UI collapsed behind Home/Dashboard molecules");
 }
 
+// ---------------------------------------------------------------------------
+// Shree whiteboard: Beginner route-molecule compression (many marketing pages).
+// ---------------------------------------------------------------------------
+const miniNextManyRoot = path.join(repoRoot, "verification", "mini-next-many");
+const miniNextManyGraph = await compileRepository(miniNextManyRoot);
+const miniNextManyPageMolecules = miniNextManyGraph.nodes.filter(
+  (node) =>
+    node.metadata?.projection === "semantic" &&
+    typeof node.metadata?.systemKey === "string" &&
+    String(node.metadata.systemKey).startsWith("page:"),
+);
+const miniNextManyFlow = miniNextManyGraph.nodes
+  .filter(
+    (node) =>
+      node.metadata?.projection === "semantic" &&
+      typeof node.metadata?.flowOrder === "number" &&
+      typeof node.metadata?.systemKey === "string" &&
+      String(node.metadata.systemKey).startsWith("page:"),
+  )
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+const miniNextManyOmitted = miniNextManyPageMolecules.filter(
+  (node) =>
+    node.metadata?.beginnerOmitted === true ||
+    node.metadata?.collapsedInOverview === true,
+);
+const miniNextManyFlowLabels = miniNextManyFlow.map((node) => node.label);
+const miniNextManyHasProduct =
+  miniNextManyFlowLabels.includes("Home") &&
+  miniNextManyFlowLabels.includes("Login") &&
+  miniNextManyFlowLabels.includes("Dashboard") &&
+  miniNextManyFlowLabels.includes("Student");
+const miniNextManyMarketingOnFlow = miniNextManyFlowLabels.filter((label) =>
+  /Maths|English|Science|Coding|Career|Faqs|Reviews|Elevenplusexam|Gcseexam/i.test(
+    label,
+  ),
+);
+if (miniNextManyPageMolecules.length < 12) {
+  fail(
+    `mini-next-many expected ≥12 page molecules, found ${miniNextManyPageMolecules.length}`,
+  );
+} else if (miniNextManyFlow.length > 8) {
+  fail(
+    `mini-next-many Beginner page hubs must be ≤8, got ${miniNextManyFlow.length}: ${miniNextManyFlowLabels.join(" → ")}`,
+  );
+} else if (!miniNextManyHasProduct) {
+  fail(
+    `mini-next-many should keep product hubs Home/Login/Dashboard/Student on flow, got ${miniNextManyFlowLabels.join(" → ")}`,
+  );
+} else if (miniNextManyMarketingOnFlow.length > 0) {
+  fail(
+    `mini-next-many marketing/exam pages must leave Beginner flow, still on flow: ${miniNextManyMarketingOnFlow.join(", ")}`,
+  );
+} else if (miniNextManyOmitted.length < 4) {
+  fail(
+    `mini-next-many expected omitted marketing page molecules, found ${miniNextManyOmitted.length}`,
+  );
+} else {
+  pass(
+    `mini-next-many Beginner compression: ${miniNextManyFlow.length} hubs (${miniNextManyFlowLabels.join(" → ")}); omitted ${miniNextManyOmitted.length} marketing/cap pages`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shree whiteboard: Scholar calm + honesty (FE-only, no invented backend).
+// ---------------------------------------------------------------------------
+const miniScholarRoot = path.join(repoRoot, "verification", "mini-scholar");
+const miniScholarGraph = await compileRepository(miniScholarRoot);
+const miniScholarProduct = miniScholarGraph.nodes.find(
+  (node) => node.kind === "product",
+);
+const miniScholarPageMolecules = miniScholarGraph.nodes.filter(
+  (node) =>
+    node.metadata?.projection === "semantic" &&
+    typeof node.metadata?.systemKey === "string" &&
+    String(node.metadata.systemKey).startsWith("page:"),
+);
+const miniScholarFlow = miniScholarGraph.nodes
+  .filter(
+    (node) =>
+      node.metadata?.projection === "semantic" &&
+      typeof node.metadata?.flowOrder === "number" &&
+      typeof node.metadata?.systemKey === "string" &&
+      String(node.metadata.systemKey).startsWith("page:"),
+  )
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+const miniScholarFlowLabels = miniScholarFlow.map((node) => node.label);
+const miniScholarBackendSystems = miniScholarGraph.nodes.filter(
+  (node) =>
+    node.metadata?.projection === "semantic" &&
+    ["api", "data", "jobs", "workers", "pipelines"].includes(
+      node.metadata?.systemKey,
+    ) &&
+    node.metadata?.collapsedInOverview !== true,
+);
+const miniScholarUiOnlyDiag = miniScholarGraph.diagnostics?.some(
+  (item) => item.code === "ui-only-product",
+);
+const miniNextProduct = miniNextGraph.nodes.find((node) => node.kind === "product");
+if (miniScholarPageMolecules.length < 8) {
+  fail(
+    `mini-scholar expected ≥8 page molecules, found ${miniScholarPageMolecules.length}`,
+  );
+} else if (miniScholarFlow.length > SCHOLAR_BEGINNER_HUB_MAX) {
+  fail(
+    `mini-scholar Beginner page hubs must be ≤${SCHOLAR_BEGINNER_HUB_MAX}, got ${miniScholarFlow.length}: ${miniScholarFlowLabels.join(" → ")}`,
+  );
+} else if (miniScholarBackendSystems.length > 0) {
+  fail(
+    `mini-scholar must not invent visible API/Data/Jobs; found ${miniScholarBackendSystems
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else if (miniScholarProduct?.metadata?.uiOnly !== true) {
+  fail(
+    `mini-scholar product must mark uiOnly when no static backend evidence (got ${JSON.stringify(
+      miniScholarProduct?.metadata ?? null,
+    )})`,
+  );
+} else if (!miniScholarUiOnlyDiag) {
+  fail("mini-scholar expected ui-only-product diagnostic");
+} else if (miniNextProduct?.metadata?.uiOnly === true) {
+  fail(
+    "mini-next (FE+API) must not be marked uiOnly when Posts API evidence exists",
+  );
+} else {
+  pass(
+    `mini-scholar UI-only honesty: ${miniScholarFlow.length} Beginner hubs (${miniScholarFlowLabels.join(" → ") || "(none)"}); no invented backend; uiOnly locked`,
+  );
+}
+
 // Home prefers derived writes (from PostForm→Create post); inferred uses is
 // dropped when a derived reads/writes twin exists. Dashboard keeps uses.
 const miniNextHomeStoryToApi = miniNextGraph.edges.some(
@@ -2850,10 +3026,11 @@ if (miniNextCommerceNoise) {
   pass("mini-next has no Checkout/orders commerce collaboration noise");
 }
 
+const miniNextById = new Map(miniNextGraph.nodes.map((node) => [node.id, node]));
 const miniNextRoutesUnderApi = miniNextGraph.nodes.filter(
   (node) =>
     node.kind === "route" &&
-    node.parentId === miniNextApi?.id,
+    routeNestedUnderApi(node, miniNextApi?.id, miniNextById),
 );
 if (miniNextRoutesUnderApi.length < 3) {
   fail(
@@ -3577,10 +3754,12 @@ if (realRepoRoot) {
       pass("real-repo data system keeps path-role label 'Data access'");
     }
 
-    // Nesting: every route under API; product tables under Data; overview collapses routes.
+    // Nesting: every route under API (directly or via domain route groups);
+    // product tables under Data; overview collapses routes.
     if (apiSystem) {
+      const realById = new Map(realGraph.nodes.map((node) => [node.id, node]));
       const orphanRoutes = realRoutes.filter(
-        (node) => node.parentId !== apiSystem.id,
+        (node) => !routeNestedUnderApi(node, apiSystem.id, realById),
       );
       if (orphanRoutes.length) {
         fail(
@@ -3608,6 +3787,35 @@ if (realRepoRoot) {
         );
       } else {
         pass("real-repo routes collapsed on overview (API tells the story)");
+      }
+      const realRouteGroups = realGraph.nodes.filter(
+        (node) => node.metadata?.routeGroup === true,
+      );
+      const realRouteGroupLabels = realRouteGroups.map((node) => node.label);
+      if (!realRouteGroupLabels.includes("Articles")) {
+        fail(
+          `real-repo Intermediate should group Articles routes, found groups: ${realRouteGroupLabels.join(", ") || "(none)"}`,
+        );
+      } else {
+        const realApiFocus = intermediateFocusNodes(realGraph, apiSystem.id);
+        const realApiFocusRoutes = realApiFocus.filter(
+          (node) => node.kind === "route",
+        );
+        if (realApiFocusRoutes.length > INTERMEDIATE_NAKED_ROUTE_CAP) {
+          fail(
+            `real-repo API Intermediate naked routes must be ≤${INTERMEDIATE_NAKED_ROUTE_CAP}, found ${realApiFocusRoutes.length}`,
+          );
+        } else if (
+          realApiFocusRoutes.some((node) => node.metadata?.routeGroupMember)
+        ) {
+          fail(
+            "real-repo API Intermediate must not dump Articles/Users route-group members",
+          );
+        } else {
+          pass(
+            `real-repo Intermediate route groups: ${realRouteGroupLabels.sort().join(", ")} (API focus naked routes ${realApiFocusRoutes.length})`,
+          );
+        }
       }
     }
     if (dataSystem) {
@@ -4016,8 +4224,9 @@ if (nextRealRoot) {
       );
     }
     if (nextApi) {
+      const nextById = new Map(nextRealGraph.nodes.map((node) => [node.id, node]));
       const orphanRoutes = nextRoutes.filter(
-        (node) => node.parentId !== nextApi.id,
+        (node) => !routeNestedUnderApi(node, nextApi.id, nextById),
       );
       if (orphanRoutes.length) {
         fail(
@@ -4458,8 +4667,11 @@ if (!miniPythonFlowKeys.includes("api")) {
   );
 }
 
-const miniPythonRoutesUnderApi = miniPythonRoutes.filter(
-  (node) => node.parentId === miniPythonApi?.id,
+const miniPythonById = new Map(
+  miniPythonGraph.nodes.map((node) => [node.id, node]),
+);
+const miniPythonRoutesUnderApi = miniPythonRoutes.filter((node) =>
+  routeNestedUnderApi(node, miniPythonApi?.id, miniPythonById),
 );
 if (miniPythonRoutesUnderApi.length < 9) {
   fail(
@@ -4951,8 +5163,11 @@ if (
   pass("mini-mongo product collections visible under Catalog data on overview");
 }
 
-const miniMongoRoutesUnderApi = miniMongoRoutes.filter(
-  (node) => node.parentId === miniMongoApi?.id,
+const miniMongoById = new Map(
+  miniMongoGraph.nodes.map((node) => [node.id, node]),
+);
+const miniMongoRoutesUnderApi = miniMongoRoutes.filter((node) =>
+  routeNestedUnderApi(node, miniMongoApi?.id, miniMongoById),
 );
 if (miniMongoRoutesUnderApi.length < 3) {
   fail(
@@ -5041,6 +5256,25 @@ if (miniMongoVisibleChrome.length > 0) {
 }
 
 // Mongo `.aggregate([...])` → pipeline hubs under Catalog data (RAG/query story).
+// Product aggregates stay overview hubs; handle crumbs (`C` / `Col`) collapse.
+for (const [label, expectTrivial] of [
+  ["C pipeline", true],
+  ["Col pipeline", true],
+  ["Note pipeline", false],
+  ["Search chunks pipeline", false],
+  ["Tag pipeline", false],
+]) {
+  if (isTrivialMongoAggregateLabel(label) !== expectTrivial) {
+    fail(
+      `isTrivialMongoAggregateLabel(${JSON.stringify(label)}) expected ${expectTrivial}`,
+    );
+  } else {
+    pass(
+      `isTrivialMongoAggregateLabel(${JSON.stringify(label)}) → ${expectTrivial}`,
+    );
+  }
+}
+
 const miniMongoAggregates = miniMongoGraph.nodes.filter(
   (node) =>
     node.kind === "pipeline" && node.metadata?.mongoAggregate === true,
@@ -5058,12 +5292,23 @@ for (const expected of ["Search chunks pipeline", "Note pipeline"]) {
   }
 }
 
+const miniMongoJunkAggregateLabels = ["C pipeline", "Col pipeline"];
+for (const expected of miniMongoJunkAggregateLabels) {
+  if (!miniMongoAggregateLabels.has(expected)) {
+    fail(
+      `mini-mongo missing junk-handle aggregate ${expected} (fixture must exercise suppression); found ${[...miniMongoAggregateLabels].join(", ") || "(none)"}`,
+    );
+  } else {
+    pass(`mini-mongo extracts junk-handle aggregate ${expected}`);
+  }
+}
+
 const miniMongoAggregatesUnderData = miniMongoAggregates.filter(
   (node) => node.parentId === miniMongoData?.id,
 );
-if (miniMongoAggregatesUnderData.length !== 2) {
+if (miniMongoAggregatesUnderData.length < 4) {
   fail(
-    `mini-mongo expected exactly 2 aggregate pipelines nested under Catalog data, found ${miniMongoAggregatesUnderData.length} (${[...miniMongoAggregateLabels].join(", ")})`,
+    `mini-mongo expected ≥4 aggregate pipelines nested under Catalog data (2 product + 2 junk), found ${miniMongoAggregatesUnderData.length} (${[...miniMongoAggregateLabels].join(", ")})`,
   );
 } else {
   pass(
@@ -5071,18 +5316,47 @@ if (miniMongoAggregatesUnderData.length !== 2) {
   );
 }
 
+const miniMongoProductAggregates = miniMongoAggregatesUnderData.filter(
+  (node) => node.metadata?.trivialMongoAggregate !== true,
+);
+const miniMongoJunkAggregates = miniMongoAggregatesUnderData.filter(
+  (node) => node.metadata?.trivialMongoAggregate === true,
+);
 if (
-  miniMongoAggregatesUnderData.some(
+  miniMongoProductAggregates.length !== 2 ||
+  miniMongoProductAggregates.some(
     (node) =>
       node.metadata?.overviewHub !== true ||
       node.metadata?.collapsedInOverview === true,
   )
 ) {
   fail(
-    "mini-mongo aggregate pipelines should stay visible on overview (overviewHub)",
+    `mini-mongo product aggregates should stay visible on overview (overviewHub); found ${miniMongoProductAggregates.map((n) => n.label).join(", ") || "(none)"}`,
   );
 } else {
-  pass("mini-mongo aggregate pipelines visible as overview hubs under Catalog data");
+  pass(
+    "mini-mongo product aggregate pipelines visible as overview hubs under Catalog data",
+  );
+}
+
+if (
+  miniMongoJunkAggregates.length < 2 ||
+  miniMongoJunkAggregates.some(
+    (node) =>
+      node.metadata?.overviewHub === true ||
+      node.metadata?.collapsedInOverview !== true,
+  ) ||
+  !miniMongoJunkAggregateLabels.every((label) =>
+    miniMongoJunkAggregates.some((node) => node.label === label),
+  )
+) {
+  fail(
+    `mini-mongo junk aggregates (C/Col) must be trivialMongoAggregate + collapsed off overview; found ${miniMongoJunkAggregates.map((n) => `${n.label} hub=${n.metadata?.overviewHub} collapsed=${n.metadata?.collapsedInOverview}`).join("; ") || "(none)"}`,
+  );
+} else {
+  pass(
+    "mini-mongo junk C/Col aggregate pipelines suppressed on Beginner/overview",
+  );
 }
 
 const miniMongoAggregateSteps = miniMongoGraph.nodes.filter(
@@ -5129,6 +5403,16 @@ if (
 } else {
   pass("mini-mongo browser routes mongo aggregate hubs into Data & automation");
 }
+if (
+  !miniMongoHtml.includes("trivialMongoAggregate") ||
+  !miniMongoHtml.includes("node.metadata.trivialMongoAggregate")
+) {
+  fail(
+    "mini-mongo browser must hide trivialMongoAggregate crumbs on Beginner/Intermediate",
+  );
+} else {
+  pass("mini-mongo browser wires trivialMongoAggregate suppression");
+}
 
 const miniMongoPipelineUsesCollection = miniMongoGraph.edges.some(
   (edge) =>
@@ -5141,6 +5425,268 @@ if (!miniMongoPipelineUsesCollection) {
   fail("mini-mongo expected aggregate pipeline -[uses:query]-> collection");
 } else {
   pass("mini-mongo aggregate pipeline -[uses:query]-> collection");
+}
+
+// ---------------------------------------------------------------------------
+// Shree Heart label hygiene: README numbered Layer / file-glob headings must
+// not become API/Data Product Flow labels (verification/mini-readme-structure).
+// Good product headings (Notes API / Catalog data) still refine labels.
+// ---------------------------------------------------------------------------
+const heartStyleStructureHeadings = [
+  "1. Route Layer (.route.ts)",
+  "2. Controller Layer (.controller.ts)",
+  "5. Data Access Layer (models/)",
+  "5. Data Access Layer…",
+  "Route Layer (*.route.ts)",
+];
+for (const heading of heartStyleStructureHeadings) {
+  if (!isReadmeStructureHeading(heading)) {
+    fail(`expected isReadmeStructureHeading(${JSON.stringify(heading)})`);
+  }
+}
+const productStyleHeadings = ["Notes API", "Catalog data", "Checkout API"];
+for (const heading of productStyleHeadings) {
+  if (isReadmeStructureHeading(heading)) {
+    fail(
+      `product heading ${JSON.stringify(heading)} must not count as README structure liturgy`,
+    );
+  }
+}
+pass("README structure liturgy detector covers Heart-style Layer/glob headings");
+
+const heartStyleReadme = `# Mini Heart
+
+## Project Structure
+
+### 1. Route Layer (.route.ts)
+Routes.
+
+### 5. Data Access Layer (models/)
+Models.
+`;
+const heartStyleHints = parseReadmeHeadingHints(heartStyleReadme);
+if (heartStyleHints.length > 0) {
+  fail(
+    `Heart-style Layer README must yield zero system-label hints, got ${JSON.stringify(heartStyleHints)}`,
+  );
+} else {
+  pass("Heart-style Layer README yields no system-label hints");
+}
+
+const goodReadmeHints = parseReadmeHeadingHints(`# Mini
+
+## Notes API
+Routes.
+
+## Catalog data
+Models.
+`);
+const goodHintLabels = Object.fromEntries(
+  goodReadmeHints.map((hint) => [hint.key, hint.label]),
+);
+if (
+  goodHintLabels.api !== "Notes API" ||
+  goodHintLabels.data !== "Catalog data"
+) {
+  fail(
+    `good product README headings must still refine labels, got ${JSON.stringify(goodHintLabels)}`,
+  );
+} else {
+  pass("good product README headings still map to Notes API / Catalog data");
+}
+
+const miniReadmeStructureGraph = await compileRepository(
+  miniReadmeStructureRoot,
+);
+const miniReadmeStructureSystems = miniReadmeStructureGraph.nodes.filter(
+  (node) => node.metadata?.projection === "semantic",
+);
+const miniReadmeStructureByKey = new Map(
+  miniReadmeStructureSystems
+    .filter((node) => typeof node.metadata?.systemKey === "string")
+    .map((node) => [node.metadata.systemKey, node]),
+);
+const miniReadmeStructureApi = miniReadmeStructureByKey.get("api");
+const miniReadmeStructureData = miniReadmeStructureByKey.get("data");
+const miniReadmeStructureProduct = miniReadmeStructureGraph.nodes.find(
+  (node) => node.kind === "product",
+);
+
+if (
+  !miniReadmeStructureProduct ||
+  miniReadmeStructureProduct.label !== "Mini Heart"
+) {
+  fail(
+    `mini-readme-structure product expected 'Mini Heart', found '${miniReadmeStructureProduct?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-readme-structure product labeled Mini Heart");
+}
+
+if (!miniReadmeStructureApi || miniReadmeStructureApi.label !== "HTTP API") {
+  fail(
+    `mini-readme-structure API must stay path-role 'HTTP API' (not Route Layer liturgy), found '${miniReadmeStructureApi?.label ?? "(missing)"}'`,
+  );
+} else if (miniReadmeStructureApi.metadata?.labelSource === "readme") {
+  fail(
+    "mini-readme-structure API must not record labelSource=readme from Layer headings",
+  );
+} else {
+  pass("mini-readme-structure API labeled HTTP API (structure liturgy suppressed)");
+}
+
+if (
+  !miniReadmeStructureData ||
+  miniReadmeStructureData.label !== "Data access"
+) {
+  fail(
+    `mini-readme-structure Data must stay path-role 'Data access' (not Data Access Layer liturgy), found '${miniReadmeStructureData?.label ?? "(missing)"}'`,
+  );
+} else if (miniReadmeStructureData.metadata?.labelSource === "readme") {
+  fail(
+    "mini-readme-structure Data must not record labelSource=readme from Layer headings",
+  );
+} else {
+  pass(
+    "mini-readme-structure Data labeled Data access (structure liturgy suppressed)",
+  );
+}
+
+const miniReadmeStructureFlow = miniReadmeStructureSystems
+  .filter((node) => typeof node.metadata?.flowOrder === "number")
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder)
+  .map((node) => node.label);
+if (
+  miniReadmeStructureFlow.includes("1. Route Layer (.route.ts)") ||
+  miniReadmeStructureFlow.some((label) =>
+    /\blayer\b/i.test(label) && /\.(route|controller|service|repository)\.?t/i.test(label),
+  ) ||
+  miniReadmeStructureFlow.some((label) =>
+    /^\d+[\.\):]\s+/.test(label),
+  )
+) {
+  fail(
+    `mini-readme-structure Product Flow still shows README Layer liturgy: ${miniReadmeStructureFlow.join(" → ")}`,
+  );
+} else if (
+  !miniReadmeStructureFlow.includes("HTTP API") ||
+  !miniReadmeStructureFlow.includes("Data access")
+) {
+  fail(
+    `mini-readme-structure Product Flow expected HTTP API → Data access, got ${miniReadmeStructureFlow.join(" → ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `mini-readme-structure Product Flow: ${miniReadmeStructureFlow.join(" → ")}`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shree Heart Intermediate route groups: domain hubs + naked-route cap
+// (verification/mini-routes-many). API focus shows Users/Articles/… not a
+// phonebook; grouped route atoms only appear when their hub is focused.
+// ---------------------------------------------------------------------------
+const miniRoutesManyGraph = await compileRepository(miniRoutesManyRoot);
+const miniRoutesManyById = new Map(
+  miniRoutesManyGraph.nodes.map((node) => [node.id, node]),
+);
+const miniRoutesManyApi = miniRoutesManyGraph.nodes.find(
+  (node) =>
+    node.metadata?.projection === "semantic" &&
+    node.metadata?.systemKey === "api",
+);
+const miniRoutesManyRoutes = miniRoutesManyGraph.nodes.filter(
+  (node) => node.kind === "route",
+);
+const miniRoutesManyGroups = miniRoutesManyGraph.nodes.filter(
+  (node) => node.metadata?.routeGroup === true,
+);
+const miniRoutesManyGroupLabels = miniRoutesManyGroups
+  .map((node) => node.label)
+  .sort((a, b) => a.localeCompare(b));
+const miniRoutesManyNaked = miniRoutesManyRoutes.filter(
+  (node) => node.parentId === miniRoutesManyApi?.id,
+);
+const miniRoutesManyApiFocus = miniRoutesManyApi
+  ? intermediateFocusNodes(miniRoutesManyGraph, miniRoutesManyApi.id)
+  : [];
+const miniRoutesManyApiFocusRoutes = miniRoutesManyApiFocus.filter(
+  (node) => node.kind === "route",
+);
+const miniRoutesManyApiFocusGroups = miniRoutesManyApiFocus.filter(
+  (node) => node.metadata?.routeGroup === true,
+);
+const miniRoutesManyUsers = miniRoutesManyGroups.find(
+  (node) => node.metadata?.routeDomain === "users",
+);
+const miniRoutesManyUsersFocusRoutes = miniRoutesManyUsers
+  ? intermediateFocusNodes(miniRoutesManyGraph, miniRoutesManyUsers.id).filter(
+      (node) => node.kind === "route",
+    )
+  : [];
+const miniRoutesManyNested = miniRoutesManyRoutes.filter((node) =>
+  routeNestedUnderApi(node, miniRoutesManyApi?.id, miniRoutesManyById),
+);
+const expectedRouteGroups = [
+  "Admin",
+  "Articles",
+  "Auth",
+  "Comments",
+  "Payments",
+  "Profiles",
+  "Tags",
+  "Users",
+];
+const missingRouteGroups = expectedRouteGroups.filter(
+  (label) => !miniRoutesManyGroupLabels.includes(label),
+);
+if (!miniRoutesManyApi) {
+  fail("mini-routes-many missing HTTP API system");
+} else if (miniRoutesManyRoutes.length < 40) {
+  fail(
+    `mini-routes-many expected ≥40 routes, found ${miniRoutesManyRoutes.length}`,
+  );
+} else if (miniRoutesManyNested.length !== miniRoutesManyRoutes.length) {
+  fail(
+    `mini-routes-many routes must nest under API (via groups OK): nested ${miniRoutesManyNested.length}/${miniRoutesManyRoutes.length}`,
+  );
+} else if (missingRouteGroups.length) {
+  fail(
+    `mini-routes-many missing domain groups ${missingRouteGroups.join(", ")}; found ${miniRoutesManyGroupLabels.join(", ") || "(none)"}`,
+  );
+} else if (miniRoutesManyNaked.length > INTERMEDIATE_NAKED_ROUTE_CAP) {
+  fail(
+    `mini-routes-many naked routes under API must be ≤${INTERMEDIATE_NAKED_ROUTE_CAP}, found ${miniRoutesManyNaked.length}`,
+  );
+} else if (
+  miniRoutesManyApiFocusRoutes.length > INTERMEDIATE_NAKED_ROUTE_CAP
+) {
+  fail(
+    `mini-routes-many API Intermediate must show ≤${INTERMEDIATE_NAKED_ROUTE_CAP} naked routes, found ${miniRoutesManyApiFocusRoutes.length}`,
+  );
+} else if (miniRoutesManyApiFocusGroups.length < 8) {
+  fail(
+    `mini-routes-many API Intermediate should show domain groups, found ${miniRoutesManyApiFocusGroups.map((n) => n.label).join(", ") || "(none)"}`,
+  );
+} else if (
+  miniRoutesManyApiFocusRoutes.some((node) => node.metadata?.routeGroupMember)
+) {
+  fail(
+    "mini-routes-many API Intermediate must not dump route-group members (focus the Users/Articles hub)",
+  );
+} else if (miniRoutesManyUsersFocusRoutes.length < 4) {
+  fail(
+    `mini-routes-many Users Intermediate should reveal user routes, found ${miniRoutesManyUsersFocusRoutes.length}`,
+  );
+} else if (
+  miniRoutesManyGroupLabels.includes("More routes") === false &&
+  miniRoutesManyRoutes.length > INTERMEDIATE_NAKED_ROUTE_CAP + 20
+) {
+  fail("mini-routes-many expected More routes overflow group when past naked cap");
+} else {
+  pass(
+    `mini-routes-many Intermediate route groups: ${miniRoutesManyApiFocusGroups.length} hubs (${miniRoutesManyApiFocusGroups.map((n) => n.label).sort().join(", ")}); naked≤${INTERMEDIATE_NAKED_ROUTE_CAP} (${miniRoutesManyApiFocusRoutes.length}); Users focus ${miniRoutesManyUsersFocusRoutes.length} routes`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -5272,8 +5818,11 @@ if (fastapiRealRoot) {
       );
     }
 
-    const fastapiRoutesUnderApi = fastapiRoutes.filter(
-      (node) => node.parentId === fastapiApi?.id,
+    const fastapiById = new Map(
+      fastapiRealGraph.nodes.map((node) => [node.id, node]),
+    );
+    const fastapiRoutesUnderApi = fastapiRoutes.filter((node) =>
+      routeNestedUnderApi(node, fastapiApi?.id, fastapiById),
     );
     if (fastapiRoutesUnderApi.length < 19) {
       fail(
@@ -5723,8 +6272,11 @@ if (mongoRealRoot) {
       );
     }
 
-    const mongoRoutesUnderApi = mongoRoutes.filter(
-      (node) => node.parentId === mongoApi?.id,
+    const mongoById = new Map(
+      mongoRealGraph.nodes.map((node) => [node.id, node]),
+    );
+    const mongoRoutesUnderApi = mongoRoutes.filter((node) =>
+      routeNestedUnderApi(node, mongoApi?.id, mongoById),
     );
     if (mongoRoutesUnderApi.length < 20) {
       fail(

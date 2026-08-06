@@ -234,6 +234,20 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         (node.metadata.role === "detection-surface" || node.metadata.detectionSurface)
       );
     }
+    // Route atoms nested under domain groups (Users / Articles) — only show when
+    // that group is focused (same Intermediate calm as detection surfaces).
+    function isRouteGroupMember(node) {
+      return !!(
+        node.kind === "route" &&
+        node.metadata &&
+        (node.metadata.routeGroupMember === true || node.metadata.routeGroup)
+      );
+    }
+    function routeGroupMemberVisible(node, focusId) {
+      if (!isRouteGroupMember(node)) return true;
+      if (!focusId) return false;
+      return node.parentId === focusId || node.id === focusId;
+    }
     function laneNameFor(node) {
       if (isDetectionSurface(node)) return "Detects";
       if (isMongoAggregateHub(node)) return "Data & automation";
@@ -712,6 +726,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         ) {
           return false;
         }
+        if (!routeGroupMemberVisible(node, rootId)) return false;
         const isOverviewHub = node.metadata && node.metadata.overviewHub;
         if (advancedKinds.has(node.kind) && !isOverviewHub) return false;
         return true;
@@ -734,6 +749,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           return false;
         }
         // leafChrome (Card/Button) is Advanced-only — keep here, hide Intermediate.
+        // Route-group members stay Intermediate furniture of their group, not of
+        // the parent API Advanced room (drill the Users/Articles hub instead).
+        if (!routeGroupMemberVisible(node, rootId)) return false;
         const isOverviewHub = node.metadata && node.metadata.overviewHub;
         if (advancedKinds.has(node.kind) && !isOverviewHub) {
           if (node.kind === "function") {
@@ -861,6 +879,15 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         if (node.metadata && node.metadata.leafChrome && !isAdvancedTier()) {
           return false;
         }
+        // Trivial Mongo aggregate crumbs (C pipeline / Col pipeline) stay
+        // off Beginner/Intermediate; Advanced-in-focus may still reveal them.
+        if (
+          node.metadata &&
+          node.metadata.trivialMongoAggregate &&
+          !isAdvancedTier()
+        ) {
+          return false;
+        }
         // Detection surfaces live under capabilities — only show inside that
         // capability focus (never flood Extractors Intermediate with every surface).
         if (isDetectionSurface(node)) {
@@ -871,6 +898,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
             return false;
           }
         }
+        // Domain-grouped routes: only paint when their Users/Articles hub is focused
+        // (API Intermediate shows groups, not the route phonebook).
+        if (!routeGroupMemberVisible(node, state.focus)) return false;
         // overviewHub (auth/billing actions, Helm Chart/resources, mongo
         // aggregates) bypasses advanced-kind hides so hubs can appear once the
         // user focuses a system (Intermediate neighborhood / Advanced-in-focus).
@@ -1426,6 +1456,11 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       "exampleChrome", "leafChrome", "featureRoot", "labelSource", "pathRoleLabel",
       "collapsedInOverview",
       "overviewHub",
+      "routeGroup", "routeGroupMember", "routeDomain", "routeMolecule",
+      "intermediateOmitted", "intermediateOmitReason",
+      "beginnerRouteHub", "beginnerOmitted", "beginnerOmitReason",
+      "replacedByRouteMolecules",
+      "uiOnly", "uiOnlyReason",
     ]);
 
     function connectionButton(edge, id) {
