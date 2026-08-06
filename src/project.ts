@@ -2087,6 +2087,216 @@ function compressFeBeginnerRouteMolecules(
   }
 }
 
+/**
+ * Max naked route atoms visible under an API Intermediate focus when they are
+ * not nested under a domain route group (Shree Heart field gate: no 373-route
+ * phonebook). Excess nest under a "More routes" group hub.
+ */
+export const INTERMEDIATE_NAKED_ROUTE_CAP = 24;
+
+/**
+ * Domain key for HTTP route grouping: `/api/users/:id` → `users`,
+ * `/articles` → `articles`. Strips leading `api` / `vN`. Probes (`/health`)
+ * and empty roots return null so they stay naked under the API hub.
+ */
+export function httpRouteDomainKey(path: string): string | null {
+  let raw = path.trim();
+  if (!raw) return null;
+  if (!raw.startsWith("/")) raw = `/${raw}`;
+  const noQuery = raw.split("?")[0] ?? raw;
+  const parts = noQuery.split("/").filter(Boolean);
+  while (parts.length && /^(api|v\d+)$/i.test(parts[0]!)) {
+    parts.shift();
+  }
+  if (!parts.length) return null;
+  let seg = parts[0]!;
+  // Param-only first segments are not domains.
+  if (/^[:{<]/.test(seg)) return null;
+  seg = seg.replace(/\{([^}]+)\}/g, "$1").replace(/^:/, "").toLowerCase();
+  if (/^(healthz?|readyz?|livez?|ping|status|favicon\.ico)$/.test(seg)) {
+    return null;
+  }
+  return seg;
+}
+
+function routeGroupSystemKey(domain: string): string {
+  return `routes:${domain}`;
+}
+
+/** Prefer short probe / root paths when capping naked Intermediate routes. */
+export function nakedRouteIntermediateScore(path: string): number {
+  if (isThinHttpRoutePath(path)) return 100;
+  const key = httpRouteDomainKey(path);
+  if (!key) return 80;
+  const len = path.trim().length;
+  return Math.max(10, 70 - Math.min(50, len));
+}
+
+/**
+ * Intermediate API calm: group Express/Heart-style routes by path-prefix domain
+ * under hubs (Users / Articles / …). Nested route atoms stay off the API
+ * Intermediate canvas until the group is focused (viewer mirrors detection
+ * surfaces). Cap leftover naked routes at INTERMEDIATE_NAKED_ROUTE_CAP.
+ */
+function projectApiRouteDomainGroups(
+  systems: Map<string, ArchitectureNode>,
+  nodes: Map<string, ArchitectureNode>,
+  edges: Map<string, ArchitectureEdge>,
+  attachToSystem: (
+    nodeId: string,
+    systemId: string,
+    evidence: Evidence,
+  ) => void,
+): void {
+  const api = systems.get("api");
+  if (!api) return;
+
+  const routes = [...nodes.values()].filter(
+    (node) =>
+      node.kind === "route" &&
+      node.parentId === api.id &&
+      node.metadata?.projection !== "semantic",
+  );
+  if (routes.length < 2) return;
+
+  const byDomain = new Map<string, ArchitectureNode[]>();
+  const naked: ArchitectureNode[] = [];
+  for (const route of routes) {
+    const path =
+      typeof route.metadata?.path === "string" ? route.metadata.path : "";
+    const domain = path ? httpRouteDomainKey(path) : null;
+    if (!domain) {
+      naked.push(route);
+      continue;
+    }
+    const bucket = byDomain.get(domain) ?? [];
+    bucket.push(route);
+    byDomain.set(domain, bucket);
+  }
+
+  const ensureGroup = (
+    domain: string,
+    label: string,
+    members: ArchitectureNode[],
+  ): ArchitectureNode => {
+    const key = routeGroupSystemKey(domain);
+    const groupId = stableId("system", key);
+    const evidence = dedupeEvidence(
+      members.flatMap((route) => route.evidence).slice(0, 8),
+    );
+    const seed =
+      evidence[0] ??
+      projectionEvidence(
+        members[0]?.evidence[0]?.file ?? ".",
+        `API route domain group ${domain}`,
+      );
+    let group = nodes.get(groupId);
+    if (!group) {
+      group = {
+        id: groupId,
+        kind: "system",
+        label,
+        technology: "semantic",
+        parentId: api.id,
+        metadata: {
+          projection: "semantic",
+          systemKey: key,
+          routeGroup: true,
+          routeDomain: domain,
+          collapsedInOverview: true,
+        },
+        evidence: [
+          {
+            ...seed,
+            detail: seed.detail ?? `Route domain ${domain}`,
+          },
+        ],
+      };
+      nodes.set(group.id, group);
+      const contains = edgeFrom("contains", api.id, group.id, seed);
+      edges.set(contains.id, contains);
+    } else {
+      group.label = label;
+      group.parentId = api.id;
+      group.metadata = {
+        ...group.metadata,
+        projection: "semantic",
+        systemKey: key,
+        routeGroup: true,
+        routeDomain: domain,
+        collapsedInOverview: true,
+      };
+      group.evidence = dedupeEvidence([...group.evidence, ...evidence]);
+      nodes.set(group.id, group);
+    }
+    return group;
+  };
+
+  for (const [domain, members] of byDomain) {
+    if (members.length < 2) {
+      naked.push(...members);
+      continue;
+    }
+    const group = ensureGroup(
+      domain,
+      humanizeIdentifierLabel(domain),
+      members,
+    );
+    for (const route of members) {
+      attachToSystem(
+        route.id,
+        group.id,
+        route.evidence[0] ?? projectionEvidence("."),
+      );
+      route.metadata = {
+        ...route.metadata,
+        routeGroupMember: true,
+        routeGroup: routeGroupSystemKey(domain),
+        projectedSystem: routeGroupSystemKey(domain),
+      };
+      nodes.set(route.id, route);
+    }
+    group.evidence = dedupeEvidence(group.evidence);
+    nodes.set(group.id, group);
+  }
+
+  // Cap leftover naked routes under the API hub — excess nest under More routes.
+  if (naked.length <= INTERMEDIATE_NAKED_ROUTE_CAP) return;
+
+  const ranked = [...naked].sort((a, b) => {
+    const pathA =
+      typeof a.metadata?.path === "string" ? a.metadata.path : a.label;
+    const pathB =
+      typeof b.metadata?.path === "string" ? b.metadata.path : b.label;
+    return (
+      nakedRouteIntermediateScore(pathB) - nakedRouteIntermediateScore(pathA) ||
+      pathA.localeCompare(pathB) ||
+      a.id.localeCompare(b.id)
+    );
+  });
+  const overflow = ranked.slice(INTERMEDIATE_NAKED_ROUTE_CAP);
+  if (!overflow.length) return;
+  const more = ensureGroup("_more", "More routes", overflow);
+  for (const route of overflow) {
+    attachToSystem(
+      route.id,
+      more.id,
+      route.evidence[0] ?? projectionEvidence("."),
+    );
+    route.metadata = {
+      ...route.metadata,
+      routeGroupMember: true,
+      routeGroup: routeGroupSystemKey("_more"),
+      projectedSystem: routeGroupSystemKey("_more"),
+      intermediateOmitted: true,
+      intermediateOmitReason: "naked-route-cap",
+    };
+    nodes.set(route.id, route);
+  }
+  more.evidence = dedupeEvidence(more.evidence);
+  nodes.set(more.id, more);
+}
+
 /** Server-action label → story edge kind (mutations write; getters read). */
 function serverActionStoryEdgeKind(label: string): "reads" | "writes" {
   const normalized = label.toLowerCase();
@@ -5070,6 +5280,10 @@ export function projectSemanticArchitecture(
   // Foreign Next apps (shree-learn) can mint dozens of page molecules — keep
   // product hubs on Beginner; collapse marketing/excess for Intermediate/Find.
   compressFeBeginnerRouteMolecules(systems, nodes);
+
+  // Heart / Express Intermediate calm: domain route groups + naked-route cap
+  // so API focus is Users/Articles hubs (or ≤24 samples), not a route phonebook.
+  projectApiRouteDomainGroups(systems, nodes, edges, attachToSystem);
 
   assignFlowOrder(systems, flowPairs);
 

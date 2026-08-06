@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { compileRepository } from "../dist/compile.js";
 import {
   isReadmeStructureHeading,
+  INTERMEDIATE_NAKED_ROUTE_CAP,
   parseReadmeHeadingHints,
 } from "../dist/project.js";
 import { renderArchitectureHtml } from "../dist/viewer.js";
@@ -37,7 +38,28 @@ const miniReadmeStructureRoot = path.join(
   "verification",
   "mini-readme-structure",
 );
+const miniRoutesManyRoot = path.join(
+  repoRoot,
+  "verification",
+  "mini-routes-many",
+);
 const miniOpenapiRoot = path.join(repoRoot, "verification", "mini-openapi");
+
+/**
+ * True when a route sits under an API hub directly or via a domain route group
+ * (Users / Articles / More routes).
+ */
+function routeNestedUnderApi(route, apiId, nodesById) {
+  if (!apiId || !route) return false;
+  let current = route;
+  const seen = new Set();
+  while (current && !seen.has(current.id)) {
+    if (current.parentId === apiId) return true;
+    seen.add(current.id);
+    current = current.parentId ? nodesById.get(current.parentId) : undefined;
+  }
+  return false;
+}
 const miniGraphqlRoot = path.join(repoRoot, "verification", "mini-graphql");
 const miniDockerRoot = path.join(repoRoot, "verification", "mini-docker");
 const miniTerraformRoot = path.join(repoRoot, "verification", "mini-terraform");
@@ -129,6 +151,7 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file.includes("mini-mongo/") ||
         file.includes("mini-readme-structure/") ||
         file.includes("mini-next-many/") ||
+        file.includes("mini-routes-many/") ||
         file.includes("mini-openapi/") ||
         file.includes("mini-graphql/") ||
         file.includes("mini-docker/") ||
@@ -1194,7 +1217,9 @@ if (
 } else if (
   !viewerHtml.includes("function focusNeighborhood(rootId)") ||
   !viewerHtml.includes("focusNeighborhood(state.focus)") ||
-  !viewerHtml.includes("neighborhoodEdgeKinds")
+  !viewerHtml.includes("neighborhoodEdgeKinds") ||
+  !viewerHtml.includes("function routeGroupMemberVisible(node, focusId)") ||
+  !viewerHtml.includes("routeGroupMemberVisible(node, state.focus)")
 ) {
   fail(
     "viewer Intermediate focus must use focusNeighborhood (contains + story neighbors), not whole-repo uncollapse",
@@ -1526,6 +1551,13 @@ function intermediateFocusNodes(graph, rootId) {
     if (
       node.metadata?.role === "detection-surface" ||
       node.metadata?.detectionSurface
+    ) {
+      if (node.parentId !== rootId && node.id !== rootId) return false;
+    }
+    // Domain-grouped routes only inside their Users/Articles hub focus.
+    if (
+      node.kind === "route" &&
+      (node.metadata?.routeGroupMember === true || node.metadata?.routeGroup)
     ) {
       if (node.parentId !== rootId && node.id !== rootId) return false;
     }
@@ -2923,10 +2955,11 @@ if (miniNextCommerceNoise) {
   pass("mini-next has no Checkout/orders commerce collaboration noise");
 }
 
+const miniNextById = new Map(miniNextGraph.nodes.map((node) => [node.id, node]));
 const miniNextRoutesUnderApi = miniNextGraph.nodes.filter(
   (node) =>
     node.kind === "route" &&
-    node.parentId === miniNextApi?.id,
+    routeNestedUnderApi(node, miniNextApi?.id, miniNextById),
 );
 if (miniNextRoutesUnderApi.length < 3) {
   fail(
@@ -3650,10 +3683,12 @@ if (realRepoRoot) {
       pass("real-repo data system keeps path-role label 'Data access'");
     }
 
-    // Nesting: every route under API; product tables under Data; overview collapses routes.
+    // Nesting: every route under API (directly or via domain route groups);
+    // product tables under Data; overview collapses routes.
     if (apiSystem) {
+      const realById = new Map(realGraph.nodes.map((node) => [node.id, node]));
       const orphanRoutes = realRoutes.filter(
-        (node) => node.parentId !== apiSystem.id,
+        (node) => !routeNestedUnderApi(node, apiSystem.id, realById),
       );
       if (orphanRoutes.length) {
         fail(
@@ -3681,6 +3716,35 @@ if (realRepoRoot) {
         );
       } else {
         pass("real-repo routes collapsed on overview (API tells the story)");
+      }
+      const realRouteGroups = realGraph.nodes.filter(
+        (node) => node.metadata?.routeGroup === true,
+      );
+      const realRouteGroupLabels = realRouteGroups.map((node) => node.label);
+      if (!realRouteGroupLabels.includes("Articles")) {
+        fail(
+          `real-repo Intermediate should group Articles routes, found groups: ${realRouteGroupLabels.join(", ") || "(none)"}`,
+        );
+      } else {
+        const realApiFocus = intermediateFocusNodes(realGraph, apiSystem.id);
+        const realApiFocusRoutes = realApiFocus.filter(
+          (node) => node.kind === "route",
+        );
+        if (realApiFocusRoutes.length > INTERMEDIATE_NAKED_ROUTE_CAP) {
+          fail(
+            `real-repo API Intermediate naked routes must be ≤${INTERMEDIATE_NAKED_ROUTE_CAP}, found ${realApiFocusRoutes.length}`,
+          );
+        } else if (
+          realApiFocusRoutes.some((node) => node.metadata?.routeGroupMember)
+        ) {
+          fail(
+            "real-repo API Intermediate must not dump Articles/Users route-group members",
+          );
+        } else {
+          pass(
+            `real-repo Intermediate route groups: ${realRouteGroupLabels.sort().join(", ")} (API focus naked routes ${realApiFocusRoutes.length})`,
+          );
+        }
       }
     }
     if (dataSystem) {
@@ -4089,8 +4153,9 @@ if (nextRealRoot) {
       );
     }
     if (nextApi) {
+      const nextById = new Map(nextRealGraph.nodes.map((node) => [node.id, node]));
       const orphanRoutes = nextRoutes.filter(
-        (node) => node.parentId !== nextApi.id,
+        (node) => !routeNestedUnderApi(node, nextApi.id, nextById),
       );
       if (orphanRoutes.length) {
         fail(
@@ -4531,8 +4596,11 @@ if (!miniPythonFlowKeys.includes("api")) {
   );
 }
 
-const miniPythonRoutesUnderApi = miniPythonRoutes.filter(
-  (node) => node.parentId === miniPythonApi?.id,
+const miniPythonById = new Map(
+  miniPythonGraph.nodes.map((node) => [node.id, node]),
+);
+const miniPythonRoutesUnderApi = miniPythonRoutes.filter((node) =>
+  routeNestedUnderApi(node, miniPythonApi?.id, miniPythonById),
 );
 if (miniPythonRoutesUnderApi.length < 9) {
   fail(
@@ -5024,8 +5092,11 @@ if (
   pass("mini-mongo product collections visible under Catalog data on overview");
 }
 
-const miniMongoRoutesUnderApi = miniMongoRoutes.filter(
-  (node) => node.parentId === miniMongoApi?.id,
+const miniMongoById = new Map(
+  miniMongoGraph.nodes.map((node) => [node.id, node]),
+);
+const miniMongoRoutesUnderApi = miniMongoRoutes.filter((node) =>
+  routeNestedUnderApi(node, miniMongoApi?.id, miniMongoById),
 );
 if (miniMongoRoutesUnderApi.length < 3) {
   fail(
@@ -5371,6 +5442,114 @@ if (
 }
 
 // ---------------------------------------------------------------------------
+// Shree Heart Intermediate route groups: domain hubs + naked-route cap
+// (verification/mini-routes-many). API focus shows Users/Articles/… not a
+// phonebook; grouped route atoms only appear when their hub is focused.
+// ---------------------------------------------------------------------------
+const miniRoutesManyGraph = await compileRepository(miniRoutesManyRoot);
+const miniRoutesManyById = new Map(
+  miniRoutesManyGraph.nodes.map((node) => [node.id, node]),
+);
+const miniRoutesManyApi = miniRoutesManyGraph.nodes.find(
+  (node) =>
+    node.metadata?.projection === "semantic" &&
+    node.metadata?.systemKey === "api",
+);
+const miniRoutesManyRoutes = miniRoutesManyGraph.nodes.filter(
+  (node) => node.kind === "route",
+);
+const miniRoutesManyGroups = miniRoutesManyGraph.nodes.filter(
+  (node) => node.metadata?.routeGroup === true,
+);
+const miniRoutesManyGroupLabels = miniRoutesManyGroups
+  .map((node) => node.label)
+  .sort((a, b) => a.localeCompare(b));
+const miniRoutesManyNaked = miniRoutesManyRoutes.filter(
+  (node) => node.parentId === miniRoutesManyApi?.id,
+);
+const miniRoutesManyApiFocus = miniRoutesManyApi
+  ? intermediateFocusNodes(miniRoutesManyGraph, miniRoutesManyApi.id)
+  : [];
+const miniRoutesManyApiFocusRoutes = miniRoutesManyApiFocus.filter(
+  (node) => node.kind === "route",
+);
+const miniRoutesManyApiFocusGroups = miniRoutesManyApiFocus.filter(
+  (node) => node.metadata?.routeGroup === true,
+);
+const miniRoutesManyUsers = miniRoutesManyGroups.find(
+  (node) => node.metadata?.routeDomain === "users",
+);
+const miniRoutesManyUsersFocusRoutes = miniRoutesManyUsers
+  ? intermediateFocusNodes(miniRoutesManyGraph, miniRoutesManyUsers.id).filter(
+      (node) => node.kind === "route",
+    )
+  : [];
+const miniRoutesManyNested = miniRoutesManyRoutes.filter((node) =>
+  routeNestedUnderApi(node, miniRoutesManyApi?.id, miniRoutesManyById),
+);
+const expectedRouteGroups = [
+  "Admin",
+  "Articles",
+  "Auth",
+  "Comments",
+  "Payments",
+  "Profiles",
+  "Tags",
+  "Users",
+];
+const missingRouteGroups = expectedRouteGroups.filter(
+  (label) => !miniRoutesManyGroupLabels.includes(label),
+);
+if (!miniRoutesManyApi) {
+  fail("mini-routes-many missing HTTP API system");
+} else if (miniRoutesManyRoutes.length < 40) {
+  fail(
+    `mini-routes-many expected ≥40 routes, found ${miniRoutesManyRoutes.length}`,
+  );
+} else if (miniRoutesManyNested.length !== miniRoutesManyRoutes.length) {
+  fail(
+    `mini-routes-many routes must nest under API (via groups OK): nested ${miniRoutesManyNested.length}/${miniRoutesManyRoutes.length}`,
+  );
+} else if (missingRouteGroups.length) {
+  fail(
+    `mini-routes-many missing domain groups ${missingRouteGroups.join(", ")}; found ${miniRoutesManyGroupLabels.join(", ") || "(none)"}`,
+  );
+} else if (miniRoutesManyNaked.length > INTERMEDIATE_NAKED_ROUTE_CAP) {
+  fail(
+    `mini-routes-many naked routes under API must be ≤${INTERMEDIATE_NAKED_ROUTE_CAP}, found ${miniRoutesManyNaked.length}`,
+  );
+} else if (
+  miniRoutesManyApiFocusRoutes.length > INTERMEDIATE_NAKED_ROUTE_CAP
+) {
+  fail(
+    `mini-routes-many API Intermediate must show ≤${INTERMEDIATE_NAKED_ROUTE_CAP} naked routes, found ${miniRoutesManyApiFocusRoutes.length}`,
+  );
+} else if (miniRoutesManyApiFocusGroups.length < 8) {
+  fail(
+    `mini-routes-many API Intermediate should show domain groups, found ${miniRoutesManyApiFocusGroups.map((n) => n.label).join(", ") || "(none)"}`,
+  );
+} else if (
+  miniRoutesManyApiFocusRoutes.some((node) => node.metadata?.routeGroupMember)
+) {
+  fail(
+    "mini-routes-many API Intermediate must not dump route-group members (focus the Users/Articles hub)",
+  );
+} else if (miniRoutesManyUsersFocusRoutes.length < 4) {
+  fail(
+    `mini-routes-many Users Intermediate should reveal user routes, found ${miniRoutesManyUsersFocusRoutes.length}`,
+  );
+} else if (
+  miniRoutesManyGroupLabels.includes("More routes") === false &&
+  miniRoutesManyRoutes.length > INTERMEDIATE_NAKED_ROUTE_CAP + 20
+) {
+  fail("mini-routes-many expected More routes overflow group when past naked cap");
+} else {
+  pass(
+    `mini-routes-many Intermediate route groups: ${miniRoutesManyApiFocusGroups.length} hubs (${miniRoutesManyApiFocusGroups.map((n) => n.label).sort().join(", ")}); naked≤${INTERMEDIATE_NAKED_ROUTE_CAP} (${miniRoutesManyApiFocusRoutes.length}); Users focus ${miniRoutesManyUsersFocusRoutes.length} routes`,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Capability ladder rung 3: real FastAPI repo (pinned SHA, gitignored).
 // Golden-lock include_router prefixes, empty-path mounts, product title from
 // pyproject, HTTP API + Data nesting/collapse, RealWorld core paths.
@@ -5499,8 +5678,11 @@ if (fastapiRealRoot) {
       );
     }
 
-    const fastapiRoutesUnderApi = fastapiRoutes.filter(
-      (node) => node.parentId === fastapiApi?.id,
+    const fastapiById = new Map(
+      fastapiRealGraph.nodes.map((node) => [node.id, node]),
+    );
+    const fastapiRoutesUnderApi = fastapiRoutes.filter((node) =>
+      routeNestedUnderApi(node, fastapiApi?.id, fastapiById),
     );
     if (fastapiRoutesUnderApi.length < 19) {
       fail(
@@ -5950,8 +6132,11 @@ if (mongoRealRoot) {
       );
     }
 
-    const mongoRoutesUnderApi = mongoRoutes.filter(
-      (node) => node.parentId === mongoApi?.id,
+    const mongoById = new Map(
+      mongoRealGraph.nodes.map((node) => [node.id, node]),
+    );
+    const mongoRoutesUnderApi = mongoRoutes.filter((node) =>
+      routeNestedUnderApi(node, mongoApi?.id, mongoById),
     );
     if (mongoRoutesUnderApi.length < 20) {
       fail(
