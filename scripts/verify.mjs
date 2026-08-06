@@ -2336,7 +2336,7 @@ if (!viewerHtml.includes('name: "Detects"') || !viewerHtml.includes("isDetection
 }
 
 
-const collaborationHeading = viewerHtml.indexOf("<h3>Collaboration</h3>");
+const storyHeading = viewerHtml.indexOf("<h3>In the story</h3>");
 const importsHeading = viewerHtml.indexOf("Imports &amp; calls");
 const collaborationKindsDecl = viewerHtml.indexOf(
   'const collaborationKinds = new Set([',
@@ -2353,9 +2353,9 @@ const importsFilter = viewerHtml.indexOf(
 const collaborationItemFn = viewerHtml.indexOf("function collaborationItem");
 const edgeDetailTextFn = viewerHtml.indexOf("function edgeDetailText");
 const collabDetailClass = viewerHtml.indexOf('class="collab-detail"');
-const collabUsesCollaborationItem = viewerHtml.includes(
-  "collaboration.slice(0, 16).map((edge) => collaborationItem(edge, id))",
-);
+const collabUsesCollaborationItem =
+  viewerHtml.includes("storyNeighbors.slice(0, 8).map((edge) => collaborationItem(edge, id))") ||
+  viewerHtml.includes("collaboration.slice(0, 16).map((edge) => collaborationItem(edge, id))");
 if (
   collaborationKindsDecl < 0 ||
   usesInKinds < 0 ||
@@ -2368,10 +2368,10 @@ if (
   fail("viewer missing collaborationKinds set for inspector (uses/renders/exposes/triggers/reads/writes)");
 } else if (importsFilter < 0 || importsFilter < collaborationKindsDecl) {
   fail("viewer inspector should split importsAndCalls after collaborationKinds");
-} else if (collaborationHeading < 0 || importsHeading < 0 || collaborationHeading > importsHeading) {
-  // Headings are template strings inside selectNode; both must appear and Collaboration first.
+} else if (storyHeading < 0 || importsHeading < 0 || storyHeading > importsHeading) {
+  // Headings are template strings inside selectNode; story neighbors lead Imports & calls.
   fail(
-    `viewer inspector should render Collaboration before Imports & calls (collab=${collaborationHeading}, imports=${importsHeading})`,
+    `viewer inspector should render In the story before Imports & calls (story=${storyHeading}, imports=${importsHeading})`,
   );
 } else if (
   collaborationItemFn < 0 ||
@@ -2383,7 +2383,7 @@ if (
     "viewer inspector should render collaboration edge detail text via collaborationItem/collab-detail",
   );
 } else {
-  pass("viewer inspector surfaces Collaboration detail text before Imports & calls");
+  pass("viewer inspector surfaces In the story detail text before Imports & calls");
 }
 
 // Canvas: collaboration edges styled apart from import/call hairlines.
@@ -2592,7 +2592,12 @@ const messagingOwnedPubSub =
   fixtureViewerHtml.includes('"messagingHub"');
 const messagingInInspector =
   fixtureViewerHtml.includes("const messaging = messagingRolesHtml(node)") &&
-  fixtureViewerHtml.includes("tableSources + tableRelations + messaging");
+  (fixtureViewerHtml.includes("tableSources + tableRelations + messaging") ||
+    (fixtureViewerHtml.includes("tableSources") &&
+      fixtureViewerHtml.includes("tableRelations") &&
+      fixtureViewerHtml.includes("messaging") &&
+      fixtureViewerHtml.includes("tableSourcesHtml(node, incomingEdges)") &&
+      fixtureViewerHtml.includes("tableRelationsHtml(node, connections)")));
 if (messagingRolesFn < 0 || messagingHeading < 0) {
   fail("viewer inspector missing Messaging section for queue hubs");
 } else if (publishersRoleLabel < 0 || consumersRoleLabel < 0 || messagingHubNote < 0) {
@@ -2617,6 +2622,51 @@ if (!hideCompilerMetaPills) {
   );
 } else {
   pass("viewer inspector hides projection/systemKey/flowOrder metadata pills");
+}
+
+// Inspector value: story-first panel (role → story neighbors → evidence).
+const plainLanguageRoleFn = fixtureViewerHtml.indexOf("function plainLanguageRole");
+const inspectorRoleClass = fixtureViewerHtml.indexOf('class="inspector-role"');
+const storyFirstHeading = fixtureViewerHtml.indexOf("<h3>In the story</h3>");
+const evidenceHeading = fixtureViewerHtml.indexOf("<h3>Evidence</h3>");
+const storyNeighborRank = fixtureViewerHtml.indexOf("storyNeighborRank");
+const hidePathFrameworkPills =
+  fixtureViewerHtml.includes('"path"') &&
+  fixtureViewerHtml.includes('"framework"') &&
+  fixtureViewerHtml.includes('"readmeHeading"') &&
+  fixtureViewerHtml.includes('"packageName"');
+// Assembly order in selectNode (string literal positions differ from runtime order).
+const storyFirstAssembly = fixtureViewerHtml.indexOf(
+  "roleHtml +\n        collaborationHtml +\n        evidenceHtml",
+);
+const noKindTechLead =
+  !fixtureViewerHtml.includes(
+    'inspector.innerHTML = "<h2></h2><p>" + node.kind + (node.technology ? " · " + node.technology : "") + "</p>"',
+  ) &&
+  fixtureViewerHtml.includes("plainLanguageRole(node)") &&
+  fixtureViewerHtml.includes("Story-first panel");
+if (
+  plainLanguageRoleFn < 0 ||
+  inspectorRoleClass < 0 ||
+  storyFirstHeading < 0 ||
+  evidenceHeading < 0 ||
+  storyNeighborRank < 0
+) {
+  fail(
+    "viewer inspector value pass missing plainLanguageRole / In the story / Evidence lead",
+  );
+} else if (storyFirstAssembly < 0 || !noKindTechLead) {
+  fail(
+    "viewer inspector must lead with role → In the story → Evidence (not kind·tech / metadata dump)",
+  );
+} else if (!hidePathFrameworkPills) {
+  fail(
+    "viewer inspector should fold path/framework/readmeHeading/packageName into role (hide as pills)",
+  );
+} else {
+  pass(
+    "viewer inspector story-first: plain-language role, In the story neighbors, Evidence file:line",
+  );
 }
 
 // ---------------------------------------------------------------------------
