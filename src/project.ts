@@ -6032,10 +6032,38 @@ export function projectSemanticArchitecture(
   );
   if (feShellKeys.length) {
     const shellSet = new Set(feShellKeys);
-    const heroPageKey = [...systems.entries()].find(
+    // Entrance hero: prefer explicit beginnerHero (Public `/`), else keep a
+    // top-level `/` page molecule on Beginner when Auth/Protected shells exist
+    // but no Public shell (common: middleware-gated /dashboard + public Home).
+    let heroPageKey = [...systems.entries()].find(
       ([key, node]) =>
         key.startsWith("page:") && node.metadata?.beginnerHero === true,
     )?.[0];
+    if (!heroPageKey) {
+      const homeEntry = [...systems.entries()].find(([key, node]) => {
+        if (!key.startsWith("page:") || node.metadata?.routeMolecule !== true) {
+          return false;
+        }
+        if (node.metadata?.collapsedInOverview === true) return false;
+        const path =
+          typeof node.metadata?.path === "string" ? node.metadata.path : "";
+        return path === "/" || appRouterRouteSegment(path) === "/";
+      });
+      if (homeEntry) {
+        const [homeKey, homeNode] = homeEntry;
+        homeNode.metadata = {
+          ...homeNode.metadata,
+          beginnerHero: true,
+          beginnerRouteHub: true,
+          collapsedInOverview: false,
+        };
+        delete homeNode.metadata.beginnerOmitted;
+        delete homeNode.metadata.beginnerOmitReason;
+        nodes.set(homeNode.id, homeNode);
+        systems.set(homeKey, homeNode);
+        heroPageKey = homeKey;
+      }
+    }
     const authKey = shellSet.has(shellSystemKey("auth"))
       ? shellSystemKey("auth")
       : undefined;

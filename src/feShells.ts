@@ -24,7 +24,14 @@ export const feReachabilityValues = [
 ] as const;
 export type FeReachability = (typeof feReachabilityValues)[number];
 
-/** App Router group folder names → access (observed path convention). */
+/**
+ * App Router group folder names → access (observed path convention).
+ *
+ * Keep this list to clear access boundaries (`(public)` / `(auth)` / `(app)`).
+ * Organizational chrome groups like `(dashboard)` / `(admin)` are NOT proof of
+ * protection — real apps (nextjs/saas-starter) nest marketing Home under
+ * `(dashboard)` for shared chrome. Middleware / layout guards cover those.
+ */
 const routeGroupAccess: Record<string, FeAccess> = {
   public: "public",
   marketing: "public",
@@ -32,9 +39,7 @@ const routeGroupAccess: Record<string, FeAccess> = {
   auth: "auth",
   login: "auth",
   app: "protected",
-  dashboard: "protected",
-  admin: "protected",
-  "(protected)": "protected",
+  protected: "protected",
 };
 
 function normalizeGroupName(segment: string): string {
@@ -133,4 +138,62 @@ export function shellFlowRank(shell: FeShell): number {
   if (shell === "public") return 0;
   if (shell === "auth") return 1;
   return 2;
+}
+
+/**
+ * Concrete middleware matcher → path prefix.
+ * Skips catch-all regex matchers like `/((?!api|_next).*)`.
+ */
+export function prefixFromMiddlewareMatcher(matcher: string): string | undefined {
+  const raw = matcher.trim();
+  if (!raw.startsWith("/")) return undefined;
+  if (raw.includes("(") || raw.includes("?") || raw.includes("[")) {
+    return undefined;
+  }
+  const cleaned = raw
+    .replace(/\/:path\*$/i, "")
+    .replace(/\/\*$/u, "")
+    .replace(/\/+$/u, "");
+  if (!cleaned || cleaned === "/") return undefined;
+  return cleaned.startsWith("/") ? cleaned : `/${cleaned}`;
+}
+
+/**
+ * Collect protected path prefixes from middleware source + concrete matchers.
+ * Prefers explicit `startsWith('/dashboard')` / `protectedRoutes = '/dashboard'`
+ * over catch-all `config.matcher` regexes.
+ */
+export function protectedPrefixesFromMiddleware(
+  sourceText: string,
+  matcherPaths: readonly string[] = [],
+): string[] {
+  const prefixes = new Set<string>();
+  for (const matcher of matcherPaths) {
+    const prefix = prefixFromMiddlewareMatcher(matcher);
+    if (prefix) prefixes.add(prefix);
+  }
+  for (const match of sourceText.matchAll(
+    /\.startsWith\s*\(\s*['"`](\/[^'"`]+)['"`]\s*\)/g,
+  )) {
+    const value = match[1]?.replace(/\/+$/u, "");
+    if (value && value !== "/") prefixes.add(value);
+  }
+  for (const match of sourceText.matchAll(
+    /(?:const|let|var)\s+\w*(?:protected|guard|authProtected)\w*\s*=\s*['"`](\/[^'"`]+)['"`]/gi,
+  )) {
+    const value = match[1]?.replace(/\/+$/u, "");
+    if (value && value !== "/") prefixes.add(value);
+  }
+  return [...prefixes].sort((a, b) => a.localeCompare(b));
+}
+
+/** True when an App Router path is gated by a middleware protected prefix. */
+export function pathMatchesProtectedPrefix(
+  pagePath: string,
+  prefix: string,
+): boolean {
+  const path = pagePath.trim() || "/";
+  const gate = prefix.trim().replace(/\/+$/u, "") || "/";
+  if (gate === "/") return false;
+  return path === gate || path.startsWith(`${gate}/`);
 }

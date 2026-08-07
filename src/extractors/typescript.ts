@@ -13,7 +13,11 @@ import type {
   NodeKind,
   SourceRange,
 } from "../schema.js";
-import { accessFromRouteGroups } from "../feShells.js";
+import {
+  accessFromRouteGroups,
+  pathMatchesProtectedPrefix,
+  protectedPrefixesFromMiddleware,
+} from "../feShells.js";
 
 const extensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mts", ".cts"]);
 const httpMethods = new Set([
@@ -1327,6 +1331,7 @@ export const typescriptExtractor: ArchitectureExtractor = {
     }
 
     // Next.js middleware — access-gate signal (matcher + login redirect).
+    const middlewareProtectedPrefixes: string[] = [];
     for (const file of parsed) {
       const normalized = file.relative.replaceAll("\\", "/");
       if (!/(?:^|\/)middleware\.[cm]?[jt]sx?$/i.test(normalized)) continue;
@@ -1378,6 +1383,15 @@ export const typescriptExtractor: ArchitectureExtractor = {
         ts.forEachChild(node, visitMiddleware);
       };
       visitMiddleware(file.source);
+      const protectedPrefixes = protectedPrefixesFromMiddleware(
+        file.source.text,
+        matcherPaths,
+      );
+      for (const prefix of protectedPrefixes) {
+        if (!middlewareProtectedPrefixes.includes(prefix)) {
+          middlewareProtectedPrefixes.push(prefix);
+        }
+      }
       const middlewareId = stableId("config", file.relative, "middleware");
       nodes.push({
         id: middlewareId,
@@ -1391,8 +1405,13 @@ export const typescriptExtractor: ArchitectureExtractor = {
           framework: "next",
           surface: "story",
           ...(matcherPaths.length ? { middlewareMatchers: matcherPaths } : {}),
+          ...(protectedPrefixes.length
+            ? { middlewareProtectedPrefixes: [...protectedPrefixes] }
+            : {}),
           ...(redirectsToLogin ? { redirectsToLogin: true } : {}),
-          ...(matcherPaths.length || redirectsToLogin
+          ...(matcherPaths.length ||
+          redirectsToLogin ||
+          protectedPrefixes.length
             ? { accessSignal: "middleware-gate" }
             : {}),
         },
@@ -1401,9 +1420,11 @@ export const typescriptExtractor: ArchitectureExtractor = {
             file,
             file.source,
             "observed",
-            matcherPaths.length
-              ? `Next.js middleware matcher: ${matcherPaths.join(", ")}`
-              : "Next.js middleware",
+            protectedPrefixes.length
+              ? `Next.js middleware protected prefixes: ${protectedPrefixes.join(", ")}`
+              : matcherPaths.length
+                ? `Next.js middleware matcher: ${matcherPaths.join(", ")}`
+                : "Next.js middleware",
           ),
         ],
       });
@@ -1415,6 +1436,45 @@ export const typescriptExtractor: ArchitectureExtractor = {
           evidenceFor(file, file.source, "observed", "Next.js middleware"),
         ),
       );
+    }
+
+    // Pass A honesty: middleware path prefixes mark matching pages protected.
+    // Never override stronger route-group auth/public; never invent from URL alone.
+    if (middlewareProtectedPrefixes.length) {
+      for (const node of nodes) {
+        if (node.kind !== "page") continue;
+        const pagePath =
+          typeof node.metadata?.path === "string" ? node.metadata.path : "";
+        if (!pagePath) continue;
+        const matched = middlewareProtectedPrefixes.find((prefix) =>
+          pathMatchesProtectedPrefix(pagePath, prefix),
+        );
+        if (!matched) continue;
+        const current = node.metadata?.access;
+        if (current === "auth" || current === "public" || current === "protected") {
+          continue;
+        }
+        node.metadata = {
+          ...node.metadata,
+          access: "protected",
+          shell: "protected",
+          surface: "story",
+          reachability: "route-tree",
+          accessSignal: "middleware-prefix",
+        };
+        node.evidence = [
+          ...node.evidence,
+          {
+            file:
+              typeof node.qualifiedName === "string"
+                ? node.qualifiedName.split("#")[0] ?? "."
+                : ".",
+            extractor: "typescript",
+            certainty: "derived",
+            detail: `Middleware protects ${matched} → access=protected`,
+          },
+        ];
+      }
     }
 
     return {

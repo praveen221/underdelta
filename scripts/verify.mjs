@@ -5117,28 +5117,60 @@ if (nextRealRoot) {
     }
 
     // Re-check flow with Data access in the SaaS story band.
+    // FE shells: when Auth/Protected hubs exist, Beginner is Home → Auth →
+    // Protected (± public peers) → HTTP API → Data — nested page molecules
+    // stay off the flow band (same as mini-next-shells).
     const nextFlowWithData = nextSemantic
       .filter((node) => typeof node.metadata?.flowOrder === "number")
       .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder)
       .map((node) => node.label);
-    const nextFlowMoleculeLabels = nextRouteMolecules.map((node) => node.label);
+    const nextShellHubsOnFlow = nextSemantic.filter(
+      (node) =>
+        node.metadata?.shellHub === true &&
+        typeof node.metadata?.flowOrder === "number",
+    );
+    const nextFlowMoleculeLabels = nextRouteMolecules
+      .filter(
+        (node) =>
+          node.metadata?.collapsedInOverview !== true &&
+          node.metadata?.projectedShell == null,
+      )
+      .map((node) => node.label);
     const firstMoleculeIdx = Math.min(
       ...nextFlowMoleculeLabels.map((label) => nextFlowWithData.indexOf(label)),
     );
     const apiIdx = nextFlowWithData.indexOf("HTTP API");
     const dataIdx = nextFlowWithData.indexOf("Data access");
+    const homeIdx = nextFlowWithData.indexOf("Home");
+    const authIdx = nextFlowWithData.indexOf("Auth");
+    const protectedIdx = nextFlowWithData.indexOf("Protected");
     const missingFlowMolecules = nextFlowMoleculeLabels.filter(
       (label) => !nextFlowWithData.includes(label),
     );
-    if (
-      missingFlowMolecules.length ||
-      apiIdx < 0 ||
-      dataIdx < 0 ||
-      !(firstMoleculeIdx < apiIdx && apiIdx < dataIdx) ||
-      nextFlowWithData.includes("UI")
-    ) {
+    const shellEntranceOk =
+      nextShellHubsOnFlow.length > 0 &&
+      homeIdx >= 0 &&
+      homeIdx < apiIdx &&
+      apiIdx >= 0 &&
+      dataIdx >= 0 &&
+      apiIdx < dataIdx &&
+      (authIdx < 0 || (homeIdx < authIdx && authIdx < apiIdx)) &&
+      (protectedIdx < 0 ||
+        ((authIdx >= 0 ? authIdx : homeIdx) < protectedIdx &&
+          protectedIdx < apiIdx)) &&
+      !nextFlowWithData.includes("UI");
+    const moleculeParadeOk =
+      !missingFlowMolecules.length &&
+      apiIdx >= 0 &&
+      dataIdx >= 0 &&
+      Number.isFinite(firstMoleculeIdx) &&
+      firstMoleculeIdx >= 0 &&
+      firstMoleculeIdx < apiIdx &&
+      apiIdx < dataIdx &&
+      !nextFlowWithData.includes("UI");
+    if (!(shellEntranceOk || moleculeParadeOk)) {
       fail(
-        `next-real-repo flowOrder should be route molecules → HTTP API → Data access (no UI blob), got ${nextFlowWithData.join(" → ") || "(none)"}`,
+        `next-real-repo flowOrder should be Home→Auth→Protected→API→Data (shells) or route molecules → HTTP API → Data access (no UI blob), got ${nextFlowWithData.join(" → ") || "(none)"}`,
       );
     } else {
       pass(`next-real-repo flowOrder: ${nextFlowWithData.join(" → ")}`);
