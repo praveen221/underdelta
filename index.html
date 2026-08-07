@@ -14,7 +14,7 @@
       content="A visual way to read AI-generated code. Map UI, APIs, data, and jobs — every claim tied to source."
     />
     <meta property="og:type" content="website" />
-    <link rel="stylesheet" href="./site.css?v=bfe53bd" />
+    <link rel="stylesheet" href="./site.css?v=20260807-graph" />
   </head>
   <body>
     <nav class="topbar" aria-label="Primary navigation">
@@ -57,6 +57,7 @@
     </nav>
 
     <header class="hero">
+      <canvas class="graph-field" id="graph-field" aria-hidden="true"></canvas>
       <div class="wrap hero-grid">
         <div class="hero-copy">
           <p class="eyebrow"><span></span> Open-source architecture intelligence</p>
@@ -445,6 +446,185 @@
             hero.style.setProperty("--grid-x", "0px");
             hero.style.setProperty("--grid-y", "0px");
           });
+        }
+
+        var graphCanvas = document.getElementById("graph-field");
+
+        if (hero && graphCanvas) {
+          var graphContext = graphCanvas.getContext("2d");
+          var graphNodes = [];
+          var graphLinks = [];
+          var graphPointer = { x: 0, y: 0, active: false };
+          var graphWidth = 0;
+          var graphHeight = 0;
+          var graphDpr = 1;
+          var graphFrame = 0;
+          var graphVisible = true;
+          var graphAnimated = !reducedMotion.matches && precisePointer.matches;
+
+          function buildGraph() {
+            if (graphFrame) cancelAnimationFrame(graphFrame);
+            graphFrame = 0;
+            graphDpr = Math.min(window.devicePixelRatio || 1, 2);
+            graphWidth = hero.clientWidth;
+            graphHeight = hero.clientHeight;
+            graphCanvas.width = Math.round(graphWidth * graphDpr);
+            graphCanvas.height = Math.round(graphHeight * graphDpr);
+            graphCanvas.style.width = graphWidth + "px";
+            graphCanvas.style.height = graphHeight + "px";
+            graphContext.setTransform(graphDpr, 0, 0, graphDpr, 0, 0);
+
+            graphNodes = [];
+            graphLinks = [];
+
+            var spacing = graphWidth < 700 ? 52 : 62;
+            var columns = Math.ceil(graphWidth / spacing) + 2;
+            var rows = Math.ceil(graphHeight / spacing) + 2;
+            var grid = [];
+
+            for (var row = 0; row < rows; row += 1) {
+              grid[row] = [];
+              for (var column = 0; column < columns; column += 1) {
+                var seed = row * 97 + column * 53;
+                var jitterX = Math.sin(seed * 1.71) * spacing * 0.13;
+                var jitterY = Math.cos(seed * 1.13) * spacing * 0.13;
+                var node = {
+                  x: (column - 1) * spacing + (row % 2) * spacing * 0.5 + jitterX,
+                  y: (row - 1) * spacing * 0.82 + jitterY,
+                  phase: (seed % 31) / 31,
+                  lift: 0,
+                  glow: 0,
+                };
+                grid[row][column] = node;
+                graphNodes.push(node);
+              }
+            }
+
+            for (var r = 0; r < rows; r += 1) {
+              for (var c = 0; c < columns; c += 1) {
+                var current = grid[r][c];
+                if (grid[r][c + 1]) graphLinks.push([current, grid[r][c + 1]]);
+                if (grid[r + 1]) {
+                  graphLinks.push([current, grid[r + 1][c]]);
+                  if (grid[r + 1][c + (r % 2 ? 1 : -1)]) {
+                    graphLinks.push([current, grid[r + 1][c + (r % 2 ? 1 : -1)]]);
+                  }
+                }
+              }
+            }
+
+            if (!graphPointer.x && !graphPointer.y) {
+              graphPointer.x = graphWidth * 0.72;
+              graphPointer.y = graphHeight * 0.34;
+            }
+            drawGraph(performance.now());
+          }
+
+          function drawGraph(time) {
+            graphContext.clearRect(0, 0, graphWidth, graphHeight);
+            var radius = graphWidth < 700 ? 125 : 205;
+            var idleX = graphWidth * (0.72 + Math.sin(time * 0.00016) * 0.035);
+            var idleY = graphHeight * (0.33 + Math.cos(time * 0.00013) * 0.025);
+            var focusX = graphPointer.active ? graphPointer.x : idleX;
+            var focusY = graphPointer.active ? graphPointer.y : idleY;
+
+            graphNodes.forEach(function (node) {
+              var dx = node.x - focusX;
+              var dy = node.y - focusY;
+              var distance = Math.sqrt(dx * dx + dy * dy);
+              var proximity = Math.max(0, 1 - distance / radius);
+              var pulse = 0.88 + Math.sin(time * 0.002 + node.phase * 6.28) * 0.12;
+              node.glow = proximity * proximity * pulse;
+              node.lift = node.glow * (graphWidth < 700 ? 13 : 28);
+            });
+
+            graphContext.lineCap = "round";
+            graphLinks.forEach(function (link) {
+              var a = link[0];
+              var b = link[1];
+              var energy = Math.max(a.glow, b.glow);
+              graphContext.beginPath();
+              graphContext.moveTo(a.x, a.y - a.lift);
+              graphContext.lineTo(b.x, b.y - b.lift);
+              graphContext.strokeStyle =
+                "rgba(216,255,82," + (0.025 + energy * 0.24).toFixed(3) + ")";
+              graphContext.lineWidth = 0.55 + energy * 1.15;
+              graphContext.stroke();
+            });
+
+            graphNodes.forEach(function (node, index) {
+              var energy = node.glow;
+              var top = node.y - node.lift;
+
+              if (node.lift > 0.8) {
+                var stem = graphContext.createLinearGradient(node.x, node.y, node.x, top);
+                stem.addColorStop(0, "rgba(216,255,82,0.025)");
+                stem.addColorStop(1, "rgba(216,255,82," + (0.12 + energy * 0.5).toFixed(3) + ")");
+                graphContext.beginPath();
+                graphContext.moveTo(node.x, node.y);
+                graphContext.lineTo(node.x, top);
+                graphContext.strokeStyle = stem;
+                graphContext.lineWidth = 1 + energy * 2.4;
+                graphContext.stroke();
+              }
+
+              graphContext.save();
+              graphContext.beginPath();
+              graphContext.arc(node.x, top, 1.1 + energy * 4.2, 0, Math.PI * 2);
+              graphContext.fillStyle =
+                index % 11 === 0
+                  ? "rgba(114,165,255," + (0.16 + energy * 0.72).toFixed(3) + ")"
+                  : "rgba(216,255,82," + (0.11 + energy * 0.82).toFixed(3) + ")";
+              if (energy > 0.08) {
+                graphContext.shadowColor = index % 11 === 0 ? "#72a5ff" : "#d8ff52";
+                graphContext.shadowBlur = 5 + energy * 18;
+              }
+              graphContext.fill();
+              graphContext.restore();
+            });
+
+            if (graphAnimated && graphVisible) {
+              graphFrame = requestAnimationFrame(drawGraph);
+            }
+          }
+
+          function startGraph() {
+            graphVisible = true;
+            if (graphAnimated && !graphFrame) graphFrame = requestAnimationFrame(drawGraph);
+          }
+
+          function stopGraph() {
+            graphVisible = false;
+            if (graphFrame) cancelAnimationFrame(graphFrame);
+            graphFrame = 0;
+          }
+
+          hero.addEventListener("pointermove", function (event) {
+            if (!precisePointer.matches) return;
+            var bounds = hero.getBoundingClientRect();
+            graphPointer.x = event.clientX - bounds.left;
+            graphPointer.y = event.clientY - bounds.top;
+            graphPointer.active = true;
+          });
+
+          hero.addEventListener("pointerleave", function () {
+            graphPointer.active = false;
+          });
+
+          if ("ResizeObserver" in window) {
+            new ResizeObserver(buildGraph).observe(hero);
+          } else {
+            window.addEventListener("resize", buildGraph);
+          }
+
+          if ("IntersectionObserver" in window) {
+            new IntersectionObserver(function (entries) {
+              if (entries[0].isIntersecting) startGraph();
+              else stopGraph();
+            }).observe(hero);
+          }
+
+          buildGraph();
         }
       })();
     </script>
