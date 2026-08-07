@@ -380,28 +380,80 @@
         var tryScanButton = document.getElementById("try-scan-btn");
 
         function setCounts(n) {
+          if (typeof n !== "number" || !isFinite(n) || n < 0) return;
           countEls.forEach(function (el) {
             if (!el) return;
             el.textContent = String(n);
             el.hidden = false;
           });
+          try {
+            localStorage.setItem("underdelta-stars", String(n));
+            localStorage.setItem("underdelta-stars-at", String(Date.now()));
+          } catch (error) {}
+        }
+
+        function cachedStars() {
+          try {
+            var raw = localStorage.getItem("underdelta-stars");
+            var at = Number(localStorage.getItem("underdelta-stars-at") || 0);
+            var n = Number(raw);
+            // Prefer a recent cache so rate-limit blips don't flash 0.
+            if (isFinite(n) && n >= 0 && Date.now() - at < 6 * 60 * 60 * 1000) {
+              return n;
+            }
+          } catch (error) {}
+          return null;
+        }
+
+        function parseShieldMessage(message) {
+          if (typeof message !== "string") return null;
+          var cleaned = message.replace(/,/g, "").trim();
+          if (/^\d+(\.\d+)?[kKmM]$/.test(cleaned)) {
+            var base = parseFloat(cleaned);
+            var unit = cleaned.slice(-1).toLowerCase();
+            return Math.round(base * (unit === "m" ? 1000000 : 1000));
+          }
+          var n = Number(cleaned);
+          return isFinite(n) ? n : null;
         }
 
         function refreshStars() {
-          fetch("https://api.github.com/repos/" + REPO)
+          // shields.io is resilient when unauthenticated api.github.com is
+          // rate-limited (common on shared / residential IPs + GitHub Pages).
+          fetch("https://img.shields.io/github/stars/" + REPO + ".json")
             .then(function (r) {
               return r.ok ? r.json() : null;
             })
             .then(function (data) {
-              if (!data || typeof data.stargazers_count !== "number") return;
-              setCounts(data.stargazers_count);
+              var fromShield =
+                data && typeof data.value === "number"
+                  ? data.value
+                  : data
+                    ? parseShieldMessage(data.message)
+                    : null;
+              if (typeof fromShield === "number") {
+                setCounts(fromShield);
+                return;
+              }
+              return fetch("https://api.github.com/repos/" + REPO, {
+                headers: { Accept: "application/vnd.github+json" },
+              })
+                .then(function (r) {
+                  return r.ok ? r.json() : null;
+                })
+                .then(function (repo) {
+                  if (repo && typeof repo.stargazers_count === "number") {
+                    setCounts(repo.stargazers_count);
+                  }
+                });
             })
             .catch(function () {});
         }
 
+        var warm = cachedStars();
+        if (warm !== null) setCounts(warm);
         refreshStars();
         window.addEventListener("focus", refreshStars);
-        setInterval(refreshStars, 20000);
 
         function syncThemeToggle() {
           if (!themeToggle) return;
