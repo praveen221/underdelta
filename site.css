@@ -74,6 +74,12 @@ a {
   color: inherit;
 }
 
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+  color: var(--accent);
+}
+
 .wrap {
   position: relative;
   z-index: 1;
@@ -82,11 +88,11 @@ a {
 }
 
 .hero {
-  min-height: 100vh;
+  min-height: auto;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  padding: 2rem 0 4.5rem;
+  justify-content: flex-start;
+  padding: clamp(3.5rem, 12vh, 7rem) 0 3.25rem;
 }
 
 .brand {
@@ -107,7 +113,7 @@ a {
 }
 
 .lede {
-  max-width: 28rem;
+  max-width: 34rem;
   margin: 0 0 1.75rem;
   color: var(--muted);
   font-size: clamp(1.05rem, 2.2vw, 1.25rem);
@@ -129,6 +135,7 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.45rem;
   min-height: 2.85rem;
   padding: 0.7rem 1.15rem;
   border-radius: 999px;
@@ -162,6 +169,37 @@ a {
   border-color: rgba(232, 228, 217, 0.35);
 }
 
+.btn-star {
+  border-color: rgba(214, 255, 75, 0.35);
+  color: var(--paper);
+  background: rgba(214, 255, 75, 0.08);
+}
+
+.btn-star:hover {
+  border-color: var(--accent);
+  background: rgba(214, 255, 75, 0.14);
+}
+
+.star-glyph {
+  color: var(--accent);
+  font-size: 1.05em;
+  line-height: 1;
+}
+
+.star-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.35rem;
+  padding: 0.1rem 0.45rem;
+  margin-left: 0.15rem;
+  border-radius: 999px;
+  background: rgba(18, 20, 26, 0.55);
+  border: 1px solid var(--line);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 @keyframes rise {
   to {
     opacity: 1;
@@ -170,7 +208,7 @@ a {
 }
 
 .section {
-  padding: 5.5rem 0;
+  padding: 4.5rem 0;
   border-top: 1px solid var(--line);
 }
 
@@ -185,14 +223,30 @@ a {
 }
 
 .section .support {
-  margin: 0 0 2.25rem;
-  max-width: 36rem;
+  margin: 0 0 1.35rem;
+  max-width: 38rem;
   color: var(--muted);
+}
+
+.section .support:last-of-type {
+  margin-bottom: 0;
+}
+
+.punch {
+  font-family: "Syne", sans-serif;
+  font-weight: 700;
+  font-size: clamp(1.35rem, 3vw, 1.85rem);
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  max-width: 22ch;
+  margin: 1.75rem 0 0;
+  color: var(--accent);
 }
 
 .principles {
   display: grid;
   gap: 1.25rem;
+  margin-top: 2.25rem;
 }
 
 @media (min-width: 800px) {
@@ -262,16 +316,57 @@ a {
   background: var(--warm);
 }
 
-.try {
+.steps {
+  list-style: none;
+  margin: 2rem 0 0;
+  padding: 0;
   display: grid;
   gap: 1rem;
+  max-width: 44rem;
 }
 
-@media (min-width: 860px) {
-  .try {
-    grid-template-columns: 1.1fr 0.9fr;
-    align-items: end;
-  }
+.step {
+  margin: 0;
+}
+
+.step-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.55rem;
+}
+
+.step-label {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--paper);
+  letter-spacing: 0.01em;
+}
+
+.copy-btn {
+  appearance: none;
+  cursor: pointer;
+  min-height: 2rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(28, 32, 41, 0.7);
+  color: var(--paper);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: border-color 0.2s var(--ease), background 0.2s var(--ease), color 0.2s var(--ease);
+}
+
+.copy-btn:hover {
+  border-color: rgba(232, 228, 217, 0.35);
+}
+
+.copy-btn.is-copied {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  background: var(--accent);
 }
 
 pre {
@@ -284,6 +379,24 @@ pre {
   font-size: 0.88rem;
   line-height: 1.5;
   border-radius: 0.75rem;
+}
+
+.contact-list {
+  list-style: none;
+  margin: 1.75rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.contact-list a {
+  color: var(--paper);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.contact-list a:hover {
+  border-bottom-color: var(--accent);
 }
 
 footer {

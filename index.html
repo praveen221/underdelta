@@ -6,12 +6,12 @@
     <title>Underdelta — What did I actually build?</title>
     <meta
       name="description"
-      content="Underdelta compiles a repository into an evidence-backed visual model of the product — not a call graph, not vibes. Source-linked architecture you can trust."
+      content="Read the code AI generates — visually. Underdelta turns a repo into an evidence-backed map of the product."
     />
     <meta property="og:title" content="Underdelta — What did I actually build?" />
     <meta
       property="og:description"
-      content="Open infrastructure that turns a codebase into a calm, evidence-backed product map."
+      content="A visual way to read AI-generated code. Map UI, APIs, data, and jobs — every claim tied to source."
     />
     <meta property="og:type" content="website" />
     <link rel="stylesheet" href="./site.css" />
@@ -20,27 +20,60 @@
     <header class="hero wrap">
       <h1 class="brand">Under<span>delta</span></h1>
       <p class="lede">
-        After vibe coding, founders still ask one question. We compile the repo into an
-        evidence-backed map of the product — UI, APIs, data, jobs — with every claim tied to source.
+        Read all the code AI generates — by looking at it. We compile a repo into an
+        evidence-backed map of the product: UI, APIs, data, jobs — every claim tied to source.
       </p>
       <div class="cta-row">
-        <a class="btn btn-primary" href="https://github.com/praveen221/underdelta">Open on GitHub</a>
-        <a class="btn btn-ghost" href="#try">Try a scan</a>
+        <a class="btn btn-primary" href="#try">Try a scan</a>
+        <a
+          class="btn btn-star"
+          id="star-btn"
+          href="https://github.com/praveen221/underdelta"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <span class="star-glyph" aria-hidden="true">★</span>
+          Star on GitHub
+          <span class="star-count" id="star-count" hidden></span>
+        </a>
+        <a
+          class="btn btn-ghost"
+          href="https://github.com/praveen221/underdelta"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Open repo
+        </a>
       </div>
     </header>
+
+    <section class="section wrap" id="why">
+      <h2>Why this exists</h2>
+      <p class="support">
+        We were using tools like Graphify to map repos for agents. That works when the consumer
+        is another model. It falls apart when a human needs to understand what just landed —
+        or when PRs get too big to review line by line every day.
+      </p>
+      <p class="support">
+        The bet: if there is a calm visual way to read code, you can keep up with what agents
+        ship without pretending you read every diff. Underdelta is that map — for people, not
+        just for tools.
+      </p>
+      <p class="punch">Read the code AI writes. Visually.</p>
+    </section>
 
     <section class="section wrap" id="philosophy">
       <h2>Philosophy</h2>
       <p class="support">
-        Underdelta is capability infrastructure, not a dashboard skin. The browser is the product:
-        a mind map for people who shipped with agents and need to see what is real.
+        Capability infrastructure, not a dashboard skin. The browser is the product: a mind map
+        for people who shipped with agents and need to see what is real.
       </p>
       <div class="principles">
         <article class="principle">
           <h3>Evidence over invention</h3>
           <p>
             Nodes and edges come from the repository. Certainty is marked observed, derived, or
-            inferred. Unknown frameworks are left blank — never hallucinated into a pretty lie.
+            inferred. Unknown frameworks stay blank — never hallucinated into a pretty lie.
           </p>
         </article>
         <article class="principle">
@@ -80,17 +113,60 @@
     </section>
 
     <section class="section wrap" id="try">
-      <div class="try">
-        <div>
-          <h2>Try it</h2>
-          <p class="support">
-            Map any project without installing Underdelta into that project. Output lands in
-            <code>.underdelta/</code> as <code>index.html</code> + <code>architecture.json</code>.
-          </p>
-        </div>
-        <pre><code>cd /path/to/your/project
-curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/scripts/scan.sh | bash</code></pre>
-      </div>
+      <h2>Try it</h2>
+      <p class="support">
+        Map any project without installing Underdelta into that project. Output lands in
+        <code>.underdelta/</code> as <code>index.html</code> + <code>architecture.json</code>.
+      </p>
+      <ol class="steps">
+        <li class="step">
+          <div class="step-head">
+            <span class="step-label">1 · Go to your project</span>
+            <button type="button" class="copy-btn" data-copy="cd /path/to/your/project">
+              Copy
+            </button>
+          </div>
+          <pre><code>cd /path/to/your/project</code></pre>
+        </li>
+        <li class="step">
+          <div class="step-head">
+            <span class="step-label">2 · Run the scan</span>
+            <button
+              type="button"
+              class="copy-btn"
+              data-copy="curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/scripts/scan.sh | bash"
+            >
+              Copy
+            </button>
+          </div>
+          <pre><code>curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/scripts/scan.sh | bash</code></pre>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section wrap" id="contact">
+      <h2>Contact</h2>
+      <p class="support">
+        Built by Praveen. Questions, dogfood reports, or “this map lied about my repo” —
+        open an issue or find me below.
+      </p>
+      <ul class="contact-list">
+        <li>
+          <a href="https://github.com/praveen221/underdelta/issues" target="_blank" rel="noopener noreferrer"
+            >GitHub issues</a
+          >
+        </li>
+        <li>
+          <a href="https://github.com/praveen221" target="_blank" rel="noopener noreferrer"
+            >github.com/praveen221</a
+          >
+        </li>
+        <li>
+          <a href="https://praveen221.github.io/portfolio/" target="_blank" rel="noopener noreferrer"
+            >Personal site / portfolio</a
+          >
+        </li>
+      </ul>
     </section>
 
     <footer>
@@ -101,5 +177,59 @@ curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/script
         </span>
       </div>
     </footer>
+
+    <script>
+      (function () {
+        var countEl = document.getElementById("star-count");
+        fetch("https://api.github.com/repos/praveen221/underdelta")
+          .then(function (r) {
+            return r.ok ? r.json() : null;
+          })
+          .then(function (data) {
+            if (!data || typeof data.stargazers_count !== "number") return;
+            countEl.textContent = String(data.stargazers_count);
+            countEl.hidden = false;
+          })
+          .catch(function () {});
+
+        document.querySelectorAll(".copy-btn").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var text = btn.getAttribute("data-copy") || "";
+            var done = function () {
+              var prev = btn.textContent;
+              btn.textContent = "Copied";
+              btn.classList.add("is-copied");
+              setTimeout(function () {
+                btn.textContent = prev;
+                btn.classList.remove("is-copied");
+              }, 1400);
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(text).then(done).catch(function () {
+                fallbackCopy(text, done);
+              });
+            } else {
+              fallbackCopy(text, done);
+            }
+          });
+        });
+
+        function fallbackCopy(text, done) {
+          var ta = document.createElement("textarea");
+          ta.value = text;
+          ta.setAttribute("readonly", "");
+          ta.style.position = "fixed";
+          ta.style.left = "-9999px";
+          document.body.appendChild(ta);
+          ta.select();
+          try {
+            document.execCommand("copy");
+            done();
+          } finally {
+            document.body.removeChild(ta);
+          }
+        }
+      })();
+    </script>
   </body>
 </html>
