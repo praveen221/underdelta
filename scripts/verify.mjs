@@ -1562,6 +1562,8 @@ function focusNeighborhoodIds(graph, rootId) {
 }
 function intermediateFocusNodes(graph, rootId) {
   const allowed = focusNeighborhoodIds(graph, rootId);
+  const focused = graph.nodes.find((node) => node.id === rootId);
+  const shellFocus = focused?.metadata?.shellHub === true;
   return graph.nodes.filter((node) => {
     if (!allowed.has(node.id)) return false;
     if (node.kind === "product") return false;
@@ -1571,6 +1573,14 @@ function intermediateFocusNodes(graph, rootId) {
       node.metadata?.exampleChrome ||
       node.metadata?.leafChrome
     ) {
+      return false;
+    }
+    // FE shells Intermediate MVP: shell focus → nested route molecules only.
+    if (shellFocus) {
+      if (node.id === rootId) return true;
+      if (node.metadata?.routeMolecule === true && node.parentId === rootId) {
+        return true;
+      }
       return false;
     }
     // Surfaces only inside their owning capability focus (mirror viewer).
@@ -3727,6 +3737,107 @@ if (miniNextShellHubs.length) {
   );
 } else {
   pass("mini-next has no invented shell hubs (no fake Auth wall)");
+}
+
+// Phase Intermediate MVP: shell focus → nested route molecules only.
+const shellsProtectedFocus = shellsProtectedHub
+  ? intermediateFocusNodes(miniNextShellsGraph, shellsProtectedHub.id)
+  : [];
+const shellsAuthFocus = shellsAuthHub
+  ? intermediateFocusNodes(miniNextShellsGraph, shellsAuthHub.id)
+  : [];
+const shellsProtectedFocusLabels = shellsProtectedFocus.map((node) =>
+  String(node.label),
+);
+const shellsAuthFocusLabels = shellsAuthFocus.map((node) => String(node.label));
+const shellsProtectedFocusSet = new Set(shellsProtectedFocusLabels);
+const shellsAuthFocusSet = new Set(shellsAuthFocusLabels);
+const shellsProtectedHasFlood =
+  shellsProtectedFocus.some(
+    (node) =>
+      node.kind === "module" ||
+      node.kind === "function" ||
+      node.metadata?.leafChrome === true ||
+      node.metadata?.featureRoot === true ||
+      (node.kind === "component" && node.metadata?.routeMolecule !== true) ||
+      (node.kind === "page" && node.metadata?.routeMolecule !== true),
+  ) ||
+  shellsProtectedFocusSet.has("Card") ||
+  shellsProtectedFocusSet.has("Button") ||
+  shellsProtectedFocusSet.has("Dashboard panel") ||
+  shellsProtectedFocusSet.has("Dashboard page");
+if (
+  !shellsProtectedHub ||
+  !shellsProtectedFocusSet.has("Protected") ||
+  !shellsProtectedFocusSet.has("Dashboard") ||
+  !shellsProtectedFocusSet.has("Settings") ||
+  shellsProtectedFocusLabels.length !== 3 ||
+  shellsProtectedHasFlood
+) {
+  fail(
+    `mini-next-shells Protected Intermediate must be routes only (Protected + Dashboard + Settings); got ${shellsProtectedFocusLabels.join(", ") || "(none)"}`,
+  );
+} else {
+  pass(
+    "mini-next-shells Protected Intermediate is routes only (Protected → Dashboard + Settings)",
+  );
+}
+if (
+  !shellsAuthHub ||
+  !shellsAuthFocusSet.has("Auth") ||
+  !shellsAuthFocusSet.has("Login") ||
+  shellsAuthFocusLabels.length !== 2 ||
+  shellsAuthFocus.some(
+    (node) =>
+      node.kind === "module" ||
+      node.kind === "function" ||
+      node.metadata?.leafChrome === true ||
+      (node.kind === "component" && node.metadata?.routeMolecule !== true),
+  )
+) {
+  fail(
+    `mini-next-shells Auth Intermediate must be routes only (Auth + Login); got ${shellsAuthFocusLabels.join(", ") || "(none)"}`,
+  );
+} else {
+  pass("mini-next-shells Auth Intermediate is routes only (Auth → Login)");
+}
+// Fixture must still mark Dashboard panel feature root + Card/Button leaf chrome
+// so the shell Intermediate filter is a real omission, not an empty graph.
+const shellsDashboardPanel = miniNextShellsGraph.nodes.find(
+  (node) =>
+    node.kind === "component" &&
+    (node.label === "Dashboard panel" ||
+      node.metadata?.technicalLabel === "DashboardPanel"),
+);
+const shellsLeafChrome = miniNextShellsGraph.nodes.filter(
+  (node) =>
+    node.kind === "component" &&
+    node.metadata?.leafChrome === true &&
+    (node.label === "Card" || node.label === "Button"),
+);
+if (!shellsDashboardPanel || shellsDashboardPanel.metadata?.featureRoot !== true) {
+  fail(
+    "mini-next-shells expected Dashboard panel featureRoot under Protected /dashboard for Intermediate omission floor",
+  );
+} else if (shellsLeafChrome.length < 2) {
+  fail(
+    `mini-next-shells expected Card + Button leafChrome under dashboard panel, found ${shellsLeafChrome.map((n) => n.label).join(", ") || "(none)"}`,
+  );
+} else {
+  pass(
+    "mini-next-shells dashboard featureRoot + Card/Button leafChrome exist but stay off shell Intermediate",
+  );
+}
+if (
+  !viewerHtml.includes("shellRoutesOnlyVisible") ||
+  !viewerHtml.includes("isShellHub") ||
+  !viewerHtml.includes("shellHub")
+) {
+  fail(
+    "viewer must implement FE shell Intermediate routes-only filter (shellRoutesOnlyVisible / isShellHub)",
+  );
+} else {
+  pass("viewer wires FE shell Intermediate routes-only filter");
 }
 
 const miniNextHomeFocus = miniNextHomeMolecule

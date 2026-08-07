@@ -16,3 +16,5 @@ Sign-in under `(auth)/login`.
 ### Protected shell
 
 Dashboard and Settings under `(app)`, matched by root `middleware.ts`.
+Dashboard imports a page-owned `DashboardPanel` plus presentational Card/Button
+so Intermediate shell focus can prove routes-only (no featureRoot / leaf chrome).
