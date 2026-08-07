@@ -5,7 +5,7 @@ of the product. It is infrastructure for answering a simple question:
 
 > What did I actually build?
 
-Philosophy one-pager (GitHub Pages from `/docs`):
+Philosophy one-pager (GitHub Pages from repo root):
 [praveen221.github.io/underdelta](https://praveen221.github.io/underdelta/)
 
 The generated browser presents routes, components, functions, databases,
