@@ -236,6 +236,21 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         (node.metadata.role === "detection-surface" || node.metadata.detectionSurface)
       );
     }
+    // Pass B FE shell hubs (Public / Auth / Protected) — Intermediate is routes only.
+    function isShellHub(node) {
+      return !!(node && node.metadata && node.metadata.shellHub === true);
+    }
+    function isRouteMoleculeHub(node) {
+      return !!(node && node.metadata && node.metadata.routeMolecule === true);
+    }
+    // Shell Intermediate MVP: nested page/route molecules under the shell, not
+    // page atoms, feature roots, leaf chrome, modules, or functions.
+    function shellRoutesOnlyVisible(node, focusId) {
+      const focused = focusId ? byId.get(focusId) : null;
+      if (!isShellHub(focused)) return true;
+      if (node.id === focusId) return true;
+      return isRouteMoleculeHub(node) && node.parentId === focusId;
+    }
     // Route atoms nested under domain groups (Users / Articles) — only show when
     // that group is focused (same Intermediate calm as detection surfaces).
     function isRouteGroupMember(node) {
@@ -716,6 +731,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     // Intermediate-visible nodes inside a focus (no Advanced code kinds).
     function intermediateNeighborhoodNodes(rootId) {
       const allowed = focusNeighborhood(rootId);
+      const focused = byId.get(rootId);
       return graph.nodes.filter((node) => {
         if (!allowed.has(node.id)) return false;
         if (node.kind === "product") return false;
@@ -726,6 +742,10 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
             node.metadata.exampleChrome ||
             node.metadata.leafChrome)
         ) {
+          return false;
+        }
+        // FE shells: Protected/Auth/Public Intermediate = nested routes only.
+        if (isShellHub(focused) && !shellRoutesOnlyVisible(node, rootId)) {
           return false;
         }
         if (!routeGroupMemberVisible(node, rootId)) return false;
@@ -799,6 +819,10 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       }
       if (advancedKinds.has(clicked.kind)) {
         return { focusId: clickedId, tier: "advanced", selectedId: clickedId };
+      }
+      // FE shell hubs always open Intermediate routes (never thin-room Advanced).
+      if (isShellHub(clicked)) {
+        return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
       }
 
       const inter = intermediateNeighborhoodNodes(clickedId);
@@ -887,6 +911,15 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         // Presentational FE leaves (Card/Button) stay off Beginner/Intermediate;
         // Advanced-in-focus may reveal them as code chrome.
         if (node.metadata && node.metadata.leafChrome && !isAdvancedTier()) {
+          return false;
+        }
+        // FE shells Intermediate MVP: shell focus shows nested route molecules
+        // only (not page atoms, feature roots, leaf chrome, or code flood).
+        if (
+          state.focus &&
+          !isAdvancedTier() &&
+          !shellRoutesOnlyVisible(node, state.focus)
+        ) {
           return false;
         }
         // Trivial Mongo aggregate crumbs (C pipeline / Col pipeline) stay
@@ -1475,8 +1508,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       "collapsedInOverview",
       "overviewHub",
       "routeGroup", "routeGroupMember", "routeDomain", "routeMolecule",
+      "shellHub", "shell", "access", "surface", "reachability", "projectedShell",
       "intermediateOmitted", "intermediateOmitReason",
-      "beginnerRouteHub", "beginnerOmitted", "beginnerOmitReason",
+      "beginnerRouteHub", "beginnerOmitted", "beginnerOmitReason", "beginnerHero",
       "replacedByRouteMolecules",
       "uiOnly", "uiOnlyReason",
       "path", "framework", "readmeHeading", "readmeTitle",
@@ -1488,6 +1522,12 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const meta = node.metadata || {};
       if (meta.uiOnly === true) {
         return "UI-only product — no static API, Data, or Jobs evidence";
+      }
+      if (meta.shellHub === true) {
+        if (meta.shell === "auth") return "Auth gate — sign-in routes";
+        if (meta.shell === "protected") return "Protected app — nested routes";
+        if (meta.shell === "public") return "Public shell — marketing routes";
+        return "Front-end access shell";
       }
       if (meta.routeMolecule === true) {
         const path = typeof meta.path === "string" && meta.path ? meta.path : "";

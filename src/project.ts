@@ -1,4 +1,12 @@
 import { detectionSurfacesForExtractor } from "./capabilitySurfaces.js";
+import {
+  isFeShell,
+  shellFlowRank,
+  shellFromAccessMetadata,
+  shellHubLabel,
+  shellSystemKey,
+  type FeShell,
+} from "./feShells.js";
 import { edgeFrom, stableId } from "./graph.js";
 import {
   architectureGraphSchema,
@@ -559,10 +567,20 @@ const flowOrderPreference: string[] = [
 ];
 
 function flowOrderRank(key: string): number {
+  const uiIndex = flowOrderPreference.indexOf("ui");
+  const uiSlot = uiIndex === -1 ? flowOrderPreference.length : uiIndex;
+  // Shell hubs + page molecules share the UI band; shells sort Public→Auth→Protected
+  // ahead of leftover page peers (hero) via preferred flow pairs when present.
+  if (key.startsWith("shell:")) {
+    const shell = key.slice("shell:".length);
+    if (isFeShell(shell)) {
+      return uiSlot + shellFlowRank(shell) / 10;
+    }
+    return uiSlot;
+  }
   // App Router page molecules occupy the UI slot, ordered among themselves by key.
   if (key.startsWith("page:")) {
-    const uiIndex = flowOrderPreference.indexOf("ui");
-    return uiIndex === -1 ? flowOrderPreference.length : uiIndex;
+    return uiSlot + 0.5;
   }
   const index = flowOrderPreference.indexOf(key);
   return index === -1 ? flowOrderPreference.length : index;
@@ -2332,6 +2350,199 @@ function compressFeBeginnerRouteMolecules(
     nodes.set(item.node.id, item.node);
     systems.set(item.key, item.node);
   }
+}
+
+/** Nest a semantic hub under another hub (attachToSystem skips projection=semantic). */
+function nestSemanticHub(
+  child: ArchitectureNode,
+  parent: ArchitectureNode,
+  nodes: Map<string, ArchitectureNode>,
+  edges: Map<string, ArchitectureEdge>,
+  evidence: Evidence,
+): void {
+  child.parentId = parent.id;
+  nodes.set(child.id, child);
+  for (const [edgeId, edge] of [...edges.entries()]) {
+    if (
+      edge.kind === "contains" &&
+      edge.target === child.id &&
+      edge.source !== parent.id
+    ) {
+      edges.delete(edgeId);
+    }
+  }
+  const contains = edgeFrom("contains", parent.id, child.id, evidence);
+  edges.set(contains.id, contains);
+}
+
+function pageMoleculeShell(
+  molecule: ArchitectureNode,
+  nodes: Map<string, ArchitectureNode>,
+): FeShell | undefined {
+  const direct = shellFromAccessMetadata(molecule.metadata);
+  if (direct) return direct;
+  const childPages = [...nodes.values()].filter(
+    (node) =>
+      node.kind === "page" &&
+      (node.parentId === molecule.id ||
+        node.metadata?.routeMolecule === molecule.metadata?.systemKey),
+  );
+  for (const page of childPages) {
+    const shell = shellFromAccessMetadata(page.metadata);
+    if (shell) return shell;
+  }
+  return undefined;
+}
+
+/**
+ * Pass B — shell hubs: when App Router access metadata exists, Beginner becomes
+ * Home (hero) → Auth → Protected instead of one hub per page.tsx.
+ * Never invent a Protected shell without access=protected evidence on pages.
+ */
+function projectFeShellHubs(
+  systems: Map<string, ArchitectureNode>,
+  nodes: Map<string, ArchitectureNode>,
+  edges: Map<string, ArchitectureEdge>,
+  productId: string,
+): string[] {
+  const pageMolecules = [...systems.entries()].filter(
+    ([key, node]) =>
+      key.startsWith("page:") && node.metadata?.routeMolecule === true,
+  );
+  if (pageMolecules.length < 2) return [];
+
+  const byShell = new Map<FeShell, Array<{ key: string; node: ArchitectureNode }>>();
+  for (const [key, node] of pageMolecules) {
+    const shell = pageMoleculeShell(node, nodes);
+    if (!shell) continue;
+    const bucket = byShell.get(shell) ?? [];
+    bucket.push({ key, node });
+    byShell.set(shell, bucket);
+  }
+
+  // Need a real gate story — public-only marketing pages stay as page molecules.
+  if (!byShell.has("auth") && !byShell.has("protected")) return [];
+  // Protected only when pages carry access=protected (route-group / guard extract).
+  if (byShell.has("protected")) {
+    const protectedPages = [...nodes.values()].filter(
+      (node) =>
+        node.kind === "page" && node.metadata?.access === "protected",
+    );
+    if (!protectedPages.length) {
+      byShell.delete("protected");
+    }
+  }
+  if (!byShell.has("auth") && !byShell.has("protected")) return [];
+
+  const shellKeys: string[] = [];
+  const orderedShells = (["public", "auth", "protected"] as const).filter(
+    (shell) => byShell.has(shell),
+  );
+
+  for (const shell of orderedShells) {
+    const members = byShell.get(shell)!;
+    const key = shellSystemKey(shell);
+    const systemId = stableId("system", key);
+    const evidence = dedupeEvidence(
+      members.flatMap((item) => item.node.evidence).slice(0, 8),
+    );
+    const seed =
+      evidence[0] ??
+      projectionEvidence(".", `FE shell hub ${shell}`);
+    // Public collapses behind the Home hero when `/` is present; Auth/Protected
+    // stay on Beginner as shell gates.
+    const heroCoversPublic =
+      shell === "public" &&
+      members.some((item) => {
+        const path =
+          typeof item.node.metadata?.path === "string"
+            ? item.node.metadata.path
+            : item.key.slice("page:".length);
+        return path === "/" || appRouterRouteSegment(path) === "/";
+      });
+    const collapsedInOverview = shell === "public" && heroCoversPublic;
+
+    let hub = systems.get(key);
+    if (!hub) {
+      hub = {
+        id: systemId,
+        kind: "ui",
+        label: shellHubLabel(shell),
+        technology: "semantic",
+        metadata: {
+          projection: "semantic",
+          systemKey: key,
+          shellHub: true,
+          shell,
+          access: shell,
+          surface: "story",
+          reachability: "route-tree",
+          collapsedInOverview,
+        },
+        evidence: [
+          {
+            ...seed,
+            detail: seed.detail ?? `FE shell ${shell}`,
+          },
+        ],
+      };
+      systems.set(key, hub);
+      nodes.set(hub.id, hub);
+      const productEdge = edgeFrom("contains", productId, hub.id, seed);
+      edges.set(productEdge.id, productEdge);
+    } else {
+      hub.label = shellHubLabel(shell);
+      hub.metadata = {
+        ...hub.metadata,
+        projection: "semantic",
+        systemKey: key,
+        shellHub: true,
+        shell,
+        access: shell,
+        surface: "story",
+        reachability: "route-tree",
+        collapsedInOverview,
+      };
+      hub.evidence = dedupeEvidence([...hub.evidence, ...evidence]);
+      nodes.set(hub.id, hub);
+      systems.set(key, hub);
+    }
+    shellKeys.push(key);
+
+    for (const member of members) {
+      const path =
+        typeof member.node.metadata?.path === "string"
+          ? member.node.metadata.path
+          : member.key.slice("page:".length);
+      const isHero =
+        shell === "public" &&
+        (path === "/" || appRouterRouteSegment(path) === "/");
+      nestSemanticHub(member.node, hub, nodes, edges, member.node.evidence[0] ?? seed);
+      member.node.metadata = {
+        ...member.node.metadata,
+        shell,
+        access: member.node.metadata?.access ?? shell,
+        surface: "story",
+        projectedShell: key,
+        beginnerRouteHub: isHero,
+        collapsedInOverview: !isHero,
+        ...(isHero
+          ? { beginnerHero: true }
+          : {
+              beginnerOmitted: true,
+              beginnerOmitReason: "nested-under-shell",
+            }),
+      };
+      nodes.set(member.node.id, member.node);
+      systems.set(member.key, member.node);
+    }
+
+    hub.evidence = dedupeEvidence(hub.evidence);
+    nodes.set(hub.id, hub);
+    systems.set(key, hub);
+  }
+
+  return shellKeys;
 }
 
 /**
@@ -5810,6 +6021,67 @@ export function projectSemanticArchitecture(
   // Foreign Next apps (shree-learn) can mint dozens of page molecules — keep
   // product hubs on Beginner; collapse marketing/excess for Intermediate/Find.
   compressFeBeginnerRouteMolecules(systems, nodes);
+
+  // Pass B shells: when access metadata exists, nest page molecules under
+  // Public/Auth/Protected and keep Beginner as hero + shell gates.
+  const feShellKeys = projectFeShellHubs(
+    systems,
+    nodes,
+    edges,
+    product.id,
+  );
+  if (feShellKeys.length) {
+    const shellSet = new Set(feShellKeys);
+    // Entrance hero: prefer explicit beginnerHero (Public `/`), else keep a
+    // top-level `/` page molecule on Beginner when Auth/Protected shells exist
+    // but no Public shell (common: middleware-gated /dashboard + public Home).
+    let heroPageKey = [...systems.entries()].find(
+      ([key, node]) =>
+        key.startsWith("page:") && node.metadata?.beginnerHero === true,
+    )?.[0];
+    if (!heroPageKey) {
+      const homeEntry = [...systems.entries()].find(([key, node]) => {
+        if (!key.startsWith("page:") || node.metadata?.routeMolecule !== true) {
+          return false;
+        }
+        if (node.metadata?.collapsedInOverview === true) return false;
+        const path =
+          typeof node.metadata?.path === "string" ? node.metadata.path : "";
+        return path === "/" || appRouterRouteSegment(path) === "/";
+      });
+      if (homeEntry) {
+        const [homeKey, homeNode] = homeEntry;
+        homeNode.metadata = {
+          ...homeNode.metadata,
+          beginnerHero: true,
+          beginnerRouteHub: true,
+          collapsedInOverview: false,
+        };
+        delete homeNode.metadata.beginnerOmitted;
+        delete homeNode.metadata.beginnerOmitReason;
+        nodes.set(homeNode.id, homeNode);
+        systems.set(homeKey, homeNode);
+        heroPageKey = homeKey;
+      }
+    }
+    const authKey = shellSet.has(shellSystemKey("auth"))
+      ? shellSystemKey("auth")
+      : undefined;
+    const protectedKey = shellSet.has(shellSystemKey("protected"))
+      ? shellSystemKey("protected")
+      : undefined;
+    // Prefer entrance walk: Home → Auth → Protected → API.
+    if (heroPageKey && authKey) flowPairs.push([heroPageKey, authKey]);
+    if (authKey && protectedKey) flowPairs.push([authKey, protectedKey]);
+    if (heroPageKey && protectedKey && !authKey) {
+      flowPairs.push([heroPageKey, protectedKey]);
+    }
+    if (systems.has("api")) {
+      const apiTail =
+        protectedKey ?? authKey ?? feShellKeys[feShellKeys.length - 1]!;
+      flowPairs.push([apiTail, "api"]);
+    }
+  }
 
   // Heart / Express Intermediate calm: domain route groups + naked-route cap
   // so API focus is Users/Articles hubs (≤8 leftover samples when grouped),

@@ -38,6 +38,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const fixtureRoot = path.join(repoRoot, "verification", "mini-stack");
 const miniNextRoot = path.join(repoRoot, "verification", "mini-next");
+const miniNextShellsRoot = path.join(
+  repoRoot,
+  "verification",
+  "mini-next-shells",
+);
 const miniVueRoot = path.join(repoRoot, "verification", "mini-vue");
 const miniPythonRoot = path.join(repoRoot, "verification", "mini-python");
 const miniMongoRoot = path.join(repoRoot, "verification", "mini-mongo");
@@ -164,6 +169,7 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file.includes("/verification/") ||
         file.includes("mini-stack/") ||
         file.includes("mini-next/") ||
+        file.includes("mini-next-shells/") ||
         file.includes("mini-vue/") ||
         file.includes("mini-python/") ||
         file.includes("mini-mongo/") ||
@@ -1556,6 +1562,8 @@ function focusNeighborhoodIds(graph, rootId) {
 }
 function intermediateFocusNodes(graph, rootId) {
   const allowed = focusNeighborhoodIds(graph, rootId);
+  const focused = graph.nodes.find((node) => node.id === rootId);
+  const shellFocus = focused?.metadata?.shellHub === true;
   return graph.nodes.filter((node) => {
     if (!allowed.has(node.id)) return false;
     if (node.kind === "product") return false;
@@ -1565,6 +1573,14 @@ function intermediateFocusNodes(graph, rootId) {
       node.metadata?.exampleChrome ||
       node.metadata?.leafChrome
     ) {
+      return false;
+    }
+    // FE shells Intermediate MVP: shell focus → nested route molecules only.
+    if (shellFocus) {
+      if (node.id === rootId) return true;
+      if (node.metadata?.routeMolecule === true && node.parentId === rootId) {
+        return true;
+      }
       return false;
     }
     // Surfaces only inside their owning capability focus (mirror viewer).
@@ -3543,6 +3559,287 @@ if (
   pass("mini-next featureRoot ⊥ leafChrome");
 }
 
+// FE shells Phase 0+1: access contract + shell Beginner (Public→Auth→Protected).
+const miniNextShellsGraph = await compileRepository(miniNextShellsRoot);
+const miniNextShellsPages = miniNextShellsGraph.nodes.filter(
+  (node) => node.kind === "page",
+);
+const accessByPath = new Map(
+  miniNextShellsPages.map((node) => [
+    String(node.metadata?.path ?? ""),
+    String(node.metadata?.access ?? ""),
+  ]),
+);
+const shellByPath = new Map(
+  miniNextShellsPages.map((node) => [
+    String(node.metadata?.path ?? ""),
+    String(node.metadata?.shell ?? ""),
+  ]),
+);
+const expectedShellAccess = [
+  ["/", "public"],
+  ["/pricing", "public"],
+  ["/login", "auth"],
+  ["/dashboard", "protected"],
+  ["/settings", "protected"],
+];
+for (const [pagePath, access] of expectedShellAccess) {
+  if (accessByPath.get(pagePath) !== access) {
+    fail(
+      `mini-next-shells page ${pagePath} expected access=${access}, got ${accessByPath.get(pagePath) || "(missing)"}; map=${[...accessByPath.entries()].map(([p, a]) => `${p}:${a}`).join(", ")}`,
+    );
+  } else {
+    pass(`mini-next-shells ${pagePath} access=${access}`);
+  }
+  if (shellByPath.get(pagePath) !== access) {
+    fail(
+      `mini-next-shells page ${pagePath} expected shell=${access}, got ${shellByPath.get(pagePath) || "(missing)"}`,
+    );
+  } else {
+    pass(`mini-next-shells ${pagePath} shell=${access}`);
+  }
+}
+const shellsStoryPages = miniNextShellsPages.filter(
+  (node) =>
+    node.metadata?.surface === "story" &&
+    node.metadata?.reachability === "route-tree",
+);
+if (shellsStoryPages.length < 5) {
+  fail(
+    `mini-next-shells expected ≥5 pages with surface=story + reachability=route-tree, found ${shellsStoryPages.length}`,
+  );
+} else {
+  pass(
+    `mini-next-shells ${shellsStoryPages.length} pages carry surface=story + reachability=route-tree`,
+  );
+}
+const shellsMiddleware = miniNextShellsGraph.nodes.find(
+  (node) =>
+    node.kind === "config" &&
+    (node.metadata?.next === "middleware" ||
+      node.technology === "next-middleware"),
+);
+if (!shellsMiddleware) {
+  fail("mini-next-shells missing Next.js middleware config node");
+} else if (
+  !Array.isArray(shellsMiddleware.metadata?.middlewareMatchers) ||
+  shellsMiddleware.metadata.middlewareMatchers.length < 1
+) {
+  fail(
+    `mini-next-shells middleware missing matcher paths, metadata=${JSON.stringify(shellsMiddleware.metadata)}`,
+  );
+} else if (shellsMiddleware.metadata?.redirectsToLogin !== true) {
+  fail("mini-next-shells middleware should observe redirect-to-login");
+} else {
+  pass(
+    `mini-next-shells middleware gate: matchers=${shellsMiddleware.metadata.middlewareMatchers.join(", ")}`,
+  );
+}
+// Negative floor: flat mini-next /dashboard must NOT invent protected from the name alone.
+const miniNextDashboardPage = miniNextGraph.nodes.find(
+  (node) => node.kind === "page" && node.metadata?.path === "/dashboard",
+);
+if (
+  miniNextDashboardPage &&
+  miniNextDashboardPage.metadata?.access === "protected"
+) {
+  fail(
+    "mini-next /dashboard must not get access=protected without route-group/middleware evidence (no fake Auth wall)",
+  );
+} else {
+  pass(
+    "mini-next /dashboard is not access=protected without shell evidence (no fake wall)",
+  );
+}
+
+// Phase 1: Beginner is hero + shell hubs, not one hub per page.tsx.
+const miniNextShellsFlow = miniNextShellsGraph.nodes
+  .filter((node) => typeof node.metadata?.flowOrder === "number")
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+const miniNextShellsFlowLabels = miniNextShellsFlow.map((node) => node.label);
+const shellsAuthHub = miniNextShellsGraph.nodes.find(
+  (node) => node.metadata?.systemKey === "shell:auth",
+);
+const shellsProtectedHub = miniNextShellsGraph.nodes.find(
+  (node) => node.metadata?.systemKey === "shell:protected",
+);
+const shellsPublicHub = miniNextShellsGraph.nodes.find(
+  (node) => node.metadata?.systemKey === "shell:public",
+);
+const shellsHomeMolecule = miniNextShellsGraph.nodes.find(
+  (node) => node.metadata?.systemKey === "page:/",
+);
+const shellsLoginMolecule = miniNextShellsGraph.nodes.find(
+  (node) => node.metadata?.systemKey === "page:/login",
+);
+const shellsDashboardMolecule = miniNextShellsGraph.nodes.find(
+  (node) => node.metadata?.systemKey === "page:/dashboard",
+);
+const shellsSettingsMolecule = miniNextShellsGraph.nodes.find(
+  (node) => node.metadata?.systemKey === "page:/settings",
+);
+const shellsPricingMolecule = miniNextShellsGraph.nodes.find(
+  (node) => node.metadata?.systemKey === "page:/pricing",
+);
+if (
+  miniNextShellsFlowLabels.length < 3 ||
+  miniNextShellsFlowLabels[0] !== "Home" ||
+  !miniNextShellsFlowLabels.includes("Auth") ||
+  !miniNextShellsFlowLabels.includes("Protected") ||
+  miniNextShellsFlowLabels.indexOf("Home") >
+    miniNextShellsFlowLabels.indexOf("Auth") ||
+  miniNextShellsFlowLabels.indexOf("Auth") >
+    miniNextShellsFlowLabels.indexOf("Protected")
+) {
+  fail(
+    `mini-next-shells Beginner expected Home → Auth → Protected, got ${miniNextShellsFlowLabels.join(" → ") || "(none)"}`,
+  );
+} else if (
+  miniNextShellsFlowLabels.includes("Login") ||
+  miniNextShellsFlowLabels.includes("Dashboard") ||
+  miniNextShellsFlowLabels.includes("Settings") ||
+  miniNextShellsFlowLabels.includes("Pricing")
+) {
+  fail(
+    `mini-next-shells Beginner must nest Login/Dashboard/Settings/Pricing under shells, still on flow: ${miniNextShellsFlowLabels.join(" → ")}`,
+  );
+} else {
+  pass(
+    `mini-next-shells Beginner shell walk: ${miniNextShellsFlowLabels.join(" → ")}`,
+  );
+}
+if (!shellsAuthHub || !shellsProtectedHub || !shellsPublicHub) {
+  fail(
+    `mini-next-shells missing shell hubs auth=${!!shellsAuthHub} protected=${!!shellsProtectedHub} public=${!!shellsPublicHub}`,
+  );
+} else if (shellsPublicHub.metadata?.collapsedInOverview !== true) {
+  fail("mini-next-shells Public shell should collapse behind Home hero");
+} else if (
+  shellsLoginMolecule?.parentId !== shellsAuthHub.id ||
+  shellsDashboardMolecule?.parentId !== shellsProtectedHub.id ||
+  shellsSettingsMolecule?.parentId !== shellsProtectedHub.id ||
+  shellsPricingMolecule?.parentId !== shellsPublicHub.id ||
+  shellsHomeMolecule?.parentId !== shellsPublicHub.id
+) {
+  fail(
+    `mini-next-shells page molecules must nest under shells (login→Auth, dash/settings→Protected, home/pricing→Public); got login=${shellsLoginMolecule?.parentId} dash=${shellsDashboardMolecule?.parentId} settings=${shellsSettingsMolecule?.parentId} home=${shellsHomeMolecule?.parentId} pricing=${shellsPricingMolecule?.parentId}`,
+  );
+} else {
+  pass("mini-next-shells page molecules nested under Public/Auth/Protected shells");
+}
+// Flat mini-next must not invent shell hubs from /dashboard alone.
+const miniNextShellHubs = miniNextGraph.nodes.filter(
+  (node) => node.metadata?.shellHub === true,
+);
+if (miniNextShellHubs.length) {
+  fail(
+    `mini-next must not invent shell hubs without access evidence; found ${miniNextShellHubs.map((n) => n.label).join(", ")}`,
+  );
+} else {
+  pass("mini-next has no invented shell hubs (no fake Auth wall)");
+}
+
+// Phase Intermediate MVP: shell focus → nested route molecules only.
+const shellsProtectedFocus = shellsProtectedHub
+  ? intermediateFocusNodes(miniNextShellsGraph, shellsProtectedHub.id)
+  : [];
+const shellsAuthFocus = shellsAuthHub
+  ? intermediateFocusNodes(miniNextShellsGraph, shellsAuthHub.id)
+  : [];
+const shellsProtectedFocusLabels = shellsProtectedFocus.map((node) =>
+  String(node.label),
+);
+const shellsAuthFocusLabels = shellsAuthFocus.map((node) => String(node.label));
+const shellsProtectedFocusSet = new Set(shellsProtectedFocusLabels);
+const shellsAuthFocusSet = new Set(shellsAuthFocusLabels);
+const shellsProtectedHasFlood =
+  shellsProtectedFocus.some(
+    (node) =>
+      node.kind === "module" ||
+      node.kind === "function" ||
+      node.metadata?.leafChrome === true ||
+      node.metadata?.featureRoot === true ||
+      (node.kind === "component" && node.metadata?.routeMolecule !== true) ||
+      (node.kind === "page" && node.metadata?.routeMolecule !== true),
+  ) ||
+  shellsProtectedFocusSet.has("Card") ||
+  shellsProtectedFocusSet.has("Button") ||
+  shellsProtectedFocusSet.has("Dashboard panel") ||
+  shellsProtectedFocusSet.has("Dashboard page");
+if (
+  !shellsProtectedHub ||
+  !shellsProtectedFocusSet.has("Protected") ||
+  !shellsProtectedFocusSet.has("Dashboard") ||
+  !shellsProtectedFocusSet.has("Settings") ||
+  shellsProtectedFocusLabels.length !== 3 ||
+  shellsProtectedHasFlood
+) {
+  fail(
+    `mini-next-shells Protected Intermediate must be routes only (Protected + Dashboard + Settings); got ${shellsProtectedFocusLabels.join(", ") || "(none)"}`,
+  );
+} else {
+  pass(
+    "mini-next-shells Protected Intermediate is routes only (Protected → Dashboard + Settings)",
+  );
+}
+if (
+  !shellsAuthHub ||
+  !shellsAuthFocusSet.has("Auth") ||
+  !shellsAuthFocusSet.has("Login") ||
+  shellsAuthFocusLabels.length !== 2 ||
+  shellsAuthFocus.some(
+    (node) =>
+      node.kind === "module" ||
+      node.kind === "function" ||
+      node.metadata?.leafChrome === true ||
+      (node.kind === "component" && node.metadata?.routeMolecule !== true),
+  )
+) {
+  fail(
+    `mini-next-shells Auth Intermediate must be routes only (Auth + Login); got ${shellsAuthFocusLabels.join(", ") || "(none)"}`,
+  );
+} else {
+  pass("mini-next-shells Auth Intermediate is routes only (Auth → Login)");
+}
+// Fixture must still mark Dashboard panel feature root + Card/Button leaf chrome
+// so the shell Intermediate filter is a real omission, not an empty graph.
+const shellsDashboardPanel = miniNextShellsGraph.nodes.find(
+  (node) =>
+    node.kind === "component" &&
+    (node.label === "Dashboard panel" ||
+      node.metadata?.technicalLabel === "DashboardPanel"),
+);
+const shellsLeafChrome = miniNextShellsGraph.nodes.filter(
+  (node) =>
+    node.kind === "component" &&
+    node.metadata?.leafChrome === true &&
+    (node.label === "Card" || node.label === "Button"),
+);
+if (!shellsDashboardPanel || shellsDashboardPanel.metadata?.featureRoot !== true) {
+  fail(
+    "mini-next-shells expected Dashboard panel featureRoot under Protected /dashboard for Intermediate omission floor",
+  );
+} else if (shellsLeafChrome.length < 2) {
+  fail(
+    `mini-next-shells expected Card + Button leafChrome under dashboard panel, found ${shellsLeafChrome.map((n) => n.label).join(", ") || "(none)"}`,
+  );
+} else {
+  pass(
+    "mini-next-shells dashboard featureRoot + Card/Button leafChrome exist but stay off shell Intermediate",
+  );
+}
+if (
+  !viewerHtml.includes("shellRoutesOnlyVisible") ||
+  !viewerHtml.includes("isShellHub") ||
+  !viewerHtml.includes("shellHub")
+) {
+  fail(
+    "viewer must implement FE shell Intermediate routes-only filter (shellRoutesOnlyVisible / isShellHub)",
+  );
+} else {
+  pass("viewer wires FE shell Intermediate routes-only filter");
+}
+
 const miniNextHomeFocus = miniNextHomeMolecule
   ? intermediateFocusNodes(miniNextGraph, miniNextHomeMolecule.id)
   : [];
@@ -4820,28 +5117,60 @@ if (nextRealRoot) {
     }
 
     // Re-check flow with Data access in the SaaS story band.
+    // FE shells: when Auth/Protected hubs exist, Beginner is Home → Auth →
+    // Protected (± public peers) → HTTP API → Data — nested page molecules
+    // stay off the flow band (same as mini-next-shells).
     const nextFlowWithData = nextSemantic
       .filter((node) => typeof node.metadata?.flowOrder === "number")
       .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder)
       .map((node) => node.label);
-    const nextFlowMoleculeLabels = nextRouteMolecules.map((node) => node.label);
+    const nextShellHubsOnFlow = nextSemantic.filter(
+      (node) =>
+        node.metadata?.shellHub === true &&
+        typeof node.metadata?.flowOrder === "number",
+    );
+    const nextFlowMoleculeLabels = nextRouteMolecules
+      .filter(
+        (node) =>
+          node.metadata?.collapsedInOverview !== true &&
+          node.metadata?.projectedShell == null,
+      )
+      .map((node) => node.label);
     const firstMoleculeIdx = Math.min(
       ...nextFlowMoleculeLabels.map((label) => nextFlowWithData.indexOf(label)),
     );
     const apiIdx = nextFlowWithData.indexOf("HTTP API");
     const dataIdx = nextFlowWithData.indexOf("Data access");
+    const homeIdx = nextFlowWithData.indexOf("Home");
+    const authIdx = nextFlowWithData.indexOf("Auth");
+    const protectedIdx = nextFlowWithData.indexOf("Protected");
     const missingFlowMolecules = nextFlowMoleculeLabels.filter(
       (label) => !nextFlowWithData.includes(label),
     );
-    if (
-      missingFlowMolecules.length ||
-      apiIdx < 0 ||
-      dataIdx < 0 ||
-      !(firstMoleculeIdx < apiIdx && apiIdx < dataIdx) ||
-      nextFlowWithData.includes("UI")
-    ) {
+    const shellEntranceOk =
+      nextShellHubsOnFlow.length > 0 &&
+      homeIdx >= 0 &&
+      homeIdx < apiIdx &&
+      apiIdx >= 0 &&
+      dataIdx >= 0 &&
+      apiIdx < dataIdx &&
+      (authIdx < 0 || (homeIdx < authIdx && authIdx < apiIdx)) &&
+      (protectedIdx < 0 ||
+        ((authIdx >= 0 ? authIdx : homeIdx) < protectedIdx &&
+          protectedIdx < apiIdx)) &&
+      !nextFlowWithData.includes("UI");
+    const moleculeParadeOk =
+      !missingFlowMolecules.length &&
+      apiIdx >= 0 &&
+      dataIdx >= 0 &&
+      Number.isFinite(firstMoleculeIdx) &&
+      firstMoleculeIdx >= 0 &&
+      firstMoleculeIdx < apiIdx &&
+      apiIdx < dataIdx &&
+      !nextFlowWithData.includes("UI");
+    if (!(shellEntranceOk || moleculeParadeOk)) {
       fail(
-        `next-real-repo flowOrder should be route molecules → HTTP API → Data access (no UI blob), got ${nextFlowWithData.join(" → ") || "(none)"}`,
+        `next-real-repo flowOrder should be Home→Auth→Protected→API→Data (shells) or route molecules → HTTP API → Data access (no UI blob), got ${nextFlowWithData.join(" → ") || "(none)"}`,
       );
     } else {
       pass(`next-real-repo flowOrder: ${nextFlowWithData.join(" → ")}`);
