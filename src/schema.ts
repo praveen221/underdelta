@@ -76,6 +76,8 @@ export const evidenceSchema = z.object({
  * - `surface`: story | code | library | noise
  * - `reachability`: route-tree | orphaned | external-package
  * - `routeGroups`: App Router `(group)` folder names
+ * - `shellHub`: true on Pass B Public/Auth/Protected hubs (`systemKey` shell:*)
+ * - `beginnerHero`: true on the `/` page molecule kept beside shell gates
  */
 export const architectureNodeSchema = z.object({
   id: z.string().min(1),

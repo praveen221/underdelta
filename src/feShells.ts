@@ -98,3 +98,39 @@ export function isFeSurface(value: unknown): value is FeSurface {
     (feSurfaceValues as readonly string[]).includes(value)
   );
 }
+
+/** Stable systemKey for a Pass B shell hub. */
+export function shellSystemKey(shell: FeShell): string {
+  return `shell:${shell}`;
+}
+
+/** Deterministic Beginner / Intermediate label for a shell hub. */
+export function shellHubLabel(shell: FeShell): string {
+  if (shell === "auth") return "Auth";
+  if (shell === "protected") return "Protected";
+  return "Public";
+}
+
+/**
+ * Resolve shell membership from page (or page-molecule) metadata.
+ * Only `public` / `auth` / `protected` participate — never invent from names.
+ */
+export function shellFromAccessMetadata(
+  metadata: Record<string, unknown> | undefined,
+): FeShell | undefined {
+  if (!metadata) return undefined;
+  const shell = metadata.shell;
+  if (isFeShell(shell)) return shell;
+  const access = metadata.access;
+  if (access === "public" || access === "auth" || access === "protected") {
+    return access;
+  }
+  return undefined;
+}
+
+/** Beginner shell band order: Public → Auth → Protected. */
+export function shellFlowRank(shell: FeShell): number {
+  if (shell === "public") return 0;
+  if (shell === "auth") return 1;
+  return 2;
+}

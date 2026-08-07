@@ -3549,8 +3549,7 @@ if (
   pass("mini-next featureRoot ⊥ leafChrome");
 }
 
-// FE shells Phase 0: access/shell/surface contract + route-group fixture.
-// Shell Beginner hubs (Public→Auth→Protected) land in a later tick — metadata first.
+// FE shells Phase 0+1: access contract + shell Beginner (Public→Auth→Protected).
 const miniNextShellsGraph = await compileRepository(miniNextShellsRoot);
 const miniNextShellsPages = miniNextShellsGraph.nodes.filter(
   (node) => node.kind === "page",
@@ -3641,6 +3640,93 @@ if (
   pass(
     "mini-next /dashboard is not access=protected without shell evidence (no fake wall)",
   );
+}
+
+// Phase 1: Beginner is hero + shell hubs, not one hub per page.tsx.
+const miniNextShellsFlow = miniNextShellsGraph.nodes
+  .filter((node) => typeof node.metadata?.flowOrder === "number")
+  .sort((a, b) => a.metadata.flowOrder - b.metadata.flowOrder);
+const miniNextShellsFlowLabels = miniNextShellsFlow.map((node) => node.label);
+const shellsAuthHub = miniNextShellsGraph.nodes.find(
+  (node) => node.metadata?.systemKey === "shell:auth",
+);
+const shellsProtectedHub = miniNextShellsGraph.nodes.find(
+  (node) => node.metadata?.systemKey === "shell:protected",
+);
+const shellsPublicHub = miniNextShellsGraph.nodes.find(
+  (node) => node.metadata?.systemKey === "shell:public",
+);
+const shellsHomeMolecule = miniNextShellsGraph.nodes.find(
+  (node) => node.metadata?.systemKey === "page:/",
+);
+const shellsLoginMolecule = miniNextShellsGraph.nodes.find(
+  (node) => node.metadata?.systemKey === "page:/login",
+);
+const shellsDashboardMolecule = miniNextShellsGraph.nodes.find(
+  (node) => node.metadata?.systemKey === "page:/dashboard",
+);
+const shellsSettingsMolecule = miniNextShellsGraph.nodes.find(
+  (node) => node.metadata?.systemKey === "page:/settings",
+);
+const shellsPricingMolecule = miniNextShellsGraph.nodes.find(
+  (node) => node.metadata?.systemKey === "page:/pricing",
+);
+if (
+  miniNextShellsFlowLabels.length < 3 ||
+  miniNextShellsFlowLabels[0] !== "Home" ||
+  !miniNextShellsFlowLabels.includes("Auth") ||
+  !miniNextShellsFlowLabels.includes("Protected") ||
+  miniNextShellsFlowLabels.indexOf("Home") >
+    miniNextShellsFlowLabels.indexOf("Auth") ||
+  miniNextShellsFlowLabels.indexOf("Auth") >
+    miniNextShellsFlowLabels.indexOf("Protected")
+) {
+  fail(
+    `mini-next-shells Beginner expected Home → Auth → Protected, got ${miniNextShellsFlowLabels.join(" → ") || "(none)"}`,
+  );
+} else if (
+  miniNextShellsFlowLabels.includes("Login") ||
+  miniNextShellsFlowLabels.includes("Dashboard") ||
+  miniNextShellsFlowLabels.includes("Settings") ||
+  miniNextShellsFlowLabels.includes("Pricing")
+) {
+  fail(
+    `mini-next-shells Beginner must nest Login/Dashboard/Settings/Pricing under shells, still on flow: ${miniNextShellsFlowLabels.join(" → ")}`,
+  );
+} else {
+  pass(
+    `mini-next-shells Beginner shell walk: ${miniNextShellsFlowLabels.join(" → ")}`,
+  );
+}
+if (!shellsAuthHub || !shellsProtectedHub || !shellsPublicHub) {
+  fail(
+    `mini-next-shells missing shell hubs auth=${!!shellsAuthHub} protected=${!!shellsProtectedHub} public=${!!shellsPublicHub}`,
+  );
+} else if (shellsPublicHub.metadata?.collapsedInOverview !== true) {
+  fail("mini-next-shells Public shell should collapse behind Home hero");
+} else if (
+  shellsLoginMolecule?.parentId !== shellsAuthHub.id ||
+  shellsDashboardMolecule?.parentId !== shellsProtectedHub.id ||
+  shellsSettingsMolecule?.parentId !== shellsProtectedHub.id ||
+  shellsPricingMolecule?.parentId !== shellsPublicHub.id ||
+  shellsHomeMolecule?.parentId !== shellsPublicHub.id
+) {
+  fail(
+    `mini-next-shells page molecules must nest under shells (login→Auth, dash/settings→Protected, home/pricing→Public); got login=${shellsLoginMolecule?.parentId} dash=${shellsDashboardMolecule?.parentId} settings=${shellsSettingsMolecule?.parentId} home=${shellsHomeMolecule?.parentId} pricing=${shellsPricingMolecule?.parentId}`,
+  );
+} else {
+  pass("mini-next-shells page molecules nested under Public/Auth/Protected shells");
+}
+// Flat mini-next must not invent shell hubs from /dashboard alone.
+const miniNextShellHubs = miniNextGraph.nodes.filter(
+  (node) => node.metadata?.shellHub === true,
+);
+if (miniNextShellHubs.length) {
+  fail(
+    `mini-next must not invent shell hubs without access evidence; found ${miniNextShellHubs.map((n) => n.label).join(", ")}`,
+  );
+} else {
+  pass("mini-next has no invented shell hubs (no fake Auth wall)");
 }
 
 const miniNextHomeFocus = miniNextHomeMolecule
