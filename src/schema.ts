@@ -68,6 +68,15 @@ export const evidenceSchema = z.object({
   detail: z.string().optional(),
 });
 
+/**
+ * Node metadata is an open record. FE shells contract keys (see `feShells.ts`
+ * and `docs/loopplans/FE_SHELLS_07082026.md`) live here when present:
+ * - `access`: public | auth | protected | unknown
+ * - `shell`: public | auth | protected
+ * - `surface`: story | code | library | noise
+ * - `reachability`: route-tree | orphaned | external-package
+ * - `routeGroups`: App Router `(group)` folder names
+ */
 export const architectureNodeSchema = z.object({
   id: z.string().min(1),
   kind: z.enum(nodeKinds),

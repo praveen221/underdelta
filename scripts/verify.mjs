@@ -38,6 +38,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const fixtureRoot = path.join(repoRoot, "verification", "mini-stack");
 const miniNextRoot = path.join(repoRoot, "verification", "mini-next");
+const miniNextShellsRoot = path.join(
+  repoRoot,
+  "verification",
+  "mini-next-shells",
+);
 const miniVueRoot = path.join(repoRoot, "verification", "mini-vue");
 const miniPythonRoot = path.join(repoRoot, "verification", "mini-python");
 const miniMongoRoot = path.join(repoRoot, "verification", "mini-mongo");
@@ -164,6 +169,7 @@ const leaked = productGraph.nodes.flatMap((node) =>
         file.includes("/verification/") ||
         file.includes("mini-stack/") ||
         file.includes("mini-next/") ||
+        file.includes("mini-next-shells/") ||
         file.includes("mini-vue/") ||
         file.includes("mini-python/") ||
         file.includes("mini-mongo/") ||
@@ -3541,6 +3547,100 @@ if (
   fail("mini-next featureRoot and leafChrome must be mutually exclusive");
 } else {
   pass("mini-next featureRoot ⊥ leafChrome");
+}
+
+// FE shells Phase 0: access/shell/surface contract + route-group fixture.
+// Shell Beginner hubs (Public→Auth→Protected) land in a later tick — metadata first.
+const miniNextShellsGraph = await compileRepository(miniNextShellsRoot);
+const miniNextShellsPages = miniNextShellsGraph.nodes.filter(
+  (node) => node.kind === "page",
+);
+const accessByPath = new Map(
+  miniNextShellsPages.map((node) => [
+    String(node.metadata?.path ?? ""),
+    String(node.metadata?.access ?? ""),
+  ]),
+);
+const shellByPath = new Map(
+  miniNextShellsPages.map((node) => [
+    String(node.metadata?.path ?? ""),
+    String(node.metadata?.shell ?? ""),
+  ]),
+);
+const expectedShellAccess = [
+  ["/", "public"],
+  ["/pricing", "public"],
+  ["/login", "auth"],
+  ["/dashboard", "protected"],
+  ["/settings", "protected"],
+];
+for (const [pagePath, access] of expectedShellAccess) {
+  if (accessByPath.get(pagePath) !== access) {
+    fail(
+      `mini-next-shells page ${pagePath} expected access=${access}, got ${accessByPath.get(pagePath) || "(missing)"}; map=${[...accessByPath.entries()].map(([p, a]) => `${p}:${a}`).join(", ")}`,
+    );
+  } else {
+    pass(`mini-next-shells ${pagePath} access=${access}`);
+  }
+  if (shellByPath.get(pagePath) !== access) {
+    fail(
+      `mini-next-shells page ${pagePath} expected shell=${access}, got ${shellByPath.get(pagePath) || "(missing)"}`,
+    );
+  } else {
+    pass(`mini-next-shells ${pagePath} shell=${access}`);
+  }
+}
+const shellsStoryPages = miniNextShellsPages.filter(
+  (node) =>
+    node.metadata?.surface === "story" &&
+    node.metadata?.reachability === "route-tree",
+);
+if (shellsStoryPages.length < 5) {
+  fail(
+    `mini-next-shells expected ≥5 pages with surface=story + reachability=route-tree, found ${shellsStoryPages.length}`,
+  );
+} else {
+  pass(
+    `mini-next-shells ${shellsStoryPages.length} pages carry surface=story + reachability=route-tree`,
+  );
+}
+const shellsMiddleware = miniNextShellsGraph.nodes.find(
+  (node) =>
+    node.kind === "config" &&
+    (node.metadata?.next === "middleware" ||
+      node.technology === "next-middleware"),
+);
+if (!shellsMiddleware) {
+  fail("mini-next-shells missing Next.js middleware config node");
+} else if (
+  !Array.isArray(shellsMiddleware.metadata?.middlewareMatchers) ||
+  shellsMiddleware.metadata.middlewareMatchers.length < 1
+) {
+  fail(
+    `mini-next-shells middleware missing matcher paths, metadata=${JSON.stringify(shellsMiddleware.metadata)}`,
+  );
+} else if (shellsMiddleware.metadata?.redirectsToLogin !== true) {
+  fail("mini-next-shells middleware should observe redirect-to-login");
+} else {
+  pass(
+    `mini-next-shells middleware gate: matchers=${shellsMiddleware.metadata.middlewareMatchers.join(", ")}`,
+  );
+}
+// Negative floor: flat mini-next /dashboard must NOT invent protected from the name alone.
+const miniNextDashboardPage = miniNextGraph.nodes.find(
+  (node) => node.kind === "page" && node.metadata?.path === "/dashboard",
+);
+if (
+  miniNextDashboardPage &&
+  miniNextDashboardPage.metadata?.access === "protected"
+) {
+  fail(
+    "mini-next /dashboard must not get access=protected without route-group/middleware evidence (no fake Auth wall)",
+  );
+} else {
+  pass(
+    "mini-next /dashboard is not access=protected without shell evidence (no fake wall)",
+  );
 }
 
 const miniNextHomeFocus = miniNextHomeMolecule

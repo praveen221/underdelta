@@ -13,6 +13,7 @@ import type {
   NodeKind,
   SourceRange,
 } from "../schema.js";
+import { accessFromRouteGroups } from "../feShells.js";
 
 const extensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mts", ".cts"]);
 const httpMethods = new Set([
@@ -137,6 +138,8 @@ const nextAppSpecialFiles = new Set([
 interface NextAppFile {
   type: string;
   urlPath: string;
+  /** App Router `(group)` folder names, e.g. `(public)`, `(auth)`. */
+  routeGroups: string[];
 }
 
 /** Parse Next.js App Router special files under `app/` or `src/app/`. */
@@ -147,6 +150,9 @@ function parseNextAppFile(relative: string): NextAppFile | undefined {
   );
   if (!match) return undefined;
   const rawSegments = (match[1] ?? "").split("/").filter(Boolean);
+  const routeGroups = rawSegments.filter(
+    (segment) => segment.startsWith("(") && segment.endsWith(")"),
+  );
   const urlSegments = rawSegments.filter(
     (segment) =>
       !(segment.startsWith("(") && segment.endsWith(")")) &&
@@ -158,6 +164,7 @@ function parseNextAppFile(relative: string): NextAppFile | undefined {
   return {
     type: match[2]!.toLowerCase(),
     urlPath,
+    routeGroups,
   };
 }
 
@@ -1078,6 +1085,10 @@ export const typescriptExtractor: ArchitectureExtractor = {
           nextFile.type,
           nextFile.urlPath,
         );
+        const groupAccess = accessFromRouteGroups(nextFile.routeGroups);
+        const accessEvidenceDetail = groupAccess
+          ? `App Router route group (${groupAccess.group}) → access=${groupAccess.access}`
+          : undefined;
         nodes.push({
           id: nodeId,
           kind,
@@ -1091,6 +1102,21 @@ export const typescriptExtractor: ArchitectureExtractor = {
             framework: "next",
             runtime: directive ?? "server",
             ...(directive === "client" ? { clientComponent: true } : {}),
+            ...(nextFile.routeGroups.length
+              ? { routeGroups: [...nextFile.routeGroups] }
+              : {}),
+            ...(groupAccess
+              ? {
+                  access: groupAccess.access,
+                  shell: groupAccess.shell,
+                  surface: "story" as const,
+                  reachability: "route-tree" as const,
+                }
+              : {
+                  access: "unknown" as const,
+                  surface: "story" as const,
+                  reachability: "route-tree" as const,
+                }),
           },
           evidence: [
             {
@@ -1102,6 +1128,16 @@ export const typescriptExtractor: ArchitectureExtractor = {
                   ? `Next.js App Router page ${nextFile.urlPath}`
                   : `Next.js App Router layout ${nextFile.urlPath}`,
             },
+            ...(groupAccess && accessEvidenceDetail
+              ? [
+                  {
+                    file: file.relative,
+                    extractor: "typescript" as const,
+                    certainty: "observed" as const,
+                    detail: accessEvidenceDetail,
+                  },
+                ]
+              : []),
           ],
         });
         edges.push(
@@ -1288,6 +1324,97 @@ export const typescriptExtractor: ArchitectureExtractor = {
         ts.forEachChild(node, visitRouter);
       };
       visitRouter(file.source);
+    }
+
+    // Next.js middleware — access-gate signal (matcher + login redirect).
+    for (const file of parsed) {
+      const normalized = file.relative.replaceAll("\\", "/");
+      if (!/(?:^|\/)middleware\.[cm]?[jt]sx?$/i.test(normalized)) continue;
+      const matcherPaths: string[] = [];
+      let redirectsToLogin = false;
+      const visitMiddleware = (node: ts.Node): void => {
+        if (
+          ts.isPropertyAssignment(node) &&
+          ((ts.isIdentifier(node.name) && node.name.text === "matcher") ||
+            (ts.isStringLiteralLike(node.name) && node.name.text === "matcher"))
+        ) {
+          const collect = (expr: ts.Expression): void => {
+            if (ts.isStringLiteralLike(expr)) {
+              matcherPaths.push(expr.text);
+            } else if (ts.isArrayLiteralExpression(expr)) {
+              for (const element of expr.elements) collect(element);
+            } else if (ts.isObjectLiteralExpression(expr)) {
+              for (const property of expr.properties) {
+                if (
+                  ts.isPropertyAssignment(property) &&
+                  ts.isIdentifier(property.name) &&
+                  property.name.text === "source" &&
+                  ts.isStringLiteralLike(property.initializer)
+                ) {
+                  matcherPaths.push(property.initializer.text);
+                }
+              }
+            }
+          };
+          collect(node.initializer);
+        }
+        if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
+          const text = node.getText(file.source);
+          if (
+            /redirect\s*\(/i.test(text) &&
+            /['"`](\/login|\/signin|\/sign-in|\/auth)/i.test(text)
+          ) {
+            redirectsToLogin = true;
+          }
+        }
+        if (ts.isStringLiteralLike(node)) {
+          if (/^\/(login|signin|sign-in|auth)\b/i.test(node.text)) {
+            // Presence of login path in middleware often accompanies guards.
+            if (/NextResponse\.redirect|redirect\(/i.test(file.source.text)) {
+              redirectsToLogin = true;
+            }
+          }
+        }
+        ts.forEachChild(node, visitMiddleware);
+      };
+      visitMiddleware(file.source);
+      const middlewareId = stableId("config", file.relative, "middleware");
+      nodes.push({
+        id: middlewareId,
+        kind: "config",
+        label: "Next.js middleware",
+        qualifiedName: file.relative,
+        parentId: file.moduleId,
+        technology: "next-middleware",
+        metadata: {
+          next: "middleware",
+          framework: "next",
+          surface: "story",
+          ...(matcherPaths.length ? { middlewareMatchers: matcherPaths } : {}),
+          ...(redirectsToLogin ? { redirectsToLogin: true } : {}),
+          ...(matcherPaths.length || redirectsToLogin
+            ? { accessSignal: "middleware-gate" }
+            : {}),
+        },
+        evidence: [
+          evidenceFor(
+            file,
+            file.source,
+            "observed",
+            matcherPaths.length
+              ? `Next.js middleware matcher: ${matcherPaths.join(", ")}`
+              : "Next.js middleware",
+          ),
+        ],
+      });
+      edges.push(
+        edgeFrom(
+          "contains",
+          file.moduleId,
+          middlewareId,
+          evidenceFor(file, file.source, "observed", "Next.js middleware"),
+        ),
+      );
     }
 
     return {
