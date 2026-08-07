@@ -24,19 +24,31 @@
           <a class="nav-link" href="#why">Why</a>
           <a class="nav-link" href="#try">Try</a>
           <a class="nav-link" href="#contact">Contact</a>
-          <!-- Real GitHub star widget: stars the repo when you're logged into GitHub -->
-          <span class="gh-star-slot" id="gh-star-slot">
-            <a
-              class="github-button"
-              href="https://github.com/praveen221/underdelta"
-              data-icon="octicon-star"
-              data-size="large"
-              data-show-count="true"
-              data-color-scheme="no-preference: dark; light: dark; dark: dark;"
-              aria-label="Star praveen221/underdelta on GitHub"
-              >Star</a
-            >
-          </span>
+          <div class="star-wrap">
+            <button type="button" class="star-chip" id="star-chip" aria-expanded="false" aria-controls="star-popover">
+              <span class="star-glyph" aria-hidden="true">★</span>
+              <span class="star-chip-label">Star</span>
+              <span class="star-count" id="star-count" hidden></span>
+            </button>
+            <div class="star-popover" id="star-popover" hidden>
+              <p class="star-popover-title">Star Underdelta</p>
+              <p class="star-popover-copy">One click if you’re logged into GitHub — that count is real.</p>
+              <iframe
+                class="star-iframe"
+                title="Star praveen221/underdelta on GitHub"
+                src="https://ghbtns.com/github-btn.html?user=praveen221&amp;repo=underdelta&amp;type=star&amp;count=true&amp;size=large"
+                width="170"
+                height="30"
+              ></iframe>
+              <a
+                class="star-popover-link"
+                href="https://github.com/praveen221/underdelta"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Open repo →</a
+              >
+            </div>
+          </div>
         </div>
       </div>
     </nav>
@@ -50,14 +62,11 @@
 
       <div class="cta-row">
         <a class="btn btn-primary" href="#try">Try a scan</a>
-        <a
-          class="btn btn-ghost"
-          href="https://github.com/praveen221/underdelta"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Open repo
-        </a>
+        <button type="button" class="btn btn-star" id="star-btn">
+          <span class="star-glyph" aria-hidden="true">★</span>
+          Star on GitHub
+          <span class="star-count" id="star-count-btn" hidden></span>
+        </button>
       </div>
 
       <div class="hero-try" id="try">
@@ -66,19 +75,27 @@
           From any project folder. Writes <code>.underdelta/index.html</code> +
           <code>architecture.json</code>.
         </p>
-        <div class="cmd" data-copy="curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/scripts/scan.sh | bash">
+        <div
+          class="cmd"
+          data-copy="curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/scripts/scan.sh | bash"
+        >
+          <div class="cmd-bar">
+            <span class="cmd-bar-label">scan</span>
+            <button type="button" class="copy-btn" aria-label="Copy command">
+              <svg class="copy-icon" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M4 2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6zM2 5a1 1 0 0 0-1 1v8a2 2 0 0 0 2 2h6a1 1 0 0 0 1-1h-1v1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1V5H3z"
+                />
+              </svg>
+              <span class="copy-label">Copy</span>
+            </button>
+          </div>
           <pre><code>curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/scripts/scan.sh | bash</code></pre>
-          <button type="button" class="copy-btn" aria-label="Copy command">
-            <span class="copy-label">Copy</span>
-          </button>
         </div>
         <p class="hero-try-sub">
           Need to switch folders first?
-          <button
-            type="button"
-            class="inline-copy"
-            data-copy="cd /path/to/your/project"
-          >
+          <button type="button" class="inline-copy" data-copy="cd /path/to/your/project">
             Copy <code>cd /path/to/your/project</code>
           </button>
         </p>
@@ -184,9 +201,80 @@
       </div>
     </footer>
 
-    <script async defer src="https://buttons.github.io/buttons.js"></script>
     <script>
       (function () {
+        var REPO = "praveen221/underdelta";
+        var countEls = [
+          document.getElementById("star-count"),
+          document.getElementById("star-count-btn"),
+        ];
+        var chip = document.getElementById("star-chip");
+        var btn = document.getElementById("star-btn");
+        var pop = document.getElementById("star-popover");
+        var wrap = document.querySelector(".star-wrap");
+
+        function setCounts(n) {
+          countEls.forEach(function (el) {
+            if (!el) return;
+            el.textContent = String(n);
+            el.hidden = false;
+          });
+        }
+
+        function refreshStars() {
+          fetch("https://api.github.com/repos/" + REPO)
+            .then(function (r) {
+              return r.ok ? r.json() : null;
+            })
+            .then(function (data) {
+              if (!data || typeof data.stargazers_count !== "number") return;
+              setCounts(data.stargazers_count);
+            })
+            .catch(function () {});
+        }
+
+        refreshStars();
+        window.addEventListener("focus", refreshStars);
+        setInterval(refreshStars, 20000);
+
+        function openStar() {
+          pop.hidden = false;
+          chip.setAttribute("aria-expanded", "true");
+          chip.classList.add("is-open");
+        }
+
+        function closeStar() {
+          pop.hidden = true;
+          chip.setAttribute("aria-expanded", "false");
+          chip.classList.remove("is-open");
+          refreshStars();
+        }
+
+        function toggleStar() {
+          if (pop.hidden) openStar();
+          else closeStar();
+        }
+
+        chip.addEventListener("click", function (e) {
+          e.stopPropagation();
+          toggleStar();
+        });
+
+        btn.addEventListener("click", function () {
+          openStar();
+          chip.focus();
+          // Also nudge to top so the popover is visible.
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+
+        document.addEventListener("click", function (e) {
+          if (!wrap.contains(e.target)) closeStar();
+        });
+
+        document.addEventListener("keydown", function (e) {
+          if (e.key === "Escape") closeStar();
+        });
+
         function copyText(text, onDone) {
           if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(text).then(onDone).catch(function () {
@@ -214,30 +302,29 @@
         }
 
         document.querySelectorAll(".cmd").forEach(function (block) {
-          var btn = block.querySelector(".copy-btn");
-          if (!btn) return;
-          btn.addEventListener("click", function () {
+          var copyBtn = block.querySelector(".copy-btn");
+          if (!copyBtn) return;
+          copyBtn.addEventListener("click", function () {
             var text = block.getAttribute("data-copy") || "";
             copyText(text, function () {
               block.classList.add("is-copied");
-              var label = btn.querySelector(".copy-label");
-              var prev = label ? label.textContent : "Copy";
+              var label = copyBtn.querySelector(".copy-label");
               if (label) label.textContent = "Copied";
               setTimeout(function () {
                 block.classList.remove("is-copied");
-                if (label) label.textContent = prev;
+                if (label) label.textContent = "Copy";
               }, 1400);
             });
           });
         });
 
-        document.querySelectorAll(".inline-copy").forEach(function (btn) {
-          btn.addEventListener("click", function () {
-            var text = btn.getAttribute("data-copy") || "";
+        document.querySelectorAll(".inline-copy").forEach(function (el) {
+          el.addEventListener("click", function () {
+            var text = el.getAttribute("data-copy") || "";
             copyText(text, function () {
-              btn.classList.add("is-copied");
+              el.classList.add("is-copied");
               setTimeout(function () {
-                btn.classList.remove("is-copied");
+                el.classList.remove("is-copied");
               }, 1400);
             });
           });
