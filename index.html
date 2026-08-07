@@ -14,9 +14,21 @@
       content="A visual way to read AI-generated code. Map UI, APIs, data, and jobs — every claim tied to source."
     />
     <meta property="og:type" content="website" />
-    <link rel="stylesheet" href="./site.css?v=20260807-graph" />
+    <script>
+      try {
+        var savedTheme = localStorage.getItem("underdelta-theme");
+        if (savedTheme === "light" || savedTheme === "dark") {
+          document.documentElement.setAttribute("data-theme", savedTheme);
+        }
+      } catch (error) {}
+    </script>
+    <link rel="stylesheet" href="./site.css?v=20260807-final" />
   </head>
   <body>
+    <div class="cursor-glow" id="cursor-glow" aria-hidden="true">
+      <i class="cursor-glow-dark"></i>
+      <i class="cursor-glow-light"></i>
+    </div>
     <nav class="topbar" aria-label="Primary navigation">
       <div class="wrap topbar-inner">
         <a class="topbar-brand" href="#" aria-label="Underdelta home">
@@ -27,11 +39,21 @@
           <a class="nav-link" href="#why">Why</a>
           <a class="nav-link" href="#principles">Principles</a>
           <a class="nav-link" href="#contact">Contact</a>
+          <button
+            type="button"
+            class="theme-toggle"
+            id="theme-toggle"
+            aria-label="Switch to light theme"
+            aria-pressed="false"
+          >
+            <span class="theme-icon theme-icon-sun" aria-hidden="true">☼</span>
+            <span class="theme-icon theme-icon-moon" aria-hidden="true">◐</span>
+          </button>
           <div class="star-wrap">
             <button type="button" class="star-chip" id="star-chip" aria-expanded="false" aria-controls="star-popover">
               <span class="star-glyph" aria-hidden="true">★</span>
               <span class="star-chip-label">Star</span>
-              <span class="star-count" id="star-count" hidden></span>
+              <span class="star-count" id="star-count">0</span>
             </button>
             <div class="star-popover" id="star-popover" hidden>
               <p class="star-popover-title">Star Underdelta</p>
@@ -71,17 +93,31 @@
             and jobs—so humans can understand what actually shipped.
           </p>
           <div class="cta-row">
-            <a class="btn btn-primary" href="#try">
+            <button class="btn btn-primary" type="button" id="try-scan-btn">
               Try a scan
-              <span aria-hidden="true">↘</span>
-            </a>
+              <span aria-hidden="true">⌘</span>
+            </button>
             <button type="button" class="btn btn-secondary" id="star-btn">
               <span class="star-glyph" aria-hidden="true">★</span>
               Star on GitHub
-              <span class="star-count" id="star-count-btn" hidden></span>
+              <span class="star-count" id="star-count-btn">0</span>
             </button>
           </div>
           <p class="hero-note">No install · No account · Runs locally</p>
+          <div
+            class="hero-command cmd"
+            id="try"
+            data-copy="curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/scripts/scan.sh | bash"
+          >
+            <span class="prompt" aria-hidden="true">$</span>
+            <code>curl -fsSL …/underdelta/master/scripts/scan.sh | bash</code>
+            <button type="button" class="copy-btn" aria-label="Copy scan command">
+              <svg class="copy-icon" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">
+                <path fill="currentColor" d="M4 2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6zM2 5a1 1 0 0 0-1 1v8a2 2 0 0 0 2 2h6a1 1 0 0 0 1-1h-1v1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1V5H3z" />
+              </svg>
+              <span class="copy-label">Copy</span>
+            </button>
+          </div>
         </div>
 
         <div class="map-shell" aria-label="Example Underdelta architecture map">
@@ -130,40 +166,79 @@
         </div>
       </div>
 
-      <div class="wrap command-dock" id="try">
-        <div class="command-intro">
-          <span class="command-step">01</span>
+    </header>
+
+    <section class="section map-showcase" id="sample-map">
+      <div class="wrap">
+        <div class="showcase-heading">
           <div>
-            <strong>Scan your repository</strong>
-            <span>Run from any project folder</span>
+            <p class="section-index">01 / SAMPLE OUTPUT</p>
+            <h2>See the system.<br />Not the file tree.</h2>
+          </div>
+          <p>
+            Underdelta folds implementation detail into a product-level map. Start with the
+            major systems, then follow routes, workflows, data, and background execution.
+          </p>
+        </div>
+
+        <div class="system-map" aria-label="Sample architecture map connecting frontend and backend systems">
+          <svg class="system-edges" viewBox="0 0 1000 600" preserveAspectRatio="none" aria-hidden="true">
+            <path class="edge edge-main" d="M370 286 C455 235 545 235 630 286" />
+            <path class="edge" d="M185 125 C230 160 270 210 305 265" />
+            <path class="edge" d="M175 455 C230 420 270 360 305 310" />
+            <path class="edge" d="M695 265 C740 210 785 165 835 135" />
+            <path class="edge" d="M700 286 C770 286 815 286 865 286" />
+            <path class="edge" d="M685 315 C725 370 750 430 770 485" />
+            <path class="edge" d="M635 325 C600 390 565 445 520 500" />
+          </svg>
+
+          <article class="system-node system-node-core node-frontend">
+            <span class="system-node-icon">◫</span>
+            <span><strong>Frontend</strong><small>Product interface</small></span>
+            <b>34 views</b>
+          </article>
+          <article class="system-node system-node-core node-backend">
+            <span class="system-node-icon">⌘</span>
+            <span><strong>Backend</strong><small>Application services</small></span>
+            <b>18 APIs</b>
+          </article>
+          <article class="system-node system-node-satellite node-routes">
+            <i class="node-status lime"></i>
+            <span><strong>Routes</strong><small>12 user journeys</small></span>
+          </article>
+          <article class="system-node system-node-satellite node-workflows">
+            <i class="node-status blue"></i>
+            <span><strong>Workflows</strong><small>6 product flows</small></span>
+          </article>
+          <article class="system-node system-node-satellite node-database">
+            <i class="node-status orange"></i>
+            <span><strong>Database</strong><small>7 models · 3 stores</small></span>
+          </article>
+          <article class="system-node system-node-satellite node-jobs">
+            <i class="node-status violet"></i>
+            <span><strong>Jobs</strong><small>4 background workers</small></span>
+          </article>
+          <article class="system-node system-node-satellite node-cron">
+            <i class="node-status lime"></i>
+            <span><strong>Cron</strong><small>Nightly sync · 02:00</small></span>
+          </article>
+          <article class="system-node system-node-satellite node-pipeline">
+            <i class="node-status blue"></i>
+            <span><strong>Pipeline</strong><small>Extract → compile → view</small></span>
+          </article>
+
+          <div class="system-map-caption">
+            <span><i></i> Every connection carries source evidence</span>
+            <code>src/server.ts:42</code>
           </div>
         </div>
-        <div
-          class="cmd"
-          data-copy="curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/scripts/scan.sh | bash"
-        >
-          <span class="prompt" aria-hidden="true">$</span>
-          <pre><code>curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/scripts/scan.sh | bash</code></pre>
-          <button type="button" class="copy-btn" aria-label="Copy scan command">
-            <svg class="copy-icon" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">
-              <path fill="currentColor" d="M4 2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6zM2 5a1 1 0 0 0-1 1v8a2 2 0 0 0 2 2h6a1 1 0 0 0 1-1h-1v1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1V5H3z" />
-            </svg>
-            <span class="copy-label">Copy</span>
-          </button>
-        </div>
-        <div class="command-output">
-          <span>OUTPUT</span>
-          <code>.underdelta/index.html</code>
-          <span>+</span>
-          <code>architecture.json</code>
-        </div>
       </div>
-    </header>
+    </section>
 
     <section class="section section-editorial" id="why">
       <div class="wrap editorial-grid">
         <div class="section-heading">
-          <p class="section-index">01 / WHY</p>
+          <p class="section-index">02 / WHY</p>
           <h2>Code generation accelerated.<br />Understanding didn’t.</h2>
         </div>
         <div class="editorial-copy">
@@ -192,7 +267,7 @@
       <div class="wrap">
         <div class="section-heading principles-heading">
           <div>
-            <p class="section-index">02 / PRINCIPLES</p>
+            <p class="section-index">03 / PRINCIPLES</p>
             <h2>Built to earn trust,<br />not manufacture confidence.</h2>
           </div>
           <p>
@@ -246,7 +321,7 @@
     <section class="section section-refusals" id="not">
       <div class="wrap refusals-grid">
         <div>
-          <p class="section-index">03 / REFUSALS</p>
+          <p class="section-index">04 / REFUSALS</p>
           <h2>Clarity requires<br />saying no.</h2>
         </div>
         <ul class="not-list">
@@ -301,6 +376,8 @@
         var btn = document.getElementById("star-btn");
         var pop = document.getElementById("star-popover");
         var wrap = document.querySelector(".star-wrap");
+        var themeToggle = document.getElementById("theme-toggle");
+        var tryScanButton = document.getElementById("try-scan-btn");
 
         function setCounts(n) {
           countEls.forEach(function (el) {
@@ -325,6 +402,27 @@
         refreshStars();
         window.addEventListener("focus", refreshStars);
         setInterval(refreshStars, 20000);
+
+        function syncThemeToggle() {
+          if (!themeToggle) return;
+          var light = document.documentElement.getAttribute("data-theme") === "light";
+          themeToggle.setAttribute("aria-pressed", String(light));
+          themeToggle.setAttribute("aria-label", light ? "Switch to dark theme" : "Switch to light theme");
+        }
+
+        syncThemeToggle();
+
+        if (themeToggle) {
+          themeToggle.addEventListener("click", function () {
+            var current = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+            var next = current === "light" ? "dark" : "light";
+            document.documentElement.setAttribute("data-theme", next);
+            try {
+              localStorage.setItem("underdelta-theme", next);
+            } catch (error) {}
+            syncThemeToggle();
+          });
+        }
 
         function openStar() {
           pop.hidden = false;
@@ -407,6 +505,19 @@
           });
         });
 
+        if (tryScanButton) {
+          tryScanButton.addEventListener("click", function () {
+            var command = document.querySelector(".hero-command");
+            var commandCopy = command && command.querySelector(".copy-btn");
+            if (!commandCopy) return;
+            commandCopy.click();
+            command.classList.add("is-emphasized");
+            setTimeout(function () {
+              command.classList.remove("is-emphasized");
+            }, 1400);
+          });
+        }
+
         document.querySelectorAll(".inline-copy").forEach(function (el) {
           el.addEventListener("click", function () {
             var text = el.getAttribute("data-copy") || "";
@@ -445,6 +556,24 @@
             hero.classList.remove("is-interacting");
             hero.style.setProperty("--grid-x", "0px");
             hero.style.setProperty("--grid-y", "0px");
+          });
+        }
+
+        var cursorGlow = document.getElementById("cursor-glow");
+        var glowFrame = 0;
+
+        if (cursorGlow && precisePointer.matches && !reducedMotion.matches) {
+          document.addEventListener("pointermove", function (event) {
+            if (glowFrame) cancelAnimationFrame(glowFrame);
+            glowFrame = requestAnimationFrame(function () {
+              cursorGlow.style.setProperty("--cursor-x", event.clientX + "px");
+              cursorGlow.style.setProperty("--cursor-y", event.clientY + "px");
+              document.body.classList.add("cursor-active");
+            });
+          });
+
+          document.addEventListener("pointerleave", function () {
+            document.body.classList.remove("cursor-active");
           });
         }
 
