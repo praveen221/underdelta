@@ -5824,6 +5824,25 @@ if (/install/i.test(miniReadmePoisonProduct?.label ?? "")) {
   );
 }
 
+// hermes-agent dogfood: marketing "## Skip the API-key…" must not rename HTTP API.
+const hermesStyleApiSlogan = "Skip the API-key collection — Nous Portal";
+const hermesStyleHints = parseReadmeHeadingHints(
+  `## ${hermesStyleApiSlogan}\n\n## Notes API\n`,
+);
+if (hermesStyleHints.some((hint) => hint.key === "api" && /skip the api/i.test(hint.label))) {
+  fail(
+    `parseReadmeHeadingHints must not map slogan ${JSON.stringify(hermesStyleApiSlogan)} to api`,
+  );
+}
+const hermesStyleNotes = hermesStyleHints.find((hint) => hint.key === "api");
+if (!hermesStyleNotes || hermesStyleNotes.label !== "Notes API") {
+  fail(
+    `parseReadmeHeadingHints should keep Notes API as the api hint, found ${JSON.stringify(hermesStyleNotes ?? null)}`,
+  );
+} else {
+  pass("README API-key marketing slogans do not rename HTTP API");
+}
+
 // ---------------------------------------------------------------------------
 // Foreign filename collisions must not invent Underdelta self-map hubs /
 // architecture.json artifacts (verification/mini-decoy-tooling).

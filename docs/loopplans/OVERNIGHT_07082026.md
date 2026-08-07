@@ -69,7 +69,7 @@ Once **Loop status = LOOP COMPLETE**, idle ticks must **not invent, commit, or p
 ### Loop status
 
 ```text
-ACTIVE
+LOOP COMPLETE
 ```
 
 ### Idle protocol
@@ -108,26 +108,27 @@ Learning log must include verify + what changed for trust.
 - [x] Gate Underdelta-specific artifact + self-tooling projection (`isUnderdeltaToolingRepo`)  
 - [x] Decoy filename fixture + verify (`verification/mini-decoy-tooling`)  
 - [x] Product label hardening (README poison) + verify (`mini-readme-poison`)  
+- [x] Re-scan openclaw + t3code — Underdelta hubs gone; self-map still complete  
+- [x] hermes-agent hub title cleanup (API-key marketing slogan → stays HTTP API)  
+- [x] Acceptance gates 1–6 met → LOOP COMPLETE  
 
 ### In progress / next
 
-Keep **≥ 3** unchecked items.
+_None — loop soft-stopped._
 
-- [ ] Re-scan openclaw or t3code; log hub list before/after (confirm Underdelta hubs gone)  
-- [ ] Confirm Underdelta self-map unchanged / still complete  
-- [ ] hermes-agent hub title cleanup (README slogan on flow band)  
-- [ ] Vendor/monorepo ignore expansions if still drowning after gates  
+### Cancelled / deferred
 
-### Seed backlog (refill when In progress < 3)
+- [x] Vendor/monorepo ignore expansions — deferred; openclaw still ~116k nodes (scale hairball) but no longer invents Underdelta IR; out of scope for this trust loop  
+- Size/time soft-cap warning — deferred with monorepo calm  
 
-- Size/time soft-cap warning diagnostic on huge repos  
+### Seed backlog (idle)
+
 - Docs: Pages enable note in README if missing  
-- Do **not** start landing marketing beyond the one-pager  
-- Do **not** add new stack extractors in this loop  
+- Do **not** invent new work while LOOP COMPLETE  
 
 ### Next focus (edit every tick)
 
-> **Next focus:** Re-scan openclaw (or t3code); log flow hubs before/after Underdelta gate; confirm self-map still complete; then hermes-agent slogan hub cleanup if time.
+> **Next focus:** IDLE — LOOP COMPLETE. Re-check gates only; no invent/commit/push unless regression.
 
 ### Learning log
 
@@ -138,6 +139,7 @@ Keep **≥ 3** unchecked items.
 - 2026-08-07 | Done: plan created; one-pager on master | Next: gate Underdelta-only projection | Learned: dogfood showed path-role projection invents Underdelta systems on any repo with similar filenames; trust > new extractors | Dogfood: prior folder scan (27 repos)
 - 2026-08-06 ~21:00 UTC | Done: gate compile/viewer/extractors/graph/schema + artifacts behind `isUnderdeltaToolingRepo`; mini-decoy-tooling verify floors; nest bare schema.ts under HTTP API without inventing Schema contract | Next: README label poison | Learned: gating Schema contract broke GraphQL schema.ts nesting — fold orphans into API instead of inventing a hub | Dogfood: npm run verify green (self-map + decoy + graphql-real)
 - 2026-08-06 ~21:25 UTC | Done: HTML `<h1>` + strip fenced `#` comments + `isPoisonedProductTitle`; mini-readme-poison fixture | Next: openclaw/t3code re-scan | Learned: TrackNotch product was a bash comment inside ``` because parseReadmeTitle ignored HTML h1 | Dogfood: tracknotch product → TrackNotch (was Install Claude Code…)
+- 2026-08-07 ~04:45 UTC | Done: dogfood re-scan openclaw/t3code (Underdelta hubs cleared); hermes API slogan suppressed; LOOP COMPLETE | Next: idle | Learned: `\bapi\b` matched inside “API-key”; skip-imperatives + api-key negative lookahead restore HTTP API | Dogfood: openclaw flow CLI→HTTP API→… (was Compile/architecture.json…); t3code same; hermes HTTP API→Deploy; self-map still full compiler story; verify green
 
 ---
 

@@ -350,10 +350,10 @@ export function inferSystemKeyFromHeading(heading: string): string | undefined {
     return undefined;
   }
 
-  // Skip imperative how-to headings ("Generate your Prisma client", "Seed the database").
-  // Also "To run (via Docker)" — docs chrome, not a Deploy system name.
+  // Skip imperative how-to / marketing headings ("Generate your Prisma client",
+  // "Skip the API-key collection — Nous Portal"). Also "To run (via Docker)".
   if (
-    /^(to\s+)?(generate|install|run|create|configure|deploy|build|test|clone|download|add|update|set\s*up|make|enable|start|seed|apply|migrate|push|pull|open|visit|follow|copy|paste|replace|remove|delete|drop|reset)\b/.test(
+    /^(to\s+)?(generate|install|run|create|configure|deploy|build|test|clone|download|add|update|set\s*up|make|enable|start|seed|apply|migrate|push|pull|open|visit|follow|copy|paste|replace|remove|delete|drop|reset|skip|use|try|get|pick|choose|switch)\b/.test(
       text,
     )
   ) {
@@ -381,7 +381,13 @@ export function inferSystemKeyFromHeading(heading: string): string | undefined {
     { key: "schema", pattern: /\bschema\b/, weight: 9 },
     { key: "graph", pattern: /\bgraph\b|\bassembly\b/, weight: 8 },
     { key: "cli", pattern: /\bcli\b|\bcommand[- ]line\b/, weight: 8 },
-    { key: "api", pattern: /\bapi\b|\broutes?\b|\bhttp\b|\bendpoints?\b/, weight: 8 },
+    // "API-key" / "API keys" are auth/setup chrome, not an HTTP API hub name
+    // (hermes-agent: "Skip the API-key collection — Nous Portal").
+    {
+      key: "api",
+      pattern: /\bapi(?![- ]keys?\b)\b|\broutes?\b|\bhttp\b|\bendpoints?\b/,
+      weight: 8,
+    },
     { key: "ui", pattern: /\bui\b|\bfrontend\b|\bstorefront\b|\bcomponents?\b/, weight: 7 },
     // "prisma"/"sql" alone match how-to noise; require data-ish phrasing.
     {
