@@ -17,12 +17,15 @@
     <link rel="stylesheet" href="./site.css" />
   </head>
   <body>
-    <nav class="topbar">
+    <nav class="topbar" aria-label="Primary navigation">
       <div class="wrap topbar-inner">
-        <a class="topbar-brand" href="#">Under<span>delta</span></a>
+        <a class="topbar-brand" href="#" aria-label="Underdelta home">
+          <span class="brand-mark" aria-hidden="true">Δ</span>
+          <span>Under<strong>delta</strong></span>
+        </a>
         <div class="topbar-actions">
           <a class="nav-link" href="#why">Why</a>
-          <a class="nav-link" href="#try">Try</a>
+          <a class="nav-link" href="#principles">Principles</a>
           <a class="nav-link" href="#contact">Contact</a>
           <div class="star-wrap">
             <button type="button" class="star-chip" id="star-chip" aria-expanded="false" aria-controls="star-popover">
@@ -53,78 +56,153 @@
       </div>
     </nav>
 
-    <header class="hero wrap">
-      <h1 class="brand">Under<span>delta</span></h1>
-      <p class="lede">
-        Read all the code AI generates — by looking at it. We compile a repo into an
-        evidence-backed map of the product: UI, APIs, data, jobs — every claim tied to source.
-      </p>
+    <header class="hero">
+      <div class="wrap hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow"><span></span> Open-source architecture intelligence</p>
+          <h1 class="brand">Under<span>delta</span></h1>
+          <p class="hero-statement">
+            Read the code AI writes.<br />
+            <strong>Visually.</strong>
+          </p>
+          <p class="lede">
+            Turn any repository into an evidence-backed map of its UI, APIs, data,
+            and jobs—so humans can understand what actually shipped.
+          </p>
+          <div class="cta-row">
+            <a class="btn btn-primary" href="#try">
+              Try a scan
+              <span aria-hidden="true">↘</span>
+            </a>
+            <button type="button" class="btn btn-secondary" id="star-btn">
+              <span class="star-glyph" aria-hidden="true">★</span>
+              Star on GitHub
+              <span class="star-count" id="star-count-btn" hidden></span>
+            </button>
+          </div>
+          <p class="hero-note">No install · No account · Runs locally</p>
+        </div>
 
-      <div class="cta-row">
-        <a class="btn btn-primary" href="#try">Try a scan</a>
-        <button type="button" class="btn btn-star" id="star-btn">
-          <span class="star-glyph" aria-hidden="true">★</span>
-          Star on GitHub
-          <span class="star-count" id="star-count-btn" hidden></span>
-        </button>
+        <div class="map-shell" aria-label="Example Underdelta architecture map">
+          <div class="map-toolbar">
+            <div class="traffic-lights" aria-hidden="true"><i></i><i></i><i></i></div>
+            <span>architecture / overview</span>
+            <span class="map-live"><i></i> evidence linked</span>
+          </div>
+          <div class="map-canvas">
+            <svg class="map-lines" viewBox="0 0 600 440" preserveAspectRatio="none" aria-hidden="true">
+              <path d="M300 210 C230 210 230 90 153 90" />
+              <path d="M300 210 C370 210 370 90 447 90" />
+              <path d="M300 210 C220 210 210 337 133 337" />
+              <path d="M300 210 C375 210 380 337 467 337" />
+              <path d="M153 90 C153 142 223 142 223 175" />
+              <path d="M447 90 C447 142 377 142 377 175" />
+            </svg>
+            <div class="map-node map-root">
+              <span class="node-icon">Δ</span>
+              <span><strong>Underdelta</strong><small>Product system</small></span>
+            </div>
+            <div class="map-node map-ui">
+              <span class="node-dot lime"></span>
+              <span><strong>Interface</strong><small>12 routes · 34 views</small></span>
+            </div>
+            <div class="map-node map-api">
+              <span class="node-dot blue"></span>
+              <span><strong>HTTP API</strong><small>18 endpoints</small></span>
+            </div>
+            <div class="map-node map-data">
+              <span class="node-dot orange"></span>
+              <span><strong>Data</strong><small>7 models · 3 stores</small></span>
+            </div>
+            <div class="map-node map-jobs">
+              <span class="node-dot violet"></span>
+              <span><strong>Jobs</strong><small>4 scheduled flows</small></span>
+            </div>
+            <div class="map-evidence">Observed in <code>src/server.ts:42</code></div>
+          </div>
+          <div class="map-footer">
+            <span><i class="legend observed"></i> Observed</span>
+            <span><i class="legend derived"></i> Derived</span>
+            <span><i class="legend inferred"></i> Inferred</span>
+            <span class="map-footer-count">76 claims</span>
+          </div>
+        </div>
       </div>
 
-      <div class="hero-try" id="try">
-        <p class="hero-try-label">Or try it with this command</p>
-        <p class="hero-try-hint">
-          From any project folder. Writes <code>.underdelta/index.html</code> +
-          <code>architecture.json</code>.
-        </p>
+      <div class="wrap command-dock" id="try">
+        <div class="command-intro">
+          <span class="command-step">01</span>
+          <div>
+            <strong>Scan your repository</strong>
+            <span>Run from any project folder</span>
+          </div>
+        </div>
         <div
           class="cmd"
           data-copy="curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/scripts/scan.sh | bash"
         >
-          <div class="cmd-bar">
-            <span class="cmd-bar-label">scan</span>
-            <button type="button" class="copy-btn" aria-label="Copy command">
-              <svg class="copy-icon" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-                <path
-                  fill="currentColor"
-                  d="M4 2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6zM2 5a1 1 0 0 0-1 1v8a2 2 0 0 0 2 2h6a1 1 0 0 0 1-1h-1v1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1V5H3z"
-                />
-              </svg>
-              <span class="copy-label">Copy</span>
-            </button>
-          </div>
+          <span class="prompt" aria-hidden="true">$</span>
           <pre><code>curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/scripts/scan.sh | bash</code></pre>
-        </div>
-        <p class="hero-try-sub">
-          Need to switch folders first?
-          <button type="button" class="inline-copy" data-copy="cd /path/to/your/project">
-            Copy <code>cd /path/to/your/project</code>
+          <button type="button" class="copy-btn" aria-label="Copy scan command">
+            <svg class="copy-icon" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">
+              <path fill="currentColor" d="M4 2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H6zM2 5a1 1 0 0 0-1 1v8a2 2 0 0 0 2 2h6a1 1 0 0 0 1-1h-1v1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1V5H3z" />
+            </svg>
+            <span class="copy-label">Copy</span>
           </button>
-        </p>
+        </div>
+        <div class="command-output">
+          <span>OUTPUT</span>
+          <code>.underdelta/index.html</code>
+          <span>+</span>
+          <code>architecture.json</code>
+        </div>
       </div>
     </header>
 
-    <section class="section wrap" id="why">
-      <h2>Why this exists</h2>
-      <p class="support">
-        We were using tools like Graphify to map repos for agents. That works when the consumer
-        is another model. It falls apart when a human needs to understand what just landed —
-        or when PRs get too big to review line by line every day.
-      </p>
-      <p class="support">
-        The bet: if there is a calm visual way to read code, you can keep up with what agents
-        ship without pretending you read every diff. Underdelta is that map — for people, not
-        just for tools.
-      </p>
-      <p class="punch">Read the code AI writes. Visually.</p>
+    <section class="section section-editorial" id="why">
+      <div class="wrap editorial-grid">
+        <div class="section-heading">
+          <p class="section-index">01 / WHY</p>
+          <h2>Code generation accelerated.<br />Understanding didn’t.</h2>
+        </div>
+        <div class="editorial-copy">
+          <p class="editorial-lead">
+            Agents can ship more code in an afternoon than a person can responsibly review.
+            The bottleneck is no longer writing—it is building an accurate mental model.
+          </p>
+          <p>
+            We used tools like Graphify to map repositories for other agents. Useful for machines,
+            yes. But humans need a calmer view: what systems exist, how they connect, and which
+            source lines prove each claim.
+          </p>
+          <p>
+            Underdelta turns a repository into that view. Not a prettier call graph. Not an
+            AI-generated guess. A product map designed to help you trust what shipped.
+          </p>
+          <div class="pull-quote">
+            <span>“</span>
+            <p>Keep the speed of AI.<br />Recover the clarity of understanding.</p>
+          </div>
+        </div>
+      </div>
     </section>
 
-    <section class="section wrap" id="philosophy">
-      <h2>Philosophy</h2>
-      <p class="support">
-        Capability infrastructure, not a dashboard skin. The browser is the product: a mind map
-        for people who shipped with agents and need to see what is real.
-      </p>
-      <div class="principles">
+    <section class="section section-principles" id="principles">
+      <div class="wrap">
+        <div class="section-heading principles-heading">
+          <div>
+            <p class="section-index">02 / PRINCIPLES</p>
+            <h2>Built to earn trust,<br />not manufacture confidence.</h2>
+          </div>
+          <p>
+            Every visual decision follows one rule: make the repository easier to understand
+            without making claims the code cannot support.
+          </p>
+        </div>
+        <div class="principles">
         <article class="principle">
+          <span class="principle-number">01</span>
+          <div class="principle-icon" aria-hidden="true">⌁</div>
           <h3>Evidence over invention</h3>
           <p>
             Nodes and edges come from the repository. Certainty is marked observed, derived, or
@@ -132,6 +210,8 @@
           </p>
         </article>
         <article class="principle">
+          <span class="principle-number">02</span>
+          <div class="principle-icon" aria-hidden="true">◎</div>
           <h3>Product story, not symbol soup</h3>
           <p>
             Default view collapses modules and functions into systems, pages, APIs, data, and jobs.
@@ -139,65 +219,73 @@
           </p>
         </article>
         <article class="principle">
+          <span class="principle-number">03</span>
+          <div class="principle-icon" aria-hidden="true">◇</div>
           <h3>Twin engines</h3>
           <p>
             Capability extracts real stacks. Polish keeps the Beginner walk calm. A feature is not
             done until the map is golden-locked and cold-readable.
           </p>
         </article>
+        </div>
       </div>
     </section>
 
-    <section class="section wrap" id="question">
-      <p class="quote">What did I <em>actually</em> build?</p>
-      <p class="support" style="margin-bottom: 0">
-        That is the whole product. Routes, components, databases, migrations, cron, queues,
-        pipelines — linked back to the file and line that justified them.
-      </p>
+    <section class="question-band" id="question">
+      <div class="wrap">
+        <p class="section-index">THE ONLY QUESTION</p>
+        <p class="quote">What did I <em>actually</em> build?</p>
+        <p class="quote-support">
+          Routes, components, databases, migrations, cron, queues, pipelines—connected
+          to the exact file and line that justified them.
+        </p>
+      </div>
     </section>
 
-    <section class="section wrap" id="not">
-      <h2>Not this</h2>
-      <p class="support">Clear refusals keep the map honest.</p>
-      <ul class="not-list">
-        <li>Not a raw call graph or IDE outline wearing new clothes</li>
-        <li>Not AI naming that invents services the code never declared</li>
-        <li>Not a sales funnel — open infrastructure you can run locally</li>
-        <li>Not a dump of tests, fixtures, or build output as “architecture”</li>
-      </ul>
+    <section class="section section-refusals" id="not">
+      <div class="wrap refusals-grid">
+        <div>
+          <p class="section-index">03 / REFUSALS</p>
+          <h2>Clarity requires<br />saying no.</h2>
+        </div>
+        <ul class="not-list">
+          <li><span>01</span><p>Not a raw call graph or IDE outline wearing new clothes</p></li>
+          <li><span>02</span><p>Not AI naming that invents services the code never declared</p></li>
+          <li><span>03</span><p>Not a sales funnel—open infrastructure you can run locally</p></li>
+          <li><span>04</span><p>Not a dump of tests, fixtures, or build output as “architecture”</p></li>
+        </ul>
+      </div>
     </section>
 
-    <section class="section wrap" id="contact">
-      <h2>Contact</h2>
-      <p class="support">
-        Built by Praveen. Questions, dogfood reports, or “this map lied about my repo” —
-        open an issue or find me below.
-      </p>
-      <ul class="contact-list">
-        <li>
-          <a href="https://github.com/praveen221/underdelta/issues" target="_blank" rel="noopener noreferrer"
-            >GitHub issues</a
-          >
-        </li>
-        <li>
-          <a href="https://github.com/praveen221" target="_blank" rel="noopener noreferrer"
-            >github.com/praveen221</a
-          >
-        </li>
-        <li>
-          <a href="https://praveen221.github.io/portfolio/" target="_blank" rel="noopener noreferrer"
-            >Personal site / portfolio</a
-          >
-        </li>
-      </ul>
+    <section class="contact-section" id="contact">
+      <div class="wrap contact-panel">
+        <div>
+          <p class="section-index">BUILT IN THE OPEN</p>
+          <h2>Does your map tell the truth?</h2>
+          <p>
+            Try Underdelta on something real. If the map misses, invents, or confuses,
+            tell me—those reports make the product better.
+          </p>
+        </div>
+        <div class="contact-actions">
+          <a class="contact-primary" href="https://github.com/praveen221/underdelta/issues" target="_blank" rel="noopener noreferrer">
+            Open an issue <span>↗</span>
+          </a>
+          <a href="https://github.com/praveen221" target="_blank" rel="noopener noreferrer">
+            GitHub <span>↗</span>
+          </a>
+          <a href="https://praveen221.github.io/portfolio/" target="_blank" rel="noopener noreferrer">
+            Praveen’s portfolio <span>↗</span>
+          </a>
+        </div>
+      </div>
     </section>
 
     <footer>
       <div class="wrap">
-        <span>MIT · built in the open</span>
-        <span>
-          <a href="https://github.com/praveen221/underdelta">github.com/praveen221/underdelta</a>
-        </span>
+        <a class="footer-brand" href="#"><span>Δ</span> Underdelta</a>
+        <span>Evidence-backed architecture maps for humans.</span>
+        <span>MIT · 2026</span>
       </div>
     </footer>
 
@@ -329,6 +417,35 @@
             });
           });
         });
+
+        var hero = document.querySelector(".hero");
+        var precisePointer = window.matchMedia("(hover: hover) and (pointer: fine)");
+        var reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+        var pointerFrame = 0;
+
+        if (hero && precisePointer.matches && !reducedMotion.matches) {
+          hero.addEventListener("pointermove", function (event) {
+            if (pointerFrame) cancelAnimationFrame(pointerFrame);
+            pointerFrame = requestAnimationFrame(function () {
+              var rect = hero.getBoundingClientRect();
+              var x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+              var y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+
+              hero.style.setProperty("--pointer-x", (x * 100).toFixed(2) + "%");
+              hero.style.setProperty("--pointer-y", (y * 100).toFixed(2) + "%");
+              hero.style.setProperty("--grid-x", ((x - 0.5) * 14).toFixed(2) + "px");
+              hero.style.setProperty("--grid-y", ((y - 0.5) * 14).toFixed(2) + "px");
+              hero.classList.add("is-interacting");
+            });
+          });
+
+          hero.addEventListener("pointerleave", function () {
+            if (pointerFrame) cancelAnimationFrame(pointerFrame);
+            hero.classList.remove("is-interacting");
+            hero.style.setProperty("--grid-x", "0px");
+            hero.style.setProperty("--grid-y", "0px");
+          });
+        }
       })();
     </script>
   </body>
