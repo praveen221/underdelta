@@ -36,6 +36,26 @@ export interface ProjectOptions {
 }
 
 /**
+ * True when this repo is Underdelta itself (or explicitly ships an `underdelta`
+ * bin). Gates Compile/Viewer/Extractors/Graph/Schema-contract hubs and the
+ * architecture.json / index.html artifact projection so foreign repos with
+ * decoy filenames do not invent an Underdelta self-map.
+ */
+export function isUnderdeltaToolingRepo(options: ProjectOptions = {}): boolean {
+  const name = options.packageManifest?.name?.trim().toLowerCase();
+  if (name === "underdelta") return true;
+
+  const bin = options.packageManifest?.bin;
+  if (typeof bin === "string") {
+    return /(^|\/)underdelta(?:\.[cm]?js)?$/i.test(bin.trim());
+  }
+  if (bin && typeof bin === "object") {
+    return Object.keys(bin).some((key) => key.toLowerCase() === "underdelta");
+  }
+  return false;
+}
+
+/**
  * Strip markdown image/link chrome from a heading so alt/link text can be used
  * as a human label. `![Alt](img.png)` → `Alt`.
  */
@@ -56,25 +76,71 @@ export function sanitizeMarkdownHeadingText(raw: string): string {
   return text;
 }
 
+/**
+ * README "titles" that are install/setup chrome, not the product name
+ * (TrackNotch dogfood: shell comment `# Install Claude Code if you haven't already`).
+ */
+export function isPoisonedProductTitle(title: string): boolean {
+  const text = title.trim();
+  if (!text) return true;
+  const lower = text.toLowerCase();
+
+  // Imperative how-to / install lines.
+  if (
+    /^(to\s+)?(generate|install|run|create|configure|deploy|build|test|clone|download|add|update|set\s*up|make|enable|start|seed|apply|migrate|push|pull|open|visit|follow|copy|paste|replace|remove|delete|drop|reset)\b/i.test(
+      lower,
+    )
+  ) {
+    return true;
+  }
+
+  // Docs asides that sneak in as H1s from code comments or setup sections.
+  if (
+    /\bif you haven'?t already\b/i.test(lower) ||
+    /\bvia\s+(?:npm|pnpm|yarn|brew|curl|docker)\b/i.test(lower) ||
+    /^(?:usage|getting started|quick\s*start|installation)\b/i.test(lower)
+  ) {
+    return true;
+  }
+
+  // Full-sentence instructions are never product brands.
+  if (/\b(if you|you need to|make sure|don'?t forget)\b/i.test(lower)) {
+    return true;
+  }
+
+  return false;
+}
+
+function usableProductTitle(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const title = sanitizeMarkdownHeadingText(raw.replace(/\s+#+\s*$/, ""));
+  if (!title || /^https?:\/\//i.test(title) || title.length > 80) {
+    return undefined;
+  }
+  if (isPoisonedProductTitle(title)) return undefined;
+  return title;
+}
+
 /** First H1 in a README, sanitized — product-title territory, not system hints. */
 export function parseReadmeTitle(markdown: string): string | undefined {
-  const match = /^#\s+(.+?)\s*$/m.exec(markdown);
+  // Drop fenced code so shell comments (`# Install …`) never win as the product H1.
+  const withoutFences = markdown.replace(/```[\s\S]*?```/g, "\n");
+
+  // HTML <h1> (centered brand logos / TrackNotch-style READMEs) before markdown.
+  const htmlH1 =
+    /<h1\b[^>]*>\s*([\s\S]*?)\s*<\/h1>/i.exec(withoutFences)?.[1];
+  const fromHtml = usableProductTitle(htmlH1);
+  if (fromHtml) return fromHtml;
+
+  const match = /^#\s+(.+?)\s*$/m.exec(withoutFences);
   if (match?.[1]) {
-    const title = sanitizeMarkdownHeadingText(
-      match[1].replace(/\s+#+\s*$/, ""),
-    );
-    if (
-      title &&
-      !/^https?:\/\//i.test(title) &&
-      title.length <= 80
-    ) {
-      return title;
-    }
+    const fromMd = usableProductTitle(match[1]);
+    if (fromMd) return fromMd;
   }
 
   // No usable H1 — accept a leading bold brand used as the product name
   // (`**Online Boutique** is a cloud-first…`) after stripping comments/badges.
-  const head = markdown
+  const head = withoutFences
     .replace(/<!--[\s\S]*?-->/g, "")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
     .slice(0, 2500);
@@ -82,11 +148,7 @@ export function parseReadmeTitle(markdown: string): string | undefined {
     /^\s*\*\*([^*]{2,60})\*\*\s+is\b/im.exec(head) ??
     /\n\s*\*\*([^*]{2,60})\*\*\s+is\b/i.exec(head);
   if (!bold?.[1]) return undefined;
-  const boldTitle = sanitizeMarkdownHeadingText(bold[1]);
-  if (!boldTitle || /^https?:\/\//i.test(boldTitle) || boldTitle.length > 80) {
-    return undefined;
-  }
-  return boldTitle;
+  return usableProductTitle(bold[1]);
 }
 
 /**
@@ -134,14 +196,17 @@ export function preferProductLabel(
   if (pkg && !pkg.includes("/")) {
     return /[-_]/.test(pkg) ? humanizePackageName(pkg) : pkg;
   }
-  if (readmeTitle) {
-    const title = readmeTitle.trim();
+  const cleanedReadme =
+    readmeTitle && !isPoisonedProductTitle(readmeTitle)
+      ? readmeTitle.trim()
+      : undefined;
+  if (cleanedReadme) {
     // Plain lowercase README brands (`podinfo`) read as product names once
     // title-cased; multi-word / already-cased titles stay as authored.
-    if (/^[a-z][a-z0-9]*$/.test(title)) {
-      return humanizePackageName(title);
+    if (/^[a-z][a-z0-9]*$/.test(cleanedReadme)) {
+      return humanizePackageName(cleanedReadme);
     }
-    return title;
+    return cleanedReadme;
   }
   if (pkg) return humanizePackageName(pkg);
   const base = fallback.trim();
@@ -285,10 +350,10 @@ export function inferSystemKeyFromHeading(heading: string): string | undefined {
     return undefined;
   }
 
-  // Skip imperative how-to headings ("Generate your Prisma client", "Seed the database").
-  // Also "To run (via Docker)" — docs chrome, not a Deploy system name.
+  // Skip imperative how-to / marketing headings ("Generate your Prisma client",
+  // "Skip the API-key collection — Nous Portal"). Also "To run (via Docker)".
   if (
-    /^(to\s+)?(generate|install|run|create|configure|deploy|build|test|clone|download|add|update|set\s*up|make|enable|start|seed|apply|migrate|push|pull|open|visit|follow|copy|paste|replace|remove|delete|drop|reset)\b/.test(
+    /^(to\s+)?(generate|install|run|create|configure|deploy|build|test|clone|download|add|update|set\s*up|make|enable|start|seed|apply|migrate|push|pull|open|visit|follow|copy|paste|replace|remove|delete|drop|reset|skip|use|try|get|pick|choose|switch)\b/.test(
       text,
     )
   ) {
@@ -316,7 +381,13 @@ export function inferSystemKeyFromHeading(heading: string): string | undefined {
     { key: "schema", pattern: /\bschema\b/, weight: 9 },
     { key: "graph", pattern: /\bgraph\b|\bassembly\b/, weight: 8 },
     { key: "cli", pattern: /\bcli\b|\bcommand[- ]line\b/, weight: 8 },
-    { key: "api", pattern: /\bapi\b|\broutes?\b|\bhttp\b|\bendpoints?\b/, weight: 8 },
+    // "API-key" / "API keys" are auth/setup chrome, not an HTTP API hub name
+    // (hermes-agent: "Skip the API-key collection — Nous Portal").
+    {
+      key: "api",
+      pattern: /\bapi(?![- ]keys?\b)\b|\broutes?\b|\bhttp\b|\bendpoints?\b/,
+      weight: 8,
+    },
     { key: "ui", pattern: /\bui\b|\bfrontend\b|\bstorefront\b|\bcomponents?\b/, weight: 7 },
     // "prisma"/"sql" alone match how-to noise; require data-ish phrasing.
     {
@@ -820,6 +891,35 @@ function quietNonCompilerProductChrome(
       ),
     ]);
     nodes.set(api.id, api);
+  } else if (api && !schema) {
+    // Foreign repos no longer invent a Schema contract hub for bare schema.ts.
+    // Still nest those modules under HTTP API as collapsed chrome (GraphQL).
+    const dataId = systems.get("data")?.id;
+    for (const node of nodes.values()) {
+      if (!isFileModule(node)) continue;
+      const file = modulePath(node).toLowerCase();
+      if (!/(^|\/)schema\.[cm]?[jt]sx?$/.test(file)) continue;
+      if (/(^|\/)(db|database)\//.test(file)) continue;
+      if (node.parentId === dataId || node.parentId === api.id) continue;
+      node.parentId = api.id;
+      node.metadata = {
+        ...node.metadata,
+        projectedSystem: "api",
+        collapsedInOverview: true,
+      };
+      nodes.set(node.id, node);
+      moduleToSystem.set(node.id, api.id);
+      const contains = edgeFrom(
+        "contains",
+        api.id,
+        node.id,
+        projectionEvidence(
+          modulePath(node),
+          "Nested bare schema.ts under HTTP API (no Schema contract hub)",
+        ),
+      );
+      if (!edges.has(contains.id)) edges.set(contains.id, contains);
+    }
   }
 
   // Empty CLI from package.json bin with no child modules — hide on overview.
@@ -1144,20 +1244,32 @@ function modulePath(node: ArchitectureNode): string {
   return normalizePath(node.qualifiedName ?? node.label);
 }
 
-export function inferSystemRole(moduleFile: string): SystemRole | undefined {
+export function inferSystemRole(
+  moduleFile: string,
+  context: { underdeltaTooling?: boolean } = {},
+): SystemRole | undefined {
   const file = normalizePath(moduleFile).toLowerCase();
+  const underdeltaTooling = context.underdeltaTooling === true;
 
-  if (file.includes("/extractors/") || /(^|\/)extractor\.[cm]?[jt]sx?$/.test(file)) {
-    return { key: "extractors", label: "Extractors", kind: "system" };
+  // Underdelta self-map hubs only — foreign repos often have extractors/,
+  // compile.ts, viewer.ts, graph.ts, schema.ts without being this product.
+  if (underdeltaTooling) {
+    if (
+      file.includes("/extractors/") ||
+      /(^|\/)extractor\.[cm]?[jt]sx?$/.test(file)
+    ) {
+      return { key: "extractors", label: "Extractors", kind: "system" };
+    }
+    if (/(^|\/)compile\.[cm]?[jt]sx?$/.test(file)) {
+      return { key: "compile", label: "Compile pipeline", kind: "pipeline" };
+    }
+    if (/(^|\/)viewer\.[cm]?[jt]sx?$/.test(file)) {
+      return { key: "viewer", label: "Viewer", kind: "ui" };
+    }
   }
+
   if (/(^|\/)cli\.[cm]?[jt]sx?$/.test(file)) {
     return { key: "cli", label: "CLI", kind: "system" };
-  }
-  if (/(^|\/)compile\.[cm]?[jt]sx?$/.test(file)) {
-    return { key: "compile", label: "Compile pipeline", kind: "pipeline" };
-  }
-  if (/(^|\/)viewer\.[cm]?[jt]sx?$/.test(file)) {
-    return { key: "viewer", label: "Viewer", kind: "ui" };
   }
   // Top-level `components/` / `ui/` (no leading slash) must match too —
   // Next fixtures often keep client widgets beside `app/`, not under `src/`.
@@ -1175,7 +1287,7 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
   ) {
     return { key: "ui", label: "UI", kind: "ui" };
   }
-  if (/(^|\/)graph\.[cm]?[jt]sx?$/.test(file)) {
+  if (underdeltaTooling && /(^|\/)graph\.[cm]?[jt]sx?$/.test(file)) {
     return { key: "graph", label: "Graph assembly", kind: "system" };
   }
   // Next.js App Router: route handlers + server actions are the API surface.
@@ -1281,7 +1393,7 @@ export function inferSystemRole(moduleFile: string): SystemRole | undefined {
     return { key: "data", label: "Data access", kind: "system" };
   }
   // Architecture / compiler schema modules (Underdelta src/schema.ts), not ORM.
-  if (/(^|\/)schema\.[cm]?[jt]sx?$/.test(file)) {
+  if (underdeltaTooling && /(^|\/)schema\.[cm]?[jt]sx?$/.test(file)) {
     return { key: "schema", label: "Schema contract", kind: "system" };
   }
 
@@ -3851,10 +3963,11 @@ export function projectSemanticArchitecture(
 
   const systems = new Map<string, ArchitectureNode>();
   const moduleToSystem = new Map<string, string>();
+  const underdeltaTooling = isUnderdeltaToolingRepo(options);
 
   for (const node of [...nodes.values()]) {
     if (!isFileModule(node)) continue;
-    const role = inferSystemRole(modulePath(node));
+    const role = inferSystemRole(modulePath(node), { underdeltaTooling });
     if (!role) continue;
 
     const systemId = stableId("system", role.key);
@@ -5310,9 +5423,11 @@ export function projectSemanticArchitecture(
     if (!edges.has(dependency.id)) edges.set(dependency.id, dependency);
   }
 
-  // Synthesize scan output artifacts on tooling self-maps:
-  // architecture.json (IR) beside index.html (browser).
+  // Synthesize scan output artifacts on Underdelta self-maps only:
+  // architecture.json (IR) beside index.html (browser). Never invent these
+  // on foreign repos that happen to have cli/compile/viewer filenames.
   if (
+    underdeltaTooling &&
     (systems.has("compile") || systems.has("graph")) &&
     (systems.has("viewer") || systems.has("cli"))
   ) {

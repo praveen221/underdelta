@@ -8,12 +8,15 @@ import { compileRepository } from "../dist/compile.js";
 import {
   isClientApisOnlyHttpApi,
   isGenericApiDocsTitle,
+  isPoisonedProductTitle,
   isReadmeStructureHeading,
   isTrivialMongoAggregateLabel,
   INTERMEDIATE_GROUPED_NAKED_ROUTE_CAP,
   INTERMEDIATE_NAKED_ROUTE_CAP,
   SCHOLAR_BEGINNER_HUB_MAX,
   parseReadmeHeadingHints,
+  parseReadmeTitle,
+  preferProductLabel,
 } from "../dist/project.js";
 import { renderArchitectureHtml } from "../dist/viewer.js";
 import {
@@ -42,6 +45,16 @@ const miniReadmeStructureRoot = path.join(
   repoRoot,
   "verification",
   "mini-readme-structure",
+);
+const miniDecoyToolingRoot = path.join(
+  repoRoot,
+  "verification",
+  "mini-decoy-tooling",
+);
+const miniReadmePoisonRoot = path.join(
+  repoRoot,
+  "verification",
+  "mini-readme-poison",
 );
 const miniRoutesManyRoot = path.join(
   repoRoot,
@@ -5764,6 +5777,133 @@ if (!miniMongoPipelineUsesCollection) {
   fail("mini-mongo expected aggregate pipeline -[uses:query]-> collection");
 } else {
   pass("mini-mongo aggregate pipeline -[uses:query]-> collection");
+}
+
+// ---------------------------------------------------------------------------
+// README product-title poison: HTML <h1> brands win; fenced `# Install …`
+// shell comments must not become the product name (TrackNotch dogfood).
+// ---------------------------------------------------------------------------
+const poisonInstallTitle = "Install Claude Code if you haven't already";
+if (!isPoisonedProductTitle(poisonInstallTitle)) {
+  fail(`expected isPoisonedProductTitle(${JSON.stringify(poisonInstallTitle)})`);
+} else {
+  pass("isPoisonedProductTitle catches install/setup chrome titles");
+}
+const poisonSampleReadme = `<h1 align="center">TrackNotch</h1>\n\n\`\`\`bash\n# Install Claude Code if you haven't already\nnpm i -g x\n\`\`\`\n`;
+const poisonParsedTitle = parseReadmeTitle(poisonSampleReadme);
+if (poisonParsedTitle !== "TrackNotch") {
+  fail(
+    `parseReadmeTitle should prefer HTML h1 TrackNotch over fenced install comment, found ${JSON.stringify(poisonParsedTitle)}`,
+  );
+} else {
+  pass("parseReadmeTitle prefers HTML h1 over fenced # Install comments");
+}
+if (
+  preferProductLabel(undefined, poisonInstallTitle, "tracknotch") !==
+  "tracknotch"
+) {
+  fail("preferProductLabel must skip poisoned README titles and use fallback");
+} else {
+  pass("preferProductLabel skips poisoned README titles");
+}
+
+const miniReadmePoisonGraph = await compileRepository(miniReadmePoisonRoot);
+const miniReadmePoisonProduct = miniReadmePoisonGraph.nodes.find(
+  (node) => node.kind === "product",
+);
+if (miniReadmePoisonProduct?.label !== "TrackNotch") {
+  fail(
+    `mini-readme-poison product expected 'TrackNotch' from HTML h1, found '${miniReadmePoisonProduct?.label ?? "(missing)"}'`,
+  );
+} else {
+  pass("mini-readme-poison product labeled TrackNotch (not install comment)");
+}
+if (/install/i.test(miniReadmePoisonProduct?.label ?? "")) {
+  fail(
+    `mini-readme-poison product still looks like install chrome: ${miniReadmePoisonProduct.label}`,
+  );
+}
+
+// hermes-agent dogfood: marketing "## Skip the API-key…" must not rename HTTP API.
+const hermesStyleApiSlogan = "Skip the API-key collection — Nous Portal";
+const hermesStyleHints = parseReadmeHeadingHints(
+  `## ${hermesStyleApiSlogan}\n\n## Notes API\n`,
+);
+if (hermesStyleHints.some((hint) => hint.key === "api" && /skip the api/i.test(hint.label))) {
+  fail(
+    `parseReadmeHeadingHints must not map slogan ${JSON.stringify(hermesStyleApiSlogan)} to api`,
+  );
+}
+const hermesStyleNotes = hermesStyleHints.find((hint) => hint.key === "api");
+if (!hermesStyleNotes || hermesStyleNotes.label !== "Notes API") {
+  fail(
+    `parseReadmeHeadingHints should keep Notes API as the api hint, found ${JSON.stringify(hermesStyleNotes ?? null)}`,
+  );
+} else {
+  pass("README API-key marketing slogans do not rename HTTP API");
+}
+
+// ---------------------------------------------------------------------------
+// Foreign filename collisions must not invent Underdelta self-map hubs /
+// architecture.json artifacts (verification/mini-decoy-tooling).
+// ---------------------------------------------------------------------------
+const miniDecoyToolingGraph = await compileRepository(miniDecoyToolingRoot);
+const decoyForbiddenLabels = [
+  "Compile pipeline",
+  "Extractors",
+  "Viewer",
+  "Graph assembly",
+  "Schema contract",
+  "architecture.json",
+  "index.html",
+];
+const decoyForbiddenHits = miniDecoyToolingGraph.nodes.filter((node) =>
+  decoyForbiddenLabels.includes(node.label),
+);
+if (decoyForbiddenHits.length) {
+  fail(
+    `mini-decoy-tooling invented Underdelta hubs/artifacts: ${decoyForbiddenHits
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-decoy-tooling has no Underdelta compile/viewer/artifact hubs");
+}
+const decoyArtifactRole = miniDecoyToolingGraph.nodes.filter(
+  (node) =>
+    node.metadata?.role === "artifact" ||
+    node.metadata?.artifactKind === "architecture-ir" ||
+    node.metadata?.artifactKind === "browser",
+);
+if (decoyArtifactRole.length) {
+  fail(
+    `mini-decoy-tooling has artifact-role nodes: ${decoyArtifactRole
+      .map((node) => node.label)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-decoy-tooling has no architecture.json / index.html artifact roles");
+}
+const decoyForbiddenKeys = new Set([
+  "compile",
+  "extractors",
+  "viewer",
+  "graph",
+  "schema",
+  "artifact",
+  "browser",
+]);
+const decoyForbiddenKeyHits = miniDecoyToolingGraph.nodes.filter((node) =>
+  decoyForbiddenKeys.has(String(node.metadata?.systemKey ?? "")),
+);
+if (decoyForbiddenKeyHits.length) {
+  fail(
+    `mini-decoy-tooling has Underdelta systemKeys: ${decoyForbiddenKeyHits
+      .map((node) => `${node.label}(${node.metadata?.systemKey})`)
+      .join(", ")}`,
+  );
+} else {
+  pass("mini-decoy-tooling has no Underdelta systemKeys");
 }
 
 // ---------------------------------------------------------------------------
