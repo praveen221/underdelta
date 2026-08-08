@@ -236,20 +236,53 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         (node.metadata.role === "detection-surface" || node.metadata.detectionSurface)
       );
     }
-    // Pass B FE shell hubs (Public / Auth / Protected) — Intermediate is routes only.
+    // Pass B FE shell hubs (Public / Auth / Protected) — Intermediate is tools
+    // (nested route molecules) plus their API story neighbors — not code flood.
     function isShellHub(node) {
       return !!(node && node.metadata && node.metadata.shellHub === true);
     }
     function isRouteMoleculeHub(node) {
       return !!(node && node.metadata && node.metadata.routeMolecule === true);
     }
-    // Shell Intermediate MVP: nested page/route molecules under the shell, not
-    // page atoms, feature roots, leaf chrome, modules, or functions.
-    function shellRoutesOnlyVisible(node, focusId) {
+    function isHttpApiStoryHub(node) {
+      return !!(
+        node &&
+        (node.kind === "api" ||
+          (node.metadata && node.metadata.systemKey === "api"))
+      );
+    }
+    // Shell Intermediate: nested tools under the shell, plus HTTP API when a
+    // tool has reads/writes/uses edges to it. Still hide feature roots / leaf chrome.
+    function shellToolStoryVisible(node, focusId) {
       const focused = focusId ? byId.get(focusId) : null;
       if (!isShellHub(focused)) return true;
       if (node.id === focusId) return true;
-      return isRouteMoleculeHub(node) && node.parentId === focusId;
+      if (isRouteMoleculeHub(node) && node.parentId === focusId) return true;
+      if (isHttpApiStoryHub(node)) return true;
+      return false;
+    }
+    // Tool Intermediate: focusing a route molecule shows the tool, its page-owned
+    // feature roots, and HTTP API story neighbors — not page-atom / Card flood.
+    function routeToolStoryVisible(node, focusId) {
+      const focused = focusId ? byId.get(focusId) : null;
+      if (!isRouteMoleculeHub(focused)) return true;
+      if (node.id === focusId) return true;
+      if (isHttpApiStoryHub(node)) return true;
+      if (
+        node.metadata &&
+        node.metadata.featureRoot === true &&
+        node.parentId === focusId
+      ) {
+        return true;
+      }
+      return false;
+    }
+    // Back-compat name kept for verify string floors / older notes.
+    function shellRoutesOnlyVisible(node, focusId) {
+      return (
+        shellToolStoryVisible(node, focusId) &&
+        routeToolStoryVisible(node, focusId)
+      );
     }
     // Route atoms nested under domain groups (Users / Articles) — only show when
     // that group is focused (same Intermediate calm as detection surfaces).
@@ -744,8 +777,15 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         ) {
           return false;
         }
-        // FE shells: Protected/Auth/Public Intermediate = nested routes only.
-        if (isShellHub(focused) && !shellRoutesOnlyVisible(node, rootId)) {
+        // FE shells: Protected/Auth/Public Intermediate = tools + API story neighbors.
+        if (isShellHub(focused) && !shellToolStoryVisible(node, rootId)) {
+          return false;
+        }
+        // FE tools: Dashboard/Settings Intermediate = tool + feature roots + API.
+        if (
+          isRouteMoleculeHub(focused) &&
+          !routeToolStoryVisible(node, rootId)
+        ) {
           return false;
         }
         if (!routeGroupMemberVisible(node, rootId)) return false;
@@ -822,6 +862,10 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       }
       // FE shell hubs always open Intermediate routes (never thin-room Advanced).
       if (isShellHub(clicked)) {
+        return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
+      }
+      // FE tools (route molecules) open Intermediate tool→API rooms, not Advanced.
+      if (isRouteMoleculeHub(clicked)) {
         return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
       }
 
