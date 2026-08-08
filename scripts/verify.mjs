@@ -3684,6 +3684,12 @@ const shellsSettingsMolecule = miniNextShellsGraph.nodes.find(
 const shellsPricingMolecule = miniNextShellsGraph.nodes.find(
   (node) => node.metadata?.systemKey === "page:/pricing",
 );
+const shellsApiOnBeginner = miniNextShellsFlow.some(
+  (node) => node.kind === "api" || node.metadata?.systemKey === "api",
+);
+const shellsApiHub = miniNextShellsGraph.nodes.find(
+  (node) => node.metadata?.systemKey === "api",
+);
 if (
   miniNextShellsFlowLabels.length < 3 ||
   miniNextShellsFlowLabels[0] !== "Home" ||
@@ -3706,9 +3712,20 @@ if (
   fail(
     `mini-next-shells Beginner must nest Login/Dashboard/Settings/Pricing under shells, still on flow: ${miniNextShellsFlowLabels.join(" → ")}`,
   );
+} else if (shellsApiOnBeginner || miniNextShellsFlowLabels.includes("HTTP API")) {
+  fail(
+    `mini-next-shells Beginner must not put HTTP API as co-equal shell peer; got ${miniNextShellsFlowLabels.join(" → ")}`,
+  );
+} else if (
+  !shellsApiHub ||
+  shellsApiHub.metadata?.collapsedInOverview !== true
+) {
+  fail(
+    "mini-next-shells client HTTP API must collapse from Beginner (tool→API stays on Protected Intermediate)",
+  );
 } else {
   pass(
-    `mini-next-shells Beginner shell walk: ${miniNextShellsFlowLabels.join(" → ")}`,
+    `mini-next-shells Beginner shell walk (no HTTP API peer): ${miniNextShellsFlowLabels.join(" → ")}`,
   );
 }
 if (!shellsAuthHub || !shellsProtectedHub || !shellsPublicHub) {
