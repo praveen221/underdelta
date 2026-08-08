@@ -1564,6 +1564,7 @@ function intermediateFocusNodes(graph, rootId) {
   const allowed = focusNeighborhoodIds(graph, rootId);
   const focused = graph.nodes.find((node) => node.id === rootId);
   const shellFocus = focused?.metadata?.shellHub === true;
+  const routeToolFocus = focused?.metadata?.routeMolecule === true;
   return graph.nodes.filter((node) => {
     if (!allowed.has(node.id)) return false;
     if (node.kind === "product") return false;
@@ -1582,6 +1583,17 @@ function intermediateFocusNodes(graph, rootId) {
         return true;
       }
       if (node.kind === "api" || node.metadata?.systemKey === "api") {
+        return true;
+      }
+      return false;
+    }
+    // FE tool Intermediate: focused route molecule + feature roots + HTTP API.
+    if (routeToolFocus) {
+      if (node.id === rootId) return true;
+      if (node.kind === "api" || node.metadata?.systemKey === "api") {
+        return true;
+      }
+      if (node.metadata?.featureRoot === true && node.parentId === rootId) {
         return true;
       }
       return false;
@@ -3899,14 +3911,51 @@ if (!shellsDashboardPanel || shellsDashboardPanel.metadata?.featureRoot !== true
 if (
   !viewerHtml.includes("shellToolStoryVisible") ||
   !viewerHtml.includes("shellRoutesOnlyVisible") ||
+  !viewerHtml.includes("routeToolStoryVisible") ||
   !viewerHtml.includes("isShellHub") ||
   !viewerHtml.includes("shellHub")
 ) {
   fail(
-    "viewer must implement FE shell Intermediate tool+API filter (shellToolStoryVisible / isShellHub)",
+    "viewer must implement FE shell/tool Intermediate filters (shellToolStoryVisible / routeToolStoryVisible / isShellHub)",
   );
 } else {
   pass("viewer wires FE shell Intermediate tool+API story filter");
+}
+
+// Tool focus: Dashboard Intermediate surfaces HTTP API; Card/Button stay off.
+const shellsDashboardFocus = shellsDashboardMolecule
+  ? intermediateFocusNodes(miniNextShellsGraph, shellsDashboardMolecule.id)
+  : [];
+const shellsDashboardFocusLabels = shellsDashboardFocus.map((node) =>
+  String(node.label),
+);
+const shellsDashboardFocusSet = new Set(shellsDashboardFocusLabels);
+const shellsDashboardApiHub = shellsDashboardFocus.find(
+  (node) => node.kind === "api" || node.metadata?.systemKey === "api",
+);
+const shellsDashboardHasFlood =
+  shellsDashboardFocus.some(
+    (node) =>
+      node.kind === "module" ||
+      node.kind === "function" ||
+      node.metadata?.leafChrome === true,
+  ) ||
+  shellsDashboardFocusSet.has("Card") ||
+  shellsDashboardFocusSet.has("Button") ||
+  shellsDashboardFocusSet.has("Dashboard page");
+if (
+  !shellsDashboardMolecule ||
+  !shellsDashboardFocusSet.has("Dashboard") ||
+  !shellsDashboardApiHub ||
+  shellsDashboardHasFlood
+) {
+  fail(
+    `mini-next-shells Dashboard tool focus must show Dashboard + HTTP API without Card/Button/page flood; got ${shellsDashboardFocusLabels.join(", ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `mini-next-shells Dashboard tool focus: ${shellsDashboardFocusLabels.join(" · ")}`,
+  );
 }
 
 const miniNextHomeFocus = miniNextHomeMolecule

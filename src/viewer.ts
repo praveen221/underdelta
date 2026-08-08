@@ -261,9 +261,28 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       if (isHttpApiStoryHub(node)) return true;
       return false;
     }
+    // Tool Intermediate: focusing a route molecule shows the tool, its page-owned
+    // feature roots, and HTTP API story neighbors — not page-atom / Card flood.
+    function routeToolStoryVisible(node, focusId) {
+      const focused = focusId ? byId.get(focusId) : null;
+      if (!isRouteMoleculeHub(focused)) return true;
+      if (node.id === focusId) return true;
+      if (isHttpApiStoryHub(node)) return true;
+      if (
+        node.metadata &&
+        node.metadata.featureRoot === true &&
+        node.parentId === focusId
+      ) {
+        return true;
+      }
+      return false;
+    }
     // Back-compat name kept for verify string floors / older notes.
     function shellRoutesOnlyVisible(node, focusId) {
-      return shellToolStoryVisible(node, focusId);
+      return (
+        shellToolStoryVisible(node, focusId) &&
+        routeToolStoryVisible(node, focusId)
+      );
     }
     // Route atoms nested under domain groups (Users / Articles) — only show when
     // that group is focused (same Intermediate calm as detection surfaces).
@@ -762,6 +781,13 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         if (isShellHub(focused) && !shellToolStoryVisible(node, rootId)) {
           return false;
         }
+        // FE tools: Dashboard/Settings Intermediate = tool + feature roots + API.
+        if (
+          isRouteMoleculeHub(focused) &&
+          !routeToolStoryVisible(node, rootId)
+        ) {
+          return false;
+        }
         if (!routeGroupMemberVisible(node, rootId)) return false;
         const isOverviewHub = node.metadata && node.metadata.overviewHub;
         if (advancedKinds.has(node.kind) && !isOverviewHub) return false;
@@ -836,6 +862,10 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       }
       // FE shell hubs always open Intermediate routes (never thin-room Advanced).
       if (isShellHub(clicked)) {
+        return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
+      }
+      // FE tools (route molecules) open Intermediate tool→API rooms, not Advanced.
+      if (isRouteMoleculeHub(clicked)) {
         return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
       }
 
