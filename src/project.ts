@@ -6139,16 +6139,31 @@ export function projectSemanticArchitecture(
     const protectedKey = shellSet.has(shellSystemKey("protected"))
       ? shellSystemKey("protected")
       : undefined;
-    // Prefer entrance walk: Home → Auth → Protected → API.
+    // Prefer entrance walk: Home → Auth → Protected.
+    // HTTP API is tool wiring (Intermediate), not a co-equal Beginner shell peer.
     if (heroPageKey && authKey) flowPairs.push([heroPageKey, authKey]);
     if (authKey && protectedKey) flowPairs.push([authKey, protectedKey]);
     if (heroPageKey && protectedKey && !authKey) {
       flowPairs.push([heroPageKey, protectedKey]);
     }
-    if (systems.has("api")) {
-      const apiTail =
-        protectedKey ?? authKey ?? feShellKeys[feShellKeys.length - 1]!;
-      flowPairs.push([apiTail, "api"]);
+    const apiSystem = systems.get("api");
+    if (apiSystem) {
+      // Scholar / mini-next-shells: client `apis/**` helpers only — collapse from
+      // Beginner so the cold-open stays the access walk. Protected Intermediate
+      // still shows tool→API via reads/writes/uses. Full-stack server API keeps
+      // a post-shell band (Protected → HTTP API → Data).
+      if (isClientApisOnlyHttpApi(apiSystem, nodes)) {
+        apiSystem.metadata = {
+          ...apiSystem.metadata,
+          collapsedInOverview: true,
+        };
+        nodes.set(apiSystem.id, apiSystem);
+        systems.set("api", apiSystem);
+      } else {
+        const apiTail =
+          protectedKey ?? authKey ?? feShellKeys[feShellKeys.length - 1]!;
+        flowPairs.push([apiTail, "api"]);
+      }
     }
   }
 
