@@ -3681,6 +3681,12 @@ const shellsDashboardMolecule = miniNextShellsGraph.nodes.find(
 const shellsSettingsMolecule = miniNextShellsGraph.nodes.find(
   (node) => node.metadata?.systemKey === "page:/settings",
 );
+const shellsOnboardingMolecule = miniNextShellsGraph.nodes.find(
+  (node) => node.metadata?.systemKey === "page:/onboarding",
+);
+const shellsProfileMolecule = miniNextShellsGraph.nodes.find(
+  (node) => node.metadata?.systemKey === "page:/profile",
+);
 const shellsPricingMolecule = miniNextShellsGraph.nodes.find(
   (node) => node.metadata?.systemKey === "page:/pricing",
 );
@@ -3701,10 +3707,12 @@ if (
   miniNextShellsFlowLabels.includes("Login") ||
   miniNextShellsFlowLabels.includes("Dashboard") ||
   miniNextShellsFlowLabels.includes("Settings") ||
+  miniNextShellsFlowLabels.includes("Onboarding") ||
+  miniNextShellsFlowLabels.includes("Profile") ||
   miniNextShellsFlowLabels.includes("Pricing")
 ) {
   fail(
-    `mini-next-shells Beginner must nest Login/Dashboard/Settings/Pricing under shells, still on flow: ${miniNextShellsFlowLabels.join(" → ")}`,
+    `mini-next-shells Beginner must nest Login/Dashboard/Settings/Onboarding/Profile/Pricing under shells, still on flow: ${miniNextShellsFlowLabels.join(" → ")}`,
   );
 } else {
   pass(
@@ -3721,11 +3729,13 @@ if (!shellsAuthHub || !shellsProtectedHub || !shellsPublicHub) {
   shellsLoginMolecule?.parentId !== shellsAuthHub.id ||
   shellsDashboardMolecule?.parentId !== shellsProtectedHub.id ||
   shellsSettingsMolecule?.parentId !== shellsProtectedHub.id ||
+  shellsOnboardingMolecule?.parentId !== shellsProtectedHub.id ||
+  shellsProfileMolecule?.parentId !== shellsProtectedHub.id ||
   shellsPricingMolecule?.parentId !== shellsPublicHub.id ||
   shellsHomeMolecule?.parentId !== shellsPublicHub.id
 ) {
   fail(
-    `mini-next-shells page molecules must nest under shells (login→Auth, dash/settings→Protected, home/pricing→Public); got login=${shellsLoginMolecule?.parentId} dash=${shellsDashboardMolecule?.parentId} settings=${shellsSettingsMolecule?.parentId} home=${shellsHomeMolecule?.parentId} pricing=${shellsPricingMolecule?.parentId}`,
+    `mini-next-shells page molecules must nest under shells (login→Auth, dash/settings/onboarding/profile→Protected, home/pricing→Public); got login=${shellsLoginMolecule?.parentId} dash=${shellsDashboardMolecule?.parentId} settings=${shellsSettingsMolecule?.parentId} onboarding=${shellsOnboardingMolecule?.parentId} profile=${shellsProfileMolecule?.parentId} home=${shellsHomeMolecule?.parentId} pricing=${shellsPricingMolecule?.parentId}`,
   );
 } else {
   pass("mini-next-shells page molecules nested under Public/Auth/Protected shells");
@@ -3771,17 +3781,30 @@ const shellsProtectedHasFlood =
   shellsProtectedFocusSet.has("Button") ||
   shellsProtectedFocusSet.has("Dashboard panel") ||
   shellsProtectedFocusSet.has("Dashboard page");
-const shellsToolApiEdges = miniNextShellsGraph.edges.filter(
-  (edge) =>
-    (edge.kind === "reads" || edge.kind === "writes" || edge.kind === "uses") &&
-    shellsDashboardMolecule &&
-    edge.source === shellsDashboardMolecule.id &&
-    miniNextShellsGraph.nodes.some(
-      (node) =>
-        node.id === edge.target &&
-        (node.kind === "api" || node.metadata?.systemKey === "api"),
-    ),
-);
+const shellsApiTarget = (edge) =>
+  miniNextShellsGraph.nodes.some(
+    (node) =>
+      node.id === edge.target &&
+      (node.kind === "api" || node.metadata?.systemKey === "api"),
+  );
+const shellsStoryApiEdge = (molecule) =>
+  molecule &&
+  miniNextShellsGraph.edges.find(
+    (edge) =>
+      (edge.kind === "reads" ||
+        edge.kind === "writes" ||
+        edge.kind === "uses") &&
+      edge.source === molecule.id &&
+      shellsApiTarget(edge),
+  );
+const shellsDashboardApiEdge = shellsStoryApiEdge(shellsDashboardMolecule);
+const shellsProfileApiEdge = shellsStoryApiEdge(shellsProfileMolecule);
+const shellsOnboardingApiEdge = shellsStoryApiEdge(shellsOnboardingMolecule);
+const shellsToolApiEdges = [
+  shellsDashboardApiEdge,
+  shellsProfileApiEdge,
+  shellsOnboardingApiEdge,
+].filter(Boolean);
 const shellsProtectedApiHub = shellsProtectedFocus.find(
   (node) => node.kind === "api" || node.metadata?.systemKey === "api",
 );
@@ -3790,27 +3813,62 @@ if (
   !shellsProtectedFocusSet.has("Protected") ||
   !shellsProtectedFocusSet.has("Dashboard") ||
   !shellsProtectedFocusSet.has("Settings") ||
+  !shellsProtectedFocusSet.has("Onboarding") ||
+  !shellsProtectedFocusSet.has("Profile") ||
   shellsProtectedHasFlood
 ) {
   fail(
-    `mini-next-shells Protected Intermediate must show tools (Protected + Dashboard + Settings) without code flood; got ${shellsProtectedFocusLabels.join(", ") || "(none)"}`,
+    `mini-next-shells Protected Intermediate must show tools (Protected + Dashboard + Settings + Onboarding + Profile) without code flood; got ${shellsProtectedFocusLabels.join(", ") || "(none)"}`,
   );
 } else {
   pass(
     `mini-next-shells Protected Intermediate tools: ${shellsProtectedFocusLabels.join(" · ")}`,
   );
 }
-if (!shellsToolApiEdges.length) {
+if (
+  !shellsDashboardApiEdge ||
+  !shellsDashboardApiEdge.evidence?.some(
+    (item) =>
+      item.certainty === "derived" &&
+      /listDashboardStats|List dashboard stats|client apis/i.test(
+        String(item.detail ?? ""),
+      ),
+  )
+) {
   fail(
-    "mini-next-shells expected Dashboard page molecule → HTTP API reads/writes/uses story edge via apis/listDashboardStats",
+    "mini-next-shells expected Dashboard → HTTP API via featureRoot → apis/listDashboardStats",
+  );
+} else if (
+  !shellsProfileApiEdge ||
+  !shellsProfileApiEdge.evidence?.some(
+    (item) =>
+      item.certainty === "derived" &&
+      /getProfile|Get profile|client apis/i.test(String(item.detail ?? "")),
+  )
+) {
+  fail(
+    "mini-next-shells expected Profile → HTTP API via page body → apis/getProfile",
+  );
+} else if (
+  !shellsOnboardingApiEdge ||
+  !shellsOnboardingApiEdge.evidence?.some(
+    (item) =>
+      item.certainty === "derived" &&
+      /listOnboardingSteps|List onboarding steps|hook|client apis/i.test(
+        String(item.detail ?? ""),
+      ),
+  )
+) {
+  fail(
+    "mini-next-shells expected Onboarding → HTTP API via featureRoot → hook → apis/listOnboardingSteps",
   );
 } else if (!shellsProtectedApiHub) {
   fail(
-    `mini-next-shells Protected Intermediate must include HTTP API neighbor when Dashboard→API edge exists; got ${shellsProtectedFocusLabels.join(", ") || "(none)"}`,
+    `mini-next-shells Protected Intermediate must include HTTP API neighbor when tool→API edges exist; got ${shellsProtectedFocusLabels.join(", ") || "(none)"}`,
   );
 } else {
   pass(
-    `mini-next-shells Protected Intermediate shows tool→API (${shellsDashboardMolecule.label} → ${shellsProtectedApiHub.label})`,
+    `mini-next-shells Protected Intermediate shows ${shellsToolApiEdges.length} tool→API edges (Dashboard/Profile/Onboarding → ${shellsProtectedApiHub.label})`,
   );
 }
 if (
