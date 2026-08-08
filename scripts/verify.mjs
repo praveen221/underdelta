@@ -1575,10 +1575,13 @@ function intermediateFocusNodes(graph, rootId) {
     ) {
       return false;
     }
-    // FE shells Intermediate MVP: shell focus → nested route molecules only.
+    // FE shells Intermediate: nested route tools + HTTP API story neighbors.
     if (shellFocus) {
       if (node.id === rootId) return true;
       if (node.metadata?.routeMolecule === true && node.parentId === rootId) {
+        return true;
+      }
+      if (node.kind === "api" || node.metadata?.systemKey === "api") {
         return true;
       }
       return false;
@@ -3739,7 +3742,7 @@ if (miniNextShellHubs.length) {
   pass("mini-next has no invented shell hubs (no fake Auth wall)");
 }
 
-// Phase Intermediate MVP: shell focus → nested route molecules only.
+// Shell Intermediate: tools under shell + HTTP API when tool→API story edges exist.
 const shellsProtectedFocus = shellsProtectedHub
   ? intermediateFocusNodes(miniNextShellsGraph, shellsProtectedHub.id)
   : [];
@@ -3759,34 +3762,61 @@ const shellsProtectedHasFlood =
       node.kind === "function" ||
       node.metadata?.leafChrome === true ||
       node.metadata?.featureRoot === true ||
-      (node.kind === "component" && node.metadata?.routeMolecule !== true) ||
+      (node.kind === "component" &&
+        node.metadata?.routeMolecule !== true &&
+        node.kind !== "api") ||
       (node.kind === "page" && node.metadata?.routeMolecule !== true),
   ) ||
   shellsProtectedFocusSet.has("Card") ||
   shellsProtectedFocusSet.has("Button") ||
   shellsProtectedFocusSet.has("Dashboard panel") ||
   shellsProtectedFocusSet.has("Dashboard page");
+const shellsToolApiEdges = miniNextShellsGraph.edges.filter(
+  (edge) =>
+    (edge.kind === "reads" || edge.kind === "writes" || edge.kind === "uses") &&
+    shellsDashboardMolecule &&
+    edge.source === shellsDashboardMolecule.id &&
+    miniNextShellsGraph.nodes.some(
+      (node) =>
+        node.id === edge.target &&
+        (node.kind === "api" || node.metadata?.systemKey === "api"),
+    ),
+);
+const shellsProtectedApiHub = shellsProtectedFocus.find(
+  (node) => node.kind === "api" || node.metadata?.systemKey === "api",
+);
 if (
   !shellsProtectedHub ||
   !shellsProtectedFocusSet.has("Protected") ||
   !shellsProtectedFocusSet.has("Dashboard") ||
   !shellsProtectedFocusSet.has("Settings") ||
-  shellsProtectedFocusLabels.length !== 3 ||
   shellsProtectedHasFlood
 ) {
   fail(
-    `mini-next-shells Protected Intermediate must be routes only (Protected + Dashboard + Settings); got ${shellsProtectedFocusLabels.join(", ") || "(none)"}`,
+    `mini-next-shells Protected Intermediate must show tools (Protected + Dashboard + Settings) without code flood; got ${shellsProtectedFocusLabels.join(", ") || "(none)"}`,
   );
 } else {
   pass(
-    "mini-next-shells Protected Intermediate is routes only (Protected → Dashboard + Settings)",
+    `mini-next-shells Protected Intermediate tools: ${shellsProtectedFocusLabels.join(" · ")}`,
+  );
+}
+if (!shellsToolApiEdges.length) {
+  fail(
+    "mini-next-shells expected Dashboard page molecule → HTTP API reads/writes/uses story edge via apis/listDashboardStats",
+  );
+} else if (!shellsProtectedApiHub) {
+  fail(
+    `mini-next-shells Protected Intermediate must include HTTP API neighbor when Dashboard→API edge exists; got ${shellsProtectedFocusLabels.join(", ") || "(none)"}`,
+  );
+} else {
+  pass(
+    `mini-next-shells Protected Intermediate shows tool→API (${shellsDashboardMolecule.label} → ${shellsProtectedApiHub.label})`,
   );
 }
 if (
   !shellsAuthHub ||
   !shellsAuthFocusSet.has("Auth") ||
   !shellsAuthFocusSet.has("Login") ||
-  shellsAuthFocusLabels.length !== 2 ||
   shellsAuthFocus.some(
     (node) =>
       node.kind === "module" ||
@@ -3796,10 +3826,10 @@ if (
   )
 ) {
   fail(
-    `mini-next-shells Auth Intermediate must be routes only (Auth + Login); got ${shellsAuthFocusLabels.join(", ") || "(none)"}`,
+    `mini-next-shells Auth Intermediate must stay tools-only (Auth + Login); got ${shellsAuthFocusLabels.join(", ") || "(none)"}`,
   );
 } else {
-  pass("mini-next-shells Auth Intermediate is routes only (Auth → Login)");
+  pass("mini-next-shells Auth Intermediate is tools-only (Auth → Login)");
 }
 // Fixture must still mark Dashboard panel feature root + Card/Button leaf chrome
 // so the shell Intermediate filter is a real omission, not an empty graph.
@@ -3829,15 +3859,16 @@ if (!shellsDashboardPanel || shellsDashboardPanel.metadata?.featureRoot !== true
   );
 }
 if (
+  !viewerHtml.includes("shellToolStoryVisible") ||
   !viewerHtml.includes("shellRoutesOnlyVisible") ||
   !viewerHtml.includes("isShellHub") ||
   !viewerHtml.includes("shellHub")
 ) {
   fail(
-    "viewer must implement FE shell Intermediate routes-only filter (shellRoutesOnlyVisible / isShellHub)",
+    "viewer must implement FE shell Intermediate tool+API filter (shellToolStoryVisible / isShellHub)",
   );
 } else {
-  pass("viewer wires FE shell Intermediate routes-only filter");
+  pass("viewer wires FE shell Intermediate tool+API story filter");
 }
 
 const miniNextHomeFocus = miniNextHomeMolecule

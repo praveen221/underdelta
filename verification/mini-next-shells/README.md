@@ -16,5 +16,7 @@ Sign-in under `(auth)/login`.
 ### Protected shell
 
 Dashboard and Settings under `(app)`, matched by root `middleware.ts`.
+Dashboard’s feature root (`DashboardPanel`) calls `apis/listDashboardStats`
+so Protected Intermediate can show a tool → HTTP API story edge.
 Dashboard imports a page-owned `DashboardPanel` plus presentational Card/Button
 so Intermediate shell focus can prove routes-only (no featureRoot / leaf chrome).
