@@ -149,13 +149,14 @@ Log: Beginner hubs; Protected Intermediate tool labels + tool→API edge counts;
 - [x] Extend mini-next-shells: DashboardPanel → `apis/listDashboardStats`  
 - [x] Viewer: `shellToolStoryVisible` — shell Intermediate = tools + HTTP API story neighbors  
 - [x] Verify: Protected Intermediate shows Dashboard→HTTP API (not routes-only silence)  
+- [x] Broaden FE lift: page body + hook→apis bridge onto page molecules (not featureRoot-only)  
+- [x] Fixture: Profile (page body→apis) + Onboarding (feature→hook→apis); Protected Intermediate ≥3 tool→API edges  
 
 ### In progress / next
 
-- [ ] Lift/fix tool→API edges onto Scholar shell children (`apis/**` per Dashboard/Profile/…)  
 - [ ] Beginner: demote HTTP API peer on FE shell maps; nest auth pages under Auth  
 - [ ] Tool focus: API neighbors without Card/Button flood  
-- [ ] Scholar dogfood + Browser note  
+- [ ] Scholar dogfood + Browser note (human-local; cloud has no Shree)  
 - [ ] LOOP COMPLETE  
 
 ### Seed backlog (after gates)
@@ -167,7 +168,7 @@ Log: Beginner hubs; Protected Intermediate tool labels + tool→API edge counts;
 
 ### Next focus (edit every tick)
 
-> **Next focus:** Mirror fixture on Scholar — ensure Protected tools (Dashboard/Onboarding/Profile) lift evidenced `apis/**` reads/writes/uses to HTTP API (not only aggregate UI→API); dogfood Intermediate edge counts.
+> **Next focus:** Beginner cleanup — demote HTTP API as co-equal shell peer on FE shell maps (`Home → Auth → Protected`, not `… → HTTP API`); nest bare auth pages under Auth when shell exists; verify floor.
 
 ### Learning log
 
@@ -175,6 +176,7 @@ Log: Beginner hubs; Protected Intermediate tool labels + tool→API edge counts;
 - YYYY-MM-DD HH:MM UTC | Done: … | Next: … | Learned: … | Dogfood: … | Browser: …
 ```
 
+- 2026-08-08 05:40 UTC | Done: page-body + hook→apis lift; Profile/Onboarding fixture twins; verify 3 Protected tool→API edges | Next: Beginner demote HTTP API peer | Learned: client-apis-only already skips blanket page uses — featureRoot-only lift left Scholar-shaped page-body/hook callers silent (aggregate UI→API only); resolve molecule via page atom when body lacks routeMolecule stamp | Dogfood: npm run verify green; mini-next-shells Beginner still Home→Auth→Protected→HTTP API; Protected Intermediate tools Dashboard/Onboarding/Profile/Settings + HTTP API (3 tool edges); Scholar n/a (no SHREE_ROOT) | Browser: n/a (fixture closed) |
 - 2026-08-08 05:25 UTC | Done: fixture Dashboard→apis/listDashboardStats + shellToolStoryVisible + verify tool→API floor | Next: Scholar per-tool API lift | Learned: routes-only filter was actively hiding API neighbors even when molecule→API edges existed; viewer must allow api hubs in shell Intermediate; fixture edge lifts via featureRoot calls client apis helper | Dogfood: npm run verify green; Scholar still mostly aggregate UI→API (0 Dashboard/Onboarding/Profile story edges) — next tick | Browser: n/a (fixture closed) |
 - 2026-08-07 13:20 UTC | Done: plan + branch after Scholar drill critique | Next: fixture tool→API | Learned: shells Intermediate routes-only + aggregate UI→API is still a sitemap; product map needs tool→API wiring; Scholar Protected children exist (Dashboard/Onboarding/Profile) but zero story edges on focus | Dogfood: prior shells scan Scholar Beginner Home→Protected→Auth→HTTP API; Protected kids routes only | Browser: n/a (plan) |
 
