@@ -19,6 +19,8 @@ Related:
 **Pitch:**  
 Beginner is the **access walk** (Public / Auth / Protected). Intermediate is **product tools** inside a shell. Focusing a tool shows **which API surfaces it calls** (with evidence), not a sibling HTTP API blob or empty route list.
 
+**Shree / local-only repos:** **Out of loop automation.** Do **not** scan `shree-*` or require Shree paths. All acceptance is **fixture + verify**. Humans may optionally spot-check Shree locally; cloud ticks must never wait on it or push “unavailable” spam.
+
 ---
 
 ## Redesign principle (read every tick)
@@ -29,47 +31,37 @@ Beginner is the **access walk** (Public / Auth / Protected). Intermediate is **p
 
 ## Why shells-only failed the sniff test
 
-On Scholar today (local dogfood after shells merge):
-
 | Focus | What you get | What’s wrong |
 |-------|----------------|--------------|
-| Beginner | Home → Protected → Auth → HTTP API | HTTP API as peer of shells; Auth is a page hub mixed with Protected shell |
+| Beginner | Home → Protected → Auth → HTTP API | HTTP API as peer of shells; Auth page mixed with Protected shell |
 | Protected | Dashboard, Onboarding, Profile (routes only) | No API wiring — looks like a sitemap |
-| Home | layout chrome | No public tools / no API story |
 | Whole graph | mostly `UI -uses-> HTTP API` | Aggregate lie; not “Dashboard reads profiles API” |
 
 Target mental model:
 
 ```text
 Beginner:  Public  →  Auth  →  Protected
-                (optional: API stays off Beginner or as a quiet neighbor, not a co-equal hub)
+                (HTTP API off Beginner / not co-equal shell peer)
 
 Protected Intermediate:
-  Dashboard ——reads/writes——▶ profiles / results / …
-  Onboarding ——uses——▶ …
-  Profile ——reads/writes——▶ …
-
-Focus Dashboard (or a tool region later):
-  product regions / feature modules that matter
-  + evidenced edges to API modules or route handlers
-  (Card/Button still Advanced / library)
+  Dashboard ——reads/writes——▶ HTTP API
+  Settings ——reads——▶ HTTP API
+  …
 ```
-
-Same pattern under **Public** for marketing/tools that call APIs (e.g. Schools → compare APIs).
 
 ---
 
 ## Mission (read every tick)
 
-1. **Beginner cleanup** — shells are the story; demote or nest bare auth *pages* under Auth shell; **do not** put HTTP API as a co-equal Beginner peer of Protected (prefer omit from FE Beginner flow, or attach as story neighbor only when focused).  
-2. **Tool Intermediate** — focus Protected (or Public) → show **product tools** (route molecules / role tools) **with** `reads`/`writes`/`uses` edges to API (modules under HTTP API, route handlers, or server actions) — not routes-only silence.  
-3. **Tool → API evidence** — each edge must cite the calling page/featureRoot/`apis/**` helper (file:line). Prefer lifting existing FE→API machinery onto **shell children**, not inventing new scrape.  
-4. **Scholar first** — primary dogfood. Learn Protected still weak (no middleware; `(dashboard)` honesty) — improve Learn only when Scholar tool→API walk is honest, or when a cheap layout-guard unlocks Protected without lying.  
+1. **Beginner cleanup** — shells are the story; demote or nest bare auth *pages* under Auth shell; **do not** put HTTP API as a co-equal Beginner peer of Protected.  
+2. **Tool Intermediate** — focus Protected → show **product tools** **with** `reads`/`writes`/`uses` edges to API — not routes-only silence.  
+3. **Tool → API evidence** — lift from feature roots **and** Scholar-shaped page bodies that call `apis/**`.  
+4. **Fixtures only for automation** — `mini-next-shells` (+ existing mini-* floors). No Shree dogfood gates.  
 5. **No AI naming.** Deterministic only.
 
-**Keep:** shells contract, access honesty (no fake Protected), leafChrome off Intermediate, verify floors, Heart Beginner calm.
+**Keep:** shells contract, access honesty, leafChrome off Intermediate, verify floors, Heart Beginner calm.
 
-**Stop:** declaring shell Beginner labels a product win; Intermediate that only lists route names; aggregate `UI → HTTP API` as the only FE story.
+**Stop:** Shree scan requirements; aggregate `UI → HTTP API` as the only FE story.
 
 ---
 
@@ -77,19 +69,18 @@ Same pattern under **Public** for marketing/tools that call APIs (e.g. Schools �
 
 | Surface | Done looks like |
 |---------|-----------------|
-| **Beginner (Scholar)** | `Public/Home → Auth → Protected` (labels flexible). **HTTP API not** a fourth co-equal shell peer. Auth pages nested under Auth shell when shell exists. |
-| **Protected Intermediate** | Tools visible (e.g. Dashboard, Onboarding, Profile) **and** ≥1 tool shows story edge to API surface with evidence |
-| **Tool focus** | Focusing Dashboard (or equivalent) shows API neighbors it uses — not empty / not Card-Button flood |
-| **Public Intermediate** | At least one public tool with API edge **or** honest “no client API from this shell” note in Learning log |
-| **Fixture** | Extend `mini-next-shells` (or twin): protected page calls `apis/**` or server action → Intermediate shows tool→API edge |
-| **Verify** | Floors for Beginner (no API peer), Protected Intermediate edges, tool focus API neighbor; prior shell + mini-next floors green |
+| **Beginner (fixture)** | `Home → Auth → Protected` (or equivalent). **HTTP API not** a co-equal Beginner peer beside Protected on shell maps. |
+| **Protected Intermediate** | Tools + ≥1 tool→API story edge visible (verify) |
+| **Page-body lift** | Settings (or twin) page body calling `apis/**` without featureRoot still lifts molecule→API |
+| **Tool focus** | Focusing Dashboard shows API neighbor(s); Card/Button stay off. Verify. |
+| **Verify** | Floors green; prior shell + mini-next floors green |
 | **Heart** | No FE-shell regression (`HTTP API → Data`) |
 
 ### Definition of unfinished
 
-- Beginner still `… → HTTP API` as shell peer on Scholar  
-- Protected Intermediate is routes-only with **zero** tool→API edges  
-- Only aggregate `UI → HTTP API` exists  
+- Beginner still `… → HTTP API` as shell peer on mini-next-shells  
+- Protected Intermediate with **zero** tool→API edges  
+- Page-body → `apis/**` does not lift (Scholar-shaped regression)  
 - Tool focus dumps design system / functions  
 - Next focus empty while End goal unmet  
 
@@ -101,14 +92,15 @@ Once **Loop status = LOOP COMPLETE**, idle ticks must **not invent, commit, or p
 
 ### Acceptance gates (all required)
 
-1. **Beginner FE flow** — Scholar (or fixture twin): no HTTP API as co-equal Beginner hub beside Protected; Auth collapsed under Auth shell when present. Verify floor.  
-2. **Fixture tool→API** — mini-next-shells (extended): Protected tool has evidenced `reads`/`writes`/`uses` to API/action; Intermediate on Protected shows that edge (or tool focus does — pick one and lock both if cheap).  
-3. **Scholar Protected Intermediate** — ≥1 protected tool→API story edge visible in Intermediate neighborhood (not only after Advanced). Learning log lists tool + API labels.  
-4. **Tool focus** — focusing that tool surfaces API neighbor(s); Card/Button stay off. Verify.  
+1. **Beginner FE flow** — mini-next-shells: no HTTP API as co-equal Beginner hub beside Protected; Auth collapsed under Auth shell when present. Verify floor.  
+2. **Fixture tool→API** — Protected tool has evidenced `reads`/`writes`/`uses` to API; Intermediate on Protected shows API neighbor.  
+3. **Page-body lift** — Settings (or equivalent) page body → API without featureRoot. Verify floor.  
+4. **Tool focus** — focusing Dashboard surfaces API neighbor(s); Card/Button stay off. Verify.  
 5. **Honesty** — no new fake Protected walls; Heart Beginner unchanged.  
-6. **Regression** — `npm run build` + `npm run verify` green; shell Intermediate routes still available as scaffolding under tools.  
-7. **Dogfood** — every ACTIVE tick verify; Scholar re-scan when local; **Browser** note before COMPLETE (`Browser: Protected → Dashboard → API …`). Cloud may fixture-close mid-loop; final Scholar browser may be human-local — **no** empty wait commits.  
-8. **Status board** — done or cancelled with reason.
+6. **Regression** — `npm run build` + `npm run verify` green.  
+7. **Status board** — done or cancelled with reason.  
+
+**Cancelled / not required:** Shree Scholar/Learn dogfood, Browser notes on Shree, any gate that needs `/Users/praveen/Documents/GitHub/shree`.
 
 ### Loop status
 
@@ -128,14 +120,7 @@ Regression → ACTIVE + fix + push; else when complete: `IDLE: LOOP COMPLETE —
 npm run build && npm run verify
 ```
 
-When Shree exists:
-
-```bash
-node dist/cli.js scan "${SHREE_ROOT:-/Users/praveen/Documents/GitHub/shree}/shree-scholar" -o .dogfood-scans/tools_scholar
-node dist/cli.js scan "${SHREE_ROOT:-/Users/praveen/Documents/GitHub/shree}/shree-learn" -o .dogfood-scans/tools_learn
-```
-
-Log: Beginner hubs; Protected Intermediate tool labels + tool→API edge counts; Browser line when available.
+**Do not** scan Shree repos in automation ticks.
 
 ---
 
@@ -148,26 +133,27 @@ Log: Beginner hubs; Protected Intermediate tool labels + tool→API edge counts;
 - [x] This plan created  
 - [x] Extend mini-next-shells: DashboardPanel → `apis/listDashboardStats`  
 - [x] Viewer: `shellToolStoryVisible` — shell Intermediate = tools + HTTP API story neighbors  
-- [x] Verify: Protected Intermediate shows Dashboard→HTTP API (not routes-only silence)  
+- [x] Verify: Protected Intermediate shows Dashboard→HTTP API  
+- [x] Lift page-body / page-atom callers (not only featureRoot) → molecule→API  
+- [x] Settings Scholar-shaped page-body → API verify floor  
+- [x] Remove Shree dogfood gates from this plan  
 
 ### In progress / next
 
-- [ ] Lift/fix tool→API edges onto Scholar shell children (`apis/**` per Dashboard/Profile/…)  
 - [ ] Beginner: demote HTTP API peer on FE shell maps; nest auth pages under Auth  
-- [ ] Tool focus: API neighbors without Card/Button flood  
-- [ ] Scholar dogfood + Browser note  
+- [ ] Tool focus: API neighbors without Card/Button flood (verify)  
 - [ ] LOOP COMPLETE  
 
 ### Seed backlog (after gates)
 
-- Product regions inside a tool (Phase 2 of earlier brief)  
-- Learn Protected unlock via layout guard / real middleware  
+- Product regions inside a tool  
+- Learn Protected unlock (human-local / later loop)  
 - Parts bin for design-system  
 - Public shell tool→API parity polish  
 
 ### Next focus (edit every tick)
 
-> **Next focus:** Mirror fixture on Scholar — ensure Protected tools (Dashboard/Onboarding/Profile) lift evidenced `apis/**` reads/writes/uses to HTTP API (not only aggregate UI→API); dogfood Intermediate edge counts.
+> **Next focus:** Beginner cleanup on mini-next-shells — demote HTTP API from co-equal Beginner peer beside Protected; nest leftover auth pages under Auth shell; verify floor.
 
 ### Learning log
 
@@ -175,8 +161,9 @@ Log: Beginner hubs; Protected Intermediate tool labels + tool→API edge counts;
 - YYYY-MM-DD HH:MM UTC | Done: … | Next: … | Learned: … | Dogfood: … | Browser: …
 ```
 
-- 2026-08-08 05:25 UTC | Done: fixture Dashboard→apis/listDashboardStats + shellToolStoryVisible + verify tool→API floor | Next: Scholar per-tool API lift | Learned: routes-only filter was actively hiding API neighbors even when molecule→API edges existed; viewer must allow api hubs in shell Intermediate; fixture edge lifts via featureRoot calls client apis helper | Dogfood: npm run verify green; Scholar still mostly aggregate UI→API (0 Dashboard/Onboarding/Profile story edges) — next tick | Browser: n/a (fixture closed) |
-- 2026-08-07 13:20 UTC | Done: plan + branch after Scholar drill critique | Next: fixture tool→API | Learned: shells Intermediate routes-only + aggregate UI→API is still a sitemap; product map needs tool→API wiring; Scholar Protected children exist (Dashboard/Onboarding/Profile) but zero story edges on focus | Dogfood: prior shells scan Scholar Beginner Home→Protected→Auth→HTTP API; Protected kids routes only | Browser: n/a (plan) |
+- 2026-08-08 08:20 UTC | Done: pageMoleculeKeyForCaller + Settings page-body fixture floor; stripped Shree dogfood from plan | Next: Beginner API peer demotion | Learned: Scholar Dashboard page body called apis/** with featureRoot=undefined so old lift skipped; resolve molecule via page body→page atom→page:* key | Dogfood: npm run verify green (Settings page-body → API reads); optional local Scholar now Dashboard→API ×6 (not a gate) | Browser: n/a |
+- 2026-08-08 05:25 UTC | Done: fixture Dashboard→apis/listDashboardStats + shellToolStoryVisible + verify tool→API floor | Next: was Scholar lift | Learned: routes-only filter hid API neighbors | Dogfood: verify green | Browser: n/a |
+- 2026-08-07 13:20 UTC | Done: plan + branch | Next: fixture tool→API | Learned: shells Intermediate alone is a sitemap | Dogfood: n/a (plan) | Browser: n/a |
 
 ---
 
@@ -187,7 +174,7 @@ Log: Beginner hubs; Protected Intermediate tool labels + tool→API edge counts;
 3. If LOOP COMPLETE → Idle  
 4. One Next focus  
 5. Implement → verify → update plan → commit → push  
-6. Scholar over Learn until tool→API works  
+6. **Fixtures only** — never require Shree  
 7. No AI naming; no fake Auth walls  
 
 ### Copy-paste Autopilot prompt
@@ -195,7 +182,8 @@ Log: Beginner hubs; Protected Intermediate tool labels + tool→API edge counts;
 ```text
 Underdelta loop: docs/loopplans/FE_TOOLS_API_07082026.md on branch fe-tools-api-07082026 only.
 Read the plan. Shells frame the door; tools are the room; API edges wire tools — not Beginner peers.
-One Next focus. npm run build && npm run verify. Update Learning log. Commit and push this branch.
+Do NOT scan Shree or any local-only path. Fixtures + npm run verify only.
+One Next focus. Update Learning log. Commit and push this branch.
 When LOOP COMPLETE: no invent/commit/push.
 ```
 
@@ -203,15 +191,14 @@ When LOOP COMPLETE: no invent/commit/push.
 
 ## Implementation notes
 
-1. **Reuse** `liftFeClientApiStoryEdges` / featureRoot → `apis/**` — ensure edges attach to **page molecules** that are children of shells (parentId), and Intermediate neighborhood includes those edges.  
-2. **Viewer:** `shellRoutesOnlyVisible` was MVP — evolve to “shell tools + their API story neighbors,” still excluding leafChrome/modules/functions.  
-3. **Beginner `assignFlowOrder`:** FE maps with shell hubs should not force `api` into the same cold-open lane as Protected.  
-4. **Auth:** if `shell:auth` exists, `page:/auth` / signin must not also sit on Beginner as a peer.  
+1. **Reuse** `liftFePageStoryEdges` / `pageMoleculeKeyForCaller` — page bodies + feature roots.  
+2. **Viewer:** `shellToolStoryVisible` — tools + API hubs.  
+3. **Beginner `assignFlowOrder`:** FE maps with shell hubs should not force `api` into the cold-open lane as Protected peer.  
+4. **Auth:** if `shell:auth` exists, auth pages must not also sit on Beginner as peers.  
 
 ## Priority
 
-1. Fixture tool→API  
-2. Viewer Intermediate shows tool→API  
-3. Scholar dogfood  
-4. Beginner API peer demotion  
-5. LOOP COMPLETE  
+1. ~~Fixture tool→API + page-body lift~~  
+2. Beginner API peer demotion  
+3. Tool focus verify  
+4. LOOP COMPLETE  

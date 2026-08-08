@@ -2869,12 +2869,78 @@ export function isClientApisOnlyHttpApi(
 }
 
 /**
+ * Resolve the page-molecule systemKey for an FE caller (feature root, page
+ * atom, or default-export page body). Scholar-style pages often call `apis/**`
+ * from the page body component without a separate featureRoot flag.
+ */
+function pageMoleculeKeyForCaller(
+  source: ArchitectureNode,
+  nodes: Map<string, ArchitectureNode>,
+  pageBodyToPage: Map<string, string>,
+): string | undefined {
+  const keyFrom = (node: ArchitectureNode | undefined): string | undefined => {
+    if (!node) return undefined;
+    if (typeof node.metadata?.routeMolecule === "string") {
+      return node.metadata.routeMolecule;
+    }
+    if (
+      typeof node.metadata?.projectedSystem === "string" &&
+      String(node.metadata.projectedSystem).startsWith("page:")
+    ) {
+      return String(node.metadata.projectedSystem);
+    }
+    return undefined;
+  };
+
+  const direct = keyFrom(source);
+  if (direct) return direct;
+
+  if (source.kind === "page") {
+    const fromPath =
+      typeof source.metadata?.path === "string"
+        ? pageMoleculeSystemKey(appRouterRouteSegment(String(source.metadata.path)))
+        : undefined;
+    if (fromPath) return fromPath;
+  }
+
+  const pageId = pageBodyToPage.get(source.id);
+  if (pageId) {
+    const fromPage = keyFrom(nodes.get(pageId));
+    if (fromPage) return fromPage;
+    const page = nodes.get(pageId);
+    if (page?.kind === "page" && typeof page.metadata?.path === "string") {
+      return pageMoleculeSystemKey(
+        appRouterRouteSegment(String(page.metadata.path)),
+      );
+    }
+  }
+
+  // Walk parents for a page atom / already-projected page molecule member.
+  let current: string | undefined = source.parentId;
+  const seen = new Set<string>();
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    const node = nodes.get(current);
+    if (!node) break;
+    const fromAncestor = keyFrom(node);
+    if (fromAncestor) return fromAncestor;
+    if (node.kind === "page" && typeof node.metadata?.path === "string") {
+      return pageMoleculeSystemKey(
+        appRouterRouteSegment(String(node.metadata.path)),
+      );
+    }
+    current = node.parentId;
+  }
+  return undefined;
+}
+
+/**
  * FE story edges from pages (deterministic, evidence-backed):
  * - `renders` page atom → page-owned feature root (lifted from page-body JSX)
- * - `reads`/`writes` page molecule → API when a owned feature root calls a
- *   server action nested under the API system
- * - `reads`/`writes` page molecule → API when a owned feature root calls a
- *   client `apis/**` helper (Next/SaaS axios/fetch wrappers)
+ * - `reads`/`writes` page molecule → API when a page-owned caller (feature root
+ *   **or** page body / page atom) calls a server action under the API system
+ * - `reads`/`writes` page molecule → API when such a caller calls a client
+ *   `apis/**` helper (Next/SaaS axios/fetch wrappers; Scholar-shaped pages)
  */
 function liftFePageStoryEdges(
   nodes: Map<string, ArchitectureNode>,
@@ -2929,13 +2995,7 @@ function liftFePageStoryEdges(
     seed: Evidence,
     via: string,
   ): void => {
-    const moleculeKey =
-      typeof source.metadata?.routeMolecule === "string"
-        ? source.metadata.routeMolecule
-        : typeof source.metadata?.projectedSystem === "string" &&
-            String(source.metadata.projectedSystem).startsWith("page:")
-          ? String(source.metadata.projectedSystem)
-          : undefined;
+    const moleculeKey = pageMoleculeKeyForCaller(source, nodes, pageBodyToPage);
     if (!moleculeKey) return;
     const molecule = systems.get(moleculeKey);
     if (!molecule) return;
@@ -2957,15 +3017,23 @@ function liftFePageStoryEdges(
     if (!edges.has(lifted.id)) edges.set(lifted.id, lifted);
   };
 
-  // Page molecule → API reads/writes from featureRoot → serverAction calls.
+  // Page molecule → API reads/writes from page-owned caller → serverAction.
   for (const edge of [...edges.values()]) {
     if (edge.kind !== "calls") continue;
     const source = nodes.get(edge.source);
     const target = nodes.get(edge.target);
     if (!source || !target) continue;
-    if (source.metadata?.featureRoot !== true) continue;
     if (target.metadata?.serverAction !== true) continue;
     if (target.parentId !== api.id) continue;
+    // Prefer page-owned callers (feature root, page body, page atom).
+    if (
+      source.metadata?.featureRoot !== true &&
+      source.kind !== "page" &&
+      !pageBodyToPage.has(source.id) &&
+      !pageMoleculeKeyForCaller(source, nodes, pageBodyToPage)
+    ) {
+      continue;
+    }
     liftMoleculeApiStory(
       source,
       target,
@@ -2974,14 +3042,15 @@ function liftFePageStoryEdges(
     );
   }
 
-  // Page molecule → API from featureRoot → client `apis/**` helpers.
+  // Page molecule → API from page-owned caller → client `apis/**` helpers.
+  // Scholar: default-export page bodies call helpers without featureRoot=true.
   for (const edge of [...edges.values()]) {
     if (edge.kind !== "calls") continue;
     const source = nodes.get(edge.source);
     const target = nodes.get(edge.target);
     if (!source || !target) continue;
-    if (source.metadata?.featureRoot !== true) continue;
     if (!isClientApiFunction(target, nodes)) continue;
+    if (!pageMoleculeKeyForCaller(source, nodes, pageBodyToPage)) continue;
     liftMoleculeApiStory(
       source,
       target,

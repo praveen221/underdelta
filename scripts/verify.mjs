@@ -3813,6 +3813,27 @@ if (!shellsToolApiEdges.length) {
     `mini-next-shells Protected Intermediate shows tool→API (${shellsDashboardMolecule.label} → ${shellsProtectedApiHub.label})`,
   );
 }
+// Scholar-shaped: page body (not featureRoot) calls apis/** → Settings molecule edge.
+const shellsSettingsApiEdges = miniNextShellsGraph.edges.filter(
+  (edge) =>
+    (edge.kind === "reads" || edge.kind === "writes" || edge.kind === "uses") &&
+    shellsSettingsMolecule &&
+    edge.source === shellsSettingsMolecule.id &&
+    miniNextShellsGraph.nodes.some(
+      (node) =>
+        node.id === edge.target &&
+        (node.kind === "api" || node.metadata?.systemKey === "api"),
+    ),
+);
+if (!shellsSettingsApiEdges.length) {
+  fail(
+    "mini-next-shells expected Settings page-body → HTTP API story edge (Scholar-shaped, no featureRoot)",
+  );
+} else {
+  pass(
+    `mini-next-shells Settings page-body → API lift (${shellsSettingsApiEdges[0].kind})`,
+  );
+}
 if (
   !shellsAuthHub ||
   !shellsAuthFocusSet.has("Auth") ||
