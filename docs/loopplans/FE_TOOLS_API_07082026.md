@@ -138,6 +138,7 @@ npm run build && npm run verify
 - [x] Settings Scholar-shaped page-body → API verify floor  
 - [x] Remove Shree dogfood gates from this plan  
 - [x] Beginner: demote client-apis-only HTTP API peer on FE shell maps; auth pages nested under Auth  
+- [x] Recover Autopilot work from `cursor/fe-tools-api-plan-bbcb` into this locked branch; delete stray `cursor/fe-tools-api-plan-*`  
 
 ### In progress / next
 
@@ -150,10 +151,11 @@ npm run build && npm run verify
 - Learn Protected unlock (human-local / later loop)  
 - Parts bin for design-system  
 - Public shell tool→API parity polish  
+- Optional: multi-tool fixtures from abandoned `cursor/fe-tools-api-plan-4f56` (onboarding/profile/hooks) if still useful  
 
 ### Next focus (edit every tick)
 
-> **Next focus:** Tool focus verify — focusing Dashboard surfaces API neighbor(s); Card/Button stay off Intermediate/focus flood.
+> **Next focus:** Tool focus verify — focusing Dashboard surfaces API neighbor(s); Card/Button stay off Intermediate/focus flood. **Push only to `fe-tools-api-07082026` — never create `cursor/*` side branches.**
 
 ### Learning log
 
@@ -161,6 +163,7 @@ npm run build && npm run verify
 - YYYY-MM-DD HH:MM UTC | Done: … | Next: … | Learned: … | Dogfood: … | Browser: …
 ```
 
+- 2026-08-08 12:15 UTC | Done: merge bbcb Beginner demotion into fe-tools-api-07082026; delete stray cursor/* plan branches | Next: Tool focus verify | Learned: cloud Autopilot was pushing cursor/fe-tools-api-plan-* instead of locked branch so push-wakeup died; branch lock must be absolute | Dogfood: npm run verify green after merge | Browser: n/a |
 - 2026-08-08 08:25 UTC | Done: shell maps collapse client-apis-only HTTP API from Beginner; verify Home→Auth→Protected (no API peer); auth pages already nested | Next: Tool focus Dashboard→API without Card/Button | Learned: removing Protected→API flowPair alone is not enough — assignFlowOrder still bands non-collapsed api; collapse client-apis-only; keep full-stack Protected→API→Data | Dogfood: npm run verify green (Beginner shell walk no HTTP API peer) | Browser: n/a |
 - 2026-08-08 08:20 UTC | Done: pageMoleculeKeyForCaller + Settings page-body fixture floor; stripped Shree dogfood from plan | Next: Beginner API peer demotion | Learned: Scholar Dashboard page body called apis/** with featureRoot=undefined so old lift skipped; resolve molecule via page body→page atom→page:* key | Dogfood: npm run verify green (Settings page-body → API reads); optional local Scholar now Dashboard→API ×6 (not a gate) | Browser: n/a |
 - 2026-08-08 05:25 UTC | Done: fixture Dashboard→apis/listDashboardStats + shellToolStoryVisible + verify tool→API floor | Next: was Scholar lift | Learned: routes-only filter hid API neighbors | Dogfood: verify green | Browser: n/a |
