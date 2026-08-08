@@ -105,7 +105,7 @@ Once **Loop status = LOOP COMPLETE**, idle ticks must **not invent, commit, or p
 ### Loop status
 
 ```text
-ACTIVE
+LOOP COMPLETE
 ```
 
 ### Idle protocol
@@ -139,11 +139,12 @@ npm run build && npm run verify
 - [x] Remove Shree dogfood gates from this plan  
 - [x] Beginner: demote client-apis-only HTTP API peer on FE shell maps; auth pages nested under Auth  
 - [x] Recover Autopilot work from `cursor/fe-tools-api-plan-bbcb` into this locked branch; delete stray `cursor/fe-tools-api-plan-*`  
+- [x] Tool focus: API neighbors without Card/Button flood (`routeToolStoryVisible` + verify)  
+- [x] LOOP COMPLETE  
 
 ### In progress / next
 
-- [ ] Tool focus: API neighbors without Card/Button flood (verify)  
-- [ ] LOOP COMPLETE  
+- _(none — LOOP COMPLETE; idle ticks must not invent/commit/push)_  
 
 ### Seed backlog (after gates)
 
@@ -155,7 +156,7 @@ npm run build && npm run verify
 
 ### Next focus (edit every tick)
 
-> **Next focus:** Tool focus verify — focusing Dashboard surfaces API neighbor(s); Card/Button stay off Intermediate/focus flood. **Push only to `fe-tools-api-07082026` — never create `cursor/*` side branches.**
+> **Next focus:** IDLE — LOOP COMPLETE. No invent / commit / push unless regression. **Branch lock remains `fe-tools-api-07082026`.**
 
 ### Learning log
 
@@ -163,6 +164,7 @@ npm run build && npm run verify
 - YYYY-MM-DD HH:MM UTC | Done: … | Next: … | Learned: … | Dogfood: … | Browser: …
 ```
 
+- 2026-08-08 13:20 UTC | Done: confirm tool-focus floor green; mark LOOP COMPLETE (all acceptance gates) | Next: IDLE | Learned: prior tick shipped `routeToolStoryVisible` (Dashboard + feature roots + HTTP API; Card/Button/page-atom off) but left plan ACTIVE — status board must close on the same green verify | Dogfood: npm run verify green — Beginner Home→Auth→Protected; Protected Intermediate tool→API; Settings page-body→API; Dashboard tool focus Dashboard panel · HTTP API · Dashboard | Browser: n/a |
 - 2026-08-08 12:15 UTC | Done: merge bbcb Beginner demotion into fe-tools-api-07082026; delete stray cursor/* plan branches | Next: Tool focus verify | Learned: cloud Autopilot was pushing cursor/fe-tools-api-plan-* instead of locked branch so push-wakeup died; branch lock must be absolute | Dogfood: npm run verify green after merge | Browser: n/a |
 - 2026-08-08 08:25 UTC | Done: shell maps collapse client-apis-only HTTP API from Beginner; verify Home→Auth→Protected (no API peer); auth pages already nested | Next: Tool focus Dashboard→API without Card/Button | Learned: removing Protected→API flowPair alone is not enough — assignFlowOrder still bands non-collapsed api; collapse client-apis-only; keep full-stack Protected→API→Data | Dogfood: npm run verify green (Beginner shell walk no HTTP API peer) | Browser: n/a |
 - 2026-08-08 08:20 UTC | Done: pageMoleculeKeyForCaller + Settings page-body fixture floor; stripped Shree dogfood from plan | Next: Beginner API peer demotion | Learned: Scholar Dashboard page body called apis/** with featureRoot=undefined so old lift skipped; resolve molecule via page body→page atom→page:* key | Dogfood: npm run verify green (Settings page-body → API reads); optional local Scholar now Dashboard→API ×6 (not a gate) | Browser: n/a |
@@ -203,6 +205,6 @@ When LOOP COMPLETE: no invent/commit/push.
 ## Priority
 
 1. ~~Fixture tool→API + page-body lift~~  
-2. Beginner API peer demotion  
-3. Tool focus verify  
-4. LOOP COMPLETE  
+2. ~~Beginner API peer demotion~~  
+3. ~~Tool focus verify~~  
+4. ~~LOOP COMPLETE~~  
