@@ -23,6 +23,8 @@ import {
   liftFePageStoryEdges,
 } from "./projection/feStories.js";
 
+export { isClientApisOnlyHttpApi } from "./projection/feStories.js";
+
 export interface PackageManifestHint {
   name?: string;
   bin?: string | Record<string, string>;

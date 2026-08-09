@@ -58,8 +58,13 @@ test("self-map viewer supports a calm walk through focus, search, back, and relo
   await expect(node(page, "src/extractors/typescript.ts")).toBeVisible();
   await expect(node(page, "src/viewer.ts")).toHaveCount(0);
 
+  await node(page, "src/extractors/typescript.ts").click();
+  await expect(page.locator("#inspector h2")).toHaveText("src/extractors/typescript.ts");
   await page.keyboard.press("Escape");
   await expect(page.locator("#tier")).toHaveText("View: Intermediate");
+  await expect(node(page, "src/extractors/typescript.ts")).toHaveCount(0);
+  await expect(page.locator("#inspector h2")).toHaveText("Extractors");
+  await expect(node(page, "Extractors")).toHaveClass(/selected/);
   await page.keyboard.press("Escape");
   await expect(page.locator("#tier")).toHaveText("View: Beginner");
 

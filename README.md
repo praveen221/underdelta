@@ -60,7 +60,7 @@ product rather than development scaffolding.
 
 ```bash
 npm run verify             # build + extractor contracts + projection + self-map
-npm run test:viewer        # real Chromium interaction test for the self-map
+npm run test:viewer        # provision Chromium + test the self-map in a real browser
 npm run inspect -- /path/to/repo
 ```
 

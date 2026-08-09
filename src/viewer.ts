@@ -533,7 +533,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       if (state.tier === "advanced" && state.focus && focused && !advancedKinds.has(focused.kind)) {
         state.tier = "intermediate";
         syncTierButton();
-        render();
+        // Advanced may have a selected code node that Intermediate hides.
+        // Return selection and inspector context to the still-visible focus.
+        selectNode(state.focus);
         persistWalkState();
         return true;
       }

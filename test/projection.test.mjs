@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { edgeFrom } from "../dist/graph.js";
+import { isClientApisOnlyHttpApi as projectClientApisOnly } from "../dist/project.js";
 import {
   isClientApiFunction,
   isClientApisOnlyHttpApi,
@@ -58,6 +59,10 @@ test("client apis helpers are recognized from their evidence path", () => {
 test("client-only API systems are not mistaken for in-repository server APIs", () => {
   const { nodes, api } = pageApiGraph();
   assert.equal(isClientApisOnlyHttpApi(api, nodes), true);
+});
+
+test("project keeps the client-only API classifier in its public module API", () => {
+  assert.equal(projectClientApisOnly, isClientApisOnlyHttpApi);
 });
 
 test("server route evidence prevents client-only API classification", () => {
