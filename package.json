@@ -13,9 +13,14 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "verify": "npm run build && node scripts/verify.mjs",
+    "test:extractors": "node --test test/extractors.test.mjs",
+    "test:projection": "node --test test/projection.test.mjs test/policy.test.mjs",
+    "test:self": "node --test test/self.test.mjs",
+    "test:viewer": "npm run build && playwright test",
+    "verify": "npm run build && npm run test:extractors && npm run test:projection && npm run test:self",
     "start": "npm run build && node dist/cli.js scan . --serve",
-    "scan": "node dist/cli.js scan"
+    "scan": "node dist/cli.js scan",
+    "inspect": "npm run build && node scripts/inspect.mjs"
   },
   "engines": {
     "node": ">=22"
@@ -28,6 +33,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/node": "^26.1.2",
     "tsx": "^4.23.1"
   }

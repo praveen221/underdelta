@@ -1,6 +1,7 @@
 node_modules/
 dist/
 coverage/
+test-results/
 .underdelta/
 .underdelta-verify/
 .underdelta-real/
