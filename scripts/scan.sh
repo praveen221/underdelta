@@ -75,28 +75,47 @@ mkdir -p "$CACHE_ROOT"
 
 if [[ ! -d "$TOOL_DIR/.git" ]]; then
   echo "→ Cloning Underdelta ($REPO_REF) into $TOOL_DIR"
-  git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" "$TOOL_DIR"
+  git init -q "$TOOL_DIR"
+  git -C "$TOOL_DIR" remote add origin "$REPO_URL"
 else
   echo "→ Updating Underdelta in $TOOL_DIR"
-  git -C "$TOOL_DIR" fetch --depth 1 origin "$REPO_REF"
-  git -C "$TOOL_DIR" checkout -q FETCH_HEAD
+  git -C "$TOOL_DIR" remote set-url origin "$REPO_URL"
 fi
+git -C "$TOOL_DIR" fetch -q --depth 1 origin "$REPO_REF"
+git -C "$TOOL_DIR" checkout -q FETCH_HEAD
 
 cd "$TOOL_DIR"
 
-if [[ ! -d node_modules ]]; then
-  echo "→ Installing dependencies…"
-  npm ci --cache "$NPM_CACHE"
-else
-  # Refresh lockstep installs cheaply when package-lock changes.
-  if [[ package-lock.json -nt node_modules ]]; then
-    echo "→ Refreshing dependencies…"
-    npm ci --cache "$NPM_CACHE"
-  fi
+lock_hash="$(node -e "const fs=require('node:fs');const crypto=require('node:crypto');process.stdout.write(crypto.createHash('sha256').update(fs.readFileSync('package-lock.json')).digest('hex'))")"
+install_key="$(node -v):$lock_hash"
+install_stamp="$CACHE_ROOT/install-key"
+installed_key=""
+if [[ -f "$install_stamp" ]]; then
+  installed_key="$(<"$install_stamp")"
 fi
 
-echo "→ Building Underdelta…"
-npm run build --silent
+if [[ ! -d node_modules || "$installed_key" != "$install_key" ]]; then
+  echo "→ Installing dependencies…"
+  npm ci --cache "$NPM_CACHE"
+  printf '%s\n' "$install_key" > "$install_stamp"
+else
+  echo "→ Dependencies current"
+fi
+
+revision="$(git rev-parse HEAD)"
+build_key="$REPO_URL:$revision:$install_key"
+build_stamp="$CACHE_ROOT/build-key"
+built_key=""
+if [[ -f "$build_stamp" ]]; then
+  built_key="$(<"$build_stamp")"
+fi
+if [[ ! -f dist/cli.js || "$built_key" != "$build_key" ]]; then
+  echo "→ Building Underdelta…"
+  npm run build --silent
+  printf '%s\n' "$build_key" > "$build_stamp"
+else
+  echo "→ Build current"
+fi
 
 echo "→ Scanning $TARGET"
 if [[ "$SERVE" -eq 1 ]]; then

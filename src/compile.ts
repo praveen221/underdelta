@@ -14,6 +14,7 @@ import {
 import { dataResourceAdapter } from "./adapters/data/resources.js";
 import { deployUnitAdapter } from "./adapters/deploy/units.js";
 import { httpEndpointAdapter } from "./adapters/http/endpoints.js";
+import { flaskHttpAdapter } from "./adapters/http/flask.js";
 import { unsupportedHttpAdapter } from "./adapters/http/unsupported.js";
 import { celeryScheduledWorkAdapter } from "./adapters/scheduled/celery.js";
 import { kubernetesScheduledWorkAdapter } from "./adapters/scheduled/kubernetes.js";
@@ -156,6 +157,7 @@ export async function compileRepository(
     dataResourceAdapter,
     deployUnitAdapter,
     httpEndpointAdapter,
+    flaskHttpAdapter,
     unsupportedHttpAdapter,
     nodeScheduledWorkAdapter,
     celeryScheduledWorkAdapter,
