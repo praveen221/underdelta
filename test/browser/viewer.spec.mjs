@@ -15,16 +15,29 @@ const repoRoot = path.resolve(
 
 let server;
 let viewerUrl;
+let largeViewerUrl;
 
 test.beforeAll(async () => {
   const graph = await compileRepository(repoRoot);
   const html = renderArchitectureHtml(graph);
-  server = createServer((_request, response) => {
+  const largeGraph = {
+    project: { name: "large-fit-contract", root: "/virtual/large-fit-contract" },
+    nodes: Array.from({ length: 200 }, (_, index) => ({
+      id: `system:large:${index}`,
+      kind: "system",
+      label: `System ${String(index + 1).padStart(3, "0")}`,
+      metadata: { flowOrder: index },
+      evidence: [],
+    })),
+    edges: [],
+  };
+  const largeHtml = renderArchitectureHtml(largeGraph);
+  server = createServer((request, response) => {
     response.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
     });
-    response.end(html);
+    response.end(request.url === "/large" ? largeHtml : html);
   });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -33,6 +46,7 @@ test.beforeAll(async () => {
   const address = server.address();
   assert.ok(address && typeof address !== "string");
   viewerUrl = `http://127.0.0.1:${address.port}/`;
+  largeViewerUrl = `http://127.0.0.1:${address.port}/large`;
 });
 
 test.afterAll(async () => {
@@ -166,6 +180,9 @@ test("graph geometry fits, reroutes dragged nodes, and persists manual placement
     top: element.style.top,
     rect: element.getBoundingClientRect().toJSON(),
   }));
+  await module.evaluate((element) => {
+    element.dataset.dragIdentity = "preserved";
+  });
 
   await page.mouse.move(
     beforePosition.rect.x + beforePosition.rect.width / 2,
@@ -187,6 +204,7 @@ test("graph geometry fits, reroutes dragged nodes, and persists manual placement
     left: beforePosition.left,
     top: beforePosition.top,
   });
+  await expect(node(page, "src/extractor.ts")).toHaveAttribute("data-drag-identity", "preserved");
   assert.notEqual(await page.locator(incidentPathSelector).first().getAttribute("d"), beforePath);
 
   await page.reload();
@@ -197,12 +215,19 @@ test("graph geometry fits, reroutes dragged nodes, and persists manual placement
   }));
   assert.deepEqual(restoredPosition, afterPosition);
   await expect(node(page, "src/extractor.ts")).toHaveAttribute("data-manual-position", "true");
+  const selectedBeforeControls = await page.locator(".node.selected").getAttribute("data-id");
+  assert.ok(selectedBeforeControls);
+  const inspectorBeforeControls = await page.locator("#inspector h2").innerText();
 
   const transformBeforeZoom = await page.locator("#world").getAttribute("style");
   await page.locator("#zoom-in").click();
+  await expect(page.locator(".node.selected")).toHaveAttribute("data-id", selectedBeforeControls);
+  await expect(page.locator("#inspector h2")).toHaveText(inspectorBeforeControls);
   const transformAfterZoom = await page.locator("#world").getAttribute("style");
   assert.notEqual(transformAfterZoom, transformBeforeZoom);
   await page.locator("#fit-view").click();
+  await expect(page.locator(".node.selected")).toHaveAttribute("data-id", selectedBeforeControls);
+  await expect(page.locator("#inspector h2")).toHaveText(inspectorBeforeControls);
   assert.notEqual(await page.locator("#world").getAttribute("style"), transformAfterZoom);
   const fittedGeometry = await graphGeometry(page);
   for (const item of fittedGeometry.nodes) {
@@ -213,10 +238,30 @@ test("graph geometry fits, reroutes dragged nodes, and persists manual placement
   }
 
   await page.locator("#reset-layout").click();
+  await expect(page.locator(".node.selected")).toHaveAttribute("data-id", selectedBeforeControls);
+  await expect(page.locator("#inspector h2")).toHaveText(inspectorBeforeControls);
   await expect(node(page, "src/extractor.ts")).toHaveAttribute("data-manual-position", "false");
   const resetPosition = await node(page, "src/extractor.ts").evaluate((element) => ({
     left: element.style.left,
     top: element.style.top,
   }));
   assert.notDeepEqual(resetPosition, afterPosition);
+});
+
+test("fit frames graphs that require a scale below the interactive zoom floor", async ({ page }) => {
+  await page.goto(largeViewerUrl);
+  await expect(page.locator(".node")).toHaveCount(200);
+
+  const scale = await page.locator("#world").evaluate((element) =>
+    new DOMMatrix(getComputedStyle(element).transform).a,
+  );
+  assert.ok(scale < 0.15, `expected a true fit below 0.15, received ${scale}`);
+
+  const geometry = await graphGeometry(page);
+  for (const item of geometry.nodes) {
+    assert.ok(item.left >= geometry.viewport.left - 1, `${item.id} starts outside large fitted view`);
+    assert.ok(item.right <= geometry.toolsLeft - 1, `${item.id} is covered by controls in large fitted view`);
+    assert.ok(item.top >= geometry.viewport.top - 1, `${item.id} starts above large fitted view`);
+    assert.ok(item.bottom <= geometry.chromeTop - 1, `${item.id} is covered in large fitted view`);
+  }
 });

@@ -810,10 +810,10 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const availableHeight = Math.max(120, rect.height - reservedBottom - padding * 2);
       const contentWidth = Math.max(1, bounds.maxX - bounds.minX);
       const contentHeight = Math.max(1, bounds.maxY - bounds.minY);
-      state.scale = Math.min(1, Math.max(MIN_SCALE, Math.min(
+      state.scale = Math.min(1, Math.min(
         availableWidth / contentWidth,
         availableHeight / contentHeight,
-      )));
+      ));
       state.x = padding - bounds.minX * state.scale;
       state.y = padding - bounds.minY * state.scale;
       applyTransform();
@@ -823,7 +823,10 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const rect = viewport.getBoundingClientRect();
       const mx = rect.width / 2;
       const my = rect.height / 2;
-      const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, state.scale * factor));
+      const next = Math.min(
+        MAX_SCALE,
+        Math.max(Math.min(MIN_SCALE, state.scale), state.scale * factor),
+      );
       state.x = mx - ((mx - state.x) / state.scale) * next;
       state.y = my - ((my - state.y) / state.scale) * next;
       state.scale = next;
@@ -1239,18 +1242,100 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         };
       };
       nodesLayer.appendChild(element);
+      nodeElementsScratch.set(node.id, element);
       const width = element.offsetWidth || fallbackWidthForKind(node.kind);
       const height = element.offsetHeight || 58;
       positionsScratch.set(node.id, { x: placedX, y: placedY, width, height });
       return placedY + height;
     }
 
+    function edgeGeometry(source, target) {
+      const sy = source.y + source.height / 2;
+      const ty = target.y + target.height / 2;
+      const sourceCenterX = source.x + source.width / 2;
+      const targetCenterX = target.x + target.width / 2;
+      const sameColumn = Math.abs(sourceCenterX - targetCenterX) < 48;
+      if (sameColumn) {
+        const sx = source.x + source.width;
+        const tx = target.x + target.width;
+        const midX = Math.max(sx, tx) + 56;
+        return {
+          d: "M " + sx + " " + sy + " C " + midX + " " + sy + ", " + midX + " " + ty + ", " + tx + " " + ty,
+          mx: midX,
+          my: (sy + ty) / 2,
+        };
+      }
+      const routesRight = targetCenterX > sourceCenterX;
+      const sx = routesRight ? source.x + source.width : source.x;
+      const tx = routesRight ? target.x : target.x + target.width;
+      const direction = routesRight ? 1 : -1;
+      const bend = Math.max(35, Math.abs(tx - sx) * 0.45);
+      return {
+        d: "M " + sx + " " + sy + " C " + (sx + direction * bend) + " " + sy + ", " + (tx - direction * bend) + " " + ty + ", " + tx + " " + ty,
+        mx: (sx + tx) / 2,
+        my: (sy + ty) / 2,
+      };
+    }
+
     let positionsScratch = new Map();
+    let nodeElementsScratch = new Map();
+
+    function moveEdgeBadge(group, geometry) {
+      const text = group.querySelector(".edge-badge");
+      const background = group.querySelector(".edge-badge-bg");
+      if (!text || !background) return;
+      const width = Number(background.getAttribute("width")) || 42;
+      const height = Number(background.getAttribute("height")) || 16;
+      text.setAttribute("x", String(geometry.mx));
+      text.setAttribute("y", String(geometry.my));
+      background.setAttribute("x", String(geometry.mx - width / 2));
+      background.setAttribute("y", String(geometry.my - height / 2));
+    }
+
+    function rerouteDraggedNode(nodeId, x, y) {
+      const position = positionsScratch.get(nodeId);
+      const element = nodeElementsScratch.get(nodeId);
+      if (!position || !element) return;
+      position.x = x;
+      position.y = y;
+      element.style.left = x + "px";
+      element.style.top = y + "px";
+      element.dataset.manualPosition = "true";
+      element.classList.add("dragging");
+
+      const bounds = contentBounds();
+      if (bounds) {
+        edgesLayer.setAttribute(
+          "width",
+          String(Math.max(Number(edgesLayer.getAttribute("width")) || 0, bounds.maxX + 100)),
+        );
+        edgesLayer.setAttribute(
+          "height",
+          String(Math.max(Number(edgesLayer.getAttribute("height")) || 0, bounds.maxY + 140)),
+        );
+      }
+
+      for (const path of edgesLayer.querySelectorAll("path.edge")) {
+        if (path.dataset.source !== nodeId && path.dataset.target !== nodeId) continue;
+        const source = positionsScratch.get(path.dataset.source);
+        const target = positionsScratch.get(path.dataset.target);
+        if (!source || !target) continue;
+        path.setAttribute("d", edgeGeometry(source, target).d);
+      }
+      for (const badge of edgesLayer.querySelectorAll(".edge-badge-group")) {
+        if (badge.dataset.source !== nodeId && badge.dataset.target !== nodeId) continue;
+        const source = positionsScratch.get(badge.dataset.source);
+        const target = positionsScratch.get(badge.dataset.target);
+        if (!source || !target) continue;
+        moveEdgeBadge(badge, edgeGeometry(source, target));
+      }
+    }
 
     function render() {
       const visible = visibleNodes();
       const visibleIds = new Set(visible.map((node) => node.id));
       positionsScratch = new Map();
+      nodeElementsScratch = new Map();
       const positions = positionsScratch;
       nodesLayer.innerHTML = "";
       let activeLanes = lanes.filter(
@@ -1428,40 +1513,14 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           .join(" · ");
       }
 
-      function edgeGeometry(source, target) {
-        const sy = source.y + source.height / 2;
-        const ty = target.y + target.height / 2;
-        const sourceCenterX = source.x + source.width / 2;
-        const targetCenterX = target.x + target.width / 2;
-        const sameColumn = Math.abs(sourceCenterX - targetCenterX) < 48;
-        if (sameColumn) {
-          const sx = source.x + source.width;
-          const tx = target.x + target.width;
-          const midX = Math.max(sx, tx) + 56;
-          return {
-            d: "M " + sx + " " + sy + " C " + midX + " " + sy + ", " + midX + " " + ty + ", " + tx + " " + ty,
-            mx: midX,
-            my: (sy + ty) / 2,
-          };
-        }
-        const routesRight = targetCenterX > sourceCenterX;
-        const sx = routesRight ? source.x + source.width : source.x;
-        const tx = routesRight ? target.x : target.x + target.width;
-        const direction = routesRight ? 1 : -1;
-        const bend = Math.max(35, Math.abs(tx - sx) * 0.45);
-        return {
-          d: "M " + sx + " " + sy + " C " + (sx + direction * bend) + " " + sy + ", " + (tx - direction * bend) + " " + ty + ", " + tx + " " + ty,
-          mx: (sx + tx) / 2,
-          my: (sy + ty) / 2,
-        };
-      }
-
-      function appendEdgeBadge(mx, my, label, selectionOnly, extraClass) {
+      function appendEdgeBadge(mx, my, label, selectionOnly, extraClass, sourceId, targetId) {
         const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
         const classes = ["edge-badge-group"];
         if (selectionOnly) classes.push("selection");
         if (extraClass) classes.push(extraClass);
         group.setAttribute("class", classes.join(" "));
+        group.setAttribute("data-source", sourceId);
+        group.setAttribute("data-target", targetId);
         const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
         text.setAttribute("class", "edge-badge");
         text.setAttribute("x", String(mx));
@@ -1536,7 +1595,15 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         else if (kinds.length === 1 && kinds[0] === "migrates") marker = "arrow-migrates";
         path.setAttribute("marker-end", "url(#" + marker + ")");
         edgesLayer.appendChild(path);
-        appendEdgeBadge(geom.mx, geom.my, narrativeBadgeLabel(edges));
+        appendEdgeBadge(
+          geom.mx,
+          geom.my,
+          narrativeBadgeLabel(edges),
+          false,
+          "narrative",
+          sourceId,
+          targetId,
+        );
       }
 
       for (const [key, edges] of relationGroups) {
@@ -1564,7 +1631,15 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         );
         edgesLayer.appendChild(path);
         const labels = [...new Set(edges.map((edge) => relationLabelText(edge)))];
-        appendEdgeBadge(geom.mx, geom.my, labels.join(" · "), false, "relation");
+        appendEdgeBadge(
+          geom.mx,
+          geom.my,
+          labels.join(" · "),
+          false,
+          "relation",
+          sourceId,
+          targetId,
+        );
       }
 
       // Collapse structural hairlines by directed pair (one quiet path, not a fan).
@@ -1620,7 +1695,15 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           const badge = selectionEdgeBadgeLabel(edge);
           if (badge) {
             path.setAttribute("data-selection-label", "true");
-            appendEdgeBadge(geom.mx, geom.my, badge, true);
+            appendEdgeBadge(
+              geom.mx,
+              geom.my,
+              badge,
+              true,
+              null,
+              edge.source,
+              edge.target,
+            );
           }
         }
       }
@@ -2304,7 +2387,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     };
     search.onkeydown = handleSearchKeydown;
     search.addEventListener("focus", renderSearchResults);
-    viewport.onclick = () => {
+    viewport.onclick = (event) => {
+      if (event.target.closest("#canvas-tools")) return;
       if (state.suppressCanvasClick) {
         state.suppressCanvasClick = false;
         return;
@@ -2316,7 +2400,13 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     };
     viewport.onwheel = (event) => {
       event.preventDefault();
-      const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, state.scale * (event.deltaY > 0 ? .9 : 1.1)));
+      const next = Math.min(
+        MAX_SCALE,
+        Math.max(
+          Math.min(MIN_SCALE, state.scale),
+          state.scale * (event.deltaY > 0 ? .9 : 1.1),
+        ),
+      );
       const rect = viewport.getBoundingClientRect();
       const mx = event.clientX - rect.left;
       const my = event.clientY - rect.top;
@@ -2355,8 +2445,11 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         if (state.nodeDragFrame === null) {
           state.nodeDragFrame = requestAnimationFrame(() => {
             state.nodeDragFrame = null;
-            render();
-            applyTransform();
+            if (!state.nodeDrag) return;
+            const position = manualPositionFor(state.nodeDrag.id);
+            if (position) {
+              rerouteDraggedNode(state.nodeDrag.id, position.x, position.y);
+            }
           });
         }
         return;
@@ -2369,22 +2462,24 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     viewport.onpointerup = (event) => {
       if (state.nodeDrag) {
         const dragged = state.nodeDrag;
-        state.nodeDrag = null;
         if (dragged.moved) {
           if (state.nodeDragFrame !== null) {
             cancelAnimationFrame(state.nodeDragFrame);
             state.nodeDragFrame = null;
           }
+          const position = manualPositionFor(dragged.id);
+          if (position) rerouteDraggedNode(dragged.id, position.x, position.y);
+          const element = nodeElementsScratch.get(dragged.id);
+          if (element) element.classList.remove("dragging");
           state.suppressNodeClick = dragged.id;
           state.suppressCanvasClick = true;
           persistManualLayouts();
-          render();
-          applyTransform();
           setTimeout(() => {
             if (state.suppressNodeClick === dragged.id) state.suppressNodeClick = null;
             state.suppressCanvasClick = false;
           }, 0);
         }
+        state.nodeDrag = null;
         if (viewport.hasPointerCapture(event.pointerId)) {
           viewport.releasePointerCapture(event.pointerId);
         }
