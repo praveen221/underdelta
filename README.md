@@ -78,6 +78,10 @@ The browser is a walk, not a dump of every function.
 
 **View** only deepens inside a focus (Intermediate ↔ Advanced). Without a focus it stays Beginner and nudges you to double-click a Product Flow system.
 
+Drag nodes to adjust a focused graph; connected edges reroute while you move.
+Manual positions persist for that repository and view. Use **Fit** to frame the
+visible graph and **Reset** to clear saved node positions.
+
 **Back** / **Esc** steps toward Intermediate, then Beginner; **Overview** jumps home. Reloading the same project keeps your last view, focus, and selection for the tab session.
 
 ### How to read FE / BE maps

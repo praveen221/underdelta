@@ -15,16 +15,29 @@ const repoRoot = path.resolve(
 
 let server;
 let viewerUrl;
+let largeViewerUrl;
 
 test.beforeAll(async () => {
   const graph = await compileRepository(repoRoot);
   const html = renderArchitectureHtml(graph);
-  server = createServer((_request, response) => {
+  const largeGraph = {
+    project: { name: "large-fit-contract", root: "/virtual/large-fit-contract" },
+    nodes: Array.from({ length: 200 }, (_, index) => ({
+      id: `system:large:${index}`,
+      kind: "system",
+      label: `System ${String(index + 1).padStart(3, "0")}`,
+      metadata: { flowOrder: index },
+      evidence: [],
+    })),
+    edges: [],
+  };
+  const largeHtml = renderArchitectureHtml(largeGraph);
+  server = createServer((request, response) => {
     response.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
     });
-    response.end(html);
+    response.end(request.url === "/large" ? largeHtml : html);
   });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -33,6 +46,7 @@ test.beforeAll(async () => {
   const address = server.address();
   assert.ok(address && typeof address !== "string");
   viewerUrl = `http://127.0.0.1:${address.port}/`;
+  largeViewerUrl = `http://127.0.0.1:${address.port}/large`;
 });
 
 test.afterAll(async () => {
@@ -41,6 +55,54 @@ test.afterAll(async () => {
 
 function node(page, label) {
   return page.locator(".node", { has: page.locator(".label", { hasText: label }) });
+}
+
+async function graphGeometry(page) {
+  return page.evaluate(() => {
+    const viewport = document.querySelector("#viewport").getBoundingClientRect();
+    const chrome = document.querySelector("#canvas-chrome").getBoundingClientRect();
+    const tools = document.querySelector("#canvas-tools").getBoundingClientRect();
+    const nodes = [...document.querySelectorAll(".node")].map((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        id: element.dataset.id,
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        bottom: rect.bottom,
+      };
+    });
+    return {
+      viewport: {
+        left: viewport.left,
+        right: viewport.right,
+        top: viewport.top,
+        bottom: viewport.bottom,
+      },
+      chromeTop: chrome.top,
+      toolsLeft: tools.left,
+      nodes,
+    };
+  });
+}
+
+function overlappingNodePairs(nodes) {
+  const overlaps = [];
+  for (let leftIndex = 0; leftIndex < nodes.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < nodes.length; rightIndex += 1) {
+      const left = nodes[leftIndex];
+      const right = nodes[rightIndex];
+      if (
+        left.left < right.right - 1 &&
+        left.right > right.left + 1 &&
+        left.top < right.bottom - 1 &&
+        left.bottom > right.top + 1
+      ) {
+        overlaps.push([left.id, right.id]);
+      }
+    }
+  }
+  return overlaps;
 }
 
 test("self-map viewer supports a calm walk through focus, search, back, and reload", async ({ page }) => {
@@ -77,4 +139,129 @@ test("self-map viewer supports a calm walk through focus, search, back, and relo
   await page.reload();
   await expect(page.locator("#tier")).not.toHaveText("View: Beginner");
   await expect(node(page, "src/extractors/typescript.ts")).toBeVisible();
+});
+
+test("graph geometry fits, reroutes dragged nodes, and persists manual placement", async ({ page }) => {
+  await page.goto(viewerUrl);
+
+  const beginnerGeometry = await graphGeometry(page);
+  assert.deepEqual(overlappingNodePairs(beginnerGeometry.nodes), []);
+  for (const item of beginnerGeometry.nodes) {
+    assert.ok(item.left >= beginnerGeometry.viewport.left - 1, `${item.id} starts outside the viewport`);
+    assert.ok(item.right <= beginnerGeometry.toolsLeft - 1, `${item.id} is covered by graph controls`);
+    assert.ok(item.top >= beginnerGeometry.viewport.top - 1, `${item.id} starts above the viewport`);
+    assert.ok(item.bottom <= beginnerGeometry.chromeTop - 1, `${item.id} is covered by canvas chrome`);
+  }
+
+  const beginnerEdges = await page.locator("#edges path.edge").count();
+  await expect(page.locator("#counts")).toContainText(`${beginnerEdges} visible relationships`);
+  const incompleteEdges = await page.locator("#edges path.edge").evaluateAll((paths) =>
+    paths
+      .filter((path) =>
+        !path.dataset.source ||
+        !path.dataset.target ||
+        !path.getAttribute("marker-end"))
+      .map((path) => path.dataset.kind),
+  );
+  assert.deepEqual(incompleteEdges, []);
+
+  await node(page, "Extractors").dblclick();
+  await page.locator("#tier").click();
+  const module = node(page, "src/extractor.ts");
+  const moduleId = await module.getAttribute("data-id");
+  assert.ok(moduleId);
+
+  const incidentPathSelector = `#edges path.edge[data-source="${moduleId}"], #edges path.edge[data-target="${moduleId}"]`;
+  const incidentPaths = page.locator(incidentPathSelector);
+  assert.ok(await incidentPaths.count() > 0, "expected the module to have rendered incident edges");
+  const beforePath = await incidentPaths.first().getAttribute("d");
+  const beforePosition = await module.evaluate((element) => ({
+    left: element.style.left,
+    top: element.style.top,
+    rect: element.getBoundingClientRect().toJSON(),
+  }));
+  await module.evaluate((element) => {
+    element.dataset.dragIdentity = "preserved";
+  });
+
+  await page.mouse.move(
+    beforePosition.rect.x + beforePosition.rect.width / 2,
+    beforePosition.rect.y + beforePosition.rect.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    beforePosition.rect.x + beforePosition.rect.width / 2 + 120,
+    beforePosition.rect.y + beforePosition.rect.height / 2 + 70,
+    { steps: 5 },
+  );
+  await page.mouse.up();
+
+  const afterPosition = await node(page, "src/extractor.ts").evaluate((element) => ({
+    left: element.style.left,
+    top: element.style.top,
+  }));
+  assert.notDeepEqual(afterPosition, {
+    left: beforePosition.left,
+    top: beforePosition.top,
+  });
+  await expect(node(page, "src/extractor.ts")).toHaveAttribute("data-drag-identity", "preserved");
+  assert.notEqual(await page.locator(incidentPathSelector).first().getAttribute("d"), beforePath);
+
+  await page.reload();
+  await expect(page.locator("#tier")).toHaveText("View: Advanced · code in focus");
+  const restoredPosition = await node(page, "src/extractor.ts").evaluate((element) => ({
+    left: element.style.left,
+    top: element.style.top,
+  }));
+  assert.deepEqual(restoredPosition, afterPosition);
+  await expect(node(page, "src/extractor.ts")).toHaveAttribute("data-manual-position", "true");
+  const selectedBeforeControls = await page.locator(".node.selected").getAttribute("data-id");
+  assert.ok(selectedBeforeControls);
+  const inspectorBeforeControls = await page.locator("#inspector h2").innerText();
+
+  const transformBeforeZoom = await page.locator("#world").getAttribute("style");
+  await page.locator("#zoom-in").click();
+  await expect(page.locator(".node.selected")).toHaveAttribute("data-id", selectedBeforeControls);
+  await expect(page.locator("#inspector h2")).toHaveText(inspectorBeforeControls);
+  const transformAfterZoom = await page.locator("#world").getAttribute("style");
+  assert.notEqual(transformAfterZoom, transformBeforeZoom);
+  await page.locator("#fit-view").click();
+  await expect(page.locator(".node.selected")).toHaveAttribute("data-id", selectedBeforeControls);
+  await expect(page.locator("#inspector h2")).toHaveText(inspectorBeforeControls);
+  assert.notEqual(await page.locator("#world").getAttribute("style"), transformAfterZoom);
+  const fittedGeometry = await graphGeometry(page);
+  for (const item of fittedGeometry.nodes) {
+    assert.ok(item.left >= fittedGeometry.viewport.left - 1, `${item.id} starts outside fitted view`);
+    assert.ok(item.right <= fittedGeometry.toolsLeft - 1, `${item.id} is covered by graph controls after fitting`);
+    assert.ok(item.top >= fittedGeometry.viewport.top - 1, `${item.id} starts above fitted view`);
+    assert.ok(item.bottom <= fittedGeometry.chromeTop - 1, `${item.id} is covered after fitting`);
+  }
+
+  await page.locator("#reset-layout").click();
+  await expect(page.locator(".node.selected")).toHaveAttribute("data-id", selectedBeforeControls);
+  await expect(page.locator("#inspector h2")).toHaveText(inspectorBeforeControls);
+  await expect(node(page, "src/extractor.ts")).toHaveAttribute("data-manual-position", "false");
+  const resetPosition = await node(page, "src/extractor.ts").evaluate((element) => ({
+    left: element.style.left,
+    top: element.style.top,
+  }));
+  assert.notDeepEqual(resetPosition, afterPosition);
+});
+
+test("fit frames graphs that require a scale below the interactive zoom floor", async ({ page }) => {
+  await page.goto(largeViewerUrl);
+  await expect(page.locator(".node")).toHaveCount(200);
+
+  const scale = await page.locator("#world").evaluate((element) =>
+    new DOMMatrix(getComputedStyle(element).transform).a,
+  );
+  assert.ok(scale < 0.15, `expected a true fit below 0.15, received ${scale}`);
+
+  const geometry = await graphGeometry(page);
+  for (const item of geometry.nodes) {
+    assert.ok(item.left >= geometry.viewport.left - 1, `${item.id} starts outside large fitted view`);
+    assert.ok(item.right <= geometry.toolsLeft - 1, `${item.id} is covered by controls in large fitted view`);
+    assert.ok(item.top >= geometry.viewport.top - 1, `${item.id} starts above large fitted view`);
+    assert.ok(item.bottom <= geometry.chromeTop - 1, `${item.id} is covered in large fitted view`);
+  }
 });
