@@ -26,7 +26,7 @@ Supported in v0:
 - TypeScript/JavaScript — modules, React/Next UI, Express routes, BullMQ
 - Next.js App Router — pages, layouts, route handlers, server actions
 - Prisma + SQL migrations; MongoDB collections and aggregates
-- Python — FastAPI, Django routes, SQLAlchemy/Alembic
+- Python — FastAPI, Flask, Django routes, SQLAlchemy/Alembic
 - Scheduled work — node-cron, cron, NestJS Schedule, Celery, Kubernetes CronJob
 - OpenAPI / Swagger; GraphQL SDL and tagged documents
 - Deployment units — Docker / Compose, Terraform, Kubernetes, Helm, Kustomize
