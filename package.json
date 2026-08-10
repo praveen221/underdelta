@@ -13,11 +13,11 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:extractors": "npm run build && node --test test/extractors.test.mjs",
+    "test:extractors": "npm run build && node --test test/extractors.test.mjs test/adapters.test.mjs",
     "test:projection": "npm run build && node --test test/projection.test.mjs test/policy.test.mjs",
     "test:self": "npm run build && node --test test/self.test.mjs",
     "test:viewer": "npm run build && playwright install chromium && playwright test",
-    "verify": "npm run build && node --test test/extractors.test.mjs test/projection.test.mjs test/policy.test.mjs test/self.test.mjs",
+    "verify": "npm run build && node --test test/extractors.test.mjs test/adapters.test.mjs test/projection.test.mjs test/policy.test.mjs test/self.test.mjs",
     "start": "npm run build && node dist/cli.js scan . --serve",
     "scan": "node dist/cli.js scan",
     "inspect": "npm run build && node scripts/inspect.mjs"

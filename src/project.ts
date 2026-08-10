@@ -22,8 +22,16 @@ import {
   isClientApisOnlyHttpApi,
   liftFePageStoryEdges,
 } from "./projection/feStories.js";
+import {
+  createScheduledWorkSystem,
+  jobFacet,
+  projectScheduledWork,
+  scheduledWorkSourcesForHandler,
+  triggerFacet,
+} from "./projection/scheduledWork.js";
 
 export { isClientApisOnlyHttpApi } from "./projection/feStories.js";
+export { humanizeCronExpression } from "./projection/scheduledWork.js";
 
 export interface PackageManifestHint {
   name?: string;
@@ -486,6 +494,9 @@ function applyReadmeHeadingHints(
 ): void {
   if (!hints?.length) return;
   for (const hint of hints) {
+    // Scheduled work keeps its ontology label; README job headings are usually
+    // documentation examples, not product-system names.
+    if (hint.key === "jobs") continue;
     // Defense in depth: never paint structure liturgy or docs chrome onto the canvas.
     if (
       isReadmeStructureHeading(hint.label) ||
@@ -531,7 +542,8 @@ function applyReadmeHeadingHints(
 const preferredFlows: Array<[string, string]> = [
   ["cli", "compile"],
   ["compile", "extractors"],
-  ["extractors", "graph"],
+  ["extractors", "adapters"],
+  ["adapters", "graph"],
   ["compile", "artifact"],
   ["graph", "artifact"],
   ["artifact", "viewer"],
@@ -560,6 +572,7 @@ const flowOrderPreference: string[] = [
   "compile",
   "schema",
   "extractors",
+  "adapters",
   "graph",
   "artifact",
   "viewer",
@@ -635,6 +648,27 @@ const collaborationEdges: Array<{
   },
   {
     from: "compile",
+    to: "adapters",
+    kind: "uses",
+    label: "normalize",
+    detail: "Compile pipeline uses semantic capability adapters",
+  },
+  {
+    from: "extractors",
+    to: "adapters",
+    kind: "flows-to",
+    label: "base facts",
+    detail: "Language and resource facts feed semantic adapters",
+  },
+  {
+    from: "adapters",
+    to: "graph",
+    kind: "flows-to",
+    label: "semantic facts",
+    detail: "Semantic adapter facts feed graph assembly",
+  },
+  {
+    from: "compile",
     to: "graph",
     kind: "uses",
     label: "assemble",
@@ -667,6 +701,13 @@ const collaborationEdges: Array<{
     kind: "configures",
     label: "shape",
     detail: "Schema contract configures extractor output shape",
+  },
+  {
+    from: "schema",
+    to: "adapters",
+    kind: "configures",
+    label: "facets",
+    detail: "Schema contract configures adapter semantic facets",
   },
   {
     from: "schema",
@@ -1285,6 +1326,16 @@ export function inferSystemRole(
     ) {
       return { key: "extractors", label: "Extractors", kind: "system" };
     }
+    if (
+      file.includes("/adapters/") ||
+      /(^|\/)adapter\.[cm]?[jt]sx?$/.test(file)
+    ) {
+      return {
+        key: "adapters",
+        label: "Semantic adapters",
+        kind: "system",
+      };
+    }
     if (/(^|\/)compile\.[cm]?[jt]sx?$/.test(file)) {
       return { key: "compile", label: "Compile pipeline", kind: "pipeline" };
     }
@@ -1613,77 +1664,6 @@ function titleCaseSingular(label: string): string {
  * Examples: hourly five-field cron → "every hour"; slash-step minutes →
  * "every 15 minutes". Unrecognized forms keep the original expression.
  */
-export function humanizeCronExpression(expression: string): string {
-  const expr = expression.trim();
-  if (!expr) return expr;
-  if (/^@hourly$/i.test(expr)) return "every hour";
-  if (/^@daily$/i.test(expr)) return "every day";
-  if (/^@weekly$/i.test(expr)) return "every week";
-  if (/^@monthly$/i.test(expr)) return "every month";
-  if (/^@yearly$/i.test(expr) || /^@annually$/i.test(expr)) return "every year";
-
-  const parts = expr.split(/\s+/);
-  if (parts.length !== 5) return expr;
-  const minute = parts[0]!;
-  const hour = parts[1]!;
-  const dayOfMonth = parts[2]!;
-  const month = parts[3]!;
-  const dayOfWeek = parts[4]!;
-
-  const starRest =
-    dayOfMonth === "*" && month === "*" && dayOfWeek === "*";
-
-  if (minute === "*" && hour === "*" && starRest) return "every minute";
-
-  const everyMinute = /^\*\/(\d+)$/.exec(minute);
-  if (everyMinute && hour === "*" && starRest) {
-    const n = Number(everyMinute[1]);
-    return n === 1 ? "every minute" : `every ${n} minutes`;
-  }
-
-  if (minute === "0" && hour === "*" && starRest) return "every hour";
-
-  const everyHour = /^\*\/(\d+)$/.exec(hour);
-  if (minute === "0" && everyHour && starRest) {
-    const n = Number(everyHour[1]);
-    return n === 1 ? "every hour" : `every ${n} hours`;
-  }
-
-  if (
-    /^\d+$/.test(minute) &&
-    /^\d+$/.test(hour) &&
-    dayOfMonth === "*" &&
-    month === "*" &&
-    dayOfWeek === "*"
-  ) {
-    return `every day at ${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
-  }
-
-  if (minute === "0" && hour === "0" && starRest) return "every day";
-
-  const weekdays = [
-    "Sunday",
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-  ];
-  if (
-    /^\d+$/.test(minute) &&
-    /^\d+$/.test(hour) &&
-    dayOfMonth === "*" &&
-    month === "*" &&
-    /^\d+$/.test(dayOfWeek)
-  ) {
-    const day = weekdays[Number(dayOfWeek) % 7] ?? `day ${dayOfWeek}`;
-    return `every ${day} at ${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
-  }
-
-  return expr;
-}
-
 /**
  * Turn camelCase / PascalCase / kebab identifiers into calm product words.
  * `createPost` → `Create post`, `PostList` → `Post list`, `sign-in` → `Sign in`.
@@ -2902,12 +2882,13 @@ function liftBeApiDataStoryEdges(
       }
     }
 
-    // Jobs schedule a function that reads/writes Data tables.
+    // Scheduled work reaches handlers through trigger → job → handler.
     if (jobs && (sourceOwner?.id === data.id || sourceOwner?.id === jobs.id)) {
-      for (const sched of edges.values()) {
-        if (sched.kind !== "schedules" && sched.kind !== "triggers") continue;
-        if (sched.target !== source.id) continue;
-        const scheduler = nodes.get(sched.source);
+      for (const schedulerId of scheduledWorkSourcesForHandler(
+        source.id,
+        edges.values(),
+      )) {
+        const scheduler = nodes.get(schedulerId);
         if (!scheduler) continue;
         const schedulerOwner = semanticOwnerOf(scheduler.id, nodes);
         if (
@@ -4010,6 +3991,15 @@ export function projectSemanticArchitecture(
     nodes.set(node.id, node);
   }
 
+  const scheduledEvidence = [...nodes.values()]
+    .find((node) => triggerFacet(node) || jobFacet(node))
+    ?.evidence[0];
+  if (scheduledEvidence && !systems.has("jobs")) {
+    const jobs = createScheduledWorkSystem(scheduledEvidence);
+    systems.set("jobs", jobs);
+    nodes.set(jobs.id, jobs);
+  }
+
   if (systems.size === 0) return graph;
 
   for (const system of systems.values()) {
@@ -4134,19 +4124,15 @@ export function projectSemanticArchitecture(
     }
   }
 
-  // When a Scheduled jobs system exists, nest every Celery/cron/job leaf under
-  // it — beat schedules in celery_app.py and @shared_task in tasks.py share one story.
   const jobsSystem = systems.get("jobs");
   if (jobsSystem) {
-    for (const node of [...nodes.values()]) {
-      if (node.kind !== "cron" && node.kind !== "job") continue;
-      if (node.metadata?.projection === "semantic") continue;
-      attachToSystem(
-        node.id,
-        jobsSystem.id,
-        node.evidence[0] ?? projectionEvidence("."),
-      );
-    }
+    projectScheduledWork({
+      nodes,
+      edges,
+      jobsSystem,
+      attach: attachToSystem,
+      humanizeIdentifier: humanizeIdentifierLabel,
+    });
   }
 
   // When an HTTP API system exists, nest every route under it — entrypoint
@@ -4332,17 +4318,6 @@ export function projectSemanticArchitecture(
     nodes.set(queueId, queue);
   }
 
-  // Cron schedules are the jobs story — keep them visible like messaging hubs.
-  for (const node of nodes.values()) {
-    if (node.kind !== "cron") continue;
-    if (!node.metadata?.expression && !node.metadata?.handler) continue;
-    node.metadata = {
-      ...node.metadata,
-      scheduleHub: true,
-    };
-    nodes.set(node.id, node);
-  }
-
   // Hide leaves that only restate their parent semantic system on the overview.
   // Messaging hubs + cron schedules stay visible so automation reads without Details.
   const collapsibleKinds = new Set([
@@ -4363,7 +4338,7 @@ export function projectSemanticArchitecture(
     if (node.metadata?.projection === "semantic") continue;
     if (!collapsibleKinds.has(node.kind)) continue;
     if (node.kind === "queue" && node.metadata?.messagingHub) continue;
-    if (node.kind === "cron" && node.metadata?.scheduleHub) continue;
+    if (triggerFacet(node)) continue;
     // Only collapse server-action functions — raw handlers stay module-local.
     if (node.kind === "function" && node.metadata?.serverAction !== true) {
       continue;
@@ -4501,21 +4476,6 @@ export function projectSemanticArchitecture(
     ) {
       // Client apis/** helpers: listPosts → List posts (same vocabulary as actions).
       nextLabel = humanizeIdentifierLabel(node.label);
-    } else if (node.kind === "job") {
-      // Celery send_digest → Send digest
-      nextLabel = humanizeIdentifierLabel(
-        typeof node.metadata?.handler === "string"
-          ? node.metadata.handler
-          : node.label,
-      );
-    } else if (
-      node.kind === "cron" &&
-      typeof node.metadata?.handler === "string" &&
-      typeof node.metadata?.expression === "string"
-    ) {
-      // Celery/node-cron: send_digest (0 * * * *) → Send digest (every hour)
-      const when = humanizeCronExpression(node.metadata.expression);
-      nextLabel = `${humanizeIdentifierLabel(node.metadata.handler)} (${when})`;
     } else if (node.kind === "component") {
       // All components (client + server): tame PascalCase Card*/skeletons too.
       nextLabel = humanizeIdentifierLabel(node.label);
@@ -6021,6 +5981,63 @@ export function projectSemanticArchitecture(
     }
     extractorsSystem.evidence = dedupeEvidence(extractorsSystem.evidence);
     nodes.set(extractorsSystem.id, extractorsSystem);
+  }
+
+  const adaptersSystem = systems.get("adapters");
+  if (adaptersSystem) {
+    const adapterModules = [...moduleToSystem]
+      .filter(([, systemId]) => systemId === adaptersSystem.id)
+      .map(([moduleId]) => nodes.get(moduleId))
+      .filter((node): node is ArchitectureNode => Boolean(node));
+    const roster = graph.adapters
+      .map((adapter) => {
+        const provider = adapter.id.split("-").at(-1) ?? adapter.id;
+        const module = adapterModules.find((node) =>
+          new RegExp(`/${provider}\\.[cm]?[jt]sx?$`, "i").test(modulePath(node)),
+        );
+        return {
+          ...adapter,
+          file: module ? modulePath(module) : "src/adapter.ts",
+        };
+      })
+      .sort((a, b) => a.id.localeCompare(b.id));
+    adaptersSystem.metadata = {
+      ...adaptersSystem.metadata,
+      adapterRoster: roster.map((item) => item.id),
+    };
+    for (const item of roster) {
+      const childId = stableId("adapter", item.id);
+      const itemEvidence = projectionEvidence(
+        item.file,
+        `${item.id} adapter normalizes ${item.capability}`,
+      );
+      const child: ArchitectureNode = {
+        id: childId,
+        kind: "capability",
+        label: item.id,
+        technology: item.id,
+        parentId: adaptersSystem.id,
+        metadata: {
+          role: "adapter",
+          adapterId: item.id,
+          capabilityKind: item.capability,
+          projectedSystem: "adapters",
+          collapsedInOverview: true,
+        },
+        evidence: [itemEvidence],
+      };
+      nodes.set(childId, child);
+      const contains = edgeFrom(
+        "contains",
+        adaptersSystem.id,
+        childId,
+        itemEvidence,
+      );
+      edges.set(contains.id, contains);
+      adaptersSystem.evidence.push(itemEvidence);
+    }
+    adaptersSystem.evidence = dedupeEvidence(adaptersSystem.evidence);
+    nodes.set(adaptersSystem.id, adaptersSystem);
   }
 
   // Surface key source files on every semantic system for the inspector.

@@ -41,6 +41,7 @@ export const edgeKinds = [
   "exposes",
   "routes-to",
   "schedules",
+  "handled-by",
   "triggers",
   "publishes",
   "consumes",
@@ -68,6 +69,58 @@ export const evidenceSchema = z.object({
   detail: z.string().optional(),
 });
 
+export const semanticFacetSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("symbol"),
+    symbolKind: z.enum(["module", "class", "function", "method"]),
+    language: z.string().optional(),
+  }),
+  z.object({
+    kind: z.literal("trigger"),
+    triggerKind: z.enum(["cron", "interval", "calendar", "event"]),
+    provider: z.string().min(1),
+    expression: z.string().optional(),
+    timezone: z.string().optional(),
+    declaration: z.enum(["code", "config", "infrastructure"]),
+  }),
+  z.object({
+    kind: z.literal("job"),
+    executionKind: z.enum([
+      "in-process",
+      "queue",
+      "command",
+      "http",
+      "container",
+      "unknown",
+    ]),
+    provider: z.string().min(1),
+    handler: z.string().optional(),
+  }),
+  z.object({
+    kind: z.literal("resource"),
+    resourceKind: z.enum([
+      "database",
+      "table",
+      "collection",
+      "queue",
+      "topic",
+      "secret",
+    ]),
+    provider: z.string().optional(),
+  }),
+  z.object({
+    kind: z.literal("deploy-unit"),
+    deployKind: z.enum([
+      "service",
+      "workload",
+      "serverless",
+      "container",
+      "scheduled-workload",
+    ]),
+    provider: z.string().min(1),
+  }),
+]);
+
 /**
  * Node metadata is an open record. FE shells contract keys (see `feShells.ts`
  * and `docs/loopplans/FE_SHELLS_07082026.md`) live here when present:
@@ -86,6 +139,7 @@ export const architectureNodeSchema = z.object({
   qualifiedName: z.string().optional(),
   parentId: z.string().optional(),
   technology: z.string().optional(),
+  semantics: z.array(semanticFacetSchema).optional(),
   metadata: z.record(z.string(), z.unknown()).default({}),
   evidence: z.array(evidenceSchema).min(1),
 });
@@ -109,7 +163,7 @@ export const diagnosticSchema = z.object({
 
 export const architectureGraphSchema = z
   .object({
-    schemaVersion: z.literal("0.1"),
+    schemaVersion: z.literal("0.2"),
     project: z.object({
       name: z.string().min(1),
       root: z.string().min(1),
@@ -120,6 +174,13 @@ export const architectureGraphSchema = z
       z.object({
         id: z.string().min(1),
         version: z.string().min(1),
+      }),
+    ),
+    adapters: z.array(
+      z.object({
+        id: z.string().min(1),
+        version: z.string().min(1),
+        capability: z.string().min(1),
       }),
     ),
     nodes: z.array(architectureNodeSchema),
@@ -161,6 +222,7 @@ export type EdgeKind = (typeof edgeKinds)[number];
 export type Certainty = (typeof certaintyKinds)[number];
 export type SourceRange = z.infer<typeof sourceRangeSchema>;
 export type Evidence = z.infer<typeof evidenceSchema>;
+export type SemanticFacet = z.infer<typeof semanticFacetSchema>;
 export type ArchitectureNode = z.infer<typeof architectureNodeSchema>;
 export type ArchitectureEdge = z.infer<typeof architectureEdgeSchema>;
 export type Diagnostic = z.infer<typeof diagnosticSchema>;

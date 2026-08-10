@@ -8,6 +8,12 @@ import {
   isClientApisOnlyHttpApi,
   liftFePageStoryEdges,
 } from "../dist/projection/feStories.js";
+import {
+  createScheduledWorkSystem,
+  humanizeCronExpression,
+  projectScheduledWork,
+  scheduledWorkSourcesForHandler,
+} from "../dist/projection/scheduledWork.js";
 
 const evidence = {
   file: "app/dashboard/page.tsx",
@@ -104,4 +110,60 @@ test("lifting is idempotent when the same policy runs twice", () => {
     ).length,
     1,
   );
+});
+
+test("scheduled-work projection creates calm labels and preserves the handler chain", () => {
+  const trigger = node("trigger", "cron", "digest trigger", {
+    semantics: [{
+      kind: "trigger",
+      triggerKind: "cron",
+      provider: "node-cron",
+      expression: "0 * * * *",
+      timezone: "UTC",
+      declaration: "code",
+    }],
+  });
+  const job = node("job", "job", "send_digest", {
+    semantics: [{
+      kind: "job",
+      executionKind: "in-process",
+      provider: "node-cron",
+      handler: "send_digest",
+    }],
+  });
+  const handler = node("handler", "function", "send_digest");
+  const jobs = createScheduledWorkSystem(evidence);
+  const nodes = new Map([trigger, job, handler, jobs].map((item) => [item.id, item]));
+  const edges = new Map();
+  for (const edge of [
+    edgeFrom("schedules", trigger.id, job.id, evidence),
+    edgeFrom("handled-by", job.id, handler.id, evidence),
+  ]) {
+    edges.set(edge.id, edge);
+  }
+
+  projectScheduledWork({
+    nodes,
+    edges,
+    jobsSystem: jobs,
+    attach(id, parentId) {
+      nodes.get(id).parentId = parentId;
+    },
+    humanizeIdentifier(label) {
+      return label.replaceAll("_", " ").replace(/^./, (char) => char.toUpperCase());
+    },
+  });
+
+  assert.equal(trigger.label, "Send digest (every hour)");
+  assert.equal(job.label, "Send digest");
+  assert.equal(trigger.parentId, jobs.id);
+  assert.equal(job.parentId, jobs.id);
+  assert.deepEqual(scheduledWorkSourcesForHandler(handler.id, edges.values()), [
+    trigger.id,
+  ]);
+});
+
+test("six-field cron expressions produce useful second-level labels", () => {
+  assert.equal(humanizeCronExpression("*/5 * * * * *"), "every 5 seconds");
+  assert.equal(humanizeCronExpression("0 0 * * * *"), "every hour");
 });

@@ -9,7 +9,14 @@ import {
   isUnderdeltaToolingRepo,
   parseReadmeHeadingHints,
   parseReadmeTitle,
+  projectSemanticArchitecture,
 } from "../dist/project.js";
+
+const evidence = {
+  file: "jobs.py",
+  extractor: "test",
+  certainty: "observed",
+};
 
 test("README parsing keeps a real product title and ignores setup-code headings", () => {
   const readme = [
@@ -38,6 +45,49 @@ test("Underdelta self-map projection is not activated by familiar filenames", ()
     isUnderdeltaToolingRepo({ packageManifest: { name: "underdelta" } }),
     true,
   );
+});
+
+test("README job headings cannot rename the scheduled-work system", () => {
+  const graph = projectSemanticArchitecture({
+    schemaVersion: "0.2",
+    project: { name: "example", root: "/example" },
+    generatedAt: new Date(0).toISOString(),
+    extractors: [],
+    adapters: [],
+    nodes: [
+      {
+        id: "product",
+        kind: "product",
+        label: "Example",
+        metadata: {},
+        evidence: [evidence],
+      },
+      {
+        id: "job",
+        kind: "job",
+        label: "daily-task",
+        semantics: [{
+          kind: "job",
+          executionKind: "queue",
+          provider: "celery",
+          handler: "daily_task",
+        }],
+        metadata: {},
+        evidence: [evidence],
+      },
+    ],
+    edges: [],
+    diagnostics: [],
+  }, {
+    readmeHints: [{
+      key: "jobs",
+      label: "Job With Generated Name",
+      heading: "Job With Generated Name",
+    }],
+  });
+
+  const jobs = graph.nodes.find((node) => node.metadata.systemKey === "jobs");
+  assert.equal(jobs?.label, "Scheduled jobs");
 });
 
 test("repository discovery excludes test, verification, and cache inputs", async () => {

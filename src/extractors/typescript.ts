@@ -663,52 +663,6 @@ export const typescriptExtractor: ArchitectureExtractor = {
             }
           }
 
-          if (method === "schedule" || method === "cron") {
-            const expression = stringValue(node.arguments[0]);
-            if (expression) {
-              const handler = node.arguments[1];
-              const handlerName =
-                handler && ts.isIdentifier(handler) ? handler.text : undefined;
-              const cronId = stableId("cron", file.relative, expression);
-              const cronMetadata: Record<string, unknown> = { expression };
-              if (handlerName !== undefined) cronMetadata.handler = handlerName;
-              nodes.push({
-                id: cronId,
-                kind: "cron",
-                label: handlerName
-                  ? `${handlerName} (${expression})`
-                  : expression,
-                parentId: file.moduleId,
-                technology: receiver ?? "scheduler",
-                metadata: cronMetadata,
-                evidence: [evidenceFor(file, node)],
-              });
-              edges.push(
-                edgeFrom(
-                  "contains",
-                  file.moduleId,
-                  cronId,
-                  evidenceFor(file, node),
-                ),
-              );
-              if (handler && ts.isIdentifier(handler)) {
-                const target =
-                  localDeclarations.get(handler.text) ??
-                  uniqueDeclaration(handler.text);
-                if (target) {
-                  edges.push(
-                    edgeFrom(
-                      "schedules",
-                      cronId,
-                      target,
-                      evidenceFor(file, handler),
-                    ),
-                  );
-                }
-              }
-            }
-          }
-
           if (chain[0] === "prisma" && chain.length >= 3 && method) {
             const model = chain.at(-2);
             if (model) {

@@ -4,9 +4,11 @@ import os from "node:os";
 import path from "node:path";
 
 import { discoverFiles, runExtractor } from "../dist/extractor.js";
+import { runSemanticAdapter } from "../dist/adapter.js";
+import { GraphBuilder } from "../dist/graph.js";
 
-export async function extract(extractor, files) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-extractor-"));
+async function withFiles(prefix, files, run) {
+  const root = await mkdtemp(path.join(os.tmpdir(), prefix));
   try {
     await Promise.all(
       Object.entries(files).map(async ([relative, source]) => {
@@ -15,11 +17,31 @@ export async function extract(extractor, files) {
         await writeFile(target, source, "utf8");
       }),
     );
-    const discovered = await discoverFiles(root);
-    return await runExtractor(extractor, root, discovered);
+    return await run(root, await discoverFiles(root));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+}
+
+export async function extract(extractor, files) {
+  return withFiles("underdelta-extractor-", files, (root, discovered) =>
+    runExtractor(extractor, root, discovered));
+}
+
+export async function adapt(adapter, extractors, files) {
+  return withFiles("underdelta-adapter-", files, async (root, discovered) => {
+    const builder = new GraphBuilder();
+    for (const extractor of extractors) {
+      builder.add(await runExtractor(extractor, root, discovered));
+    }
+    const snapshot = builder.snapshot();
+    return runSemanticAdapter(adapter, {
+      root,
+      files: discovered,
+      nodes: snapshot.nodes,
+      edges: snapshot.edges,
+    });
+  });
 }
 
 export function nodeBy(contribution, kind, label) {
