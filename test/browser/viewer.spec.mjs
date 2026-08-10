@@ -61,6 +61,18 @@ test.beforeAll(async () => {
     "model Note {\n  id Int @id\n  title String\n}\n",
     "utf8",
   );
+  await writeFile(
+    path.join(scheduledRoot, "docker-compose.yml"),
+    [
+      "services:",
+      "  api:",
+      "    image: example/api:1",
+      "    ports:",
+      '      - "8080:80"',
+      "",
+    ].join("\n"),
+    "utf8",
+  );
   const scheduledHtml = renderArchitectureHtml(
     await compileRepository(scheduledRoot),
   );
@@ -343,4 +355,22 @@ test("data resources expose their normalized contract in the inspector", async (
   await expect(page.locator("#inspector")).toContainText("Data resource");
   await expect(page.locator("#inspector")).toContainText("Resource: table");
   await expect(page.locator("#inspector")).toContainText("Provider: prisma");
+});
+
+test("deploy units are walkable and expose normalized operational details", async ({ page }) => {
+  await page.goto(scheduledViewerUrl);
+  await expect(node(page, "Deploy")).toBeVisible();
+  await expect(page.locator('.node[data-kind="service"]')).toHaveCount(0);
+
+  await node(page, "Deploy").dblclick();
+  const service = page.locator('.node[data-kind="service"]', { hasText: "API · 8080" });
+  await expect(service).toBeVisible();
+  await service.click();
+  await expect(page.locator("#inspector .inspector-role")).toHaveText("Container");
+  await expect(page.locator("#inspector")).toContainText("Deploy unit");
+  await expect(page.locator("#inspector")).toContainText("Type: container");
+  await expect(page.locator("#inspector")).toContainText("Provider: docker-compose");
+  await expect(page.locator("#inspector")).toContainText("Image: example/api:1");
+  await expect(page.locator("#inspector")).toContainText("Ports: 8080:80");
+  await expect(page.locator("#inspector")).toContainText("docker-compose.yml");
 });

@@ -9,8 +9,9 @@ Philosophy one-pager (GitHub Pages from repo root):
 [praveen221.github.io/underdelta](https://praveen221.github.io/underdelta/)
 
 The generated browser presents routes, components, functions, databases,
-tables, migrations, scheduled jobs, queues, and their relationships. Every
-visual claim links to the source location from which it was derived.
+tables, migrations, scheduled jobs, deployment units, queues, and their
+relationships. Every visual claim links to the source location from which it
+was derived.
 
 ## Status
 
@@ -28,7 +29,7 @@ Supported in v0:
 - Python — FastAPI, Django routes, SQLAlchemy/Alembic
 - Scheduled work — node-cron, cron, NestJS Schedule, Celery, Kubernetes CronJob
 - OpenAPI / Swagger; GraphQL SDL and tagged documents
-- Docker / Compose; Terraform; Kubernetes; Helm; Kustomize
+- Deployment units — Docker / Compose, Terraform, Kubernetes, Helm, Kustomize
 
 Build history, pin SHAs, and freeze rules:
 [`docs/V0_BUILD_CONTEXT.md`](docs/V0_BUILD_CONTEXT.md).
@@ -121,10 +122,10 @@ visible graph and **Reset** to clear saved node positions.
 ```
 
 The schema is defined in [`src/schema.ts`](src/schema.ts). Extractors establish
-language/resource facts; capability adapters add normalized resources, roles,
-and triggers. This keeps framework parsers, AI enrichment, runtime traces, and
-alternative symbol sources replaceable. The v0.2 boundary and scheduled-work
-contract are documented in
+language/resource facts; capability adapters add normalized resources, deploy
+units, roles, and triggers. This keeps framework parsers, AI enrichment, runtime
+traces, and alternative symbol sources replaceable. The v0.2 boundary and
+scheduled-work contract are documented in
 [`docs/ARCHITECTURE_V02.md`](docs/ARCHITECTURE_V02.md).
 
 ## Design principles

@@ -12,6 +12,7 @@ import {
   type SemanticAdapter,
 } from "./adapter.js";
 import { dataResourceAdapter } from "./adapters/data/resources.js";
+import { deployUnitAdapter } from "./adapters/deploy/units.js";
 import { celeryScheduledWorkAdapter } from "./adapters/scheduled/celery.js";
 import { kubernetesScheduledWorkAdapter } from "./adapters/scheduled/kubernetes.js";
 import { nodeScheduledWorkAdapter } from "./adapters/scheduled/node.js";
@@ -151,6 +152,7 @@ export async function compileRepository(
   const snapshot = extracted.snapshot();
   const adapters = options.adapters ?? [
     dataResourceAdapter,
+    deployUnitAdapter,
     nodeScheduledWorkAdapter,
     celeryScheduledWorkAdapter,
     kubernetesScheduledWorkAdapter,

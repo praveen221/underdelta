@@ -2,15 +2,20 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { dataResourceAdapter } from "../dist/adapters/data/resources.js";
+import { deployUnitAdapter } from "../dist/adapters/deploy/units.js";
 import { celeryScheduledWorkAdapter } from "../dist/adapters/scheduled/celery.js";
 import { kubernetesScheduledWorkAdapter } from "../dist/adapters/scheduled/kubernetes.js";
 import { nodeScheduledWorkAdapter } from "../dist/adapters/scheduled/node.js";
 import { unsupportedScheduledWorkAdapter } from "../dist/adapters/scheduled/unsupported.js";
 import { kubernetesExtractor } from "../dist/extractors/kubernetes.js";
+import { dockerExtractor } from "../dist/extractors/docker.js";
+import { helmExtractor } from "../dist/extractors/helm.js";
+import { kustomizeExtractor } from "../dist/extractors/kustomize.js";
 import { mongoExtractor } from "../dist/extractors/mongo.js";
 import { prismaExtractor } from "../dist/extractors/prisma.js";
 import { pythonExtractor } from "../dist/extractors/python.js";
 import { typescriptExtractor } from "../dist/extractors/typescript.js";
+import { terraformExtractor } from "../dist/extractors/terraform.js";
 import { adapt, edgeBy } from "./helpers.mjs";
 
 function facet(node, kind) {
@@ -66,6 +71,74 @@ test("data resources normalize to typed database, table, and collection facets",
     provider: "mongoose",
   });
   assert.equal(graph.adapter.capability, "data-access");
+});
+
+test("deployment technologies normalize to one typed deploy-unit contract", async () => {
+  const graph = await adapt(
+    deployUnitAdapter,
+    [
+      dockerExtractor,
+      terraformExtractor,
+      kubernetesExtractor,
+      helmExtractor,
+      kustomizeExtractor,
+    ],
+    {
+      "docker-compose.yml": [
+        "services:",
+        "  api:",
+        "    image: example/api:1",
+        "    ports:",
+        '      - "8080:80"',
+        "",
+      ].join("\n"),
+      "infra/main.tf": 'resource "aws_s3_bucket" "notes" {}\n',
+      "k8s/app.yaml": [
+        "apiVersion: apps/v1",
+        "kind: Deployment",
+        "metadata:",
+        "  name: notes-api",
+        "  namespace: production",
+        "",
+      ].join("\n"),
+      "charts/notes/Chart.yaml": "name: notes\nversion: 1.0.0\n",
+      "kustomize/overlays/dev/kustomization.yaml": [
+        "namespace: development",
+        "resources:",
+        "  - ../../base",
+        "",
+      ].join("\n"),
+    },
+  );
+
+  const units = graph.nodes.map((node) => facet(node, "deploy-unit"));
+  assert.equal(graph.adapter.capability, "deployment");
+  assert.deepEqual(
+    new Set(units.map((unit) => `${unit.provider}:${unit.deployKind}`)),
+    new Set([
+      "docker-compose:container",
+      "terraform:infrastructure",
+      "kubernetes:workload",
+      "helm:package",
+      "kustomize:overlay",
+    ]),
+  );
+  assert.deepEqual(
+    units.find((unit) => unit.provider === "docker-compose"),
+    {
+      kind: "deploy-unit",
+      deployKind: "container",
+      provider: "docker-compose",
+      nativeKind: "Compose service",
+      name: "api",
+      image: "example/api:1",
+      ports: ["8080:80"],
+    },
+  );
+  assert.equal(
+    units.find((unit) => unit.provider === "kubernetes").namespace,
+    "production",
+  );
 });
 
 test("node-cron normalizes a trigger, job, and handler binding", async () => {
@@ -176,8 +249,9 @@ test("Kubernetes CronJob uses the same trigger and job contract", async () => {
   const { trigger, job } = assertScheduledContract(graph, "kubernetes", undefined);
   assert.equal(facet(trigger, "trigger").declaration, "infrastructure");
   assert.equal(facet(job, "job").executionKind, "container");
-  const deployUnit = graph.nodes.find((node) => facetOrUndefined(node, "deploy-unit"));
-  assert.ok(deployUnit);
+  const deployUnit = graph.nodes.find((node) => node.qualifiedName === "CronJob/digest");
+  assert.ok(deployUnit, "expected the extracted Kubernetes resource binding");
+  assert.equal(facetOrUndefined(deployUnit, "deploy-unit"), undefined);
   edgeBy(graph, "uses", job.id, deployUnit.id);
 });
 

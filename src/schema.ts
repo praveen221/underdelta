@@ -116,8 +116,17 @@ export const semanticFacetSchema = z.discriminatedUnion("kind", [
       "serverless",
       "container",
       "scheduled-workload",
+      "infrastructure",
+      "package",
+      "overlay",
     ]),
     provider: z.string().min(1),
+    nativeKind: z.string().min(1).optional(),
+    name: z.string().min(1).optional(),
+    address: z.string().min(1).optional(),
+    namespace: z.string().min(1).optional(),
+    image: z.string().min(1).optional(),
+    ports: z.array(z.string().min(1)).optional(),
   }),
 ]);
 

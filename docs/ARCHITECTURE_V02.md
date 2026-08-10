@@ -12,7 +12,8 @@ Nodes may carry typed `semantics` facets:
 - `trigger`: cron, interval, calendar, or event declaration
 - `job`: executable scheduled/queued work
 - `resource`: database, table, collection, queue, topic, or secret
-- `deploy-unit`: service, workload, serverless unit, container, or scheduled workload
+- `deploy-unit`: service, workload, serverless unit, container, scheduled workload,
+  infrastructure resource, deployment package, or overlay
 
 Role bindings are typed edges rather than exclusive node kinds. For scheduled
 work the contract is:
@@ -81,6 +82,20 @@ Projection owns cross-technology presentation:
 
 Neutral query operations stay `queries`; they are not guessed into reads or
 writes. Migration and table-relation edges remain separate contracts.
+
+## Deployment v1
+
+The `deploy-units` adapter normalizes existing Docker Compose, Dockerfile,
+Terraform, Kubernetes, Helm, and Kustomize facts. It does not parse those
+formats again. A deploy facet owns the portable role and provider plus observed
+operational identity when available: native kind, name, address, namespace,
+image, and ports.
+
+Projection uses that facet, rather than technology flags, to attach deployable
+units under Deploy and create calm labels. Technology-specific metadata remains
+available for detailed relationships such as Compose `depends_on`, Kubernetes
+selectors, Helm chart versions, and Kustomize resources. The viewer leads with
+the normalized contract and links back to the extractor evidence.
 
 ## Extension rule
 
