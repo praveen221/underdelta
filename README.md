@@ -89,7 +89,7 @@ visible graph and **Reset** to clear saved node positions.
 ### How to read FE / BE maps
 
 - **Frontend (Next / Vue):** Beginner shows **route/page molecules** (Home, Dashboard, …) — not a single UI blob and not every Card/Button. Leaf chrome stays collapsed; page-owned feature roots appear when you drill a route molecule.
-- **Backend:** Beginner prefers **API → Data → Jobs** (plus pipelines when present) with story edges (`reads` / `writes` / `routes-to` / `triggers`…). Focusing a table at Intermediate answers who writes or reads it from those molecules, with file:line evidence.
+- **Backend:** Beginner prefers **API → Data → Jobs** (plus pipelines when present) with story edges (`queries` / `reads` / `writes` / `routes-to` / `triggers`…). Focusing a table at Intermediate answers who queries, writes, or reads it from those molecules, with file:line evidence.
 - **This repo (self-map):** stays the compiler story (CLI → … → Viewer) — no invented FE page dump.
 
 ## Core contract
@@ -121,8 +121,8 @@ visible graph and **Reset** to clear saved node positions.
 ```
 
 The schema is defined in [`src/schema.ts`](src/schema.ts). Extractors establish
-language/resource facts; capability adapters add normalized semantic roles and
-triggers. This keeps framework parsers, AI enrichment, runtime traces, and
+language/resource facts; capability adapters add normalized resources, roles,
+and triggers. This keeps framework parsers, AI enrichment, runtime traces, and
 alternative symbol sources replaceable. The v0.2 boundary and scheduled-work
 contract are documented in
 [`docs/ARCHITECTURE_V02.md`](docs/ARCHITECTURE_V02.md).
@@ -147,7 +147,7 @@ v0 extractors above are in-tree. Next focus after merge/try:
 
 - Stable graph snapshots and structural change overlays
 - Runtime evidence via OpenTelemetry
-- Additional capability adapters after the scheduled-work interface proves reusable
+- Additional capability adapters only when a real repository requires them
 - UX polish for cold-reads by non-coders (see North star notes in
   [`docs/V0_BUILD_CONTEXT.md`](docs/V0_BUILD_CONTEXT.md))
 

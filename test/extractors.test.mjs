@@ -38,6 +38,24 @@ test("typescript extracts declarations, imports, calls, and HTTP routes", async 
   assert.equal(graph.nodes.some((node) => node.kind === "route" && node.label.includes("not-a-route")), false);
 });
 
+test("typescript emits explicit Prisma read, write, and query bindings", async () => {
+  const graph = await extract(typescriptExtractor, {
+    "src/notes.ts": [
+      "export function listNotes() { return prisma.note.findMany(); }",
+      "export function saveNote() { return prisma.note.upsert({}); }",
+      "export function inspectNotes() { return prisma.note.customQuery(); }",
+      "",
+    ].join("\n"),
+  });
+  const table = nodeBy(graph, "table", "note");
+  const list = nodeBy(graph, "function", "listNotes");
+  const save = nodeBy(graph, "function", "saveNote");
+  const inspect = nodeBy(graph, "function", "inspectNotes");
+  edgeBy(graph, "reads", list.id, table.id);
+  edgeBy(graph, "writes", save.id, table.id);
+  edgeBy(graph, "queries", inspect.id, table.id);
+});
+
 test("python extracts FastAPI routes with observed evidence", async () => {
   const graph = await extract(pythonExtractor, {
     "app.py": [
@@ -104,7 +122,9 @@ test("mongo extracts models and aggregate pipelines", async () => {
   });
   const notes = nodeBy(graph, "collection", "Note");
   assert.equal(notes.technology, "mongoose");
-  assert.ok(graph.nodes.some((node) => node.kind === "pipeline"));
+  const pipeline = graph.nodes.find((node) => node.kind === "pipeline");
+  assert.ok(pipeline);
+  edgeBy(graph, "queries", pipeline.id, notes.id);
   assertObserved(notes, "src/notes.ts", 2);
 });
 

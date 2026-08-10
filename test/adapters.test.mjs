@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { dataResourceAdapter } from "../dist/adapters/data/resources.js";
 import { celeryScheduledWorkAdapter } from "../dist/adapters/scheduled/celery.js";
 import { kubernetesScheduledWorkAdapter } from "../dist/adapters/scheduled/kubernetes.js";
 import { nodeScheduledWorkAdapter } from "../dist/adapters/scheduled/node.js";
 import { unsupportedScheduledWorkAdapter } from "../dist/adapters/scheduled/unsupported.js";
 import { kubernetesExtractor } from "../dist/extractors/kubernetes.js";
+import { mongoExtractor } from "../dist/extractors/mongo.js";
+import { prismaExtractor } from "../dist/extractors/prisma.js";
 import { pythonExtractor } from "../dist/extractors/python.js";
 import { typescriptExtractor } from "../dist/extractors/typescript.js";
 import { adapt, edgeBy } from "./helpers.mjs";
@@ -29,6 +32,41 @@ function assertScheduledContract(graph, provider, handler) {
 function facetOrUndefined(node, kind) {
   return node.semantics?.find((candidate) => candidate.kind === kind);
 }
+
+test("data resources normalize to typed database, table, and collection facets", async () => {
+  const graph = await adapt(dataResourceAdapter, [prismaExtractor, mongoExtractor], {
+    "prisma/schema.prisma": [
+      "model Note {",
+      "  id Int @id",
+      "}",
+      "",
+    ].join("\n"),
+    "src/models/note.ts": [
+      'import mongoose from "mongoose";',
+      'mongoose.model("Article", new mongoose.Schema({ title: String }));',
+      "",
+    ].join("\n"),
+  });
+  const database = graph.nodes.find((node) => node.kind === "database");
+  const table = graph.nodes.find((node) => node.kind === "table");
+  const collection = graph.nodes.find((node) => node.kind === "collection");
+  assert.deepEqual(facet(database, "resource"), {
+    kind: "resource",
+    resourceKind: "database",
+    provider: "prisma",
+  });
+  assert.deepEqual(facet(table, "resource"), {
+    kind: "resource",
+    resourceKind: "table",
+    provider: "prisma",
+  });
+  assert.deepEqual(facet(collection, "resource"), {
+    kind: "resource",
+    resourceKind: "collection",
+    provider: "mongoose",
+  });
+  assert.equal(graph.adapter.capability, "data-access");
+});
 
 test("node-cron normalizes a trigger, job, and handler binding", async () => {
   const graph = await adapt(nodeScheduledWorkAdapter, [typescriptExtractor], {

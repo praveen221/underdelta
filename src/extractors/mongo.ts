@@ -709,7 +709,7 @@ export const mongoExtractor: ArchitectureExtractor = {
         );
         edges.push(
           edgeFrom(
-            "uses",
+            "queries",
             pipelineId,
             collectionId,
             evidence(file, source, match.index, "aggregates"),
@@ -774,7 +774,7 @@ export const mongoExtractor: ArchitectureExtractor = {
         );
         edges.push(
           edgeFrom(
-            "uses",
+            "queries",
             pipelineId,
             collectionId,
             evidence(file, source, match.index, "aggregates"),
