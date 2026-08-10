@@ -102,7 +102,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     .edge-badge-group.relation .edge-badge-bg { stroke: color-mix(in srgb, #52a976 55%, var(--line)); }
     #nodes { position: absolute; inset: 0; }
     .lane-label { position: absolute; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
-    .node { --kind-color: #77808d; position: absolute; width: 190px; min-height: 58px; background: var(--panel); border: 1px solid var(--kind-color); border-radius: 9px; padding: 9px 10px; cursor: pointer; user-select: none; transition: opacity .12s, border-color .12s, background .12s; }
+    .node { --kind-color: #77808d; position: absolute; width: 190px; min-height: 58px; background: var(--panel); border: 1px solid var(--kind-color); border-radius: 9px; padding: 9px 10px; cursor: grab; touch-action: none; user-select: none; transition: opacity .12s, border-color .12s, background .12s; }
+    .node.dragging { cursor: grabbing; z-index: 4; box-shadow: 0 12px 30px rgba(0, 0, 0, .38); }
     .node:hover, .node.selected { border-color: var(--accent); background: #1c2230; }
     .node.dim { opacity: .16; }
     .node .top { display: flex; align-items: center; gap: 8px; }
@@ -155,6 +156,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     .certainty.inferred { color: var(--inferred); }
     .empty { color: var(--muted); padding-top: 30px; text-align: center; }
     #canvas-chrome { position: absolute; left: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 6px; max-width: min(540px, calc(100% - 28px)); pointer-events: none; }
+    #canvas-tools { position: absolute; z-index: 8; top: 14px; right: 14px; display: flex; flex-direction: column; gap: 6px; }
+    #canvas-tools button { min-width: 52px; height: 34px; padding: 0 9px; background: color-mix(in srgb, var(--panel) 92%, transparent); }
     #walk-hint { color: var(--muted); background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font-size: 12px; line-height: 1.35; }
     #legend { display: flex; flex-wrap: wrap; gap: 10px; color: var(--muted); background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; }
     #legend span::before { content: ""; display: inline-block; width: 14px; border-top: 2px solid var(--observed); margin-right: 5px; vertical-align: middle; }
@@ -189,6 +192,12 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         <div id="world">
           <svg id="edges"></svg>
           <div id="nodes"></div>
+        </div>
+        <div id="canvas-tools" aria-label="Graph view controls">
+          <button id="zoom-out" type="button" title="Zoom out" aria-label="Zoom out">-</button>
+          <button id="zoom-in" type="button" title="Zoom in" aria-label="Zoom in">+</button>
+          <button id="fit-view" type="button" title="Fit visible graph" aria-label="Fit visible graph">Fit</button>
+          <button id="reset-layout" type="button" title="Reset all moved nodes" aria-label="Reset all moved nodes">Reset</button>
         </div>
         <div id="canvas-chrome">
           <div id="walk-hint">Beginner · Product Flow — select to inspect, double-click to walk in</div>
@@ -344,6 +353,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     ]);
     // Beginner = product flow · Intermediate = focused neighborhood · Advanced = code in focus
     const tierOrder = ["beginner", "intermediate", "advanced"];
+    const MIN_SCALE = .15;
+    const MAX_SCALE = 2.4;
     const state = {
       scale: 1,
       x: 36,
@@ -351,13 +362,54 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       dragging: false,
       startX: 0,
       startY: 0,
+      nodeDrag: null,
+      nodeDragFrame: null,
+      suppressNodeClick: null,
+      suppressCanvasClick: false,
       focus: null,
       selected: null,
       tier: "beginner",
       history: [],
     };
     // Reload comfort: remember last walk (tier + focus stack) for this project root.
-    const walkStorageKey = "underdelta:walk:" + (graph.project.root || graph.project.name || "default");
+    const projectStorageId = graph.project.root || graph.project.name || "default";
+    const walkStorageKey = "underdelta:walk:" + projectStorageId;
+    const layoutStorageKey = "underdelta:layout:" + projectStorageId;
+    let manualLayouts = {};
+    function currentLayoutKey() {
+      return state.tier + ":" + (state.focus || "overview");
+    }
+    function restoreManualLayouts() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(layoutStorageKey) || "{}");
+        manualLayouts = saved && typeof saved === "object" ? saved : {};
+      } catch (_err) {
+        manualLayouts = {};
+      }
+    }
+    function persistManualLayouts() {
+      try {
+        localStorage.setItem(layoutStorageKey, JSON.stringify(manualLayouts));
+      } catch (_err) {
+        /* private mode / quota - dragging still works for this render */
+      }
+    }
+    function manualPositionFor(nodeId) {
+      const layout = manualLayouts[currentLayoutKey()];
+      const position = layout && layout[nodeId];
+      return position && Number.isFinite(position.x) && Number.isFinite(position.y)
+        ? position
+        : null;
+    }
+    function setManualPosition(nodeId, x, y) {
+      const key = currentLayoutKey();
+      if (!manualLayouts[key]) manualLayouts[key] = {};
+      manualLayouts[key][nodeId] = { x, y };
+    }
+    function clearManualLayouts() {
+      manualLayouts = {};
+      persistManualLayouts();
+    }
     function persistWalkState() {
       try {
         sessionStorage.setItem(walkStorageKey, JSON.stringify({
@@ -506,7 +558,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       resetCamera();
       inspector.innerHTML = emptyInspectorHtml();
       render();
-      applyTransform();
+      fitToView();
       persistWalkState();
     }
     // Breadcrumb / Back / Esc: jump to stack index (-1 = Beginner overview).
@@ -522,7 +574,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       syncTierToFocus();
       resetCamera();
       selectNode(state.focus);
-      applyTransform();
+      fitToView();
       persistWalkState();
     }
     // One step back: nested Advanced → Intermediate parent, then Beginner.
@@ -536,6 +588,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         // Advanced may have a selected code node that Intermediate hides.
         // Return selection and inspector context to the still-visible focus.
         selectNode(state.focus);
+        fitToView();
         persistWalkState();
         return true;
       }
@@ -670,10 +723,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         focusNode(root);
       } else {
         syncTierToFocus();
-        resetCamera();
-        applyTransform();
       }
       selectNode(matchId);
+      fitToView();
       return true;
     }
     function renderSearchResults() {
@@ -725,9 +777,57 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     const edgesLayer = document.getElementById("edges");
     const inspector = document.getElementById("inspector");
     const search = document.getElementById("search");
+    const canvasChrome = document.getElementById("canvas-chrome");
+    const canvasTools = document.getElementById("canvas-tools");
 
     function applyTransform() {
       world.style.transform = "translate(" + state.x + "px," + state.y + "px) scale(" + state.scale + ")";
+    }
+
+    function contentBounds() {
+      if (!positionsScratch.size) return null;
+      let minX = 0;
+      let minY = 0;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const position of positionsScratch.values()) {
+        minX = Math.min(minX, position.x);
+        minY = Math.min(minY, position.y);
+        maxX = Math.max(maxX, position.x + position.width);
+        maxY = Math.max(maxY, position.y + position.height);
+      }
+      return { minX, minY, maxX, maxY };
+    }
+
+    function fitToView() {
+      const bounds = contentBounds();
+      if (!bounds) return;
+      const rect = viewport.getBoundingClientRect();
+      const padding = 28;
+      const reservedBottom = (canvasChrome ? canvasChrome.offsetHeight : 0) + 28;
+      const reservedRight = (canvasTools ? canvasTools.offsetWidth : 0) + 28;
+      const availableWidth = Math.max(120, rect.width - reservedRight - padding * 2);
+      const availableHeight = Math.max(120, rect.height - reservedBottom - padding * 2);
+      const contentWidth = Math.max(1, bounds.maxX - bounds.minX);
+      const contentHeight = Math.max(1, bounds.maxY - bounds.minY);
+      state.scale = Math.min(1, Math.max(MIN_SCALE, Math.min(
+        availableWidth / contentWidth,
+        availableHeight / contentHeight,
+      )));
+      state.x = padding - bounds.minX * state.scale;
+      state.y = padding - bounds.minY * state.scale;
+      applyTransform();
+    }
+
+    function zoomBy(factor) {
+      const rect = viewport.getBoundingClientRect();
+      const mx = rect.width / 2;
+      const my = rect.height / 2;
+      const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, state.scale * factor));
+      state.x = mx - ((mx - state.x) / state.scale) * next;
+      state.y = my - ((my - state.y) / state.scale) * next;
+      state.scale = next;
+      applyTransform();
     }
 
     function descendants(rootId) {
@@ -1082,9 +1182,10 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       return isAdvancedTier() && !!state.focus;
     }
 
-    function widthForKind(kind) {
+    function fallbackWidthForKind(kind) {
       if (kind === "function" || kind === "column") return 170;
       if (kind === "hook") return 176;
+      if (kind === "system") return 210;
       return 190;
     }
 
@@ -1094,20 +1195,54 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     }
 
     function placeNode(node, x, y) {
-      positionsScratch.set(node.id, { x, y, width: widthForKind(node.kind) });
+      const manual = manualPositionFor(node.id);
+      const placedX = manual ? manual.x : x;
+      const placedY = manual ? manual.y : y;
       const element = document.createElement("div");
       element.className = "node" + (state.selected === node.id ? " selected" : "");
+      if (state.nodeDrag && state.nodeDrag.id === node.id) element.classList.add("dragging");
       element.dataset.kind = node.kind;
       element.dataset.id = node.id;
+      element.dataset.manualPosition = manual ? "true" : "false";
       if (node.metadata && node.metadata.role) element.dataset.role = node.metadata.role;
-      element.style.left = x + "px";
-      element.style.top = y + "px";
+      element.style.left = placedX + "px";
+      element.style.top = placedY + "px";
       element.innerHTML = '<div class="top"><span class="glyph">' + iconForKind(node.kind) + '</span><span class="label"></span></div><div class="kind">' + node.kind.replace("-", " ") + (node.technology ? " · " + node.technology : "") + "</div>";
-      element.querySelector(".label").textContent = node.label;
-      element.onclick = (event) => { event.stopPropagation(); selectNode(node.id); };
+      const label = element.querySelector(".label");
+      label.textContent = node.label;
+      label.title = node.label;
+      element.onclick = (event) => {
+        event.stopPropagation();
+        if (state.suppressNodeClick === node.id) {
+          state.suppressNodeClick = null;
+          return;
+        }
+        selectNode(node.id);
+      };
       element.ondblclick = (event) => { event.stopPropagation(); focusNode(node.id); };
+      element.onpointerdown = (event) => {
+        if (event.button !== 0) return;
+        event.stopPropagation();
+        const position = positionsScratch.get(node.id);
+        if (!position) return;
+        const rect = viewport.getBoundingClientRect();
+        const worldX = (event.clientX - rect.left - state.x) / state.scale;
+        const worldY = (event.clientY - rect.top - state.y) / state.scale;
+        state.nodeDrag = {
+          id: node.id,
+          pointerId: event.pointerId,
+          offsetX: worldX - position.x,
+          offsetY: worldY - position.y,
+          startClientX: event.clientX,
+          startClientY: event.clientY,
+          moved: false,
+        };
+      };
       nodesLayer.appendChild(element);
-      return y + 70;
+      const width = element.offsetWidth || fallbackWidthForKind(node.kind);
+      const height = element.offsetHeight || 58;
+      positionsScratch.set(node.id, { x: placedX, y: placedY, width, height });
+      return placedY + height;
     }
 
     let positionsScratch = new Map();
@@ -1146,7 +1281,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       // Product Flow wrap: ≤4 hubs per row so 6–8 Beginner hubs stay scannable
       // without a long horizontal hunt (second row + slightly tighter gap).
       const FLOW_WRAP_COLS = 4;
-      const flowGapX = 200;
+      const flowGapX = 230;
       const flowRowY = 96;
       let maxHeight = 0;
       let maxWidth = activeLanes.length * laneWidth + 200;
@@ -1171,7 +1306,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           const y = 34 + row * flowRowY;
           placeNode(node, x, y);
           maxHeight = Math.max(maxHeight, y + 70);
-          maxWidth = Math.max(maxWidth, x + widthForKind(node.kind) + 80);
+          maxWidth = Math.max(maxWidth, x + fallbackWidthForKind(node.kind) + 80);
         });
         const flowRows = Math.ceil(flowNodes.length / FLOW_WRAP_COLS);
         laneTop = 34 + flowRows * flowRowY + 28;
@@ -1214,7 +1349,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
             placeNode(node, x, y);
             nextY = Math.max(nextY, y + rowGap);
             maxHeight = Math.max(maxHeight, y + 70);
-            maxWidth = Math.max(maxWidth, x + widthForKind(node.kind) + 80);
+            maxWidth = Math.max(maxWidth, x + fallbackWidthForKind(node.kind) + 80);
           });
         } else {
           tables.forEach((node) => {
@@ -1231,6 +1366,11 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         });
       });
 
+      const measuredBounds = contentBounds();
+      if (measuredBounds) {
+        maxWidth = Math.max(maxWidth, measuredBounds.maxX + 100);
+        maxHeight = Math.max(maxHeight, measuredBounds.maxY + 40);
+      }
       edgesLayer.innerHTML = "";
       edgesLayer.setAttribute("width", String(maxWidth));
       edgesLayer.setAttribute("height", String(maxHeight + 100));
@@ -1241,6 +1381,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         ["arrow-migrates", "#52a976"],
         ["arrow-narrative", "#d09a45"],
         ["arrow-relation", "#52a976"],
+        ["arrow-default", "#657080"],
+        ["arrow-collab", "#6e8fe0"],
         ["arrow-active", "#7c9cff"],
       ]) {
         const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
@@ -1287,9 +1429,11 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       }
 
       function edgeGeometry(source, target) {
-        const sy = source.y + 29;
-        const ty = target.y + 29;
-        const sameColumn = Math.abs(source.x - target.x) < 48;
+        const sy = source.y + source.height / 2;
+        const ty = target.y + target.height / 2;
+        const sourceCenterX = source.x + source.width / 2;
+        const targetCenterX = target.x + target.width / 2;
+        const sameColumn = Math.abs(sourceCenterX - targetCenterX) < 48;
         if (sameColumn) {
           const sx = source.x + source.width;
           const tx = target.x + target.width;
@@ -1300,11 +1444,13 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
             my: (sy + ty) / 2,
           };
         }
-        const sx = source.x + source.width;
-        const tx = target.x;
+        const routesRight = targetCenterX > sourceCenterX;
+        const sx = routesRight ? source.x + source.width : source.x;
+        const tx = routesRight ? target.x : target.x + target.width;
+        const direction = routesRight ? 1 : -1;
         const bend = Math.max(35, Math.abs(tx - sx) * 0.45);
         return {
-          d: "M " + sx + " " + sy + " C " + (sx + bend) + " " + sy + ", " + (tx - bend) + " " + ty + ", " + tx + " " + ty,
+          d: "M " + sx + " " + sy + " C " + (sx + direction * bend) + " " + sy + ", " + (tx - direction * bend) + " " + ty + ", " + tx + " " + ty,
           mx: (sx + tx) / 2,
           my: (sy + ty) / 2,
         };
@@ -1380,6 +1526,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         if (active) classes.push("active");
         path.setAttribute("class", classes.join(" "));
         path.setAttribute("data-kind", kinds.join(" "));
+        path.setAttribute("data-source", sourceId);
+        path.setAttribute("data-target", targetId);
         path.setAttribute("data-narrative", "true");
         let marker = "arrow-narrative";
         if (active) marker = "arrow-active";
@@ -1407,6 +1555,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         if (active) classes.push("active");
         path.setAttribute("class", classes.join(" "));
         path.setAttribute("data-kind", "depends-on");
+        path.setAttribute("data-source", sourceId);
+        path.setAttribute("data-target", targetId);
         path.setAttribute("data-relation", "true");
         path.setAttribute(
           "marker-end",
@@ -1457,6 +1607,12 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         if (selected) classes.push("active");
         path.setAttribute("class", classes.join(" "));
         path.setAttribute("data-kind", edge.kind);
+        path.setAttribute("data-source", edge.source);
+        path.setAttribute("data-target", edge.target);
+        path.setAttribute(
+          "marker-end",
+          "url(#" + (selected ? "arrow-active" : collaborationKinds.has(edge.kind) ? "arrow-collab" : "arrow-default") + ")",
+        );
         if (isStructuralHairline) path.setAttribute("data-structural", "true");
         edgesLayer.appendChild(path);
         // Selection reveals what blue collab lines mean on-canvas.
@@ -1512,11 +1668,12 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           });
         }
       }
+      const visibleRelationships = edgesLayer.querySelectorAll("path.edge").length;
       document.getElementById("counts").textContent = focused
         ? (isAdvancedTier()
-            ? visible.length + " in focus (code) · " + graph.edges.length + " relationships"
-            : visible.length + " in neighborhood · " + graph.edges.length + " relationships")
-        : visible.length + " components · " + graph.edges.length + " relationships";
+            ? visible.length + " in focus · " + visibleRelationships + " visible relationships · " + graph.edges.length + " total"
+            : visible.length + " in neighborhood · " + visibleRelationships + " visible relationships · " + graph.edges.length + " total")
+        : visible.length + " components · " + visibleRelationships + " visible relationships · " + graph.edges.length + " total";
       document.getElementById("back").hidden = !state.focus && state.history.length === 0;
       const walkHint = document.getElementById("walk-hint");
       if (walkHint) walkHint.textContent = walkHintText();
@@ -2100,13 +2257,21 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       resetCamera();
       // Must refresh inspector — setting selected alone left Beginner empty copy.
       selectNode(walk.selectedId);
-      applyTransform();
+      fitToView();
       persistWalkState();
     }
 
     document.getElementById("overview").onclick = () => goOverview();
     document.getElementById("back").onclick = () => {
       goBack();
+    };
+    document.getElementById("zoom-out").onclick = () => zoomBy(1 / 1.2);
+    document.getElementById("zoom-in").onclick = () => zoomBy(1.2);
+    document.getElementById("fit-view").onclick = () => fitToView();
+    document.getElementById("reset-layout").onclick = () => {
+      clearManualLayouts();
+      render();
+      fitToView();
     };
     document.addEventListener("keydown", handleEscapeKey);
     document.getElementById("tier").onclick = () => {
@@ -2122,6 +2287,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         }
         if (!state.selected) inspector.innerHTML = emptyInspectorHtml();
         render();
+        fitToView();
         persistWalkState();
         return;
       }
@@ -2130,6 +2296,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       syncTierButton();
       if (!state.selected) inspector.innerHTML = emptyInspectorHtml();
       render();
+      fitToView();
       persistWalkState();
     };
     search.oninput = () => {
@@ -2138,6 +2305,10 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     search.onkeydown = handleSearchKeydown;
     search.addEventListener("focus", renderSearchResults);
     viewport.onclick = () => {
+      if (state.suppressCanvasClick) {
+        state.suppressCanvasClick = false;
+        return;
+      }
       state.selected = null;
       inspector.innerHTML = emptyInspectorHtml();
       render();
@@ -2145,7 +2316,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     };
     viewport.onwheel = (event) => {
       event.preventDefault();
-      const next = Math.min(2.4, Math.max(.35, state.scale * (event.deltaY > 0 ? .9 : 1.1)));
+      const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, state.scale * (event.deltaY > 0 ? .9 : 1.1)));
       const rect = viewport.getBoundingClientRect();
       const mx = event.clientX - rect.left;
       const my = event.clientY - rect.top;
@@ -2155,7 +2326,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       applyTransform();
     };
     viewport.onpointerdown = (event) => {
-      if (event.target.closest(".node")) return;
+      if (event.target.closest(".node, button, input, a")) return;
       state.dragging = true;
       state.startX = event.clientX - state.x;
       state.startY = event.clientY - state.y;
@@ -2163,17 +2334,69 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       viewport.setPointerCapture(event.pointerId);
     };
     viewport.onpointermove = (event) => {
+      if (state.nodeDrag) {
+        const rect = viewport.getBoundingClientRect();
+        const worldX = (event.clientX - rect.left - state.x) / state.scale;
+        const worldY = (event.clientY - rect.top - state.y) / state.scale;
+        const distance = Math.hypot(
+          event.clientX - state.nodeDrag.startClientX,
+          event.clientY - state.nodeDrag.startClientY,
+        );
+        if (distance > 3 && !state.nodeDrag.moved) {
+          state.nodeDrag.moved = true;
+          viewport.setPointerCapture(event.pointerId);
+        }
+        if (!state.nodeDrag.moved) return;
+        setManualPosition(
+          state.nodeDrag.id,
+          Math.max(0, worldX - state.nodeDrag.offsetX),
+          Math.max(0, worldY - state.nodeDrag.offsetY),
+        );
+        if (state.nodeDragFrame === null) {
+          state.nodeDragFrame = requestAnimationFrame(() => {
+            state.nodeDragFrame = null;
+            render();
+            applyTransform();
+          });
+        }
+        return;
+      }
       if (!state.dragging) return;
       state.x = event.clientX - state.startX;
       state.y = event.clientY - state.startY;
       applyTransform();
     };
-    viewport.onpointerup = () => {
+    viewport.onpointerup = (event) => {
+      if (state.nodeDrag) {
+        const dragged = state.nodeDrag;
+        state.nodeDrag = null;
+        if (dragged.moved) {
+          if (state.nodeDragFrame !== null) {
+            cancelAnimationFrame(state.nodeDragFrame);
+            state.nodeDragFrame = null;
+          }
+          state.suppressNodeClick = dragged.id;
+          state.suppressCanvasClick = true;
+          persistManualLayouts();
+          render();
+          applyTransform();
+          setTimeout(() => {
+            if (state.suppressNodeClick === dragged.id) state.suppressNodeClick = null;
+            state.suppressCanvasClick = false;
+          }, 0);
+        }
+        if (viewport.hasPointerCapture(event.pointerId)) {
+          viewport.releasePointerCapture(event.pointerId);
+        }
+        return;
+      }
       state.dragging = false;
       viewport.classList.remove("dragging");
     };
+    viewport.onpointercancel = viewport.onpointerup;
 
     // Hydrate last walk before first paint (stale ids → Beginner overview).
+    restoreManualLayouts();
     restoreWalkState();
     syncTierButton();
     if (state.selected && byId.has(state.selected)) {
@@ -2182,7 +2405,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       inspector.innerHTML = emptyInspectorHtml();
       render();
     }
-    applyTransform();
+    fitToView();
   </script>
 </body>
 </html>`;

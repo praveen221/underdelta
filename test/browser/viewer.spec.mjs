@@ -43,6 +43,54 @@ function node(page, label) {
   return page.locator(".node", { has: page.locator(".label", { hasText: label }) });
 }
 
+async function graphGeometry(page) {
+  return page.evaluate(() => {
+    const viewport = document.querySelector("#viewport").getBoundingClientRect();
+    const chrome = document.querySelector("#canvas-chrome").getBoundingClientRect();
+    const tools = document.querySelector("#canvas-tools").getBoundingClientRect();
+    const nodes = [...document.querySelectorAll(".node")].map((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        id: element.dataset.id,
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        bottom: rect.bottom,
+      };
+    });
+    return {
+      viewport: {
+        left: viewport.left,
+        right: viewport.right,
+        top: viewport.top,
+        bottom: viewport.bottom,
+      },
+      chromeTop: chrome.top,
+      toolsLeft: tools.left,
+      nodes,
+    };
+  });
+}
+
+function overlappingNodePairs(nodes) {
+  const overlaps = [];
+  for (let leftIndex = 0; leftIndex < nodes.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < nodes.length; rightIndex += 1) {
+      const left = nodes[leftIndex];
+      const right = nodes[rightIndex];
+      if (
+        left.left < right.right - 1 &&
+        left.right > right.left + 1 &&
+        left.top < right.bottom - 1 &&
+        left.bottom > right.top + 1
+      ) {
+        overlaps.push([left.id, right.id]);
+      }
+    }
+  }
+  return overlaps;
+}
+
 test("self-map viewer supports a calm walk through focus, search, back, and reload", async ({ page }) => {
   await page.goto(viewerUrl);
   await expect(page.locator("#tier")).toHaveText("View: Beginner");
@@ -77,4 +125,98 @@ test("self-map viewer supports a calm walk through focus, search, back, and relo
   await page.reload();
   await expect(page.locator("#tier")).not.toHaveText("View: Beginner");
   await expect(node(page, "src/extractors/typescript.ts")).toBeVisible();
+});
+
+test("graph geometry fits, reroutes dragged nodes, and persists manual placement", async ({ page }) => {
+  await page.goto(viewerUrl);
+
+  const beginnerGeometry = await graphGeometry(page);
+  assert.deepEqual(overlappingNodePairs(beginnerGeometry.nodes), []);
+  for (const item of beginnerGeometry.nodes) {
+    assert.ok(item.left >= beginnerGeometry.viewport.left - 1, `${item.id} starts outside the viewport`);
+    assert.ok(item.right <= beginnerGeometry.toolsLeft - 1, `${item.id} is covered by graph controls`);
+    assert.ok(item.top >= beginnerGeometry.viewport.top - 1, `${item.id} starts above the viewport`);
+    assert.ok(item.bottom <= beginnerGeometry.chromeTop - 1, `${item.id} is covered by canvas chrome`);
+  }
+
+  const beginnerEdges = await page.locator("#edges path.edge").count();
+  await expect(page.locator("#counts")).toContainText(`${beginnerEdges} visible relationships`);
+  const incompleteEdges = await page.locator("#edges path.edge").evaluateAll((paths) =>
+    paths
+      .filter((path) =>
+        !path.dataset.source ||
+        !path.dataset.target ||
+        !path.getAttribute("marker-end"))
+      .map((path) => path.dataset.kind),
+  );
+  assert.deepEqual(incompleteEdges, []);
+
+  await node(page, "Extractors").dblclick();
+  await page.locator("#tier").click();
+  const module = node(page, "src/extractor.ts");
+  const moduleId = await module.getAttribute("data-id");
+  assert.ok(moduleId);
+
+  const incidentPathSelector = `#edges path.edge[data-source="${moduleId}"], #edges path.edge[data-target="${moduleId}"]`;
+  const incidentPaths = page.locator(incidentPathSelector);
+  assert.ok(await incidentPaths.count() > 0, "expected the module to have rendered incident edges");
+  const beforePath = await incidentPaths.first().getAttribute("d");
+  const beforePosition = await module.evaluate((element) => ({
+    left: element.style.left,
+    top: element.style.top,
+    rect: element.getBoundingClientRect().toJSON(),
+  }));
+
+  await page.mouse.move(
+    beforePosition.rect.x + beforePosition.rect.width / 2,
+    beforePosition.rect.y + beforePosition.rect.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    beforePosition.rect.x + beforePosition.rect.width / 2 + 120,
+    beforePosition.rect.y + beforePosition.rect.height / 2 + 70,
+    { steps: 5 },
+  );
+  await page.mouse.up();
+
+  const afterPosition = await node(page, "src/extractor.ts").evaluate((element) => ({
+    left: element.style.left,
+    top: element.style.top,
+  }));
+  assert.notDeepEqual(afterPosition, {
+    left: beforePosition.left,
+    top: beforePosition.top,
+  });
+  assert.notEqual(await page.locator(incidentPathSelector).first().getAttribute("d"), beforePath);
+
+  await page.reload();
+  await expect(page.locator("#tier")).toHaveText("View: Advanced · code in focus");
+  const restoredPosition = await node(page, "src/extractor.ts").evaluate((element) => ({
+    left: element.style.left,
+    top: element.style.top,
+  }));
+  assert.deepEqual(restoredPosition, afterPosition);
+  await expect(node(page, "src/extractor.ts")).toHaveAttribute("data-manual-position", "true");
+
+  const transformBeforeZoom = await page.locator("#world").getAttribute("style");
+  await page.locator("#zoom-in").click();
+  const transformAfterZoom = await page.locator("#world").getAttribute("style");
+  assert.notEqual(transformAfterZoom, transformBeforeZoom);
+  await page.locator("#fit-view").click();
+  assert.notEqual(await page.locator("#world").getAttribute("style"), transformAfterZoom);
+  const fittedGeometry = await graphGeometry(page);
+  for (const item of fittedGeometry.nodes) {
+    assert.ok(item.left >= fittedGeometry.viewport.left - 1, `${item.id} starts outside fitted view`);
+    assert.ok(item.right <= fittedGeometry.toolsLeft - 1, `${item.id} is covered by graph controls after fitting`);
+    assert.ok(item.top >= fittedGeometry.viewport.top - 1, `${item.id} starts above fitted view`);
+    assert.ok(item.bottom <= fittedGeometry.chromeTop - 1, `${item.id} is covered after fitting`);
+  }
+
+  await page.locator("#reset-layout").click();
+  await expect(node(page, "src/extractor.ts")).toHaveAttribute("data-manual-position", "false");
+  const resetPosition = await node(page, "src/extractor.ts").evaluate((element) => ({
+    left: element.style.left,
+    top: element.style.top,
+  }));
+  assert.notDeepEqual(resetPosition, afterPosition);
 });
