@@ -17,6 +17,11 @@ import {
   projectDeployArchitecture,
 } from "../dist/projection/deploy.js";
 import {
+  createHttpApiSystem,
+  endpointFacet,
+  projectHttpArchitecture,
+} from "../dist/projection/http.js";
+import {
   createScheduledWorkSystem,
   humanizeCronExpression,
   projectScheduledWork,
@@ -226,6 +231,35 @@ test("scheduled-work projection creates calm labels and preserves the handler ch
   assert.deepEqual(scheduledWorkSourcesForHandler(handler.id, edges.values()), [
     trigger.id,
   ]);
+});
+
+test("HTTP projection creates one API system and attaches typed endpoints", () => {
+  const api = createHttpApiSystem(evidence);
+  const route = node("route", "route", "legacy label", {
+    semantics: [{
+      kind: "endpoint",
+      protocol: "http",
+      method: "GET",
+      path: "/notes",
+      provider: "express",
+      declaration: "code",
+    }],
+  });
+  const unrelated = node("module", "module", "src/worker.ts");
+  const nodes = new Map([api, route, unrelated].map((item) => [item.id, item]));
+  const attached = [];
+  projectHttpArchitecture({
+    nodes,
+    apiSystem: api,
+    attach(nodeId, systemId) {
+      attached.push([nodeId, systemId]);
+      nodes.get(nodeId).parentId = systemId;
+    },
+  });
+  assert.equal(endpointFacet(nodes.get(route.id)).provider, "express");
+  assert.equal(nodes.get(route.id).label, "GET /notes");
+  assert.deepEqual(attached, [[route.id, api.id]]);
+  assert.equal(nodes.get(unrelated.id).parentId, undefined);
 });
 
 test("deploy projection attaches only typed units and derives calm labels", () => {

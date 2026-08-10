@@ -11,6 +11,8 @@ const ignoredDirectories = new Set([
   ".underdelta",
   ".underdelta-verify",
   ".underdelta-real",
+  ".dogfood-repos",
+  ".dogfood-scans",
   ".terraform",
   ".venv",
   "__pycache__",

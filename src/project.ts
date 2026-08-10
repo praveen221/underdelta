@@ -40,11 +40,17 @@ import {
   humanizeDeployNodeLabel,
   projectDeployArchitecture,
 } from "./projection/deploy.js";
+import {
+  createHttpApiSystem,
+  endpointFacet,
+  projectHttpArchitecture,
+} from "./projection/http.js";
 
 export { isClientApisOnlyHttpApi } from "./projection/feStories.js";
 export { isTrivialMongoAggregateLabel } from "./projection/data.js";
 export { humanizeIdentifierLabel } from "./projection/labels.js";
 export { humanizeCronExpression } from "./projection/scheduledWork.js";
+export { endpointFacet } from "./projection/http.js";
 export {
   humanizeKubernetesLabel,
   humanizeTerraformLabel,
@@ -3224,6 +3230,15 @@ export function projectSemanticArchitecture(
     nodes.set(data.id, data);
   }
 
+  const httpEvidence = [...nodes.values()]
+    .find((node) => endpointFacet(node))
+    ?.evidence[0];
+  if (httpEvidence && !systems.has("api")) {
+    const api = createHttpApiSystem(httpEvidence);
+    systems.set("api", api);
+    nodes.set(api.id, api);
+  }
+
   if (systems.size === 0) return graph;
 
   for (const system of systems.values()) {
@@ -3364,15 +3379,11 @@ export function projectSemanticArchitecture(
   // otherwise leak onto the overview beside the product story.
   const apiSystem = systems.get("api");
   if (apiSystem) {
-    for (const node of [...nodes.values()]) {
-      if (node.kind !== "route") continue;
-      if (node.metadata?.projection === "semantic") continue;
-      attachToSystem(
-        node.id,
-        apiSystem.id,
-        node.evidence[0] ?? projectionEvidence("."),
-      );
-    }
+    projectHttpArchitecture({
+      nodes,
+      apiSystem,
+      attach: attachToSystem,
+    });
     // Same for server actions: saas-starter keeps them in app/(login)/actions.ts
     // and lib/payments/actions.ts, so path-role owningSystem often misses them.
     for (const node of [...nodes.values()]) {
@@ -3605,7 +3616,10 @@ export function projectSemanticArchitecture(
     if (node.metadata?.projection === "semantic") continue;
     let nextLabel: string | undefined;
 
-    if (
+    const endpoint = endpointFacet(node);
+    if (endpoint) {
+      nextLabel = `${endpoint.method} ${endpoint.path}`;
+    } else if (
       node.kind === "page" &&
       (node.metadata?.next === "page" ||
         node.metadata?.vue === "page" ||
