@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import {
+  analyzeArchitecture,
+  formatAnalysisLines,
+} from "../dist/analysis.js";
 import { discoverFiles } from "../dist/extractor.js";
 import {
   isUnderdeltaToolingRepo,
@@ -17,6 +22,98 @@ const evidence = {
   extractor: "test",
   certainty: "observed",
 };
+
+function analysisGraph({ nodes = [], diagnostics = [], fileCount = 3 } = {}) {
+  return {
+    schemaVersion: "0.2",
+    project: { name: "analysis", root: "/analysis" },
+    generatedAt: new Date(0).toISOString(),
+    extractors: [],
+    adapters: [],
+    nodes: [
+      {
+        id: "product",
+        kind: "product",
+        label: "Analysis",
+        metadata: { fileCount },
+        evidence: [evidence],
+      },
+      ...nodes,
+    ],
+    edges: [],
+    diagnostics,
+  };
+}
+
+test("analysis reports evidence-backed capabilities without claiming completeness", () => {
+  const graph = analysisGraph({
+    nodes: [
+      {
+        id: "route",
+        kind: "route",
+        label: "GET /notes",
+        semantics: [{
+          kind: "endpoint",
+          protocol: "http",
+          method: "GET",
+          path: "/notes",
+          provider: "express",
+          declaration: "code",
+        }],
+        metadata: {},
+        evidence: [evidence],
+      },
+      {
+        id: "table",
+        kind: "table",
+        label: "Note",
+        semantics: [{ kind: "resource", resourceKind: "table", provider: "prisma" }],
+        metadata: {},
+        evidence: [{ ...evidence, certainty: "derived" }],
+      },
+    ],
+  });
+  const analysis = analyzeArchitecture(graph);
+  assert.equal(analysis.status, "mapped");
+  assert.deepEqual(
+    analysis.capabilities.map(({ id, count }) => [id, count]),
+    [["http", 1], ["data", 1]],
+  );
+  assert.match(analysis.message, /Mapped 2 supported capabilities/);
+  assert.deepEqual(analysis.certainty, { observed: 2, derived: 1, inferred: 0 });
+});
+
+test("analysis distinguishes unsupported technology from an empty map", () => {
+  const diagnostic = {
+    severity: "warning",
+    code: "unsupported-scheduled-framework",
+    message: "agenda detected; no scheduled-work adapter is installed",
+    evidence,
+  };
+  const partial = analyzeArchitecture(
+    analysisGraph({ diagnostics: [diagnostic], fileCount: 1 }),
+  );
+  assert.equal(partial.status, "partial");
+  assert.equal(partial.unsupported.length, 1);
+  assert.match(formatAnalysisLines(partial).join("\n"), /Warning: agenda detected/);
+
+  const empty = analyzeArchitecture(analysisGraph({ fileCount: 7 }));
+  assert.equal(empty.status, "empty");
+  assert.match(empty.message, /No supported product\/runtime evidence found/);
+  assert.equal(empty.issues.length, 0);
+});
+
+test("CLI reports an invalid repository path without a stack trace", () => {
+  const missing = path.join(os.tmpdir(), "underdelta-path-that-does-not-exist");
+  const result = spawnSync(
+    process.execPath,
+    ["dist/cli.js", "scan", missing],
+    { encoding: "utf8" },
+  );
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /^Underdelta failed: Repository does not exist:/);
+  assert.doesNotMatch(result.stderr, /\n\s+at /);
+});
 
 test("README parsing keeps a real product title and ignores setup-code headings", () => {
   const readme = [
@@ -98,11 +195,15 @@ test("repository discovery excludes test, verification, and cache inputs", async
       mkdir(path.join(root, "verification"), { recursive: true }),
       mkdir(path.join(root, "tests"), { recursive: true }),
       mkdir(path.join(root, ".underdelta-real"), { recursive: true }),
+      mkdir(path.join(root, ".dogfood-repos"), { recursive: true }),
+      mkdir(path.join(root, ".dogfood-scans"), { recursive: true }),
     ]);
     await Promise.all([
       writeFile(path.join(root, "verification", "fake.ts"), "export {};\n"),
       writeFile(path.join(root, "tests", "example.ts"), "export {};\n"),
       writeFile(path.join(root, ".underdelta-real", "cached.ts"), "export {};\n"),
+      writeFile(path.join(root, ".dogfood-repos", "external.ts"), "export {};\n"),
+      writeFile(path.join(root, ".dogfood-scans", "output.ts"), "export {};\n"),
       writeFile(path.join(root, "src.test.ts"), "export {};\n"),
     ]);
     const files = await discoverFiles(root);

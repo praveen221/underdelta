@@ -1,4 +1,5 @@
 import type { ArchitectureGraph } from "./schema.js";
+import { analyzeArchitecture } from "./analysis.js";
 
 function safeJson(value: unknown): string {
   return JSON.stringify(value).replaceAll("<", "\\u003c");
@@ -6,6 +7,7 @@ function safeJson(value: unknown): string {
 
 export function renderArchitectureHtml(graph: ArchitectureGraph): string {
   const title = graph.project.name.replaceAll(/[<>&"]/g, "");
+  const analysis = analyzeArchitecture(graph);
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -42,6 +44,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     #focus-crumb .crumb:hover { border-color: transparent; background: color-mix(in srgb, var(--accent) 12%, transparent); }
     #focus-crumb .crumb.current { color: var(--text); cursor: default; font-weight: 650; }
     #focus-crumb .crumb.current:hover { background: transparent; }
+    #analysis-button[data-status="partial"] { border-color: var(--derived); }
+    #analysis-button[data-status="empty"] { color: var(--muted); }
+    #analysis-button[aria-pressed="true"] { border-color: var(--accent); background: #1c2230; }
     #focus-crumb .crumb-sep { color: var(--muted); user-select: none; }
     #search-wrap { position: relative; margin-left: auto; width: min(340px, 30vw); }
     #search { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; outline: none; }
@@ -132,12 +137,20 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     .node[data-kind="config"] { --kind-color: #9099a6; border-radius: 2px; }
     .node[data-role="artifact"] { --kind-color: #c4a35a; border-style: dashed; border-width: 2px; }
     aside { min-width: 0; border-left: 1px solid var(--line); background: var(--panel); overflow: auto; padding: 16px; }
+    #inspector-close { display: none; }
     aside h2 { margin: 0 0 4px; font-size: 17px; }
     aside h3 { margin: 20px 0 8px; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
     aside p { color: var(--muted); margin: 4px 0 12px; overflow-wrap: anywhere; }
     .pill { display: inline-block; border: 1px solid var(--line); border-radius: 999px; padding: 2px 7px; margin: 2px 4px 2px 0; font-size: 11px; color: var(--muted); }
     .inspector-role { color: var(--text); margin: 4px 0 14px; font-size: 13px; line-height: 1.4; }
     .inspector-more { margin-top: 8px; opacity: .85; }
+    .analysis-status { color: var(--text); margin: 4px 0 14px; }
+    .analysis-status.partial { color: var(--derived); }
+    .analysis-status.empty { color: var(--muted); }
+    .analysis-issue { border-left: 3px solid var(--derived); padding: 2px 0 2px 9px; margin: 8px 0 12px; }
+    .analysis-issue[data-severity="error"] { border-color: #e06c75; }
+    .analysis-issue strong { display: block; font-size: 12px; }
+    .analysis-issue .source { color: var(--muted); font-size: 11px; margin-top: 4px; }
     .collab-edge { margin: 0 0 10px; }
     .collab-edge .pill { margin-bottom: 2px; }
     .collab-detail { margin: 2px 0 0; font-size: 12px; line-height: 1.35; color: var(--text); }
@@ -167,8 +180,18 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     #legend .narrative::before { border-color: #d17f54; border-top-width: 2.5px; }
     #legend .relation::before { border-color: #52a976; border-top-width: 2.5px; }
     @media (max-width: 760px) {
+      #shell { grid-template-rows: auto 1fr; }
+      header { flex-wrap: wrap; padding: 8px; gap: 6px; }
+      header strong { flex: 1 1 90px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      #search-wrap { order: 10; width: 100%; margin-left: 0; }
       #workspace { grid-template-columns: 1fr; }
-      aside { display: none; }
+      #workspace { position: relative; overflow: hidden; }
+      #inspector-panel {
+        display: block; position: absolute; z-index: 30; inset: 0; padding: 10px 16px 16px;
+        border-left: 0; transform: translateX(100%); transition: transform .16s ease;
+      }
+      #shell.inspector-open #inspector-panel { transform: translateX(0); }
+      #inspector-close { display: block; margin: 0 0 12px auto; }
       header .meta { display: none; }
     }
   </style>
@@ -181,6 +204,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       <button id="back" hidden title="Back one step (Esc) — Intermediate, then Beginner">Back</button>
       <button id="overview" title="Return to Beginner overview">Overview</button>
       <button id="tier" title="Beginner: product story · Intermediate: enter a system’s neighborhood · Advanced: code in focus (modules; functions inside a module/api)">View: Beginner</button>
+      <button id="analysis-button" type="button" title="Show detected capabilities and scan diagnostics">Analysis</button>
       <nav class="meta" id="focus-crumb" hidden aria-label="Focus path"></nav>
       <div id="search-wrap">
         <input id="search" type="search" placeholder="Find… Enter enters its cluster" autocomplete="off" />
@@ -204,11 +228,15 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           <div id="legend"><span>observed</span><span class="derived">derived</span><span class="inferred">inferred</span><span class="collab">collaboration</span><span class="narrative">publishes / migrates</span><span class="relation">table relations</span></div>
         </div>
       </main>
-      <aside id="inspector"><div class="empty">Product Flow · Beginner. Select a system to inspect evidence, or double-click to walk into its Intermediate neighborhood.</div></aside>
+      <aside id="inspector-panel">
+        <button id="inspector-close" type="button" aria-label="Close inspector">Close</button>
+        <div id="inspector"><div class="empty">Product Flow · Beginner. Select a system to inspect evidence, or double-click to walk into its Intermediate neighborhood.</div></div>
+      </aside>
     </div>
   </div>
   <script>
     const graph = ${safeJson(graph)};
+    const analysis = ${safeJson(analysis)};
     const byId = new Map(graph.nodes.map((node) => [node.id, node]));
     const outgoing = new Map();
     const incoming = new Map();
@@ -515,6 +543,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       return "Product Flow · Beginner. Select a system to inspect evidence, or double-click to walk into its Intermediate neighborhood.";
     }
     function emptyInspectorHtml() {
+      if (state.tier === "beginner" && !state.focus && analysis.status !== "mapped") {
+        return analysisPanelHtml();
+      }
       return '<div class="empty">' + emptyInspectorMessage() + "</div>";
     }
     function escapeHtml(text) {
@@ -524,6 +555,83 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;");
     }
+    function diagnosticHtml(diagnostic) {
+      const item = diagnostic.evidence;
+      let source = "";
+      if (item && item.file) {
+        const line = item.range?.startLine || 1;
+        const href = "vscode://file/" + graph.project.root.replace(/\\\/$/, "") + "/" + item.file + ":" + line;
+        source = '<div class="source"><a href="' + escapeHtml(href) + '">' + escapeHtml(item.file + ":" + line) + "</a></div>";
+      }
+      return '<div class="analysis-issue" data-severity="' + escapeHtml(diagnostic.severity) + '">' +
+        "<strong>" + escapeHtml(diagnostic.message) + "</strong>" + source + "</div>";
+    }
+    function analysisPanelHtml() {
+      const capabilities = analysis.capabilities.length
+        ? analysis.capabilities.map((capability) =>
+            '<span class="pill">' + escapeHtml(capability.label) + ": " + capability.count + "</span>"
+          ).join("")
+        : "<p>No supported capabilities mapped.</p>";
+      const issues = analysis.issues.length
+        ? "<h3>Issues</h3>" + analysis.issues.map(diagnosticHtml).join("")
+        : "";
+      const unsupported = analysis.unsupported.length
+        ? '<p class="inspector-role">Detected technology without an installed adapter.</p>'
+        : "";
+      const certainty = analysis.certainty;
+      return "<h2>Analysis</h2>" +
+        '<p class="analysis-status ' + analysis.status + '">' + escapeHtml(analysis.message) + "</p>" +
+        unsupported +
+        "<h3>Detected</h3>" + capabilities +
+        issues +
+        "<h3>Evidence</h3>" +
+        '<span class="pill">Observed: ' + certainty.observed + "</span>" +
+        '<span class="pill">Derived: ' + certainty.derived + "</span>" +
+        '<span class="pill">Inferred: ' + certainty.inferred + "</span>" +
+        "<h3>Scan</h3>" +
+        '<span class="pill">Files: ' + analysis.filesScanned + "</span>" +
+        '<span class="pill">Nodes: ' + graph.nodes.length + "</span>" +
+        '<span class="pill">Relationships: ' + graph.edges.length + "</span>";
+    }
+    function syncAnalysisButton(open = false) {
+      const button = document.getElementById("analysis-button");
+      if (!button) return;
+      button.dataset.status = analysis.status;
+      button.setAttribute("aria-pressed", open ? "true" : "false");
+      button.textContent = analysis.status === "partial"
+        ? "Analysis · " + analysis.issues.length
+        : analysis.status === "empty"
+          ? "Analysis · empty"
+          : "Analysis · " + analysis.capabilities.length;
+    }
+    function showAnalysis() {
+      state.selected = null;
+      inspector.innerHTML = analysisPanelHtml();
+      syncAnalysisButton(true);
+      openInspector();
+      render();
+      persistWalkState();
+    }
+    const inspectorMedia = window.matchMedia("(max-width: 760px)");
+    function inspectorIsOverlay() {
+      return inspectorMedia.matches;
+    }
+    function openInspector() {
+      if (inspectorIsOverlay()) document.getElementById("shell").classList.add("inspector-open");
+    }
+    function closeInspector() {
+      document.getElementById("shell").classList.remove("inspector-open");
+      syncAnalysisButton(false);
+    }
+    inspectorMedia.addEventListener("change", () => {
+      const shell = document.getElementById("shell");
+      if (!inspectorMedia.matches) {
+        shell.classList.remove("inspector-open");
+        return;
+      }
+      const analysisOpen = document.getElementById("analysis-button").getAttribute("aria-pressed") === "true";
+      if (analysisOpen || state.selected) shell.classList.add("inspector-open");
+    });
     // Focus walk stack (nulls filtered — first enter used to push null).
     function focusStack() {
       const stack = state.history.filter(Boolean);
@@ -557,6 +665,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       syncTierToFocus();
       resetCamera();
       inspector.innerHTML = emptyInspectorHtml();
+      closeInspector();
       render();
       fitToView();
       persistWalkState();
@@ -611,6 +720,11 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         }
         searchEl.blur();
         renderSearchResults();
+        event.preventDefault();
+        return;
+      }
+      if (inspectorIsOverlay() && document.getElementById("shell").classList.contains("inspector-open")) {
+        closeInspector();
         event.preventDefault();
         return;
       }
@@ -1823,7 +1937,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       "beginnerRouteHub", "beginnerOmitted", "beginnerOmitReason", "beginnerHero",
       "replacedByRouteMolecules",
       "uiOnly", "uiOnlyReason",
-      "path", "framework", "readmeHeading", "readmeTitle",
+      "path", "method", "framework", "operationId", "summary", "openapi", "next",
+      "readmeHeading", "readmeTitle",
       "fileCount", "packageName",
     ]);
 
@@ -1891,6 +2006,9 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       }
       if (node.kind === "table") return "Database table";
       if (node.kind === "collection") return "Document collection";
+      if ((node.semantics || []).some((facet) => facet.kind === "endpoint")) {
+        return "HTTP endpoint";
+      }
       if (node.kind === "route") return "HTTP route";
       if (node.kind === "page") return "Page";
       if (node.kind === "module") return "Source module";
@@ -1978,6 +2096,33 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         pills.push('<span class="pill">Handler: ' + escapeHtml(job.handler) + "</span>");
       }
       return "<h3>Job</h3>" + pills.join("");
+    }
+
+    function httpEndpointHtml(node) {
+      const semantics = Array.isArray(node.semantics) ? node.semantics : [];
+      const endpoint = semantics.find((facet) => facet.kind === "endpoint");
+      if (!endpoint) return "";
+      const pills = [
+        '<span class="pill">Method: ' + escapeHtml(endpoint.method) + "</span>",
+        '<span class="pill">Path: ' + escapeHtml(endpoint.path) + "</span>",
+        '<span class="pill">Provider: ' + escapeHtml(endpoint.provider) + "</span>",
+        '<span class="pill">Declared in: ' + escapeHtml(endpoint.declaration) + "</span>",
+      ];
+      if (endpoint.operationId) {
+        pills.push('<span class="pill">Operation: ' + escapeHtml(endpoint.operationId) + "</span>");
+      }
+      if (endpoint.summary) {
+        pills.push('<span class="pill">Summary: ' + escapeHtml(endpoint.summary) + "</span>");
+      }
+      const handlers = (outgoing.get(node.id) || [])
+        .filter((edge) => edge.kind === "routes-to")
+        .map((edge) => byId.get(edge.target))
+        .filter(Boolean)
+        .map((handler) =>
+          '<button class="pill connection" data-id="' + handler.id + '">Handler: ' + escapeHtml(handler.label) + "</button>"
+        )
+        .join("");
+      return "<h3>HTTP endpoint</h3>" + pills.join("") + handlers;
     }
 
     function dataResourceHtml(node) {
@@ -2266,6 +2411,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     }
 
     function selectNode(id) {
+      syncAnalysisButton(false);
       state.selected = id;
       const node = byId.get(id);
       if (!node) return;
@@ -2274,6 +2420,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const connections = [...incomingEdges, ...outgoingEdges];
       const collaboration = connections.filter((edge) => collaborationKinds.has(edge.kind));
       const messaging = messagingRolesHtml(node);
+      const httpEndpoint = httpEndpointHtml(node);
       const scheduledWork = scheduledWorkHtml(node);
       const dataResource = dataResourceHtml(node);
       const deployUnit = deployUnitHtml(node);
@@ -2282,6 +2429,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       // Queue publish/consume roles are owned by the Messaging section.
       const importsAndCalls = connections.filter((edge) => {
         if (collaborationKinds.has(edge.kind)) return false;
+        if (httpEndpoint && edge.kind === "routes-to" && edge.source === node.id) return false;
         if (node.kind === "table" && edge.kind === "migrates") return false;
         if (node.kind === "table" && isTableRelationEdge(edge)) return false;
         if (
@@ -2347,7 +2495,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const collaborationHtml = collabLinks
         ? "<h3>In the story</h3>" + collabLinks
         : "";
-      const structuredSections = scheduledWork || deployUnit || containerStory || workloadStory || chartStory || overlayStory || tableSources || tableRelations || messaging || collabLinks;
+      const structuredSections = httpEndpoint || scheduledWork || deployUnit || containerStory || workloadStory || chartStory || overlayStory || tableSources || tableRelations || messaging || collabLinks;
       const otherHtml = otherLinks
         ? "<h3>" + (collabLinks ? "Imports &amp; calls" : "Connections") + "</h3>" + otherLinks
         : (structuredSections ? "" : "<h3>Connections</h3><p>None visible</p>");
@@ -2411,6 +2559,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       inspector.innerHTML =
         "<h2></h2>" +
         roleHtml +
+        httpEndpoint +
         scheduledWork +
         dataResource +
         deployUnit +
@@ -2434,6 +2583,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       inspector.querySelectorAll(".connection").forEach((button) => {
         button.onclick = () => selectNode(button.dataset.id);
       });
+      openInspector();
       render();
     }
 
@@ -2456,6 +2606,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     }
 
     document.getElementById("overview").onclick = () => goOverview();
+    document.getElementById("analysis-button").onclick = () => showAnalysis();
+    document.getElementById("inspector-close").onclick = () => closeInspector();
     document.getElementById("back").onclick = () => {
       goBack();
     };
@@ -2605,6 +2757,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     restoreManualLayouts();
     restoreWalkState();
     syncTierButton();
+    syncAnalysisButton(false);
     if (state.selected && byId.has(state.selected)) {
       selectNode(state.selected);
     } else {

@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Command } from "commander";
+import { analyzeArchitecture, formatAnalysisLines } from "./analysis.js";
 import { compileRepository } from "./compile.js";
 import { architectureGraphSchema } from "./schema.js";
 import { openInBrowser, serveDirectory } from "./serve.js";
@@ -24,8 +25,18 @@ async function runScan(
   },
 ): Promise<void> {
   const root = path.resolve(repository);
+  let rootStat;
+  try {
+    rootStat = await stat(root);
+  } catch {
+    throw new Error(`Repository does not exist: ${root}`);
+  }
+  if (!rootStat.isDirectory()) {
+    throw new Error(`Repository path is not a directory: ${root}`);
+  }
   const output = path.resolve(root, options.output);
   const graph = await compileRepository(root);
+  const analysis = analyzeArchitecture(graph);
   await mkdir(output, { recursive: true });
   const graphPath = path.join(output, "architecture.json");
   const viewerPath = path.join(output, "index.html");
@@ -38,6 +49,7 @@ async function runScan(
       `Compiled ${graph.project.name}`,
       `  ${graph.nodes.length} nodes`,
       `  ${graph.edges.length} relationships`,
+      ...formatAnalysisLines(analysis),
       `  Graph: ${graphPath}`,
       `  Browser: ${viewerPath}`,
     ].join("\n") + "\n",
@@ -121,4 +133,10 @@ program
     }
   });
 
-await program.parseAsync();
+try {
+  await program.parseAsync();
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(`Underdelta failed: ${message}\n`);
+  process.exitCode = 1;
+}

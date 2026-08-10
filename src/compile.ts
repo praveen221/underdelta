@@ -13,6 +13,8 @@ import {
 } from "./adapter.js";
 import { dataResourceAdapter } from "./adapters/data/resources.js";
 import { deployUnitAdapter } from "./adapters/deploy/units.js";
+import { httpEndpointAdapter } from "./adapters/http/endpoints.js";
+import { unsupportedHttpAdapter } from "./adapters/http/unsupported.js";
 import { celeryScheduledWorkAdapter } from "./adapters/scheduled/celery.js";
 import { kubernetesScheduledWorkAdapter } from "./adapters/scheduled/kubernetes.js";
 import { nodeScheduledWorkAdapter } from "./adapters/scheduled/node.js";
@@ -153,6 +155,8 @@ export async function compileRepository(
   const adapters = options.adapters ?? [
     dataResourceAdapter,
     deployUnitAdapter,
+    httpEndpointAdapter,
+    unsupportedHttpAdapter,
     nodeScheduledWorkAdapter,
     celeryScheduledWorkAdapter,
     kubernetesScheduledWorkAdapter,

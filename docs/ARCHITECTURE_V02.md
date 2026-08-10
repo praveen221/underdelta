@@ -11,6 +11,7 @@ Nodes may carry typed `semantics` facets:
 - `symbol`: module, class, function, or method identity
 - `trigger`: cron, interval, calendar, or event declaration
 - `job`: executable scheduled/queued work
+- `endpoint`: HTTP method/path/provider declaration
 - `resource`: database, table, collection, queue, topic, or secret
 - `deploy-unit`: service, workload, serverless unit, container, scheduled workload,
   infrastructure resource, deployment package, or overlay
@@ -82,6 +83,24 @@ Projection owns cross-technology presentation:
 
 Neutral query operations stay `queries`; they are not guessed into reads or
 writes. Migration and table-relation edges remain separate contracts.
+
+## HTTP API v1
+
+The `http-endpoints` adapter normalizes extractor-owned route facts into one
+typed endpoint contract: protocol, method, path, provider, declaration source,
+and optional operation ID/summary. Handler identity remains a `routes-to` binding so a
+function can serve HTTP and carry other roles without becoming an HTTP-specific
+function kind.
+
+Supported route facts currently come from Express-style Node routers, Next.js
+App Router handlers, FastAPI, Django URL declarations, and OpenAPI/Swagger
+contracts. Recognized frameworks without a dedicated route extractor produce an
+`unsupported-http-framework` diagnostic instead of invented endpoints.
+
+Projection creates one HTTP API system from typed endpoint evidence, attaches
+endpoints under it, and leaves source parsing in extractors. The viewer exposes
+method, path, provider, declaration source, operation ID, handler bindings, and
+file evidence.
 
 ## Deployment v1
 

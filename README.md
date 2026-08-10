@@ -18,8 +18,8 @@ was derived.
 **v0.2 semantic contract in development.** Language and infrastructure
 extractors establish base facts; capability adapters normalize framework
 semantics into one evidence-backed model. Evidence is marked `observed`,
-`derived`, or `inferred`; unsupported scheduler frameworks are reported rather
-than guessed.
+`derived`, or `inferred`; unsupported scheduler and HTTP frameworks are reported
+rather than guessed.
 
 Supported in v0:
 
@@ -60,6 +60,11 @@ Output always lands in `<repo>/.underdelta/` (`index.html` + `architecture.json`
 Generated output, dependencies, build artifacts, and conventional
 test/spec files are excluded from scans so the default map represents the
 product rather than development scaffolding.
+
+The CLI and viewer report what supported capabilities were actually detected.
+A partial map shows warnings for recognized technology without an installed
+adapter; an empty map says that no supported product/runtime evidence was
+found instead of presenting silence as success.
 
 ```bash
 npm run verify             # build + extractor contracts + projection + self-map
@@ -105,6 +110,14 @@ visible graph and **Reset** to clear saved node positions.
     "method": "POST",
     "path": "/checkout"
   },
+  "semantics": [{
+    "kind": "endpoint",
+    "protocol": "http",
+    "method": "POST",
+    "path": "/checkout",
+    "provider": "express",
+    "declaration": "code"
+  }],
   "evidence": [
     {
       "file": "src/routes/checkout.ts",
@@ -122,10 +135,10 @@ visible graph and **Reset** to clear saved node positions.
 ```
 
 The schema is defined in [`src/schema.ts`](src/schema.ts). Extractors establish
-language/resource facts; capability adapters add normalized resources, deploy
-units, roles, and triggers. This keeps framework parsers, AI enrichment, runtime
-traces, and alternative symbol sources replaceable. The v0.2 boundary and
-scheduled-work contract are documented in
+language/resource facts; capability adapters add normalized endpoints,
+resources, deploy units, roles, and triggers. This keeps framework parsers, AI
+enrichment, runtime traces, and alternative symbol sources replaceable. The
+v0.2 boundary and semantic contracts are documented in
 [`docs/ARCHITECTURE_V02.md`](docs/ARCHITECTURE_V02.md).
 
 ## Design principles

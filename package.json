@@ -17,6 +17,7 @@
     "test:projection": "npm run build && node --test test/projection.test.mjs test/policy.test.mjs",
     "test:self": "npm run build && node --test test/self.test.mjs",
     "test:viewer": "npm run build && playwright install chromium && playwright test",
+    "test:viewer:ci": "npm run build && playwright test",
     "verify": "npm run build && node --test test/extractors.test.mjs test/adapters.test.mjs test/projection.test.mjs test/policy.test.mjs test/self.test.mjs",
     "start": "npm run build && node dist/cli.js scan . --serve",
     "scan": "node dist/cli.js scan",

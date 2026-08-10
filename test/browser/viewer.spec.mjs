@@ -25,7 +25,11 @@ test.beforeAll(async () => {
   const graph = await compileRepository(repoRoot);
   const html = renderArchitectureHtml(graph);
   const largeGraph = {
+    schemaVersion: "0.2",
     project: { name: "large-fit-contract", root: "/virtual/large-fit-contract" },
+    generatedAt: new Date(0).toISOString(),
+    extractors: [],
+    adapters: [],
     nodes: Array.from({ length: 200 }, (_, index) => ({
       id: `system:large:${index}`,
       kind: "system",
@@ -34,6 +38,7 @@ test.beforeAll(async () => {
       evidence: [],
     })),
     edges: [],
+    diagnostics: [],
   };
   const largeHtml = renderArchitectureHtml(largeGraph);
   scheduledRoot = await mkdtemp(path.join(os.tmpdir(), "underdelta-scheduled-viewer-"));
@@ -43,7 +48,21 @@ test.beforeAll(async () => {
   ]);
   await writeFile(
     path.join(scheduledRoot, "package.json"),
-    JSON.stringify({ name: "scheduled-viewer", dependencies: { "node-cron": "latest" } }),
+    JSON.stringify({
+      name: "scheduled-viewer",
+      dependencies: { express: "latest", "node-cron": "latest", agenda: "latest" },
+    }),
+    "utf8",
+  );
+  await writeFile(
+    path.join(scheduledRoot, "src/api.ts"),
+    [
+      'import express from "express";',
+      "const app = express();",
+      "export function listNotes() {}",
+      'app.get("/notes", listNotes);',
+      "",
+    ].join("\n"),
     "utf8",
   );
   await writeFile(
@@ -303,6 +322,9 @@ test("graph geometry fits, reroutes dragged nodes, and persists manual placement
 test("fit frames graphs that require a scale below the interactive zoom floor", async ({ page }) => {
   await page.goto(largeViewerUrl);
   await expect(page.locator(".node")).toHaveCount(200);
+  await expect(page.locator("#analysis-button")).toHaveAttribute("data-status", "empty");
+  await page.locator("#analysis-button").click();
+  await expect(page.locator("#inspector")).toContainText("No supported product/runtime evidence found");
 
   const scale = await page.locator("#world").evaluate((element) =>
     new DOMMatrix(getComputedStyle(element).transform).a,
@@ -316,6 +338,52 @@ test("fit frames graphs that require a scale below the interactive zoom floor", 
     assert.ok(item.top >= geometry.viewport.top - 1, `${item.id} starts above large fitted view`);
     assert.ok(item.bottom <= geometry.chromeTop - 1, `${item.id} is covered in large fitted view`);
   }
+});
+
+test("analysis distinguishes mapped capabilities from unsupported technology", async ({ page }) => {
+  await page.goto(scheduledViewerUrl);
+  await expect(page.locator("#analysis-button")).toHaveAttribute("data-status", "partial");
+  await page.locator("#analysis-button").click();
+  await expect(page.locator("#inspector h2")).toHaveText("Analysis");
+  await expect(page.locator("#inspector")).toContainText("Partial map");
+  await expect(page.locator("#inspector")).toContainText("HTTP API: 1");
+  await expect(page.locator("#inspector")).toContainText("Scheduled work: 1");
+  await expect(page.locator("#inspector")).toContainText("Data access: 2");
+  await expect(page.locator("#inspector")).toContainText("Deployment: 1");
+  await expect(page.locator("#inspector")).toContainText("agenda detected");
+  await expect(page.locator("#inspector")).toContainText("package.json:1");
+});
+
+test("HTTP endpoints walk from the API system to framework and handler facts", async ({ page }) => {
+  await page.goto(scheduledViewerUrl);
+  await expect(node(page, "HTTP API")).toBeVisible();
+  await node(page, "HTTP API").dblclick();
+  await expect(page.locator("#tier")).toHaveText("View: Intermediate");
+  const endpoint = page.locator('.node[data-kind="route"]', { hasText: "GET /notes" });
+  await expect(endpoint).toBeVisible();
+  await endpoint.click();
+  await expect(page.locator("#inspector h2")).toHaveText("GET /notes");
+  await expect(page.locator("#inspector")).toContainText("Method: GET");
+  await expect(page.locator("#inspector")).toContainText("Path: /notes");
+  await expect(page.locator("#inspector")).toContainText("Provider: express");
+  const handler = page.getByRole("button", { name: "Handler: listNotes" });
+  await expect(handler).toBeVisible();
+  await handler.click();
+  await expect(page.locator("#inspector h2")).toHaveText("listNotes");
+});
+
+test("analysis stays usable when the viewport changes to mobile", async ({ page }) => {
+  await page.goto(scheduledViewerUrl);
+  await page.locator("#analysis-button").click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator("#inspector-panel")).toBeVisible();
+  await expect(page.locator("#inspector h2")).toHaveText("Analysis");
+  await expect.poll(async () => {
+    const panel = await page.locator("#inspector-panel").boundingBox();
+    return Boolean(panel && panel.x >= -1 && panel.x + panel.width <= 391);
+  }).toBe(true);
+  await page.locator("#inspector-close").click();
+  await expect(page.locator("#shell")).not.toHaveClass(/inspector-open/);
 });
 
 test("scheduled work walks from Beginner system to typed trigger and job details", async ({ page }) => {

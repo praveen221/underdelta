@@ -97,6 +97,16 @@ export const semanticFacetSchema = z.discriminatedUnion("kind", [
     handler: z.string().optional(),
   }),
   z.object({
+    kind: z.literal("endpoint"),
+    protocol: z.literal("http"),
+    method: z.string().min(1),
+    path: z.string().min(1),
+    provider: z.string().min(1),
+    declaration: z.enum(["code", "contract"]),
+    operationId: z.string().min(1).optional(),
+    summary: z.string().min(1).optional(),
+  }),
+  z.object({
     kind: z.literal("resource"),
     resourceKind: z.enum([
       "database",

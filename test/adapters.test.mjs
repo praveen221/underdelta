@@ -3,6 +3,8 @@ import test from "node:test";
 
 import { dataResourceAdapter } from "../dist/adapters/data/resources.js";
 import { deployUnitAdapter } from "../dist/adapters/deploy/units.js";
+import { httpEndpointAdapter } from "../dist/adapters/http/endpoints.js";
+import { unsupportedHttpAdapter } from "../dist/adapters/http/unsupported.js";
 import { celeryScheduledWorkAdapter } from "../dist/adapters/scheduled/celery.js";
 import { kubernetesScheduledWorkAdapter } from "../dist/adapters/scheduled/kubernetes.js";
 import { nodeScheduledWorkAdapter } from "../dist/adapters/scheduled/node.js";
@@ -12,6 +14,7 @@ import { dockerExtractor } from "../dist/extractors/docker.js";
 import { helmExtractor } from "../dist/extractors/helm.js";
 import { kustomizeExtractor } from "../dist/extractors/kustomize.js";
 import { mongoExtractor } from "../dist/extractors/mongo.js";
+import { openapiExtractor } from "../dist/extractors/openapi.js";
 import { prismaExtractor } from "../dist/extractors/prisma.js";
 import { pythonExtractor } from "../dist/extractors/python.js";
 import { typescriptExtractor } from "../dist/extractors/typescript.js";
@@ -141,6 +144,93 @@ test("deployment technologies normalize to one typed deploy-unit contract", asyn
   );
 });
 
+test("HTTP route facts normalize across Express, Next, FastAPI, and OpenAPI", async () => {
+  const graph = await adapt(
+    httpEndpointAdapter,
+    [typescriptExtractor, pythonExtractor, openapiExtractor],
+    {
+      "package.json": JSON.stringify({ dependencies: { express: "latest" } }),
+      "src/api.ts": [
+        'import express from "express";',
+        "const app = express();",
+        "export function listNotes() {}",
+        'app.get("/notes", listNotes);',
+        "",
+      ].join("\n"),
+      "app/api/health/route.ts": "export async function GET() {}\n",
+      "api.py": [
+        "from fastapi import FastAPI",
+        "app = FastAPI()",
+        '@app.post("/notes")',
+        "def create_note():",
+        "    pass",
+        "",
+      ].join("\n"),
+      "openapi.yaml": [
+        "openapi: 3.0.0",
+        "info:",
+        "  title: Notes",
+        "paths:",
+        "  /notes/{id}:",
+        "    delete:",
+        "      operationId: deleteNote",
+        "      responses: {}",
+        "",
+      ].join("\n"),
+    },
+  );
+
+  const endpoints = graph.nodes.map((node) => facet(node, "endpoint"));
+  assert.equal(graph.adapter.capability, "http-api");
+  assert.deepEqual(
+    new Set(endpoints.map((endpoint) => `${endpoint.provider}:${endpoint.method}:${endpoint.path}`)),
+    new Set([
+      "express:GET:/notes",
+      "next:GET:/api/health",
+      "fastapi:POST:/notes",
+      "openapi:DELETE:/notes/{id}",
+    ]),
+  );
+  assert.deepEqual(
+    endpoints.find((endpoint) => endpoint.provider === "openapi"),
+    {
+      kind: "endpoint",
+      protocol: "http",
+      method: "DELETE",
+      path: "/notes/{id}",
+      provider: "openapi",
+      declaration: "contract",
+      operationId: "deleteNote",
+    },
+  );
+  const fastApiRoute = graph.nodes.find(
+    (node) => facetOrUndefined(node, "endpoint")?.provider === "fastapi",
+  );
+  assert.ok(
+    graph.edges.some(
+      (edge) =>
+        edge.kind === "routes-to" &&
+        edge.source === fastApiRoute.id &&
+        edge.target.includes("create_note"),
+    ),
+    "expected FastAPI decorator to bind to its adjacent function",
+  );
+});
+
+test("unsupported Node HTTP frameworks produce no normalized endpoints", async () => {
+  const graph = await adapt(httpEndpointAdapter, [typescriptExtractor], {
+    "package.json": JSON.stringify({ dependencies: { hono: "latest" } }),
+    "src/api.ts": [
+      'import { Hono } from "hono";',
+      "const app = new Hono();",
+      "export function health() {}",
+      'app.get("/health", health);',
+      "",
+    ].join("\n"),
+  });
+  assert.equal(graph.nodes.length, 0);
+});
+
 test("node-cron normalizes a trigger, job, and handler binding", async () => {
   const graph = await adapt(nodeScheduledWorkAdapter, [typescriptExtractor], {
     "src/jobs.ts": [
@@ -263,4 +353,19 @@ test("unsupported scheduler dependencies produce an explicit diagnostic", async 
     "unsupported-scheduled-framework",
   ]);
   assert.match(graph.diagnostics[0].message, /agenda detected/);
+});
+
+test("unsupported HTTP frameworks produce explicit diagnostics", async () => {
+  const graph = await adapt(unsupportedHttpAdapter, [], {
+    "package.json": JSON.stringify({ dependencies: { hono: "latest" } }),
+    "requirements.txt": "flask==3.1.0\n",
+  });
+  assert.deepEqual(
+    graph.diagnostics.map(({ code }) => code),
+    ["unsupported-http-framework", "unsupported-http-framework"],
+  );
+  assert.deepEqual(
+    new Set(graph.diagnostics.map(({ message }) => message.split(" detected")[0])),
+    new Set(["hono", "flask"]),
+  );
 });
