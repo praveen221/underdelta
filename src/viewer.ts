@@ -1863,6 +1863,20 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
           : key.slice("page:".length);
         return path ? "Front-end page · " + path : "Front-end page hub";
       }
+      const deployUnit = (node.semantics || []).find((facet) => facet.kind === "deploy-unit");
+      if (deployUnit) {
+        const roles = {
+          service: "Network service",
+          workload: "Runtime workload",
+          serverless: "Serverless unit",
+          container: "Container",
+          "scheduled-workload": "Scheduled workload",
+          infrastructure: "Infrastructure resource",
+          package: "Deployment package",
+          overlay: "Deployment overlay",
+        };
+        return roles[deployUnit.deployKind] || "Deploy unit";
+      }
       if (meta.docker) return "Container service";
       if (meta.kubernetes) return "Kubernetes workload";
       if (meta.helm) return "Helm chart unit";
@@ -1979,6 +1993,35 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       return "<h3>Data resource</h3>" + pills.join("");
     }
 
+    function deployUnitHtml(node) {
+      const semantics = Array.isArray(node.semantics) ? node.semantics : [];
+      const unit = semantics.find((facet) => facet.kind === "deploy-unit");
+      if (!unit) return "";
+      const pills = [
+        '<span class="pill">Type: ' + escapeHtml(unit.deployKind) + "</span>",
+        '<span class="pill">Provider: ' + escapeHtml(unit.provider) + "</span>",
+      ];
+      if (unit.nativeKind) {
+        pills.push('<span class="pill">Kind: ' + escapeHtml(unit.nativeKind) + "</span>");
+      }
+      if (unit.name) {
+        pills.push('<span class="pill">Name: ' + escapeHtml(unit.name) + "</span>");
+      }
+      if (unit.namespace) {
+        pills.push('<span class="pill">Namespace: ' + escapeHtml(unit.namespace) + "</span>");
+      }
+      if (unit.image) {
+        pills.push('<span class="pill">Image: ' + escapeHtml(unit.image) + "</span>");
+      }
+      if (Array.isArray(unit.ports) && unit.ports.length) {
+        pills.push('<span class="pill">Ports: ' + unit.ports.map(escapeHtml).join(", ") + "</span>");
+      }
+      if (unit.address) {
+        pills.push('<span class="pill">Address: ' + escapeHtml(unit.address) + "</span>");
+      }
+      return "<h3>Deploy unit</h3>" + pills.join("");
+    }
+
     // Collaboration edges carry human detail on evidence (how systems connect).
     function edgeDetailText(edge) {
       for (const item of edge.evidence || []) {
@@ -2033,7 +2076,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       return "<h3>Container</h3>" + pills.join("") + (dependLinks ? '<p class="table-migrations">' + dependLinks + "</p>" : "");
     }
 
-    // Kubernetes workloads: Ingress hosts · Service→Deployment needs as product words.
+    // Kubernetes resources: Ingress hosts · Service→Deployment needs as product words.
     function workloadStoryHtml(node, connections) {
       if (node.kind !== "service" || !(node.metadata && node.metadata.kubernetes)) {
         return "";
@@ -2058,7 +2101,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         return '<button class="pill connection" data-id="' + (other?.id || "") + '">needs · ' + (other?.label || "workload") + "</button>";
       }).join("");
       if (!pills.length && !dependLinks) return "";
-      return "<h3>Workload</h3>" + pills.join("") + (dependLinks ? '<p class="table-migrations">' + dependLinks + "</p>" : "");
+      return "<h3>Kubernetes</h3>" + pills.join("") + (dependLinks ? '<p class="table-migrations">' + dependLinks + "</p>" : "");
     }
 
     // Helm charts: Chart.yaml identity + template kind/host/needs as product words.
@@ -2233,6 +2276,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const messaging = messagingRolesHtml(node);
       const scheduledWork = scheduledWorkHtml(node);
       const dataResource = dataResourceHtml(node);
+      const deployUnit = deployUnitHtml(node);
       // Table migration lineage is owned by the Prisma / SQL section.
       // Table↔table relation names are owned by the Relations section.
       // Queue publish/consume roles are owned by the Messaging section.
@@ -2303,7 +2347,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const collaborationHtml = collabLinks
         ? "<h3>In the story</h3>" + collabLinks
         : "";
-      const structuredSections = scheduledWork || containerStory || workloadStory || chartStory || overlayStory || tableSources || tableRelations || messaging || collabLinks;
+      const structuredSections = scheduledWork || deployUnit || containerStory || workloadStory || chartStory || overlayStory || tableSources || tableRelations || messaging || collabLinks;
       const otherHtml = otherLinks
         ? "<h3>" + (collabLinks ? "Imports &amp; calls" : "Connections") + "</h3>" + otherLinks
         : (structuredSections ? "" : "<h3>Connections</h3><p>None visible</p>");
@@ -2369,6 +2413,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         roleHtml +
         scheduledWork +
         dataResource +
+        deployUnit +
         collaborationHtml +
         evidenceHtml +
         surfaceHtml +

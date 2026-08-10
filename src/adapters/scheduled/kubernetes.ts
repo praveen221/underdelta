@@ -90,13 +90,6 @@ export const kubernetesScheduledWorkAdapter: SemanticAdapter = {
           qualifiedName: address,
           parentId: moduleId,
           technology: "kubernetes",
-          semantics: [
-            {
-              kind: "deploy-unit",
-              deployKind: "scheduled-workload",
-              provider: "kubernetes",
-            },
-          ],
           metadata: {},
           evidence: [item],
         });

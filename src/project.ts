@@ -36,11 +36,20 @@ import {
   projectDataArchitecture,
 } from "./projection/data.js";
 import { humanizeIdentifierLabel } from "./projection/labels.js";
+import {
+  humanizeDeployNodeLabel,
+  projectDeployArchitecture,
+} from "./projection/deploy.js";
 
 export { isClientApisOnlyHttpApi } from "./projection/feStories.js";
 export { isTrivialMongoAggregateLabel } from "./projection/data.js";
 export { humanizeIdentifierLabel } from "./projection/labels.js";
 export { humanizeCronExpression } from "./projection/scheduledWork.js";
+export {
+  humanizeKubernetesLabel,
+  humanizeTerraformLabel,
+  splitGluedKubernetesName,
+} from "./projection/deploy.js";
 
 export interface PackageManifestHint {
   name?: string;
@@ -1518,37 +1527,6 @@ function extractorIdFromModule(file: string): string | undefined {
 const infraExtractorIds = new Set(["repository", "projection"]);
 
 /**
- * Dictionary of product-name segments found glued in Kubernetes resource
- * names (Online Boutique `productcatalogservice`, `loadgenerator`, …).
- * Longest-first greedy matching turns them into camelCase before humanize.
- */
-const KUBERNETES_NAME_SEGMENTS = [
-  "opentelemetry",
-  "recommendation",
-  "product",
-  "catalog",
-  "shopping",
-  "assistant",
-  "generator",
-  "collector",
-  "checkout",
-  "currency",
-  "payment",
-  "shipping",
-  "frontend",
-  "backend",
-  "service",
-  "redis",
-  "email",
-  "cart",
-  "load",
-  "web",
-  "api",
-  "ad",
-].sort((a, b) => b.length - a.length);
-
-
-/**
  * GraphQL Query/Mutation/Subscription → canvas labels for the North star user.
  *
  * - SDL schema fields keep the kind: `createNote` → `Mutation Create note`
@@ -2681,99 +2659,6 @@ export function humanizeServerActionLabel(label: string): string {
   return humanizeIdentifierLabel(label).replace(/\s+action$/i, "");
 }
 
-/**
- * Terraform resource/module addresses → North-star Deploy labels.
- * `aws_s3_bucket.notes` → `Notes · S3 bucket`; `module.network` → `Network`.
- * Singleton names (`this`) are HCL chrome — drop them so `aws_vpc.this` → `VPC`.
- */
-export function humanizeTerraformLabel(
-  kind: "resource" | "module",
-  type: string,
-  name?: string,
-): string {
-  if (kind === "module") {
-    return humanizeIdentifierLabel(type);
-  }
-  const withoutProvider = type.replace(
-    /^(aws|google|azurerm|azuread|digitalocean|helm|kubernetes|random|null|local|tls|archive|time|external|cloudflare|vercel)_/i,
-    "",
-  );
-  const typeLabel = humanizeIdentifierLabel(withoutProvider);
-  const rawName = name?.trim();
-  // `resource "aws_vpc" "this"` — "this" is the Terraform singleton idiom,
-  // not a product word founders should read on the canvas.
-  if (!rawName || /^this$/i.test(rawName)) {
-    return typeLabel;
-  }
-  return `${humanizeIdentifierLabel(rawName)} · ${typeLabel}`;
-}
-
-/**
- * Kubernetes resources → North-star Deploy labels.
- * `Deployment/api` → `API · Deployment`; `Ingress/notes` → `Notes · Ingress`.
- * Ingress hosts become canvas vocabulary like Compose ports
- * (`Notes · notes.example.com`) so founders read where traffic lands.
- * Compound microservice names (`cartservice`) become camelCase before humanize
- * so `adservice` → `Ad service` (space early-return must not skip title case).
- */
-/**
- * Split all-lowercase glued K8s names into camelCase via a product lexicon.
- * `productcatalogservice` → `productCatalogService`, `loadgenerator` →
- * `loadGenerator`. Names that already have hyphens/underscores/camelCase (or
- * cannot be fully segmented) keep the trailing-`service` split only.
- */
-export function splitGluedKubernetesName(name: string): string {
-  const trimmed = name.trim();
-  if (!trimmed) return trimmed;
-  // Hyphen / underscore / existing camelCase already humanize cleanly.
-  if (/[-_]/.test(trimmed) || /[a-z][A-Z]/.test(trimmed)) {
-    return trimmed.replace(/([a-z0-9])service$/i, "$1Service");
-  }
-  const lower = trimmed.toLowerCase();
-  // Only attempt lexicon splits on plain glued identifiers.
-  if (!/^[a-z][a-z0-9]*$/.test(lower)) {
-    return trimmed.replace(/([a-z0-9])service$/i, "$1Service");
-  }
-  const parts: string[] = [];
-  let i = 0;
-  while (i < lower.length) {
-    let matched: string | undefined;
-    for (const word of KUBERNETES_NAME_SEGMENTS) {
-      if (lower.startsWith(word, i)) {
-        matched = word;
-        break;
-      }
-    }
-    if (!matched) {
-      // Incomplete lexicon coverage — fall back to service-suffix split.
-      return trimmed.replace(/([a-z0-9])service$/i, "$1Service");
-    }
-    parts.push(matched);
-    i += matched.length;
-  }
-  if (parts.length <= 1) {
-    return trimmed.replace(/([a-z0-9])service$/i, "$1Service");
-  }
-  return parts
-    .map((part, index) =>
-      index === 0 ? part : `${part.charAt(0).toUpperCase()}${part.slice(1)}`,
-    )
-    .join("");
-}
-
-export function humanizeKubernetesLabel(
-  kind: string,
-  name: string,
-  hosts?: string[],
-): string {
-  const base = humanizeIdentifierLabel(splitGluedKubernetesName(name));
-  if (kind === "Ingress") {
-    const host = hosts?.find((item) => typeof item === "string" && item.trim());
-    if (host) return `${base} · ${host.trim()}`;
-  }
-  return `${base} · ${kind}`;
-}
-
 /** Example/wrapper TF paths are sample chrome, not the module's product surface. */
 function isTerraformExampleChromePath(file: string): boolean {
   return /(^|\/)(examples|wrappers)(\/|$)/i.test(normalizePath(file));
@@ -2929,77 +2814,6 @@ function quietManifestIndexOverlayChrome(
       collapsedInOverview: true,
     };
     nodes.set(node.id, node);
-  }
-}
-
-/**
- * Nest kubernetes Deployments/Services/Ingress under the Base/Overlay hub
- * whose `overlayRoot` owns the manifest path. Longest prefix wins so
- * `deploy/bases/backend/deployment.yaml` → Backend · Base, not a parent tree.
- * Resources outside any hub (podinfo `deploy/webapp/`) stay under Deploy.
- */
-function nestKubernetesUnderKustomizeHubs(
-  nodes: Map<string, ArchitectureNode>,
-  attachToSystem: (
-    nodeId: string,
-    systemId: string,
-    evidence: Evidence,
-  ) => void,
-): void {
-  const hubs = [...nodes.values()]
-    .filter((node) => {
-      if (node.kind !== "service" || node.metadata?.kustomization !== true) {
-        return false;
-      }
-      if (
-        node.metadata?.kustomizeChrome === true ||
-        node.metadata?.exampleChrome === true
-      ) {
-        return false;
-      }
-      const root = normalizePath(String(node.metadata?.overlayRoot ?? ""));
-      if (!root) return false;
-      // Boutique-style manifest-index kustomizations
-      // (`kubernetes-manifests/kustomization.yaml`) are not product Base/Overlay
-      // owners — leave workloads nested under Deploy for the cold-read.
-      if (
-        /(^|\/)(k8s|kubernetes)(-?manifests?)?(\/|$)/i.test(root) ||
-        /(^|\/)manifests?(\/|$)/i.test(root)
-      ) {
-        return false;
-      }
-      return true;
-    })
-    .map((node) => ({
-      id: node.id,
-      root: normalizePath(String(node.metadata!.overlayRoot)),
-    }))
-    .sort((a, b) => b.root.length - a.root.length);
-  if (hubs.length === 0) return;
-
-  for (const node of [...nodes.values()]) {
-    if (node.metadata?.kubernetesResource !== true) continue;
-    const file = normalizePath(node.evidence[0]?.file ?? "");
-    if (!file) continue;
-    const hub = hubs.find(
-      (entry) => file === entry.root || file.startsWith(`${entry.root}/`),
-    );
-    if (!hub) continue;
-    attachToSystem(
-      node.id,
-      hub.id,
-      node.evidence[0] ?? projectionEvidence("."),
-    );
-    // Hubs are not semantic systems, so the semantic-parent collapse pass
-    // never sees these leaves — collapse them so only Base/Overlay hubs
-    // remain on the North-star cold-read.
-    const nested = nodes.get(node.id);
-    if (!nested) continue;
-    nested.metadata = {
-      ...nested.metadata,
-      collapsedInOverview: true,
-    };
-    nodes.set(nested.id, nested);
   }
 }
 
@@ -3574,34 +3388,13 @@ export function projectSemanticArchitecture(
     }
   }
 
-  // Nest Docker / Terraform / Kubernetes / Helm / Kustomize units under Deploy
-  // so the overview tells a containers/infra/workloads/charts/overlays story.
   const deploySystem = systems.get("deploy");
   if (deploySystem) {
-    for (const node of [...nodes.values()]) {
-      if (node.kind !== "service") continue;
-      if (
-        node.metadata?.docker !== true &&
-        node.metadata?.terraform !== true &&
-        node.metadata?.kubernetes !== true &&
-        node.metadata?.helm !== true &&
-        node.metadata?.kustomize !== true
-      ) {
-        continue;
-      }
-      if (node.metadata?.projection === "semantic") continue;
-      // Extractor roster children under Extractors are also kind:service — skip.
-      if (node.metadata?.role === "extractor") continue;
-      attachToSystem(
-        node.id,
-        deploySystem.id,
-        node.evidence[0] ?? projectionEvidence("."),
-      );
-    }
-
-    // Path-link kubernetes resources under owning Base/Overlay hubs
-    // (Backend · Base owns deploy/bases/backend/*). Longest overlayRoot wins.
-    nestKubernetesUnderKustomizeHubs(nodes, attachToSystem);
+    projectDeployArchitecture({
+      nodes,
+      deploySystem,
+      attach: attachToSystem,
+    });
   }
 
   // Nest extracted pipelines under the semantic Pipelines system.
@@ -3889,92 +3682,8 @@ export function projectSemanticArchitecture(
     } else if (node.kind === "component") {
       // All components (client + server): tame PascalCase Card*/skeletons too.
       nextLabel = humanizeIdentifierLabel(node.label);
-    } else if (
-      node.kind === "service" &&
-      node.metadata?.docker === true &&
-      typeof node.metadata?.serviceName === "string"
-    ) {
-      // Compose service ids: api → API, web → Web; published ports become
-      // North-star canvas vocabulary (Vote · 8080) like cron schedule phrases.
-      const base = humanizeIdentifierLabel(node.metadata.serviceName);
-      const hostPorts = Array.isArray(node.metadata.hostPorts)
-        ? node.metadata.hostPorts.filter(
-            (port): port is string => typeof port === "string" && Boolean(port),
-          )
-        : [];
-      // Prefer the primary published port; skip debugger twin ports (9229…).
-      const storyPort = hostPorts.find((port) => !/^9\d{3}$/.test(port));
-      nextLabel = storyPort ? `${base} · ${storyPort}` : base;
-    } else if (
-      node.kind === "service" &&
-      node.metadata?.terraformResource === true &&
-      typeof node.metadata?.resourceType === "string"
-    ) {
-      // aws_s3_bucket.notes → Notes · S3 bucket
-      nextLabel = humanizeTerraformLabel(
-        "resource",
-        node.metadata.resourceType,
-        typeof node.metadata.resourceName === "string"
-          ? node.metadata.resourceName
-          : undefined,
-      );
-    } else if (
-      node.kind === "service" &&
-      node.metadata?.terraformModuleBlock === true &&
-      typeof node.metadata?.moduleName === "string"
-    ) {
-      // module.network → Network
-      nextLabel = humanizeTerraformLabel("module", node.metadata.moduleName);
-    } else if (
-      node.kind === "service" &&
-      node.metadata?.kubernetesResource === true &&
-      typeof node.metadata?.k8sKind === "string" &&
-      typeof node.metadata?.resourceName === "string"
-    ) {
-      // Deployment/api → API · Deployment; Ingress/notes → Notes · host
-      const hosts = Array.isArray(node.metadata.hosts)
-        ? node.metadata.hosts.filter(
-            (host): host is string => typeof host === "string" && Boolean(host),
-          )
-        : undefined;
-      nextLabel = humanizeKubernetesLabel(
-        node.metadata.k8sKind,
-        node.metadata.resourceName,
-        hosts,
-      );
-    } else if (
-      node.kind === "service" &&
-      node.metadata?.helmChart === true &&
-      typeof node.metadata?.chartName === "string"
-    ) {
-      // Chart/notes → Notes · Chart
-      nextLabel = `${humanizeIdentifierLabel(node.metadata.chartName)} · Chart`;
-    } else if (
-      node.kind === "service" &&
-      node.metadata?.helmResource === true &&
-      typeof node.metadata?.k8sKind === "string" &&
-      typeof node.metadata?.resourceName === "string"
-    ) {
-      // Helm template Deployment/api → API · Deployment (same canvas vocabulary).
-      const hosts = Array.isArray(node.metadata.hosts)
-        ? node.metadata.hosts.filter(
-            (host): host is string => typeof host === "string" && Boolean(host),
-          )
-        : undefined;
-      nextLabel = humanizeKubernetesLabel(
-        node.metadata.k8sKind,
-        node.metadata.resourceName,
-        hosts,
-      );
-    } else if (
-      node.kind === "service" &&
-      node.metadata?.kustomization === true &&
-      typeof node.metadata?.overlayName === "string"
-    ) {
-      // Base/backend → Backend · Base; Overlay/notes → Notes · Overlay
-      const roleLabel =
-        node.metadata?.kustomizeRole === "base" ? "Base" : "Overlay";
-      nextLabel = `${humanizeIdentifierLabel(node.metadata.overlayName)} · ${roleLabel}`;
+    } else {
+      nextLabel = humanizeDeployNodeLabel(node);
     }
 
     if (!nextLabel || nextLabel === node.label) continue;

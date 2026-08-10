@@ -13,6 +13,10 @@ import {
   projectDataArchitecture,
 } from "../dist/projection/data.js";
 import {
+  humanizeDeployNodeLabel,
+  projectDeployArchitecture,
+} from "../dist/projection/deploy.js";
+import {
   createScheduledWorkSystem,
   humanizeCronExpression,
   projectScheduledWork,
@@ -222,6 +226,40 @@ test("scheduled-work projection creates calm labels and preserves the handler ch
   assert.deepEqual(scheduledWorkSourcesForHandler(handler.id, edges.values()), [
     trigger.id,
   ]);
+});
+
+test("deploy projection attaches only typed units and derives calm labels", () => {
+  const deploy = node("deploy", "system", "Deploy", {
+    metadata: { projection: "semantic", systemKey: "deploy" },
+  });
+  const service = node("service", "service", "api", {
+    semantics: [{
+      kind: "deploy-unit",
+      deployKind: "container",
+      provider: "docker-compose",
+      nativeKind: "Compose service",
+      name: "api",
+      image: "example/api:1",
+      ports: ["8080:80"],
+    }],
+    metadata: { hostPorts: ["8080"] },
+  });
+  const decoy = node("decoy", "service", "legacy metadata", {
+    metadata: { docker: true, serviceName: "decoy" },
+  });
+  const nodes = new Map([deploy, service, decoy].map((item) => [item.id, item]));
+
+  projectDeployArchitecture({
+    nodes,
+    deploySystem: deploy,
+    attach(id, parentId) {
+      nodes.get(id).parentId = parentId;
+    },
+  });
+
+  assert.equal(service.parentId, deploy.id);
+  assert.equal(decoy.parentId, undefined);
+  assert.equal(humanizeDeployNodeLabel(service), "API · 8080");
 });
 
 test("six-field cron expressions produce useful second-level labels", () => {
