@@ -65,6 +65,23 @@ The capability is complete only when all of these hold:
 - the inspector shows provider, expression, timezone, execution kind, and handler
 - Advanced can reveal the underlying handler inside the current focus
 
+## Data-access v1
+
+The `data-resources` adapter normalizes extractor-owned database, table, and
+collection nodes into typed `resource` facets. It does not parse framework
+syntax or invent resources. Existing extractors remain responsible for the
+source-backed facts and emit explicit `queries`, `reads`, and `writes` bindings.
+
+Projection owns cross-technology presentation:
+
+- Prisma, SQL, Alembic, and SQLAlchemy table twins unify into one resource
+- Mongoose and MongoDB collection aliases unify into one resource
+- API and scheduled-work handlers lift their data bindings to Data access
+- the inspector exposes resource kind and provider from typed facets
+
+Neutral query operations stay `queries`; they are not guessed into reads or
+writes. Migration and table-relation edges remain separate contracts.
+
 ## Extension rule
 
 Do not add a declarative matcher DSL yet. Add another plain adapter module when

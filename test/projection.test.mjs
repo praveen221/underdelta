@@ -9,6 +9,10 @@ import {
   liftFePageStoryEdges,
 } from "../dist/projection/feStories.js";
 import {
+  liftDataAccessStoryEdges,
+  projectDataArchitecture,
+} from "../dist/projection/data.js";
+import {
   createScheduledWorkSystem,
   humanizeCronExpression,
   projectScheduledWork,
@@ -109,6 +113,63 @@ test("lifting is idempotent when the same policy runs twice", () => {
       (edge) => edge.source === "dashboard-system" && edge.target === "api",
     ).length,
     1,
+  );
+});
+
+test("data projection unifies resources and lifts explicit query bindings", () => {
+  const api = node("api-system", "api", "HTTP API", {
+    metadata: { projection: "semantic", systemKey: "api" },
+  });
+  const data = node("data-system", "system", "Data access", {
+    metadata: { projection: "semantic", systemKey: "data" },
+  });
+  const handler = node("handler", "function", "listNotes", {
+    parentId: api.id,
+  });
+  const prisma = node("prisma-note", "table", "Note", {
+    technology: "prisma",
+    semantics: [{
+      kind: "resource",
+      resourceKind: "table",
+      provider: "prisma",
+    }],
+  });
+  const sql = node("sql-notes", "table", "notes", {
+    technology: "sql",
+    semantics: [{
+      kind: "resource",
+      resourceKind: "table",
+      provider: "sql",
+    }],
+  });
+  const nodes = new Map([api, data, handler, prisma, sql].map((item) => [item.id, item]));
+  const query = edgeFrom("queries", handler.id, sql.id, evidence);
+  const edges = new Map([[query.id, query]]);
+  const systems = new Map([["api", api], ["data", data]]);
+
+  projectDataArchitecture({
+    nodes,
+    edges,
+    systems,
+    attachToSystem(id, parentId) {
+      nodes.get(id).parentId = parentId;
+    },
+  });
+  liftDataAccessStoryEdges(nodes, edges, systems);
+
+  const tables = [...nodes.values()].filter((item) => item.kind === "table");
+  assert.equal(tables.length, 1);
+  assert.equal(tables[0].label, "Note");
+  assert.deepEqual(tables[0].metadata.sources, ["prisma", "sql"]);
+  assert.ok(
+    [...edges.values()].some(
+      (edge) => edge.kind === "queries" && edge.source === api.id && edge.target === data.id,
+    ),
+  );
+  assert.ok(
+    [...edges.values()].some(
+      (edge) => edge.kind === "queries" && edge.source === api.id && edge.target === tables[0].id,
+    ),
   );
 });
 

@@ -23,6 +23,7 @@ const registeredExtractors = [
   "sql",
 ];
 const registeredAdapters = [
+  "data-resources",
   "scheduled-node",
   "scheduled-celery",
   "scheduled-kubernetes",
@@ -49,7 +50,9 @@ test("Underdelta compiles its own structural compiler story", async () => {
     "src/graph.ts",
     "src/project.ts",
     "src/adapter.ts",
+    "src/adapters/data/resources.ts",
     "src/adapters/scheduled/node.ts",
+    "src/projection/data.ts",
     "src/viewer.ts",
   ]) {
     assert.ok(

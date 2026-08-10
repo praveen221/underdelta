@@ -261,7 +261,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       );
     }
     // Shell Intermediate: nested tools under the shell, plus HTTP API when a
-    // tool has reads/writes/uses edges to it. Still hide feature roots / leaf chrome.
+    // tool has data-story edges to it. Still hide feature roots / leaf chrome.
     function shellToolStoryVisible(node, focusId) {
       const focused = focusId ? byId.get(focusId) : null;
       if (!isShellHub(focused)) return true;
@@ -334,7 +334,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     // Product-story edges — canvas + inspector treat these apart from imports/calls.
     const collaborationKinds = new Set([
       "uses", "renders", "exposes", "triggers", "configures",
-      "reads", "writes", "flows-to",
+      "queries", "reads", "writes", "flows-to",
     ]);
     // Messaging + schema lineage — labeled badges on the default overview.
     const narrativeKinds = new Set(["publishes", "consumes", "migrates"]);
@@ -1894,16 +1894,17 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       return node.kind + tech;
     }
 
-    // Prefer read/write/use story edges before weaker collaboration kinds.
+    // Prefer explicit data bindings before weaker collaboration kinds.
     const storyNeighborRank = {
       reads: 0,
       writes: 1,
-      uses: 2,
-      renders: 3,
-      "flows-to": 4,
-      exposes: 5,
-      triggers: 6,
-      configures: 7,
+      queries: 2,
+      uses: 3,
+      renders: 4,
+      "flows-to": 5,
+      exposes: 6,
+      triggers: 7,
+      configures: 8,
     };
 
     function connectionButton(edge, id) {
@@ -1963,6 +1964,19 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         pills.push('<span class="pill">Handler: ' + escapeHtml(job.handler) + "</span>");
       }
       return "<h3>Job</h3>" + pills.join("");
+    }
+
+    function dataResourceHtml(node) {
+      const semantics = Array.isArray(node.semantics) ? node.semantics : [];
+      const resource = semantics.find((facet) => facet.kind === "resource");
+      if (!resource) return "";
+      const pills = [
+        '<span class="pill">Resource: ' + escapeHtml(resource.resourceKind) + "</span>",
+      ];
+      if (resource.provider) {
+        pills.push('<span class="pill">Provider: ' + escapeHtml(resource.provider) + "</span>");
+      }
+      return "<h3>Data resource</h3>" + pills.join("");
     }
 
     // Collaboration edges carry human detail on evidence (how systems connect).
@@ -2218,6 +2232,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const collaboration = connections.filter((edge) => collaborationKinds.has(edge.kind));
       const messaging = messagingRolesHtml(node);
       const scheduledWork = scheduledWorkHtml(node);
+      const dataResource = dataResourceHtml(node);
       // Table migration lineage is owned by the Prisma / SQL section.
       // Table↔table relation names are owned by the Relations section.
       // Queue publish/consume roles are owned by the Messaging section.
@@ -2243,7 +2258,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const overlayStory = overlayStoryHtml(node);
       const tableSources = tableSourcesHtml(node, incomingEdges);
       const tableRelations = tableRelationsHtml(node, connections);
-      // Story-first: rank read/write/use neighbors, show a short top list.
+      // Story-first: rank explicit data neighbors, then other collaboration.
       const storyNeighbors = [...collaboration].sort((a, b) => {
         const ar = storyNeighborRank[a.kind];
         const br = storyNeighborRank[b.kind];
@@ -2353,6 +2368,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         "<h2></h2>" +
         roleHtml +
         scheduledWork +
+        dataResource +
         collaborationHtml +
         evidenceHtml +
         surfaceHtml +

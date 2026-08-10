@@ -37,7 +37,10 @@ test.beforeAll(async () => {
   };
   const largeHtml = renderArchitectureHtml(largeGraph);
   scheduledRoot = await mkdtemp(path.join(os.tmpdir(), "underdelta-scheduled-viewer-"));
-  await mkdir(path.join(scheduledRoot, "src"), { recursive: true });
+  await Promise.all([
+    mkdir(path.join(scheduledRoot, "src"), { recursive: true }),
+    mkdir(path.join(scheduledRoot, "prisma"), { recursive: true }),
+  ]);
   await writeFile(
     path.join(scheduledRoot, "package.json"),
     JSON.stringify({ name: "scheduled-viewer", dependencies: { "node-cron": "latest" } }),
@@ -51,6 +54,11 @@ test.beforeAll(async () => {
       'cron.schedule("0 * * * *", sendDigest, { timezone: "UTC" });',
       "",
     ].join("\n"),
+    "utf8",
+  );
+  await writeFile(
+    path.join(scheduledRoot, "prisma/schema.prisma"),
+    "model Note {\n  id Int @id\n  title String\n}\n",
     "utf8",
   );
   const scheduledHtml = renderArchitectureHtml(
@@ -321,4 +329,18 @@ test("scheduled work walks from Beginner system to typed trigger and job details
   await job.click();
   await expect(page.locator("#inspector")).toContainText("Handler: sendDigest");
   await expect(page.locator("#inspector")).toContainText("Execution: in-process");
+});
+
+test("data resources expose their normalized contract in the inspector", async ({ page }) => {
+  await page.goto(scheduledViewerUrl);
+  await expect(node(page, "Data access")).toBeVisible();
+  await expect(page.locator('.node[data-kind="table"]')).toHaveCount(0);
+
+  await node(page, "Data access").dblclick();
+  const table = page.locator('.node[data-kind="table"]', { hasText: "Note" });
+  await expect(table).toBeVisible();
+  await table.click();
+  await expect(page.locator("#inspector")).toContainText("Data resource");
+  await expect(page.locator("#inspector")).toContainText("Resource: table");
+  await expect(page.locator("#inspector")).toContainText("Provider: prisma");
 });
