@@ -527,6 +527,18 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     }
     // One step back: nested Advanced → Intermediate parent, then Beginner.
     function goBack() {
+      const focused = state.focus ? byId.get(state.focus) : undefined;
+      // View can promote a broad system focus to Advanced without adding a
+      // focus-stack entry. Step back to that system's Intermediate room first.
+      if (state.tier === "advanced" && state.focus && focused && !advancedKinds.has(focused.kind)) {
+        state.tier = "intermediate";
+        syncTierButton();
+        // Advanced may have a selected code node that Intermediate hides.
+        // Return selection and inspector context to the still-visible focus.
+        selectNode(state.focus);
+        persistWalkState();
+        return true;
+      }
       const stack = focusStack();
       if (stack.length === 0) return false;
       navigateFocusStack(stack.length - 2);

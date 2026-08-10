@@ -19,7 +19,7 @@ Stack-neutral `architecture.json` contract with deterministic extractors for
 common app and deploy stacks. Evidence is marked `observed`, `derived`, or
 `inferred` — unknown framework semantics are not invented.
 
-Supported in v0 (fixtures + pinned real-repo golden locks via `npm run verify`):
+Supported in v0:
 
 - TypeScript/JavaScript — modules, React/Next UI, Express routes, cron, BullMQ
 - Next.js App Router — pages, layouts, route handlers, server actions
@@ -54,13 +54,19 @@ npm start                        # same as ./scripts/run.sh for .
 ```
 
 Output always lands in `<repo>/.underdelta/` (`index.html` + `architecture.json`).
-Generated output, dependencies, build artifacts, fixtures, and conventional
+Generated output, dependencies, build artifacts, and conventional
 test/spec files are excluded from scans so the default map represents the
 product rather than development scaffolding.
 
 ```bash
-npm run verify   # fixture + golden-lock suite
+npm run verify             # build + extractor contracts + projection + self-map
+npm run test:viewer        # provision Chromium + test the self-map in a real browser
+npm run inspect -- /path/to/repo
 ```
+
+`inspect` requires a path and scans only that path. Use it to assess a real
+repository on demand; Underdelta does not maintain a pinned
+external-repository test ladder.
 
 ## How to read the map
 

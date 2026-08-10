@@ -1,5 +1,10 @@
 # Underdelta v0 — Build Context
 
+> Historical record: this document predates the local test-suite reduction.
+> References to `verification/`, pinned real repositories, and the former
+> monolithic verifier describe the v0 build process, not the current test
+> workflow. Use the root README for current commands.
+
 Historical context for the capability build executed on branch
 `cursor/visual-system-browser-7649` (2026-08-02). Use this file to understand
 what shipped, what is frozen, and what future work should (and should not) do.

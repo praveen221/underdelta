@@ -1,9 +1,0 @@
-# Overlay twin — same service names as docker-compose.yml, image-only.
-# Underdelta must merge these into one API/Web/DB node (prefer build+image).
-services:
-  api:
-    image: notes-api:latest
-  web:
-    image: nginx:alpine
-  db:
-    image: postgres:16
