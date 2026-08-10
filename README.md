@@ -14,17 +14,19 @@ visual claim links to the source location from which it was derived.
 
 ## Status
 
-**v0 (branch `cursor/visual-system-browser-7649`, frozen 2026-08-02).**  
-Stack-neutral `architecture.json` contract with deterministic extractors for
-common app and deploy stacks. Evidence is marked `observed`, `derived`, or
-`inferred` — unknown framework semantics are not invented.
+**v0.2 semantic contract in development.** Language and infrastructure
+extractors establish base facts; capability adapters normalize framework
+semantics into one evidence-backed model. Evidence is marked `observed`,
+`derived`, or `inferred`; unsupported scheduler frameworks are reported rather
+than guessed.
 
 Supported in v0:
 
-- TypeScript/JavaScript — modules, React/Next UI, Express routes, cron, BullMQ
+- TypeScript/JavaScript — modules, React/Next UI, Express routes, BullMQ
 - Next.js App Router — pages, layouts, route handlers, server actions
 - Prisma + SQL migrations; MongoDB collections and aggregates
-- Python — FastAPI, Django routes, SQLAlchemy/Alembic, Celery
+- Python — FastAPI, Django routes, SQLAlchemy/Alembic
+- Scheduled work — node-cron, cron, NestJS Schedule, Celery, Kubernetes CronJob
 - OpenAPI / Swagger; GraphQL SDL and tagged documents
 - Docker / Compose; Terraform; Kubernetes; Helm; Kustomize
 
@@ -118,9 +120,12 @@ visible graph and **Reset** to clear saved node positions.
 }
 ```
 
-The schema is defined in [`src/schema.ts`](src/schema.ts). Extractors only
-produce contributions to this contract, which keeps parsers, AI enrichment,
-runtime traces, and alternative graph sources replaceable.
+The schema is defined in [`src/schema.ts`](src/schema.ts). Extractors establish
+language/resource facts; capability adapters add normalized semantic roles and
+triggers. This keeps framework parsers, AI enrichment, runtime traces, and
+alternative symbol sources replaceable. The v0.2 boundary and scheduled-work
+contract are documented in
+[`docs/ARCHITECTURE_V02.md`](docs/ARCHITECTURE_V02.md).
 
 ## Design principles
 
@@ -132,8 +137,9 @@ runtime traces, and alternative graph sources replaceable.
    facts. AI enrichment is optional and explicitly labelled.
 4. **One portable artifact.** Other tools can consume `architecture.json`
    without depending on the bundled viewer.
-5. **Extensible semantics.** Framework support belongs in focused extractors,
-   not in the renderer or schema.
+5. **Capability semantics.** Framework support belongs in focused semantic
+   adapters over a small typed ontology, not in language extractors or renderer
+   heuristics.
 
 ## Near-term roadmap
 
@@ -141,7 +147,7 @@ v0 extractors above are in-tree. Next focus after merge/try:
 
 - Stable graph snapshots and structural change overlays
 - Runtime evidence via OpenTelemetry
-- Extractor/plugin SDK and deeper conformance fixtures
+- Additional capability adapters after the scheduled-work interface proves reusable
 - UX polish for cold-reads by non-coders (see North star notes in
   [`docs/V0_BUILD_CONTEXT.md`](docs/V0_BUILD_CONTEXT.md))
 

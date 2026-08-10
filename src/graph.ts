@@ -10,12 +10,23 @@ import {
   type Evidence,
 } from "./schema.js";
 
-export interface ExtractorContribution {
-  extractor: { id: string; version: string };
+interface ContributionBody {
   nodes: ArchitectureNode[];
   edges: ArchitectureEdge[];
   diagnostics?: Diagnostic[];
 }
+
+export type ExtractorContribution = ContributionBody & {
+  extractor: { id: string; version: string };
+  adapter?: never;
+};
+
+export type AdapterContribution = ContributionBody & {
+  adapter: { id: string; version: string; capability: string };
+  extractor?: never;
+};
+
+export type GraphContribution = ExtractorContribution | AdapterContribution;
 
 export function stableId(...parts: string[]): string {
   const readable = parts
@@ -53,13 +64,18 @@ export class GraphBuilder {
   readonly #nodes = new Map<string, ArchitectureNode>();
   readonly #edges = new Map<string, ArchitectureEdge>();
   readonly #extractors = new Map<string, { id: string; version: string }>();
+  readonly #adapters = new Map<
+    string,
+    { id: string; version: string; capability: string }
+  >();
   readonly #diagnostics: Diagnostic[] = [];
 
-  add(contribution: ExtractorContribution): void {
-    this.#extractors.set(
-      contribution.extractor.id,
-      contribution.extractor,
-    );
+  add(contribution: GraphContribution): void {
+    if (contribution.extractor) {
+      this.#extractors.set(contribution.extractor.id, contribution.extractor);
+    } else {
+      this.#adapters.set(contribution.adapter.id, contribution.adapter);
+    }
 
     for (const node of contribution.nodes) {
       const current = this.#nodes.get(node.id);
@@ -69,6 +85,18 @@ export class GraphBuilder {
       }
       current.evidence.push(...node.evidence);
       current.metadata = { ...current.metadata, ...node.metadata };
+      if (node.semantics?.length) {
+        const seen = new Set(
+          (current.semantics ?? []).map((facet) => JSON.stringify(facet)),
+        );
+        current.semantics = [...(current.semantics ?? [])];
+        for (const facet of node.semantics) {
+          const key = JSON.stringify(facet);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          current.semantics.push(facet);
+        }
+      }
     }
 
     for (const edge of contribution.edges) {
@@ -85,10 +113,13 @@ export class GraphBuilder {
 
   build(project: ArchitectureGraph["project"]): ArchitectureGraph {
     const graph: ArchitectureGraph = {
-      schemaVersion: "0.1",
+      schemaVersion: "0.2",
       project,
       generatedAt: new Date().toISOString(),
       extractors: [...this.#extractors.values()].sort((a, b) =>
+        a.id.localeCompare(b.id),
+      ),
+      adapters: [...this.#adapters.values()].sort((a, b) =>
         a.id.localeCompare(b.id),
       ),
       nodes: [...this.#nodes.values()].sort((a, b) => a.id.localeCompare(b.id)),
@@ -97,5 +128,15 @@ export class GraphBuilder {
     };
 
     return architectureGraphSchema.parse(graph);
+  }
+
+  snapshot(): {
+    nodes: ArchitectureNode[];
+    edges: ArchitectureEdge[];
+  } {
+    return {
+      nodes: [...this.#nodes.values()],
+      edges: [...this.#edges.values()],
+    };
   }
 }

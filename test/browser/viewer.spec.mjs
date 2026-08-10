@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -16,6 +18,8 @@ const repoRoot = path.resolve(
 let server;
 let viewerUrl;
 let largeViewerUrl;
+let scheduledViewerUrl;
+let scheduledRoot;
 
 test.beforeAll(async () => {
   const graph = await compileRepository(repoRoot);
@@ -32,12 +36,38 @@ test.beforeAll(async () => {
     edges: [],
   };
   const largeHtml = renderArchitectureHtml(largeGraph);
+  scheduledRoot = await mkdtemp(path.join(os.tmpdir(), "underdelta-scheduled-viewer-"));
+  await mkdir(path.join(scheduledRoot, "src"), { recursive: true });
+  await writeFile(
+    path.join(scheduledRoot, "package.json"),
+    JSON.stringify({ name: "scheduled-viewer", dependencies: { "node-cron": "latest" } }),
+    "utf8",
+  );
+  await writeFile(
+    path.join(scheduledRoot, "src/jobs.ts"),
+    [
+      'import cron from "node-cron";',
+      "export function sendDigest() {}",
+      'cron.schedule("0 * * * *", sendDigest, { timezone: "UTC" });',
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  const scheduledHtml = renderArchitectureHtml(
+    await compileRepository(scheduledRoot),
+  );
   server = createServer((request, response) => {
     response.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
     });
-    response.end(request.url === "/large" ? largeHtml : html);
+    response.end(
+      request.url === "/large"
+        ? largeHtml
+        : request.url === "/scheduled"
+          ? scheduledHtml
+          : html,
+    );
   });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -47,10 +77,12 @@ test.beforeAll(async () => {
   assert.ok(address && typeof address !== "string");
   viewerUrl = `http://127.0.0.1:${address.port}/`;
   largeViewerUrl = `http://127.0.0.1:${address.port}/large`;
+  scheduledViewerUrl = `http://127.0.0.1:${address.port}/scheduled`;
 });
 
 test.afterAll(async () => {
   await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  if (scheduledRoot) await rm(scheduledRoot, { recursive: true, force: true });
 });
 
 function node(page, label) {
@@ -264,4 +296,29 @@ test("fit frames graphs that require a scale below the interactive zoom floor", 
     assert.ok(item.top >= geometry.viewport.top - 1, `${item.id} starts above large fitted view`);
     assert.ok(item.bottom <= geometry.chromeTop - 1, `${item.id} is covered in large fitted view`);
   }
+});
+
+test("scheduled work walks from Beginner system to typed trigger and job details", async ({ page }) => {
+  await page.goto(scheduledViewerUrl);
+  await expect(page.locator("#tier")).toHaveText("View: Beginner");
+  await expect(node(page, "Scheduled jobs")).toBeVisible();
+  await expect(page.locator('.node[data-kind="cron"]')).toHaveCount(0);
+
+  await node(page, "Scheduled jobs").dblclick();
+  await expect(page.locator("#tier")).toHaveText("View: Intermediate");
+  const trigger = page.locator('.node[data-kind="cron"]');
+  const job = page.locator('.node[data-kind="job"]');
+  await expect(trigger).toContainText("Send digest (every hour)");
+  await expect(job).toContainText("Send digest");
+  await expect(page.locator('#edges path.edge[data-kind="schedules"]')).toHaveCount(1);
+
+  await trigger.click();
+  await expect(page.locator("#inspector h2")).toHaveText("Send digest (every hour)");
+  await expect(page.locator("#inspector")).toContainText("Expression: 0 * * * *");
+  await expect(page.locator("#inspector")).toContainText("Timezone: UTC");
+  await expect(page.locator("#inspector")).toContainText("Provider: node-cron");
+
+  await job.click();
+  await expect(page.locator("#inspector")).toContainText("Handler: sendDigest");
+  await expect(page.locator("#inspector")).toContainText("Execution: in-process");
 });

@@ -342,7 +342,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     const neighborhoodEdgeKinds = new Set([
       ...collaborationKinds,
       ...narrativeKinds,
-      "schedules", "routes-to",
+      "schedules", "handled-by", "routes-to",
     ]);
     // Ownership fans (contains × N children) — never painted; layout is the signal.
     const ownershipEdgeKinds = new Set(["contains"]);
@@ -981,6 +981,20 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       }
       // FE tools (route molecules) open Intermediate tool→API rooms, not Advanced.
       if (isRouteMoleculeHub(clicked)) {
+        return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
+      }
+      // Scheduled work is a semantic room even when it has only one trigger,
+      // one job, and one code handler. Enter the trigger/job story before code.
+      if (
+        clicked.metadata &&
+        clicked.metadata.systemKey === "jobs" &&
+        [...descendants(clickedId)].some((id) => {
+          const node = byId.get(id);
+          return (node?.semantics || []).some(
+            (facet) => facet.kind === "trigger" || facet.kind === "job",
+          );
+        })
+      ) {
         return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
       }
 
@@ -1777,11 +1791,11 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     // founders need product evidence, not projection machinery chrome.
     // path/framework/readme* fold into plainLanguageRole — not leftover pills.
     const structuredMetaKeys = new Set([
-      "keyFiles", "binEntries", "binCommands", "packageExports", "extractorRoster",
+      "keyFiles", "binEntries", "binCommands", "packageExports", "extractorRoster", "adapterRoster",
       "prismaName", "sqlName", "sources", "aliases", "normalizedTable",
       "publishers", "consumers", "messagingHub",
       "projection", "systemKey", "flowOrder",
-      "role", "extractorId", "capabilityKind", "detectionSurface", "surfaceId", "detail",
+      "role", "extractorId", "adapterId", "capabilityKind", "detectionSurface", "surfaceId", "detail",
       "projectedSystem",
       // Docker Compose story — owned by the Container inspector section.
       "docker", "dockerService", "dockerfileService", "serviceName",
@@ -1867,6 +1881,12 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       if (node.kind === "page") return "Page";
       if (node.kind === "module") return "Source module";
       if (node.kind === "function") return "Function";
+      if ((node.semantics || []).some((facet) => facet.kind === "trigger")) {
+        return "Scheduled trigger";
+      }
+      if ((node.semantics || []).some((facet) => facet.kind === "job")) {
+        return "Scheduled job";
+      }
       const tech =
         node.technology && node.technology !== "semantic"
           ? " · " + node.technology
@@ -1917,6 +1937,32 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         ? '<p class="messaging-hub-note">Messaging hub</p>'
         : "";
       return "<h3>Messaging</h3>" + hubNote + roleList(publishers, "Publishers") + roleList(consumers, "Consumers");
+    }
+
+    function scheduledWorkHtml(node) {
+      const semantics = Array.isArray(node.semantics) ? node.semantics : [];
+      const trigger = semantics.find((facet) => facet.kind === "trigger");
+      const job = semantics.find((facet) => facet.kind === "job");
+      if (!trigger && !job) return "";
+      const pills = [];
+      if (trigger) {
+        pills.push('<span class="pill">Type: ' + escapeHtml(trigger.triggerKind) + "</span>");
+        pills.push('<span class="pill">Provider: ' + escapeHtml(trigger.provider) + "</span>");
+        if (trigger.expression) {
+          pills.push('<span class="pill">Expression: ' + escapeHtml(trigger.expression) + "</span>");
+        }
+        if (trigger.timezone) {
+          pills.push('<span class="pill">Timezone: ' + escapeHtml(trigger.timezone) + "</span>");
+        }
+        pills.push('<span class="pill">Declared in: ' + escapeHtml(trigger.declaration) + "</span>");
+        return "<h3>Schedule</h3>" + pills.join("");
+      }
+      pills.push('<span class="pill">Execution: ' + escapeHtml(job.executionKind) + "</span>");
+      pills.push('<span class="pill">Provider: ' + escapeHtml(job.provider) + "</span>");
+      if (job.handler) {
+        pills.push('<span class="pill">Handler: ' + escapeHtml(job.handler) + "</span>");
+      }
+      return "<h3>Job</h3>" + pills.join("");
     }
 
     // Collaboration edges carry human detail on evidence (how systems connect).
@@ -2171,6 +2217,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const connections = [...incomingEdges, ...outgoingEdges];
       const collaboration = connections.filter((edge) => collaborationKinds.has(edge.kind));
       const messaging = messagingRolesHtml(node);
+      const scheduledWork = scheduledWorkHtml(node);
       // Table migration lineage is owned by the Prisma / SQL section.
       // Table↔table relation names are owned by the Relations section.
       // Queue publish/consume roles are owned by the Messaging section.
@@ -2241,7 +2288,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const collaborationHtml = collabLinks
         ? "<h3>In the story</h3>" + collabLinks
         : "";
-      const structuredSections = containerStory || workloadStory || chartStory || overlayStory || tableSources || tableRelations || messaging || collabLinks;
+      const structuredSections = scheduledWork || containerStory || workloadStory || chartStory || overlayStory || tableSources || tableRelations || messaging || collabLinks;
       const otherHtml = otherLinks
         ? "<h3>" + (collabLinks ? "Imports &amp; calls" : "Connections") + "</h3>" + otherLinks
         : (structuredSections ? "" : "<h3>Connections</h3><p>None visible</p>");
@@ -2257,8 +2304,10 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         ? "<h3>Package bin</h3><p>" + binCommands.map((command) => '<span class="pill">' + command + "</span>").join("") + "</p>"
         : "";
       const extractorRoster = Array.isArray(node.metadata && node.metadata.extractorRoster) ? node.metadata.extractorRoster : [];
-      const rosterHtml = extractorRoster.length
-        ? "<h3>Capabilities</h3><p>" + extractorRoster.map((name) => '<span class="pill">' + name + "</span>").join("") + "</p>"
+      const adapterRoster = Array.isArray(node.metadata && node.metadata.adapterRoster) ? node.metadata.adapterRoster : [];
+      const capabilityRoster = extractorRoster.length ? extractorRoster : adapterRoster;
+      const rosterHtml = capabilityRoster.length
+        ? "<h3>Capabilities</h3><p>" + capabilityRoster.map((name) => '<span class="pill">' + name + "</span>").join("") + "</p>"
         : "";
       const surfaceKids = (outgoing.get(id) || [])
         .filter((edge) => edge.kind === "contains")
@@ -2303,6 +2352,7 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       inspector.innerHTML =
         "<h2></h2>" +
         roleHtml +
+        scheduledWork +
         collaborationHtml +
         evidenceHtml +
         surfaceHtml +

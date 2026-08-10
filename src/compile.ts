@@ -7,6 +7,14 @@ import {
   runExtractor,
   type ArchitectureExtractor,
 } from "./extractor.js";
+import {
+  runSemanticAdapter,
+  type SemanticAdapter,
+} from "./adapter.js";
+import { celeryScheduledWorkAdapter } from "./adapters/scheduled/celery.js";
+import { kubernetesScheduledWorkAdapter } from "./adapters/scheduled/kubernetes.js";
+import { nodeScheduledWorkAdapter } from "./adapters/scheduled/node.js";
+import { unsupportedScheduledWorkAdapter } from "./adapters/scheduled/unsupported.js";
 import { GraphBuilder, edgeFrom, stableId } from "./graph.js";
 import { dockerExtractor } from "./extractors/docker.js";
 import { graphqlExtractor } from "./extractors/graphql.js";
@@ -34,6 +42,7 @@ const execFileAsync = promisify(execFile);
 
 export interface CompileOptions {
   extractors?: ArchitectureExtractor[];
+  adapters?: SemanticAdapter[];
 }
 
 async function readPackageManifest(
@@ -136,6 +145,25 @@ export async function compileRepository(
   const contributions = await Promise.all(
     extractors.map((extractor) => runExtractor(extractor, root, files)),
   );
+  const extracted = new GraphBuilder();
+  for (const contribution of contributions) extracted.add(contribution);
+  const snapshot = extracted.snapshot();
+  const adapters = options.adapters ?? [
+    nodeScheduledWorkAdapter,
+    celeryScheduledWorkAdapter,
+    kubernetesScheduledWorkAdapter,
+    unsupportedScheduledWorkAdapter,
+  ];
+  const adapterContributions = await Promise.all(
+    adapters.map((adapter) =>
+      runSemanticAdapter(adapter, {
+        root,
+        files,
+        nodes: snapshot.nodes,
+        edges: snapshot.edges,
+      }),
+    ),
+  );
 
   const packageManifest = await readPackageManifest(root);
   const readme = await readReadmeProjection(root);
@@ -177,7 +205,8 @@ export async function compileRepository(
     ],
   };
 
-  const topLevelNodes = contributions
+  const allContributions = [...contributions, ...adapterContributions];
+  const topLevelNodes = allContributions
     .flatMap((contribution) => contribution.nodes)
     .filter((node) => node.parentId === undefined);
   const builder = new GraphBuilder();
@@ -189,7 +218,7 @@ export async function compileRepository(
     ),
     diagnostics: [],
   });
-  for (const contribution of contributions) builder.add(contribution);
+  for (const contribution of allContributions) builder.add(contribution);
 
   const gitRevision = await revision(root);
   const project: ArchitectureGraph["project"] = {

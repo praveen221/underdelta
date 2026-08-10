@@ -22,6 +22,12 @@ const registeredExtractors = [
   "prisma",
   "sql",
 ];
+const registeredAdapters = [
+  "scheduled-node",
+  "scheduled-celery",
+  "scheduled-kubernetes",
+  "scheduled-unsupported",
+];
 
 test("Underdelta compiles its own structural compiler story", async () => {
   const graph = await compileRepository(repoRoot);
@@ -31,6 +37,10 @@ test("Underdelta compiles its own structural compiler story", async () => {
     graph.extractors.map((extractor) => extractor.id).sort(),
     ["repository", ...registeredExtractors].sort(),
   );
+  assert.deepEqual(
+    graph.adapters.map((adapter) => adapter.id).sort(),
+    registeredAdapters.sort(),
+  );
 
   for (const modulePath of [
     "src/cli.ts",
@@ -38,6 +48,8 @@ test("Underdelta compiles its own structural compiler story", async () => {
     "src/schema.ts",
     "src/graph.ts",
     "src/project.ts",
+    "src/adapter.ts",
+    "src/adapters/scheduled/node.ts",
     "src/viewer.ts",
   ]) {
     assert.ok(
@@ -52,6 +64,16 @@ test("Underdelta compiles its own structural compiler story", async () => {
         (node) => node.technology === extractor || node.metadata?.extractorId === extractor,
       ),
       `self-map should represent registered ${extractor} extractor`,
+    );
+  }
+
+  for (const adapter of registeredAdapters) {
+    assert.ok(
+      graph.nodes.some(
+        (node) =>
+          node.technology === adapter || node.metadata?.adapterId === adapter,
+      ),
+      `self-map should represent registered ${adapter} adapter`,
     );
   }
 

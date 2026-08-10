@@ -6,4 +6,5 @@ test-results/
 .underdelta-verify/
 .underdelta-real/
 .dogfood-scans/
+.dogfood-repos/
 *.log
