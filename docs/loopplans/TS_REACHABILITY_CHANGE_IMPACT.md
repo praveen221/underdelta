@@ -222,28 +222,28 @@ Precision rule: omit a path rather than mark it observed without evidence.
 ## Checklist (track in Learning log)
 
 ### Phase 0
-- [ ] Symbol id + unresolved call contract written (this file + schema if needed)
-- [ ] Metrics on analysis or diagnostics
-- [ ] Impact JSON draft accepted
-- [ ] Three local eval repos chosen (paths logged)
+- [x] Symbol id + unresolved call contract written (this file + schema if needed)
+- [x] Metrics on analysis or diagnostics
+- [x] Impact JSON draft accepted
+- [ ] Three local eval repos chosen (paths logged) — **human Phase 4**
 
 ### Phase 1
-- [ ] Export / re-export resolution
-- [ ] Cross-file function calls
-- [ ] Method calls on known bindings
-- [ ] Unresolved + ambiguous recorded
-- [ ] Fixture tests green
+- [x] Export / re-export resolution
+- [x] Cross-file function calls
+- [x] Method calls on known bindings
+- [x] Unresolved + ambiguous recorded
+- [x] Fixture tests green
 
 ### Phase 2
-- [ ] Anchors share symbol ids with call graph
-- [ ] Path query helpers + tests
-- [ ] Endpoint→data / job→resource paths on fixtures
+- [x] Anchors share symbol ids with call graph
+- [x] Path query helpers + tests
+- [x] Endpoint→data / job→resource paths on fixtures
 
 ### Phase 3
-- [ ] `impact` CLI (or `scan --impact`) 
-- [ ] Text + JSON output
-- [ ] Bounded subgraph / viewer hook (minimal)
-- [ ] Real local repo demo script
+- [x] `impact` CLI (or `scan --impact`) 
+- [x] Text + JSON output
+- [x] Bounded subgraph / viewer hook (minimal)
+- [ ] Real local repo demo script — optional human dogfood
 
 ### Phase 4
 - [ ] Eval checklists pass at agreed precision
@@ -255,6 +255,7 @@ Precision rule: omit a path rather than mark it observed without evidence.
 ## Learning log
 
 - 2026-08-12 | Product wedge locked: map + change impact; Monday-map rejected; adaptive systems; honest unresolved; local evals not brittle goldens | Next: Phase 0 contracts + metrics | Baseline: identifier-only `calls` in typescript extractor; no impact CLI
+- 2026-08-12 | Phases 0–3 implemented on `ts-reachability-impact-12082026`: impact schema, call metrics, import/re-export/namespace call resolution, unresolved/ambiguous diagnostics, path queries, `underdelta impact` CLI, viewer highlight, reachability tests in verify | Phase 4 user validation is human-owned | Note: bare free identifiers with no candidates still not counted as unresolved (precision-first; import failures + ambiguous multi-defs are recorded)
 
 ---
 

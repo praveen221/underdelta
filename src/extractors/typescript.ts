@@ -9,6 +9,7 @@ import type {
 import type {
   ArchitectureEdge,
   ArchitectureNode,
+  Diagnostic,
   Evidence,
   NodeKind,
   SourceRange,
@@ -400,6 +401,80 @@ function resolveRelativeImport(
   return undefined;
 }
 
+/** Resolve relative import to a parsed file (for export tables). */
+function resolveRelativeParsedFile(
+  fromFile: ParsedFile,
+  specifier: string,
+  parsedByAbsolute: Map<string, ParsedFile>,
+  moduleByAbsolute: Map<string, string>,
+): ParsedFile | undefined {
+  const moduleId = resolveRelativeImport(fromFile, specifier, moduleByAbsolute);
+  if (!moduleId) return undefined;
+  for (const file of parsedByAbsolute.values()) {
+    if (file.moduleId === moduleId) return file;
+  }
+  return undefined;
+}
+
+type ImportBinding =
+  | { kind: "symbol"; id: string; name: string }
+  | { kind: "namespace"; moduleId: string }
+  | { kind: "module"; moduleId: string };
+
+const BUILTIN_CALLEES = new Set([
+  "console",
+  "Math",
+  "JSON",
+  "Promise",
+  "Array",
+  "Object",
+  "Number",
+  "String",
+  "Boolean",
+  "Date",
+  "Error",
+  "Map",
+  "Set",
+  "WeakMap",
+  "WeakSet",
+  "RegExp",
+  "Symbol",
+  "Proxy",
+  "Reflect",
+  "parseInt",
+  "parseFloat",
+  "isNaN",
+  "isFinite",
+  "setTimeout",
+  "setInterval",
+  "clearTimeout",
+  "clearInterval",
+  "setImmediate",
+  "clearImmediate",
+  "queueMicrotask",
+  "requestAnimationFrame",
+  "fetch",
+  "require",
+  "structuredClone",
+  "Buffer",
+  "process",
+  "Buffer",
+  "URL",
+  "URLSearchParams",
+  "TextEncoder",
+  "TextDecoder",
+  "atob",
+  "btoa",
+  "encodeURIComponent",
+  "decodeURIComponent",
+]);
+
+function symbolFacet(
+  symbolKind: "module" | "class" | "function" | "method",
+): NonNullable<ArchitectureNode["semantics"]> {
+  return [{ kind: "symbol", symbolKind, language: "typescript" }];
+}
+
 export const typescriptExtractor: ArchitectureExtractor = {
   id: "typescript",
   version: "0.1.0",
@@ -408,6 +483,7 @@ export const typescriptExtractor: ArchitectureExtractor = {
   async extract(context: ExtractionContext) {
     const nodes: ArchitectureNode[] = [];
     const edges: ArchitectureEdge[] = [];
+    const diagnostics: Diagnostic[] = [];
     const parsed: ParsedFile[] = await Promise.all(
       context.files.map(async (absolute) => {
         const relative = relativeFile(context.root, absolute);
@@ -431,8 +507,15 @@ export const typescriptExtractor: ArchitectureExtractor = {
     const moduleByAbsolute = new Map(
       parsed.map((file) => [path.normalize(file.absolute), file.moduleId]),
     );
+    const parsedByAbsolute = new Map(
+      parsed.map((file) => [path.normalize(file.absolute), file]),
+    );
     const declarationsByFile = new Map<string, Map<string, string>>();
     const declarationsByName = new Map<string, string[]>();
+    /** moduleId → exportName → symbol id (or module id for export * placeholder) */
+    const exportsByModule = new Map<string, Map<string, string>>();
+    /** class/service id → method name → method symbol id */
+    const methodsByOwner = new Map<string, Map<string, string>>();
 
     for (const file of parsed) {
       nodes.push({
@@ -441,6 +524,7 @@ export const typescriptExtractor: ArchitectureExtractor = {
         label: file.relative,
         qualifiedName: file.relative,
         metadata: { language: "typescript" },
+        semantics: symbolFacet("module"),
         evidence: [
           {
             file: file.relative,
@@ -452,11 +536,14 @@ export const typescriptExtractor: ArchitectureExtractor = {
 
       const declarations = new Map<string, string>();
       declarationsByFile.set(file.relative, declarations);
+      const moduleExports = new Map<string, string>();
+      exportsByModule.set(file.moduleId, moduleExports);
 
       const addCallable = (
         name: string,
         node: ts.Node,
         parentId = file.moduleId,
+        exported = false,
       ): string => {
         const kind = callableKind(name, node);
         const id = stableId(kind, file.relative, name);
@@ -464,17 +551,35 @@ export const typescriptExtractor: ArchitectureExtractor = {
         const byName = declarationsByName.get(name) ?? [];
         byName.push(id);
         declarationsByName.set(name, byName);
+        if (parentId !== file.moduleId) {
+          const methods = methodsByOwner.get(parentId) ?? new Map<string, string>();
+          methods.set(name, id);
+          methodsByOwner.set(parentId, methods);
+        }
+        const isMethod = parentId !== file.moduleId;
         nodes.push({
           id,
           kind,
           label: name,
           qualifiedName: `${file.relative}#${name}`,
           parentId,
-          metadata: {},
+          metadata: isMethod ? { declaration: "method" } : {},
+          semantics: symbolFacet(isMethod ? "method" : "function"),
           evidence: [evidenceFor(file, node)],
         });
         edges.push(edgeFrom("contains", parentId, id, evidenceFor(file, node)));
+        if (exported) moduleExports.set(name, id);
         return id;
+      };
+
+      const isExported = (node: ts.Node): boolean => {
+        const modifiers = ts.canHaveModifiers(node)
+          ? ts.getModifiers(node)
+          : undefined;
+        return (
+          modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ===
+          true
+        );
       };
 
       const visitDeclarations = (node: ts.Node, parentId?: string): void => {
@@ -491,11 +596,13 @@ export const typescriptExtractor: ArchitectureExtractor = {
             qualifiedName: `${file.relative}#${node.name.text}`,
             parentId: file.moduleId,
             metadata: { declaration: "class" },
+            semantics: symbolFacet("class"),
             evidence: [evidenceFor(file, node)],
           });
           edges.push(
             edgeFrom("contains", file.moduleId, id, evidenceFor(file, node)),
           );
+          if (isExported(node)) moduleExports.set(node.name.text, id);
           ts.forEachChild(node, (child) => visitDeclarations(child, id));
           return;
         }
@@ -503,32 +610,220 @@ export const typescriptExtractor: ArchitectureExtractor = {
         if (ts.isMethodDeclaration(node) && node.name) {
           addCallable(node.name.getText(file.source), node, parentId);
         } else if (ts.isFunctionDeclaration(node) && node.name) {
-          addCallable(node.name.text, node, parentId);
+          addCallable(node.name.text, node, parentId, isExported(node));
         } else if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+          // Only true function values here. Do not use isServerActionInitializer:
+          // callWrapsFunction would treat `[].map(() => …)` as a callable binding.
           if (
             node.initializer &&
             (ts.isArrowFunction(node.initializer) ||
               ts.isFunctionExpression(node.initializer))
           ) {
-            addCallable(node.name.text, node, parentId);
+            const variableStatement = node.parent?.parent;
+            const exportedVar =
+              variableStatement !== undefined &&
+              ts.isVariableStatement(variableStatement) &&
+              isExported(variableStatement);
+            addCallable(node.name.text, node, parentId, exportedVar);
           }
         }
         ts.forEachChild(node, (child) => visitDeclarations(child, parentId));
       };
       visitDeclarations(file.source);
+
+      // export { name } / export { name as alias } / export { x } from './mod'
+      for (const statement of file.source.statements) {
+        if (!ts.isExportDeclaration(statement)) continue;
+        if (statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)) {
+          // handled in re-export pass below
+          continue;
+        }
+        if (!statement.exportClause || !ts.isNamedExports(statement.exportClause)) {
+          continue;
+        }
+        for (const element of statement.exportClause.elements) {
+          const localName = (element.propertyName ?? element.name).text;
+          const exportName = element.name.text;
+          const target = declarations.get(localName);
+          if (target) moduleExports.set(exportName, target);
+        }
+      }
+
+      // export default function/class/identifier
+      for (const statement of file.source.statements) {
+        if (ts.isFunctionDeclaration(statement) && statement.name && isExported(statement)) {
+          const mods = ts.getModifiers(statement);
+          if (mods?.some((m) => m.kind === ts.SyntaxKind.DefaultKeyword)) {
+            const id = declarations.get(statement.name.text);
+            if (id) moduleExports.set("default", id);
+          }
+        }
+        if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
+          if (ts.isIdentifier(statement.expression)) {
+            const id = declarations.get(statement.expression.text);
+            if (id) moduleExports.set("default", id);
+          }
+        }
+      }
     }
 
-    const uniqueDeclaration = (name: string): string | undefined => {
-      const candidates = declarationsByName.get(name);
-      return candidates?.length === 1 ? candidates[0] : undefined;
-    };
+    // Re-export pass (export { x } from './y' and export * from './y')
+    for (let pass = 0; pass < 3; pass += 1) {
+      for (const file of parsed) {
+        const moduleExports =
+          exportsByModule.get(file.moduleId) ?? new Map<string, string>();
+        for (const statement of file.source.statements) {
+          if (!ts.isExportDeclaration(statement)) continue;
+          if (
+            !statement.moduleSpecifier ||
+            !ts.isStringLiteral(statement.moduleSpecifier)
+          ) {
+            continue;
+          }
+          const targetFile = resolveRelativeParsedFile(
+            file,
+            statement.moduleSpecifier.text,
+            parsedByAbsolute,
+            moduleByAbsolute,
+          );
+          if (!targetFile) continue;
+          const targetExports =
+            exportsByModule.get(targetFile.moduleId) ?? new Map<string, string>();
+          if (!statement.exportClause) {
+            // export * from './mod'
+            for (const [name, id] of targetExports) {
+              if (name !== "default") moduleExports.set(name, id);
+            }
+            continue;
+          }
+          if (!ts.isNamedExports(statement.exportClause)) continue;
+          for (const element of statement.exportClause.elements) {
+            const remoteName = (element.propertyName ?? element.name).text;
+            const exportName = element.name.text;
+            const target = targetExports.get(remoteName);
+            if (target) moduleExports.set(exportName, target);
+          }
+        }
+        exportsByModule.set(file.moduleId, moduleExports);
+      }
+    }
+
+    // Import bindings per file
+    const importBindingsByFile = new Map<string, Map<string, ImportBinding>>();
+    for (const file of parsed) {
+      const bindings = new Map<string, ImportBinding>();
+      importBindingsByFile.set(file.relative, bindings);
+      for (const statement of file.source.statements) {
+        if (
+          !ts.isImportDeclaration(statement) ||
+          !ts.isStringLiteral(statement.moduleSpecifier)
+        ) {
+          continue;
+        }
+        const targetModuleId = resolveRelativeImport(
+          file,
+          statement.moduleSpecifier.text,
+          moduleByAbsolute,
+        );
+        if (!targetModuleId || !statement.importClause) continue;
+        const targetExports =
+          exportsByModule.get(targetModuleId) ?? new Map<string, string>();
+        const clause = statement.importClause;
+        if (clause.name) {
+          const defaultId = targetExports.get("default");
+          if (defaultId) {
+            bindings.set(clause.name.text, {
+              kind: "symbol",
+              id: defaultId,
+              name: "default",
+            });
+          } else {
+            bindings.set(clause.name.text, {
+              kind: "module",
+              moduleId: targetModuleId,
+            });
+          }
+        }
+        if (clause.namedBindings) {
+          if (ts.isNamespaceImport(clause.namedBindings)) {
+            bindings.set(clause.namedBindings.name.text, {
+              kind: "namespace",
+              moduleId: targetModuleId,
+            });
+          } else if (ts.isNamedImports(clause.namedBindings)) {
+            for (const element of clause.namedBindings.elements) {
+              const remoteName = (element.propertyName ?? element.name).text;
+              const localName = element.name.text;
+              const symbolId = targetExports.get(remoteName);
+              if (symbolId) {
+                bindings.set(localName, {
+                  kind: "symbol",
+                  id: symbolId,
+                  name: remoteName,
+                });
+              } else {
+                // Import present but export not resolved — still track module for unresolved
+                bindings.set(localName, {
+                  kind: "module",
+                  moduleId: targetModuleId,
+                });
+              }
+            }
+          }
+        }
+      }
+    }
 
     const publishMethods = new Set(["add", "enqueue", "publish", "send", "push"]);
 
     for (const file of parsed) {
       const localDeclarations =
         declarationsByFile.get(file.relative) ?? new Map<string, string>();
+      const importBindings =
+        importBindingsByFile.get(file.relative) ?? new Map<string, ImportBinding>();
       const queueBindings = new Map<string, string>();
+
+      const resolveName = (
+        name: string,
+      ):
+        | { status: "resolved"; id: string }
+        | { status: "ambiguous"; candidates: string[] }
+        | { status: "unresolved" } => {
+        const local = localDeclarations.get(name);
+        if (local) return { status: "resolved", id: local };
+        const binding = importBindings.get(name);
+        if (binding?.kind === "symbol") {
+          return { status: "resolved", id: binding.id };
+        }
+        const candidates = declarationsByName.get(name) ?? [];
+        if (candidates.length === 1) {
+          return { status: "resolved", id: candidates[0]! };
+        }
+        if (candidates.length > 1) {
+          return { status: "ambiguous", candidates };
+        }
+        return { status: "unresolved" };
+      };
+
+      const recordCallDiagnostic = (
+        code: "call-unresolved" | "call-ambiguous",
+        callee: string,
+        at: ts.Node,
+        ownerId: string,
+        detail?: string,
+      ): void => {
+        diagnostics.push({
+          severity: "info",
+          code,
+          message:
+            code === "call-ambiguous"
+              ? `Ambiguous call to ${callee}${detail ? ` (${detail})` : ""}`
+              : `Unresolved call to ${callee}${detail ? ` (${detail})` : ""}`,
+          evidence: {
+            ...evidenceFor(file, at, "observed", `from:${ownerId}`),
+          },
+        });
+      };
 
       const ensureQueue = (
         queueName: string,
@@ -596,11 +891,15 @@ export const typescriptExtractor: ArchitectureExtractor = {
         if (ts.isJsxOpeningLikeElement(node)) {
           const name = node.tagName.getText(file.source);
           if (/^[A-Z]/.test(name)) {
-            const target =
-              localDeclarations.get(name) ?? uniqueDeclaration(name);
-            if (target) {
+            const resolved = resolveName(name);
+            if (resolved.status === "resolved") {
               edges.push(
-                edgeFrom("renders", ownerId, target, evidenceFor(file, node)),
+                edgeFrom(
+                  "renders",
+                  ownerId,
+                  resolved.id,
+                  evidenceFor(file, node),
+                ),
               );
             }
           }
@@ -646,15 +945,13 @@ export const typescriptExtractor: ArchitectureExtractor = {
               );
               const handler = node.arguments.at(-1);
               if (handler && ts.isIdentifier(handler)) {
-                const target =
-                  localDeclarations.get(handler.text) ??
-                  uniqueDeclaration(handler.text);
-                if (target) {
+                const resolved = resolveName(handler.text);
+                if (resolved.status === "resolved") {
                   edges.push(
                     edgeFrom(
                       "routes-to",
                       routeId,
-                      target,
+                      resolved.id,
                       evidenceFor(file, handler),
                     ),
                   );
@@ -723,14 +1020,92 @@ export const typescriptExtractor: ArchitectureExtractor = {
             }
           }
 
+          // Direct call: foo()
           if (ts.isIdentifier(node.expression)) {
-            const target =
-              localDeclarations.get(node.expression.text) ??
-              uniqueDeclaration(node.expression.text);
-            if (target && target !== ownerId) {
-              edges.push(
-                edgeFrom("calls", ownerId, target, evidenceFor(file, node)),
-              );
+            const name = node.expression.text;
+            if (!BUILTIN_CALLEES.has(name)) {
+              const resolved = resolveName(name);
+              if (resolved.status === "resolved" && resolved.id !== ownerId) {
+                edges.push(
+                  edgeFrom(
+                    "calls",
+                    ownerId,
+                    resolved.id,
+                    evidenceFor(file, node),
+                  ),
+                );
+              } else if (resolved.status === "ambiguous") {
+                recordCallDiagnostic(
+                  "call-ambiguous",
+                  name,
+                  node,
+                  ownerId,
+                  `${resolved.candidates.length} candidates`,
+                );
+              } else if (importBindings.has(name)) {
+                // Imported name that did not resolve to an export
+                recordCallDiagnostic("call-unresolved", name, node, ownerId);
+              }
+            }
+          }
+
+          // Property call: ns.fn() or obj.method()
+          if (ts.isPropertyAccessExpression(node.expression)) {
+            const methodName = node.expression.name.text;
+            const object = node.expression.expression;
+            if (ts.isIdentifier(object)) {
+              const objectName = object.text;
+              if (!BUILTIN_CALLEES.has(objectName)) {
+                const binding = importBindings.get(objectName);
+                if (binding?.kind === "namespace" || binding?.kind === "module") {
+                  const exports =
+                    exportsByModule.get(binding.moduleId) ??
+                    new Map<string, string>();
+                  const target = exports.get(methodName);
+                  if (target && target !== ownerId) {
+                    edges.push(
+                      edgeFrom(
+                        "calls",
+                        ownerId,
+                        target,
+                        evidenceFor(file, node, "derived"),
+                      ),
+                    );
+                  } else {
+                    recordCallDiagnostic(
+                      "call-unresolved",
+                      `${objectName}.${methodName}`,
+                      node,
+                      ownerId,
+                      "namespace/module export",
+                    );
+                  }
+                } else {
+                  const ownerResolved = resolveName(objectName);
+                  if (ownerResolved.status === "resolved") {
+                    const methods = methodsByOwner.get(ownerResolved.id);
+                    const target = methods?.get(methodName);
+                    if (target && target !== ownerId) {
+                      edges.push(
+                        edgeFrom(
+                          "calls",
+                          ownerId,
+                          target,
+                          evidenceFor(file, node, "derived"),
+                        ),
+                      );
+                    } else if (methods && !target) {
+                      recordCallDiagnostic(
+                        "call-unresolved",
+                        `${objectName}.${methodName}`,
+                        node,
+                        ownerId,
+                        "method",
+                      );
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -1435,7 +1810,7 @@ export const typescriptExtractor: ArchitectureExtractor = {
       extractor: { id: this.id, version: this.version },
       nodes,
       edges,
-      diagnostics: [],
+      diagnostics,
     };
   },
 };

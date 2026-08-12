@@ -78,11 +78,20 @@ found instead of presenting silence as success.
 npm run verify             # build + extractor contracts + projection + self-map
 npm run test:viewer        # provision Chromium + test the self-map in a real browser
 npm run inspect -- /path/to/repo
+node dist/cli.js impact . --files src/foo.ts   # change impact report + highlighted map
+node dist/cli.js impact . --base main --head HEAD
 ```
 
 `inspect` requires a path and scans only that path. Use it to assess a real
 repository on demand; Underdelta does not maintain a pinned
 external-repository test ladder.
+
+`impact` compiles the repo, maps changed files (explicit `--files` or git
+`--base`/`--head` / worktree vs HEAD) to symbols, then reports reachable product
+anchors (endpoints, resources, jobs, queues, systems) with evidence. It writes
+`architecture.json`, `impact.json`, and an `index.html` that highlights the
+impact neighborhood. Unresolved and ambiguous calls stay explicit; they are not
+turned into invented edges.
 
 ## How to read the map
 
