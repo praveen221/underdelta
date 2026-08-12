@@ -246,3 +246,95 @@ export type ArchitectureNode = z.infer<typeof architectureNodeSchema>;
 export type ArchitectureEdge = z.infer<typeof architectureEdgeSchema>;
 export type Diagnostic = z.infer<typeof diagnosticSchema>;
 export type ArchitectureGraph = z.infer<typeof architectureGraphSchema>;
+
+/** Deterministic change-impact report (product MVP retention surface). */
+export const impactReportSchema = z.object({
+  schemaVersion: z.literal("0.1"),
+  project: z.object({
+    name: z.string().min(1),
+    root: z.string().min(1),
+    baseRevision: z.string().optional(),
+    headRevision: z.string().optional(),
+  }),
+  changed: z.object({
+    files: z.array(z.string().min(1)),
+    /** Deleted relative to base; absent from head tree (not analyzed without base graph). */
+    deletedFiles: z.array(z.string().min(1)).default([]),
+    symbols: z.array(
+      z.object({
+        id: z.string().min(1),
+        label: z.string().min(1),
+        kind: z.string().min(1),
+      }),
+    ),
+  }),
+  impact: z.object({
+    endpoints: z.array(
+      z.object({
+        method: z.string().min(1),
+        path: z.string().min(1),
+        nodeId: z.string().min(1),
+        label: z.string().min(1).optional(),
+      }),
+    ),
+    resources: z.array(
+      z.object({
+        label: z.string().min(1),
+        kind: z.string().min(1),
+        nodeId: z.string().min(1),
+      }),
+    ),
+    jobs: z.array(
+      z.object({
+        label: z.string().min(1),
+        nodeId: z.string().min(1),
+      }),
+    ),
+    queues: z.array(
+      z.object({
+        label: z.string().min(1),
+        nodeId: z.string().min(1),
+      }),
+    ),
+    systems: z.array(
+      z.object({
+        id: z.string().min(1),
+        label: z.string().min(1),
+      }),
+    ),
+  }),
+  paths: z.array(
+    z.object({
+      fromSymbolId: z.string().min(1),
+      steps: z.array(
+        z.object({
+          edgeKind: z.string().min(1),
+          to: z.string().min(1),
+          certainty: z.enum(certaintyKinds),
+        }),
+      ),
+    }),
+  ),
+  evidenceCount: z.object({
+    observed: z.number().int().nonnegative(),
+    derived: z.number().int().nonnegative(),
+    inferred: z.number().int().nonnegative(),
+  }),
+  unresolved: z.array(
+    z.object({
+      fromSymbolId: z.string().optional(),
+      callee: z.string().min(1),
+      file: z.string().min(1),
+      detail: z.string().optional(),
+    }),
+  ),
+  metrics: z.object({
+    callsResolved: z.number().int().nonnegative(),
+    callsUnresolved: z.number().int().nonnegative(),
+    callsAmbiguous: z.number().int().nonnegative(),
+  }),
+  /** Node ids in the bounded impact neighborhood (for viewer highlight). */
+  highlightNodeIds: z.array(z.string().min(1)).default([]),
+});
+
+export type ImpactReport = z.infer<typeof impactReportSchema>;

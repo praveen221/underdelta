@@ -1,13 +1,17 @@
-import type { ArchitectureGraph } from "./schema.js";
+import type { ArchitectureGraph, ImpactReport } from "./schema.js";
 import { analyzeArchitecture } from "./analysis.js";
 
 function safeJson(value: unknown): string {
   return JSON.stringify(value).replaceAll("<", "\\u003c");
 }
 
-export function renderArchitectureHtml(graph: ArchitectureGraph): string {
+export function renderArchitectureHtml(
+  graph: ArchitectureGraph,
+  options: { impact?: ImpactReport } = {},
+): string {
   const title = graph.project.name.replaceAll(/[<>&"]/g, "");
   const analysis = analyzeArchitecture(graph);
+  const impact = options.impact;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -108,6 +112,20 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
     #nodes { position: absolute; inset: 0; }
     .lane-label { position: absolute; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
     .node { --kind-color: #77808d; position: absolute; width: 190px; min-height: 58px; background: var(--panel); border: 1px solid var(--kind-color); border-radius: 9px; padding: 9px 10px; cursor: grab; touch-action: none; user-select: none; transition: opacity .12s, border-color .12s, background .12s; }
+    .node.impact-hit {
+      border-color: #f0b429;
+      box-shadow: 0 0 0 1px color-mix(in srgb, #f0b429 55%, transparent), 0 0 18px color-mix(in srgb, #f0b429 22%, transparent);
+    }
+    .node.impact-changed {
+      border-color: #ff7b72;
+      box-shadow: 0 0 0 1px color-mix(in srgb, #ff7b72 50%, transparent);
+    }
+    #impact-banner {
+      display: none; align-items: center; gap: 10px; flex-wrap: wrap;
+      border-bottom: 1px solid var(--line); padding: 8px 14px; background: #1a1710; color: #f5e6c8; font-size: 12px;
+    }
+    #impact-banner[data-active="true"] { display: flex; }
+    #impact-banner strong { color: #f0b429; }
     .node.dragging { cursor: grabbing; z-index: 4; box-shadow: 0 12px 30px rgba(0, 0, 0, .38); }
     .node:hover, .node.selected { border-color: var(--accent); background: #1c2230; }
     .node.dim { opacity: .16; }
@@ -211,6 +229,20 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
         <ul id="search-results" hidden role="listbox" aria-label="Search matches"></ul>
       </div>
     </header>
+    <div id="impact-banner" data-active="${impact ? "true" : "false"}" ${impact ? "" : "hidden"}>
+      ${
+        impact
+          ? `<strong>Change impact</strong>
+      <span>${impact.changed.files.length} file(s) · ${impact.changed.symbols.length} symbol(s)${
+              (impact.changed.deletedFiles?.length ?? 0) > 0
+                ? ` · ${impact.changed.deletedFiles.length} deleted (base graph needed for deleted symbols)`
+                : ""
+            }</span>
+      <span>${impact.impact.endpoints.length} endpoint(s) · ${impact.impact.resources.length} resource(s) · ${impact.impact.jobs.length} job(s)</span>
+      <span class="meta">resolved calls ${impact.metrics.callsResolved} · unresolved ${impact.metrics.callsUnresolved}</span>`
+          : ""
+      }
+    </div>
     <div id="workspace">
       <main id="viewport">
         <div id="world">
@@ -237,6 +269,15 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
   <script>
     const graph = ${safeJson(graph)};
     const analysis = ${safeJson(analysis)};
+    const impact = ${safeJson(impact ?? null)};
+    const impactHighlight = new Set(
+      impact && Array.isArray(impact.highlightNodeIds) ? impact.highlightNodeIds : [],
+    );
+    const impactChanged = new Set(
+      impact && impact.changed && Array.isArray(impact.changed.symbols)
+        ? impact.changed.symbols.map((symbol) => symbol.id)
+        : [],
+    );
     const byId = new Map(graph.nodes.map((node) => [node.id, node]));
     const outgoing = new Map();
     const incoming = new Map();
@@ -1332,6 +1373,8 @@ export function renderArchitectureHtml(graph: ArchitectureGraph): string {
       const element = document.createElement("div");
       element.className = "node" + (state.selected === node.id ? " selected" : "");
       if (state.nodeDrag && state.nodeDrag.id === node.id) element.classList.add("dragging");
+      if (impactChanged.has(node.id)) element.classList.add("impact-changed");
+      else if (impactHighlight.has(node.id)) element.classList.add("impact-hit");
       element.dataset.kind = node.kind;
       element.dataset.id = node.id;
       element.dataset.manualPosition = manual ? "true" : "false";

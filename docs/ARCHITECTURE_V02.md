@@ -122,3 +122,11 @@ Do not add a declarative matcher DSL yet. Add another plain adapter module when
 a supported framework is requested and validate it against a user-selected
 repository with `npm run inspect -- /path/to/repo`. Generalize the adapter
 interface only after repeated implementations reveal a stable abstraction.
+
+## Product wedge (MVP freeze)
+
+Product priority is not horizontal adapter expansion. See
+[`PRODUCT_MVP.md`](PRODUCT_MVP.md): repository map for activation, deterministic
+change impact for retention. Prefer reachability and impact precision (including
+anonymous route handlers as the next follow-up) over new frameworks until user
+gates pass.

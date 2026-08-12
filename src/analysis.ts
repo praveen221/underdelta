@@ -4,6 +4,7 @@ import type {
   Certainty,
   Diagnostic,
 } from "./schema.js";
+import { collectCallMetrics, type CallMetrics } from "./reachability.js";
 
 export interface DetectedCapability {
   id: string;
@@ -19,6 +20,7 @@ export interface ArchitectureAnalysis {
   certainty: Record<Certainty, number>;
   unsupported: Diagnostic[];
   issues: Diagnostic[];
+  callMetrics: CallMetrics;
 }
 
 interface CapabilityDefinition {
@@ -130,6 +132,7 @@ export function analyzeArchitecture(
     certainty,
     unsupported,
     issues,
+    callMetrics: collectCallMetrics(graph),
   };
 }
 
@@ -140,6 +143,12 @@ export function formatAnalysisLines(analysis: ArchitectureAnalysis): string[] {
       `  Detected: ${analysis.capabilities
         .map((capability) => `${capability.label} (${capability.count})`)
         .join(", ")}`,
+    );
+  }
+  const { callsResolved, callsUnresolved, callsAmbiguous } = analysis.callMetrics;
+  if (callsResolved + callsUnresolved + callsAmbiguous > 0) {
+    lines.push(
+      `  Calls: ${callsResolved} resolved, ${callsUnresolved} unresolved, ${callsAmbiguous} ambiguous`,
     );
   }
   for (const issue of analysis.issues) {

@@ -15,13 +15,20 @@ was derived.
 
 ## Status
 
+**MVP wedge:** evidence-backed **product map** (activation) plus deterministic
+**change impact** (retention)—understand what a change touches before you make
+or merge it. See [`docs/PRODUCT_MVP.md`](docs/PRODUCT_MVP.md). The TypeScript
+reachability engine and `impact` CLI have shipped as a capability; customer
+value is not validated. Framework breadth stays frozen. Docs index:
+[`docs/README.md`](docs/README.md).
+
 **v0.2 semantic contract in development.** Language and infrastructure
 extractors establish base facts; capability adapters normalize framework
 semantics into one evidence-backed model. Evidence is marked `observed`,
 `derived`, or `inferred`; unsupported scheduler and HTTP frameworks are reported
 rather than guessed.
 
-Supported in v0:
+Supported in v0 (depth varies; TypeScript web product is the validation focus):
 
 - TypeScript/JavaScript — modules, React/Next UI, Express routes, BullMQ
 - Next.js App Router — pages, layouts, route handlers, server actions
@@ -70,11 +77,28 @@ found instead of presenting silence as success.
 npm run verify             # build + extractor contracts + projection + self-map
 npm run test:viewer        # provision Chromium + test the self-map in a real browser
 npm run inspect -- /path/to/repo
+node dist/cli.js impact . --files src/foo.ts   # change impact report + highlighted map
+node dist/cli.js impact . --base main --head HEAD
 ```
 
 `inspect` requires a path and scans only that path. Use it to assess a real
 repository on demand; Underdelta does not maintain a pinned
 external-repository test ladder.
+
+`impact` compiles the **working tree**, maps changed files (explicit `--files`,
+default dirty worktree including **untracked** files, or git `base...head`
+merge-base range) to symbols, then reports reachable product anchors (endpoints,
+resources, jobs, queues, systems) with evidence—including **upstream paths**
+from those anchors to the change. It writes `architecture.json`, `impact.json`,
+and an `index.html` that highlights the impact neighborhood.
+
+Named `--head` is only accepted when it matches a **clean** `HEAD` (historical
+tree materialization is not implemented yet). Generated Underdelta output dirs
+are ignored by that clean check. Do **not** combine `--files` with `--base` /
+`--head` (avoids mislabeled graphs). Invalid git revisions fail the CLI instead
+of producing a silent empty report. Unresolved and ambiguous calls stay
+explicit. Deleted files are listed but need a base-graph compile for symbol
+impact.
 
 ## How to read the map
 
