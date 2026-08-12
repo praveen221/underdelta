@@ -30,15 +30,123 @@ export interface ImpactOptions {
   maxPaths?: number;
 }
 
+export interface ChangedFilesResult {
+  files: string[];
+  /** Paths deleted between base and head (not present in head tree). */
+  deletedFiles: string[];
+  baseRevision?: string;
+  headRevision?: string;
+  /** True when analyzing dirty worktree (includes untracked). */
+  worktree: boolean;
+}
+
+function splitLines(stdout: string): string[] {
+  return stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replaceAll("\\", "/"));
+}
+
+async function gitNameOnly(
+  root: string,
+  args: string[],
+): Promise<string[]> {
+  const { stdout } = await execFileAsync("git", args, { cwd: root });
+  return splitLines(stdout);
+}
+
+/** Resolve a revision to a full commit SHA. */
+export async function resolveGitSha(
+  root: string,
+  revision: string,
+): Promise<string> {
+  const { stdout } = await execFileAsync(
+    "git",
+    ["rev-parse", "--verify", revision],
+    { cwd: root },
+  );
+  return stdout.trim();
+}
+
+export async function isWorktreeClean(root: string): Promise<boolean> {
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["status", "--porcelain"],
+      { cwd: root },
+    );
+    return stdout.trim().length === 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Impact always compiles the working tree today. Named `--head` revisions are
+ * only valid when HEAD points at that revision and the worktree is clean —
+ * otherwise current-tree facts would be mislabeled. Historical tree materialization
+ * is not implemented yet.
+ */
+export async function assertImpactCompileSource(
+  root: string,
+  options: { headRevision?: string; filesOnly?: boolean },
+): Promise<{ mode: "worktree" | "revision"; headSha?: string }> {
+  if (options.filesOnly || !options.headRevision) {
+    return { mode: "worktree" };
+  }
+
+  const head = options.headRevision;
+  if (
+    head === "worktree" ||
+    head.startsWith("worktree-vs-") ||
+    head === "WORKTREE"
+  ) {
+    return { mode: "worktree" };
+  }
+
+  let headSha: string;
+  let checkoutSha: string;
+  try {
+    headSha = await resolveGitSha(root, head);
+    checkoutSha = await resolveGitSha(root, "HEAD");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Cannot resolve --head ${head} for impact analysis: ${message}`,
+    );
+  }
+
+  if (headSha !== checkoutSha) {
+    throw new Error(
+      `Impact analyzes the working tree only until historical graphs exist. ` +
+        `--head ${head} resolves to ${headSha.slice(0, 12)}, but HEAD is ${checkoutSha.slice(0, 12)}. ` +
+        `Check out that revision (cleanly) and re-run, or pass --files for an explicit path list.`,
+    );
+  }
+
+  const clean = await isWorktreeClean(root);
+  if (!clean) {
+    throw new Error(
+      `Impact with --head ${head} requires a clean working tree so graph facts match that revision. ` +
+        `Commit/stash local changes, or omit --head to analyze the dirty worktree (including untracked files).`,
+    );
+  }
+
+  return { mode: "revision", headSha };
+}
+
 export async function listChangedFiles(
   root: string,
   options: ImpactOptions = {},
-): Promise<{ files: string[]; baseRevision?: string; headRevision?: string }> {
+): Promise<ChangedFilesResult> {
   if (options.files?.length) {
     return {
       files: options.files.map((file) => file.replaceAll("\\", "/")),
+      deletedFiles: [],
       ...(options.baseRevision ? { baseRevision: options.baseRevision } : {}),
       ...(options.headRevision ? { headRevision: options.headRevision } : {}),
+      worktree: !options.baseRevision && !options.headRevision,
     };
   }
 
@@ -47,52 +155,90 @@ export async function listChangedFiles(
 
   try {
     if (base && head) {
-      const { stdout } = await execFileAsync(
-        "git",
-        ["diff", "--name-only", "--diff-filter=ACMR", base, head],
-        { cwd: root },
-      );
+      // Triple-dot: merge-base(base, head)..head — PR range semantics.
+      const range = `${base}...${head}`;
+      const files = await gitNameOnly(root, [
+        "diff",
+        "--name-only",
+        "--diff-filter=ACMR",
+        range,
+      ]);
+      const deletedFiles = await gitNameOnly(root, [
+        "diff",
+        "--name-only",
+        "--diff-filter=D",
+        range,
+      ]);
       return {
-        files: stdout
-          .split("\n")
-          .map((line) => line.trim())
-          .filter(Boolean),
+        files,
+        deletedFiles,
         baseRevision: base,
         headRevision: head,
+        worktree: false,
       };
     }
     if (base) {
-      const { stdout } = await execFileAsync(
-        "git",
-        ["diff", "--name-only", "--diff-filter=ACMR", base],
-        { cwd: root },
-      );
+      // base...worktree (tracked changes vs base).
+      const files = await gitNameOnly(root, [
+        "diff",
+        "--name-only",
+        "--diff-filter=ACMR",
+        base,
+      ]);
+      const deletedFiles = await gitNameOnly(root, [
+        "diff",
+        "--name-only",
+        "--diff-filter=D",
+        base,
+      ]);
+      const untracked = await gitNameOnly(root, [
+        "ls-files",
+        "--others",
+        "--exclude-standard",
+      ]);
       return {
-        files: stdout
-          .split("\n")
-          .map((line) => line.trim())
-          .filter(Boolean),
+        files: [...new Set([...files, ...untracked])],
+        deletedFiles,
         baseRevision: base,
         headRevision: options.headRevision ?? "worktree",
+        worktree: true,
       };
     }
 
-    // Default: unstaged + staged vs HEAD
-    const { stdout } = await execFileAsync(
-      "git",
-      ["diff", "--name-only", "--diff-filter=ACMR", "HEAD"],
-      { cwd: root },
-    );
-    const { stdout: staged } = await execFileAsync(
-      "git",
-      ["diff", "--name-only", "--diff-filter=ACMR", "--cached"],
-      { cwd: root },
-    );
-    const files = new Set<string>();
-    for (const line of [...stdout.split("\n"), ...staged.split("\n")]) {
-      const trimmed = line.trim();
-      if (trimmed) files.add(trimmed);
-    }
+    // Default: dirty worktree vs HEAD, including untracked.
+    const unstaged = await gitNameOnly(root, [
+      "diff",
+      "--name-only",
+      "--diff-filter=ACMR",
+      "HEAD",
+    ]);
+    const staged = await gitNameOnly(root, [
+      "diff",
+      "--name-only",
+      "--diff-filter=ACMR",
+      "--cached",
+    ]);
+    const deletedUnstaged = await gitNameOnly(root, [
+      "diff",
+      "--name-only",
+      "--diff-filter=D",
+      "HEAD",
+    ]);
+    const deletedStaged = await gitNameOnly(root, [
+      "diff",
+      "--name-only",
+      "--diff-filter=D",
+      "--cached",
+    ]);
+    const untracked = await gitNameOnly(root, [
+      "ls-files",
+      "--others",
+      "--exclude-standard",
+    ]);
+    const files = new Set<string>([...unstaged, ...staged, ...untracked]);
+    const deletedFiles = [
+      ...new Set([...deletedUnstaged, ...deletedStaged]),
+    ];
     let headRevision = "worktree";
     try {
       const { stdout: rev } = await execFileAsync(
@@ -104,12 +250,14 @@ export async function listChangedFiles(
     } catch {
       // not a git repo
     }
-    return { files: [...files], headRevision };
+    return { files: [...files], deletedFiles, headRevision, worktree: true };
   } catch {
     return {
       files: [],
+      deletedFiles: [],
       ...(base ? { baseRevision: base } : {}),
       ...(head ? { headRevision: head } : {}),
+      worktree: true,
     };
   }
 }
@@ -138,7 +286,8 @@ function endpointInfo(node: {
   return { method, path, nodeId: node.id, label: node.label };
 }
 
-function pickRepresentativePaths(
+/** Downstream: changed symbol → product anchors. */
+function pickDownstreamPaths(
   graph: ArchitectureGraph,
   symbolIds: string[],
   neighborhood: Set<string>,
@@ -161,12 +310,49 @@ function pickRepresentativePaths(
   return paths;
 }
 
+/**
+ * Upstream: product anchors that reach changed symbols via reverse BFS.
+ * Serialize forward paths from those anchors to the seeds so claims have evidence.
+ */
+function pickUpstreamPaths(
+  graph: ArchitectureGraph,
+  seedIds: string[],
+  neighborhood: Set<string>,
+  maxPaths: number,
+): ReachabilityPath[] {
+  const seedSet = new Set(seedIds);
+  const nodes = nodeById(graph);
+  const anchors: string[] = [];
+  for (const id of neighborhood) {
+    if (seedSet.has(id)) continue;
+    const node = nodes.get(id);
+    if (node && isProductAnchor(node)) anchors.push(id);
+  }
+
+  const paths: ReachabilityPath[] = [];
+  for (const anchorId of anchors) {
+    if (paths.length >= maxPaths) break;
+    const found = findPaths(
+      graph,
+      anchorId,
+      (node) => seedSet.has(node.id),
+      { maxDepth: 8, maxPaths: 3 },
+    );
+    for (const path of found) {
+      paths.push(path);
+      if (paths.length >= maxPaths) break;
+    }
+  }
+  return paths;
+}
+
 export function computeChangeImpact(
   graph: ArchitectureGraph,
   changedFiles: string[],
   options: {
     baseRevision?: string;
     headRevision?: string;
+    deletedFiles?: string[];
     maxDepth?: number;
     maxPaths?: number;
   } = {},
@@ -174,6 +360,9 @@ export function computeChangeImpact(
   const maxDepth = options.maxDepth ?? 12;
   const maxPaths = options.maxPaths ?? 24;
   const files = changedFiles.map((file) => file.replaceAll("\\", "/"));
+  const deletedFiles = (options.deletedFiles ?? []).map((file) =>
+    file.replaceAll("\\", "/"),
+  );
   const changedSymbols = symbolsInFiles(graph, files);
   const seedIds = changedSymbols.map((node) => node.id);
 
@@ -214,7 +403,12 @@ export function computeChangeImpact(
       });
       continue;
     }
-    if (node.kind === "job" || node.kind === "cron" || hasFacet(node, "job") || hasFacet(node, "trigger")) {
+    if (
+      node.kind === "job" ||
+      node.kind === "cron" ||
+      hasFacet(node, "job") ||
+      hasFacet(node, "trigger")
+    ) {
       seen.add(id);
       jobs.push({ label: node.label, nodeId: node.id });
       continue;
@@ -230,12 +424,20 @@ export function computeChangeImpact(
     label: system.label,
   }));
 
-  const paths = pickRepresentativePaths(
+  const half = Math.max(1, Math.floor(maxPaths / 2));
+  const downstreamPaths = pickDownstreamPaths(
     graph,
     seedIds,
     neighborhood,
-    maxPaths,
+    half,
   );
+  const upstreamPaths = pickUpstreamPaths(
+    graph,
+    seedIds,
+    neighborhood,
+    maxPaths - downstreamPaths.length,
+  );
+  const paths = [...upstreamPaths, ...downstreamPaths];
 
   const evidenceCount: Record<Certainty, number> = {
     observed: 0,
@@ -284,6 +486,7 @@ export function computeChangeImpact(
     },
     changed: {
       files,
+      deletedFiles,
       symbols: changedSymbols.map((node) => ({
         id: node.id,
         label: node.label,
@@ -327,14 +530,29 @@ export function formatImpactLines(report: ImpactReport): string[] {
   if (report.changed.files.length > 20) {
     lines.push(`    … ${report.changed.files.length - 20} more`);
   }
+  if (report.changed.deletedFiles.length > 0) {
+    lines.push(
+      `  Deleted files (not in head graph; need base compile for symbols): ${report.changed.deletedFiles.length}`,
+    );
+    for (const file of report.changed.deletedFiles.slice(0, 10)) {
+      lines.push(`    - ${file}`);
+    }
+  }
   lines.push(`  Changed symbols: ${report.changed.symbols.length}`);
   for (const symbol of report.changed.symbols.slice(0, 15)) {
     lines.push(`    - ${symbol.kind} ${symbol.label}`);
   }
 
   lines.push("  Potential impact:");
-  if (report.impact.endpoints.length === 0 && report.impact.resources.length === 0 && report.impact.jobs.length === 0 && report.impact.queues.length === 0) {
-    lines.push("    (no product anchors reached — check call resolution coverage)");
+  if (
+    report.impact.endpoints.length === 0 &&
+    report.impact.resources.length === 0 &&
+    report.impact.jobs.length === 0 &&
+    report.impact.queues.length === 0
+  ) {
+    lines.push(
+      "    (no product anchors reached — check call resolution coverage)",
+    );
   }
   for (const endpoint of report.impact.endpoints) {
     lines.push(`    ${endpoint.method} ${endpoint.path}`);
@@ -376,9 +594,14 @@ export function formatImpactLines(report: ImpactReport): string[] {
     lines.push("  Sample paths:");
     for (const path of report.paths.slice(0, 8)) {
       const chain = path.steps
-        .map((step) => `${step.edgeKind}→${step.to.split(":").slice(0, 2).join(":")}`)
+        .map(
+          (step) =>
+            `${step.edgeKind}→${step.to.split(":").slice(0, 2).join(":")}`,
+        )
         .join(" ");
-      lines.push(`    - ${path.fromSymbolId.split(":").slice(0, 3).join(":")} ${chain}`);
+      lines.push(
+        `    - ${path.fromSymbolId.split(":").slice(0, 3).join(":")} ${chain}`,
+      );
     }
   }
 

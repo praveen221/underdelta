@@ -1,20 +1,38 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
 import test from "node:test";
 
 import { analyzeArchitecture } from "../dist/analysis.js";
 import { compileRepository } from "../dist/compile.js";
 import { typescriptExtractor } from "../dist/extractors/typescript.js";
-import { computeChangeImpact } from "../dist/impact.js";
+import {
+  assertImpactCompileSource,
+  computeChangeImpact,
+  listChangedFiles,
+} from "../dist/impact.js";
 import {
   collectCallMetrics,
   findPaths,
   pathsFromSymbolToResources,
 } from "../dist/reachability.js";
 import { impactReportSchema } from "../dist/schema.js";
-import { extract, edgeBy, nodeBy } from "./helpers.mjs";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
+import { edgeBy, extract, nodeBy } from "./helpers.mjs";
+
+const execFileAsync = promisify(execFile);
+
+async function git(root, args) {
+  await execFileAsync("git", args, { cwd: root });
+}
+
+async function initGitRepo(root) {
+  await git(root, ["init"]);
+  await git(root, ["config", "user.email", "test@underdelta.local"]);
+  await git(root, ["config", "user.name", "Underdelta Test"]);
+}
 
 test("typescript resolves imported calls without relying on unique names", async () => {
   const graph = await extract(typescriptExtractor, {
@@ -29,14 +47,58 @@ test("typescript resolves imported calls without relying on unique names", async
   });
   const run = nodeBy(graph, "function", "run");
   const aShared = graph.nodes.find(
-    (node) => node.kind === "function" && node.qualifiedName === "src/a.ts#shared",
+    (node) =>
+      node.kind === "function" && node.qualifiedName === "src/a.ts#shared",
   );
   const bShared = graph.nodes.find(
-    (node) => node.kind === "function" && node.qualifiedName === "src/b.ts#shared",
+    (node) =>
+      node.kind === "function" && node.qualifiedName === "src/b.ts#shared",
   );
   assert.ok(aShared && bShared);
   edgeBy(graph, "calls", run.id, aShared.id);
   edgeBy(graph, "calls", run.id, bShared.id);
+});
+
+test("typescript keeps same-named methods on different classes distinct", async () => {
+  const graph = await extract(typescriptExtractor, {
+    "src/workers.ts": [
+      "export class A {",
+      "  run() { helperA(); }",
+      "}",
+      "export class B {",
+      "  run() { helperB(); }",
+      "}",
+      "function helperA() {}",
+      "function helperB() {}",
+      "",
+    ].join("\n"),
+  });
+  const methods = graph.nodes.filter(
+    (node) => node.label === "run" && node.metadata?.declaration === "method",
+  );
+  assert.equal(methods.length, 2, "expected distinct A.run and B.run symbols");
+  const ids = new Set(methods.map((node) => node.id));
+  assert.equal(ids.size, 2);
+  const qualified = new Set(methods.map((node) => node.qualifiedName));
+  assert.ok(qualified.has("src/workers.ts#A.run"));
+  assert.ok(qualified.has("src/workers.ts#B.run"));
+
+  const helperA = nodeBy(graph, "function", "helperA");
+  const helperB = nodeBy(graph, "function", "helperB");
+  const aRun = methods.find((node) => node.qualifiedName === "src/workers.ts#A.run");
+  const bRun = methods.find((node) => node.qualifiedName === "src/workers.ts#B.run");
+  edgeBy(graph, "calls", aRun.id, helperA.id);
+  edgeBy(graph, "calls", bRun.id, helperB.id);
+  // Cross-contamination must not happen.
+  assert.equal(
+    graph.edges.some(
+      (edge) =>
+        edge.kind === "calls" &&
+        edge.source === aRun.id &&
+        edge.target === helperB.id,
+    ),
+    false,
+  );
 });
 
 test("typescript resolves namespace import method calls and re-exports", async () => {
@@ -70,11 +132,13 @@ test("typescript records ambiguous same-name calls without inventing edges", asy
   );
   assert.equal(callEdges.length, 0);
   assert.ok(
-    graph.diagnostics.some((diagnostic) => diagnostic.code === "call-ambiguous"),
+    graph.diagnostics.some(
+      (diagnostic) => diagnostic.code === "call-ambiguous",
+    ),
   );
 });
 
-test("call metrics and path queries reach resources from handlers", async () => {
+test("call metrics, endpoint impact, and upstream paths are evidence-backed", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-reach-"));
   try {
     await mkdir(path.join(root, "src"), { recursive: true });
@@ -104,21 +168,69 @@ test("call metrics and path queries reach resources from handlers", async () => 
     const checkout = graph.nodes.find(
       (node) => node.kind === "function" && node.label === "checkout",
     );
-    assert.ok(checkout);
+    const calculate = graph.nodes.find(
+      (node) => node.kind === "function" && node.label === "calculateTotal",
+    );
+    assert.ok(checkout && calculate);
     const paths = pathsFromSymbolToResources(graph, checkout.id);
     assert.ok(paths.length >= 1, "expected checkout → resource path");
     const analysis = analyzeArchitecture(graph);
     assert.ok(analysis.callMetrics.callsResolved >= 1);
 
+    // Changing only the leaf utility must still surface the upstream endpoint.
     const impact = computeChangeImpact(graph, ["src/billing.ts"]);
+    // Narrow seeds by computing on full file then checking endpoint + paths.
     const report = impactReportSchema.parse(impact);
-    assert.ok(report.changed.symbols.some((symbol) => symbol.label === "checkout"));
+    assert.ok(
+      report.changed.symbols.some((symbol) => symbol.label === "checkout"),
+    );
     assert.ok(
       report.impact.endpoints.some(
-        (endpoint) => endpoint.method === "POST" && endpoint.path === "/checkout",
-      ) || report.highlightNodeIds.length > 0,
+        (endpoint) =>
+          endpoint.method === "POST" && endpoint.path === "/checkout",
+      ),
+      "POST /checkout must appear in impact.endpoints",
     );
-    assert.ok(report.impact.resources.some((resource) => resource.label === "order"));
+    assert.ok(
+      report.impact.resources.some((resource) => resource.label === "order"),
+    );
+
+    const leafImpact = computeChangeImpact(graph, ["src/billing.ts"]);
+    // Re-run with only calculate as seed via synthetic changed symbols path:
+    // full file includes calculate; require an upstream path into calculate.
+    const route = graph.nodes.find(
+      (node) => node.kind === "route" && node.label === "POST /checkout",
+    );
+    assert.ok(route);
+    const upstreamPaths = findPaths(
+      graph,
+      route.id,
+      (node) => node.id === calculate.id,
+      { maxDepth: 8, maxPaths: 5 },
+    );
+    assert.ok(
+      upstreamPaths.length >= 1,
+      "expected POST /checkout → … → calculateTotal path",
+    );
+    assert.ok(
+      leafImpact.paths.some(
+        (path) =>
+          path.fromSymbolId === route.id ||
+          path.steps.some((step) => step.to === calculate.id) ||
+          path.fromSymbolId === calculate.id,
+      ) ||
+        leafImpact.paths.some((path) =>
+          path.steps.some(
+            (step) => step.to === route.id || path.fromSymbolId === route.id,
+          ),
+        ),
+      "impact report must serialize a path that justifies endpoint or resource claims",
+    );
+    // Stronger: at least one path starts at the route (upstream serialization).
+    assert.ok(
+      leafImpact.paths.some((path) => path.fromSymbolId === route.id),
+      "upstream path from POST /checkout must be present when reverse reachability finds it",
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -148,5 +260,124 @@ test("findPaths stops at product anchors with evidence certainty", async () => {
     (node) => node.kind === "table",
   );
   assert.ok(paths.length >= 1);
-  assert.ok(paths[0].steps.some((step) => step.edgeKind === "writes" || step.edgeKind === "calls"));
+  assert.ok(
+    paths[0].steps.some(
+      (step) => step.edgeKind === "writes" || step.edgeKind === "calls",
+    ),
+  );
+});
+
+test("worktree change list includes untracked files", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-git-"));
+  try {
+    await initGitRepo(root);
+    await writeFile(path.join(root, "package.json"), '{"name":"g"}\n', "utf8");
+    await writeFile(path.join(root, "tracked.ts"), "export const x = 1;\n", "utf8");
+    await git(root, ["add", "."]);
+    await git(root, ["commit", "-m", "init"]);
+    await writeFile(
+      path.join(root, "brand-new.ts"),
+      "export function fresh() { return 1; }\n",
+      "utf8",
+    );
+    const changed = await listChangedFiles(root, {});
+    assert.ok(
+      changed.files.includes("brand-new.ts"),
+      `expected untracked brand-new.ts, got ${JSON.stringify(changed.files)}`,
+    );
+    assert.equal(changed.worktree, true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("base...head uses merge-base range not two-dot tip comparison", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-range-"));
+  try {
+    await initGitRepo(root);
+    await writeFile(path.join(root, "package.json"), '{"name":"g"}\n', "utf8");
+    await writeFile(path.join(root, "shared.ts"), "export const a = 1;\n", "utf8");
+    await git(root, ["add", "."]);
+    await git(root, ["commit", "-m", "root"]);
+    // Normalize default branch name across git versions.
+    await git(root, ["branch", "-M", "main"]);
+
+    await git(root, ["checkout", "-b", "feature"]);
+    await writeFile(
+      path.join(root, "feature-only.ts"),
+      "export function feature() { return 1; }\n",
+      "utf8",
+    );
+    await git(root, ["add", "feature-only.ts"]);
+    await git(root, ["commit", "-m", "feature work"]);
+
+    await git(root, ["checkout", "main"]);
+    await writeFile(
+      path.join(root, "main-only.ts"),
+      "export function mainline() { return 1; }\n",
+      "utf8",
+    );
+    await git(root, ["add", "main-only.ts"]);
+    await git(root, ["commit", "-m", "main advanced"]);
+
+    // Two-dot main feature would include main-only; three-dot must not.
+    const changed = await listChangedFiles(root, {
+      baseRevision: "main",
+      headRevision: "feature",
+    });
+    assert.ok(
+      changed.files.includes("feature-only.ts"),
+      `expected feature-only.ts in ${JSON.stringify(changed.files)}`,
+    );
+    assert.equal(
+      changed.files.includes("main-only.ts"),
+      false,
+      "merge-base range must exclude main-only advances after branch point",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("named --head rejects dirty worktree and mismatched checkout", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-head-"));
+  try {
+    await initGitRepo(root);
+    await writeFile(path.join(root, "package.json"), '{"name":"g"}\n', "utf8");
+    await writeFile(path.join(root, "a.ts"), "export const a = 1;\n", "utf8");
+    await git(root, ["add", "."]);
+    await git(root, ["commit", "-m", "c1"]);
+    const { stdout: sha1 } = await execFileAsync(
+      "git",
+      ["rev-parse", "HEAD"],
+      { cwd: root },
+    );
+    await writeFile(path.join(root, "a.ts"), "export const a = 2;\n", "utf8");
+    await git(root, ["add", "."]);
+    await git(root, ["commit", "-m", "c2"]);
+
+    await assert.rejects(
+      () =>
+        assertImpactCompileSource(root, {
+          headRevision: sha1.trim(),
+        }),
+      /working tree only|Check out that revision/i,
+    );
+
+    // Dirty HEAD
+    await writeFile(path.join(root, "a.ts"), "export const a = 3;\n", "utf8");
+    await assert.rejects(
+      () => assertImpactCompileSource(root, { headRevision: "HEAD" }),
+      /clean working tree/i,
+    );
+
+    // filesOnly skips the guard
+    const ok = await assertImpactCompileSource(root, {
+      headRevision: "HEAD",
+      filesOnly: true,
+    });
+    assert.equal(ok.mode, "worktree");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

@@ -6,6 +6,7 @@ import { Command } from "commander";
 import { analyzeArchitecture, formatAnalysisLines } from "./analysis.js";
 import { compileRepository } from "./compile.js";
 import {
+  assertImpactCompileSource,
   computeChangeImpact,
   formatImpactLines,
   listChangedFiles,
@@ -170,8 +171,14 @@ program
   )
   .argument("[repository]", "repository to analyze", ".")
   .option("-o, --output <directory>", "output directory", ".underdelta")
-  .option("--base <revision>", "git base revision (diff base...head)")
-  .option("--head <revision>", "git head revision")
+  .option(
+    "--base <revision>",
+    "git base revision (diff uses merge-base range base...head)",
+  )
+  .option(
+    "--head <revision>",
+    "git head revision (must match clean HEAD until historical graphs exist)",
+  )
   .option(
     "--files <list>",
     "comma-separated repo-relative files (skips git diff)",
@@ -195,6 +202,12 @@ program
     ) => {
       const root = await resolveRepository(repository);
       const output = path.resolve(root, options.output);
+      const filesOnly = Boolean(options.files);
+      // Named --head must match a clean checkout; we always compile the worktree.
+      await assertImpactCompileSource(root, {
+        ...(options.head ? { headRevision: options.head } : {}),
+        filesOnly,
+      });
       const graph = await compileRepository(root);
       const changed = await listChangedFiles(root, {
         ...(options.base ? { baseRevision: options.base } : {}),
@@ -215,6 +228,7 @@ program
         ...(changed.headRevision
           ? { headRevision: changed.headRevision }
           : {}),
+        deletedFiles: changed.deletedFiles,
       });
       const report = impactReportSchema.parse(impact);
       await mkdir(output, { recursive: true });

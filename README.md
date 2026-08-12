@@ -86,12 +86,17 @@ node dist/cli.js impact . --base main --head HEAD
 repository on demand; Underdelta does not maintain a pinned
 external-repository test ladder.
 
-`impact` compiles the repo, maps changed files (explicit `--files` or git
-`--base`/`--head` / worktree vs HEAD) to symbols, then reports reachable product
-anchors (endpoints, resources, jobs, queues, systems) with evidence. It writes
-`architecture.json`, `impact.json`, and an `index.html` that highlights the
-impact neighborhood. Unresolved and ambiguous calls stay explicit; they are not
-turned into invented edges.
+`impact` compiles the **working tree**, maps changed files (explicit `--files`,
+default dirty worktree including **untracked** files, or git `base...head`
+merge-base range) to symbols, then reports reachable product anchors (endpoints,
+resources, jobs, queues, systems) with evidence—including **upstream paths**
+from those anchors to the change. It writes `architecture.json`, `impact.json`,
+and an `index.html` that highlights the impact neighborhood.
+
+Named `--head` is only accepted when it matches a **clean** `HEAD` (historical
+tree materialization is not implemented yet). Unresolved and ambiguous calls
+stay explicit; they are not turned into invented edges. Deleted files are listed
+but need a base-graph compile for symbol impact.
 
 ## How to read the map
 

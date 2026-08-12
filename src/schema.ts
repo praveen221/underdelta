@@ -258,6 +258,8 @@ export const impactReportSchema = z.object({
   }),
   changed: z.object({
     files: z.array(z.string().min(1)),
+    /** Deleted relative to base; absent from head tree (not analyzed without base graph). */
+    deletedFiles: z.array(z.string().min(1)).default([]),
     symbols: z.array(
       z.object({
         id: z.string().min(1),

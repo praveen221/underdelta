@@ -544,26 +544,39 @@ export const typescriptExtractor: ArchitectureExtractor = {
         node: ts.Node,
         parentId = file.moduleId,
         exported = false,
+        ownerName?: string,
       ): string => {
         const kind = callableKind(name, node);
-        const id = stableId(kind, file.relative, name);
-        declarations.set(name, id);
-        const byName = declarationsByName.get(name) ?? [];
-        byName.push(id);
-        declarationsByName.set(name, byName);
-        if (parentId !== file.moduleId) {
-          const methods = methodsByOwner.get(parentId) ?? new Map<string, string>();
+        const isMethod = parentId !== file.moduleId && ownerName !== undefined;
+        // Methods must include the owning class in their identity. Same-file
+        // A.run() and B.run() must not collapse into one symbol.
+        const id = isMethod
+          ? stableId(kind, file.relative, ownerName, name)
+          : stableId(kind, file.relative, name);
+        if (isMethod) {
+          const methods =
+            methodsByOwner.get(parentId) ?? new Map<string, string>();
           methods.set(name, id);
           methodsByOwner.set(parentId, methods);
+          // Do not put bare method names in the file-wide map — ownership is
+          // methodsByOwner only.
+        } else {
+          declarations.set(name, id);
+          const byName = declarationsByName.get(name) ?? [];
+          byName.push(id);
+          declarationsByName.set(name, byName);
         }
-        const isMethod = parentId !== file.moduleId;
         nodes.push({
           id,
           kind,
           label: name,
-          qualifiedName: `${file.relative}#${name}`,
+          qualifiedName: isMethod
+            ? `${file.relative}#${ownerName}.${name}`
+            : `${file.relative}#${name}`,
           parentId,
-          metadata: isMethod ? { declaration: "method" } : {},
+          metadata: isMethod
+            ? { declaration: "method", ownerName }
+            : {},
           semantics: symbolFacet(isMethod ? "method" : "function"),
           evidence: [evidenceFor(file, node)],
         });
@@ -582,18 +595,23 @@ export const typescriptExtractor: ArchitectureExtractor = {
         );
       };
 
-      const visitDeclarations = (node: ts.Node, parentId?: string): void => {
+      const visitDeclarations = (
+        node: ts.Node,
+        parentId?: string,
+        ownerName?: string,
+      ): void => {
         if (ts.isClassDeclaration(node) && node.name) {
-          const id = stableId("service", file.relative, node.name.text);
-          declarations.set(node.name.text, id);
-          const byName = declarationsByName.get(node.name.text) ?? [];
+          const className = node.name.text;
+          const id = stableId("service", file.relative, className);
+          declarations.set(className, id);
+          const byName = declarationsByName.get(className) ?? [];
           byName.push(id);
-          declarationsByName.set(node.name.text, byName);
+          declarationsByName.set(className, byName);
           nodes.push({
             id,
-            kind: /service$/i.test(node.name.text) ? "service" : "module",
-            label: node.name.text,
-            qualifiedName: `${file.relative}#${node.name.text}`,
+            kind: /service$/i.test(className) ? "service" : "module",
+            label: className,
+            qualifiedName: `${file.relative}#${className}`,
             parentId: file.moduleId,
             metadata: { declaration: "class" },
             semantics: symbolFacet("class"),
@@ -602,13 +620,21 @@ export const typescriptExtractor: ArchitectureExtractor = {
           edges.push(
             edgeFrom("contains", file.moduleId, id, evidenceFor(file, node)),
           );
-          if (isExported(node)) moduleExports.set(node.name.text, id);
-          ts.forEachChild(node, (child) => visitDeclarations(child, id));
+          if (isExported(node)) moduleExports.set(className, id);
+          ts.forEachChild(node, (child) =>
+            visitDeclarations(child, id, className),
+          );
           return;
         }
 
-        if (ts.isMethodDeclaration(node) && node.name) {
-          addCallable(node.name.getText(file.source), node, parentId);
+        if (ts.isMethodDeclaration(node) && node.name && parentId && ownerName) {
+          addCallable(
+            node.name.getText(file.source),
+            node,
+            parentId,
+            false,
+            ownerName,
+          );
         } else if (ts.isFunctionDeclaration(node) && node.name) {
           addCallable(node.name.text, node, parentId, isExported(node));
         } else if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
@@ -627,7 +653,9 @@ export const typescriptExtractor: ArchitectureExtractor = {
             addCallable(node.name.text, node, parentId, exportedVar);
           }
         }
-        ts.forEachChild(node, (child) => visitDeclarations(child, parentId));
+        ts.forEachChild(node, (child) =>
+          visitDeclarations(child, parentId, ownerName),
+        );
       };
       visitDeclarations(file.source);
 
@@ -843,7 +871,10 @@ export const typescriptExtractor: ArchitectureExtractor = {
 
       const visit = (node: ts.Node, ownerId = file.moduleId): void => {
         let nextOwner = ownerId;
-        if (ts.isFunctionDeclaration(node) && node.name) {
+        if (ts.isClassDeclaration(node) && node.name) {
+          // Enter class scope so methods resolve against methodsByOwner[classId].
+          nextOwner = localDeclarations.get(node.name.text) ?? ownerId;
+        } else if (ts.isFunctionDeclaration(node) && node.name) {
           nextOwner = localDeclarations.get(node.name.text) ?? ownerId;
         } else if (
           ts.isVariableDeclaration(node) &&
@@ -854,8 +885,10 @@ export const typescriptExtractor: ArchitectureExtractor = {
         ) {
           nextOwner = localDeclarations.get(node.name.text) ?? ownerId;
         } else if (ts.isMethodDeclaration(node) && node.name) {
+          const methodName = node.name.getText(file.source);
+          // Resolve via owner map — never the file-wide bare method name.
           nextOwner =
-            localDeclarations.get(node.name.getText(file.source)) ?? ownerId;
+            methodsByOwner.get(ownerId)?.get(methodName) ?? ownerId;
         }
 
         if (
