@@ -94,9 +94,12 @@ from those anchors to the change. It writes `architecture.json`, `impact.json`,
 and an `index.html` that highlights the impact neighborhood.
 
 Named `--head` is only accepted when it matches a **clean** `HEAD` (historical
-tree materialization is not implemented yet). Unresolved and ambiguous calls
-stay explicit; they are not turned into invented edges. Deleted files are listed
-but need a base-graph compile for symbol impact.
+tree materialization is not implemented yet). Generated Underdelta output dirs
+are ignored by that clean check. Do **not** combine `--files` with `--base` /
+`--head` (avoids mislabeled graphs). Invalid git revisions fail the CLI instead
+of producing a silent empty report. Unresolved and ambiguous calls stay
+explicit. Deleted files are listed but need a base-graph compile for symbol
+impact.
 
 ## How to read the map
 

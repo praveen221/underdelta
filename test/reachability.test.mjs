@@ -12,6 +12,8 @@ import { typescriptExtractor } from "../dist/extractors/typescript.js";
 import {
   assertImpactCompileSource,
   computeChangeImpact,
+  isIgnorableWorktreePath,
+  isWorktreeClean,
   listChangedFiles,
 } from "../dist/impact.js";
 import {
@@ -371,12 +373,140 @@ test("named --head rejects dirty worktree and mismatched checkout", async () => 
       /clean working tree/i,
     );
 
-    // filesOnly skips the guard
+    // filesOnly with --head is rejected (mislabel risk)
+    await assert.rejects(
+      () =>
+        assertImpactCompileSource(root, {
+          headRevision: "HEAD",
+          filesOnly: true,
+        }),
+      /Do not combine --files/i,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("invalid explicit git revisions fail instead of empty impact", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-badrev-"));
+  try {
+    await initGitRepo(root);
+    await writeFile(path.join(root, "package.json"), '{"name":"g"}\n', "utf8");
+    await writeFile(path.join(root, "a.ts"), "export const a = 1;\n", "utf8");
+    await git(root, ["add", "."]);
+    await git(root, ["commit", "-m", "init"]);
+
+    await assert.rejects(
+      () =>
+        listChangedFiles(root, {
+          baseRevision: "definitely-not-a-revision",
+          headRevision: "HEAD",
+        }),
+      /Git change discovery failed|Cannot resolve|unknown revision|bad revision|Needed a single revision/i,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("files-only mode omits revision labels and rejects combo in listChangedFiles", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-files-"));
+  try {
+    await initGitRepo(root);
+    await writeFile(path.join(root, "package.json"), '{"name":"g"}\n', "utf8");
+    await git(root, ["add", "."]);
+    await git(root, ["commit", "-m", "init"]);
+
+    const only = await listChangedFiles(root, {
+      files: ["src/impact.ts"],
+    });
+    assert.deepEqual(only.files, ["src/impact.ts"]);
+    assert.equal(only.baseRevision, undefined);
+    assert.equal(only.headRevision, undefined);
+
+    await assert.rejects(
+      () =>
+        listChangedFiles(root, {
+          files: ["src/impact.ts"],
+          headRevision: "master",
+        }),
+      /Do not combine --files/i,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("clean guard ignores generated .underdelta output", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-clean-"));
+  try {
+    await initGitRepo(root);
+    await writeFile(path.join(root, "package.json"), '{"name":"g"}\n', "utf8");
+    await writeFile(path.join(root, "a.ts"), "export const a = 1;\n", "utf8");
+    await git(root, ["add", "."]);
+    await git(root, ["commit", "-m", "init"]);
+
+    await mkdir(path.join(root, ".underdelta"), { recursive: true });
+    await writeFile(
+      path.join(root, ".underdelta", "architecture.json"),
+      "{}\n",
+      "utf8",
+    );
+
+    assert.equal(isIgnorableWorktreePath(".underdelta/architecture.json"), true);
+    assert.equal(await isWorktreeClean(root), true);
+
     const ok = await assertImpactCompileSource(root, {
       headRevision: "HEAD",
-      filesOnly: true,
+      ignoreOutput: path.join(root, ".underdelta"),
     });
-    assert.equal(ok.mode, "worktree");
+    assert.equal(ok.mode, "revision");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("base-only mode uses merge-base not base tip", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-baseonly-"));
+  try {
+    await initGitRepo(root);
+    await writeFile(path.join(root, "package.json"), '{"name":"g"}\n', "utf8");
+    await writeFile(path.join(root, "shared.ts"), "export const a = 1;\n", "utf8");
+    await git(root, ["add", "."]);
+    await git(root, ["commit", "-m", "root"]);
+    await git(root, ["branch", "-M", "main"]);
+
+    await git(root, ["checkout", "-b", "feature"]);
+    await writeFile(
+      path.join(root, "feature-only.ts"),
+      "export function feature() { return 1; }\n",
+      "utf8",
+    );
+    await git(root, ["add", "feature-only.ts"]);
+    await git(root, ["commit", "-m", "feature work"]);
+
+    await git(root, ["checkout", "main"]);
+    await writeFile(
+      path.join(root, "main-only.ts"),
+      "export function mainline() { return 1; }\n",
+      "utf8",
+    );
+    await git(root, ["add", "main-only.ts"]);
+    await git(root, ["commit", "-m", "main advanced"]);
+
+    await git(root, ["checkout", "feature"]);
+    const changed = await listChangedFiles(root, {
+      baseRevision: "main",
+    });
+    assert.ok(
+      changed.files.includes("feature-only.ts"),
+      `expected feature-only in ${JSON.stringify(changed.files)}`,
+    );
+    assert.equal(
+      changed.deletedFiles.includes("main-only.ts"),
+      false,
+      "main-only must not appear as a deletion via merge-base worktree mode",
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }

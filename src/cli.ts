@@ -204,14 +204,21 @@ program
       const output = path.resolve(root, options.output);
       const filesOnly = Boolean(options.files);
       // Named --head must match a clean checkout; we always compile the worktree.
+      // --files must not be combined with --base/--head (mislabel risk).
       await assertImpactCompileSource(root, {
         ...(options.head ? { headRevision: options.head } : {}),
+        ...(options.base ? { baseRevision: options.base } : {}),
         filesOnly,
+        ignoreOutput: output,
       });
       const graph = await compileRepository(root);
       const changed = await listChangedFiles(root, {
-        ...(options.base ? { baseRevision: options.base } : {}),
-        ...(options.head ? { headRevision: options.head } : {}),
+        ...(options.base && !filesOnly
+          ? { baseRevision: options.base }
+          : {}),
+        ...(options.head && !filesOnly
+          ? { headRevision: options.head }
+          : {}),
         ...(options.files
           ? {
               files: options.files

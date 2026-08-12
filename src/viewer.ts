@@ -233,7 +233,11 @@ export function renderArchitectureHtml(
       ${
         impact
           ? `<strong>Change impact</strong>
-      <span>${impact.changed.files.length} file(s) · ${impact.changed.symbols.length} symbol(s)</span>
+      <span>${impact.changed.files.length} file(s) · ${impact.changed.symbols.length} symbol(s)${
+              (impact.changed.deletedFiles?.length ?? 0) > 0
+                ? ` · ${impact.changed.deletedFiles.length} deleted (base graph needed for deleted symbols)`
+                : ""
+            }</span>
       <span>${impact.impact.endpoints.length} endpoint(s) · ${impact.impact.resources.length} resource(s) · ${impact.impact.jobs.length} job(s)</span>
       <span class="meta">resolved calls ${impact.metrics.callsResolved} · unresolved ${impact.metrics.callsUnresolved}</span>`
           : ""

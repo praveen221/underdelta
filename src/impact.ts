@@ -69,14 +69,70 @@ export async function resolveGitSha(
   return stdout.trim();
 }
 
-export async function isWorktreeClean(root: string): Promise<boolean> {
+/**
+ * Paths that count as "source dirtiness" for clean-HEAD impact.
+ * Ignores Underdelta output dirs and other known scan artifacts so a prior
+ * `scan`/`impact` does not block the next clean revision run.
+ */
+export function isIgnorableWorktreePath(
+  relativePath: string,
+  ignorePrefixes: string[] = [],
+): boolean {
+  const normalized = relativePath.replaceAll("\\", "/").replace(/^\.\//, "");
+  if (
+    normalized === ".underdelta" ||
+    normalized.startsWith(".underdelta/") ||
+    normalized.startsWith(".underdelta-") ||
+    normalized === ".dogfood-scans" ||
+    normalized.startsWith(".dogfood-scans/") ||
+    normalized === ".dogfood-repos" ||
+    normalized.startsWith(".dogfood-repos/")
+  ) {
+    return true;
+  }
+  for (const prefix of ignorePrefixes) {
+    const clean = prefix.replaceAll("\\", "/").replace(/\/$/, "");
+    if (!clean) continue;
+    if (normalized === clean || normalized.startsWith(`${clean}/`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Parse `git status --porcelain` paths (supports rename "old -> new"). */
+export function porcelainPaths(stdout: string): string[] {
+  const paths: string[] = [];
+  for (const line of stdout.split("\n")) {
+    if (!line.trim()) continue;
+    // XY PATH or XY ORIG -> PATH
+    const body = line.length >= 3 ? line.slice(3) : line.trim();
+    if (body.includes(" -> ")) {
+      const parts = body.split(" -> ");
+      const next = parts.at(-1)?.trim();
+      if (next) paths.push(next.replaceAll("\\", "/"));
+      continue;
+    }
+    paths.push(body.trim().replaceAll("\\", "/").replace(/^"/, "").replace(/"$/, ""));
+  }
+  return paths;
+}
+
+export async function isWorktreeClean(
+  root: string,
+  options: { ignorePrefixes?: string[] } = {},
+): Promise<boolean> {
   try {
     const { stdout } = await execFileAsync(
       "git",
       ["status", "--porcelain"],
       { cwd: root },
     );
-    return stdout.trim().length === 0;
+    if (!stdout.trim()) return true;
+    const remaining = porcelainPaths(stdout).filter(
+      (entry) => !isIgnorableWorktreePath(entry, options.ignorePrefixes ?? []),
+    );
+    return remaining.length === 0;
   } catch {
     return false;
   }
@@ -87,11 +143,27 @@ export async function isWorktreeClean(root: string): Promise<boolean> {
  * only valid when HEAD points at that revision and the worktree is clean —
  * otherwise current-tree facts would be mislabeled. Historical tree materialization
  * is not implemented yet.
+ *
+ * `--files` must not be combined with `--base`/`--head` (mislabeled graphs).
  */
 export async function assertImpactCompileSource(
   root: string,
-  options: { headRevision?: string; filesOnly?: boolean },
+  options: {
+    headRevision?: string;
+    baseRevision?: string;
+    filesOnly?: boolean;
+    /** Absolute or repo-relative output dir to ignore in clean checks. */
+    ignoreOutput?: string;
+  },
 ): Promise<{ mode: "worktree" | "revision"; headSha?: string }> {
+  if (options.filesOnly && (options.headRevision || options.baseRevision)) {
+    throw new Error(
+      `Do not combine --files with --base/--head. ` +
+        `--files analyzes the current working tree without git revision labels; ` +
+        `omit --base/--head, or drop --files to use a git range.`,
+    );
+  }
+
   if (options.filesOnly || !options.headRevision) {
     return { mode: "worktree" };
   }
@@ -121,19 +193,59 @@ export async function assertImpactCompileSource(
     throw new Error(
       `Impact analyzes the working tree only until historical graphs exist. ` +
         `--head ${head} resolves to ${headSha.slice(0, 12)}, but HEAD is ${checkoutSha.slice(0, 12)}. ` +
-        `Check out that revision (cleanly) and re-run, or pass --files for an explicit path list.`,
+        `Check out that revision (cleanly) and re-run, or pass --files alone (no --base/--head).`,
     );
   }
 
-  const clean = await isWorktreeClean(root);
+  const ignorePrefixes: string[] = [];
+  if (options.ignoreOutput) {
+    const absolute = options.ignoreOutput;
+    // Prefer repo-relative prefix when output is under root.
+    if (absolute.startsWith(root)) {
+      const rel = absolute.slice(root.length).replace(/^\//, "").replaceAll("\\", "/");
+      if (rel) ignorePrefixes.push(rel);
+    } else {
+      ignorePrefixes.push(absolute.replaceAll("\\", "/"));
+    }
+  }
+
+  const clean = await isWorktreeClean(root, { ignorePrefixes });
   if (!clean) {
     throw new Error(
       `Impact with --head ${head} requires a clean working tree so graph facts match that revision. ` +
-        `Commit/stash local changes, or omit --head to analyze the dirty worktree (including untracked files).`,
+        `Commit/stash local source changes, or omit --head to analyze the dirty worktree (including untracked files). ` +
+        `Generated Underdelta output directories are ignored.`,
     );
   }
 
   return { mode: "revision", headSha };
+}
+
+function gitErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const withStderr = error as Error & { stderr?: string | Buffer };
+  const stderr =
+    typeof withStderr.stderr === "string"
+      ? withStderr.stderr
+      : withStderr.stderr
+        ? withStderr.stderr.toString("utf8")
+        : "";
+  return (stderr || error.message).trim() || error.message;
+}
+
+async function mergeBase(root: string, base: string, head: string): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["merge-base", base, head],
+      { cwd: root },
+    );
+    return stdout.trim();
+  } catch (error) {
+    throw new Error(
+      `Cannot compute merge-base(${base}, ${head}): ${gitErrorMessage(error)}`,
+    );
+  }
 }
 
 export async function listChangedFiles(
@@ -141,20 +253,27 @@ export async function listChangedFiles(
   options: ImpactOptions = {},
 ): Promise<ChangedFilesResult> {
   if (options.files?.length) {
+    if (options.baseRevision || options.headRevision) {
+      throw new Error(
+        `Do not combine --files with --base/--head (avoids mislabeling a worktree graph).`,
+      );
+    }
     return {
       files: options.files.map((file) => file.replaceAll("\\", "/")),
       deletedFiles: [],
-      ...(options.baseRevision ? { baseRevision: options.baseRevision } : {}),
-      ...(options.headRevision ? { headRevision: options.headRevision } : {}),
-      worktree: !options.baseRevision && !options.headRevision,
+      worktree: true,
     };
   }
 
   const base = options.baseRevision;
   const head = options.headRevision;
+  const explicitRevision = Boolean(base || head);
 
-  try {
+  const run = async (): Promise<ChangedFilesResult> => {
     if (base && head) {
+      // Validate both revs first so invalid names never look like "no changes".
+      await resolveGitSha(root, base);
+      await resolveGitSha(root, head);
       // Triple-dot: merge-base(base, head)..head — PR range semantics.
       const range = `${base}...${head}`;
       const files = await gitNameOnly(root, [
@@ -178,18 +297,20 @@ export async function listChangedFiles(
       };
     }
     if (base) {
-      // base...worktree (tracked changes vs base).
+      await resolveGitSha(root, base);
+      // merge-base(base, HEAD) vs worktree — not tip of base vs worktree.
+      const ancestor = await mergeBase(root, base, "HEAD");
       const files = await gitNameOnly(root, [
         "diff",
         "--name-only",
         "--diff-filter=ACMR",
-        base,
+        ancestor,
       ]);
       const deletedFiles = await gitNameOnly(root, [
         "diff",
         "--name-only",
         "--diff-filter=D",
-        base,
+        ancestor,
       ]);
       const untracked = await gitNameOnly(root, [
         "ls-files",
@@ -200,12 +321,13 @@ export async function listChangedFiles(
         files: [...new Set([...files, ...untracked])],
         deletedFiles,
         baseRevision: base,
-        headRevision: options.headRevision ?? "worktree",
+        headRevision: "worktree",
         worktree: true,
       };
     }
 
     // Default: dirty worktree vs HEAD, including untracked.
+    // Not an explicit revision mode — empty on non-git is ok if clearly worktree.
     const unstaged = await gitNameOnly(root, [
       "diff",
       "--name-only",
@@ -251,12 +373,20 @@ export async function listChangedFiles(
       // not a git repo
     }
     return { files: [...files], deletedFiles, headRevision, worktree: true };
-  } catch {
+  };
+
+  try {
+    return await run();
+  } catch (error) {
+    if (explicitRevision) {
+      throw new Error(
+        `Git change discovery failed for explicit revision options: ${gitErrorMessage(error)}`,
+      );
+    }
+    // Default mode outside a git repo: empty change set, worktree graph.
     return {
       files: [],
       deletedFiles: [],
-      ...(base ? { baseRevision: base } : {}),
-      ...(head ? { headRevision: head } : {}),
       worktree: true,
     };
   }
