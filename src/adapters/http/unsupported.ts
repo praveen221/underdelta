@@ -19,7 +19,6 @@ const unsupportedNode = [
   "elysia",
 ] as const;
 const unsupportedPython = [
-  "flask",
   "sanic",
   "aiohttp",
   "falcon",

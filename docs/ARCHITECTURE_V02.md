@@ -93,8 +93,8 @@ function can serve HTTP and carry other roles without becoming an HTTP-specific
 function kind.
 
 Supported route facts currently come from Express-style Node routers, Next.js
-App Router handlers, FastAPI, Django URL declarations, and OpenAPI/Swagger
-contracts. Recognized frameworks without a dedicated route extractor produce an
+App Router handlers, FastAPI, Flask blueprints/URL rules, Django URL
+declarations, and OpenAPI/Swagger contracts. Recognized frameworks without a dedicated route extractor produce an
 `unsupported-http-framework` diagnostic instead of invented endpoints.
 
 Projection creates one HTTP API system from typed endpoint evidence, attaches

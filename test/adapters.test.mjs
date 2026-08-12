@@ -4,6 +4,7 @@ import test from "node:test";
 import { dataResourceAdapter } from "../dist/adapters/data/resources.js";
 import { deployUnitAdapter } from "../dist/adapters/deploy/units.js";
 import { httpEndpointAdapter } from "../dist/adapters/http/endpoints.js";
+import { flaskHttpAdapter } from "../dist/adapters/http/flask.js";
 import { unsupportedHttpAdapter } from "../dist/adapters/http/unsupported.js";
 import { celeryScheduledWorkAdapter } from "../dist/adapters/scheduled/celery.js";
 import { kubernetesScheduledWorkAdapter } from "../dist/adapters/scheduled/kubernetes.js";
@@ -231,6 +232,106 @@ test("unsupported Node HTTP frameworks produce no normalized endpoints", async (
   assert.equal(graph.nodes.length, 0);
 });
 
+test("Flask blueprints normalize mounted decorators and URL rules", async () => {
+  const graph = await adapt(flaskHttpAdapter, [pythonExtractor], {
+    "app/__init__.py": [
+      "from flask import Flask",
+      "from .routes import api as api_blueprint",
+      "app = Flask(__name__)",
+      'app.register_blueprint(api_blueprint, url_prefix="/api/v1")',
+      "",
+    ].join("\n"),
+    "app/routes.py": [
+      "from flask import Blueprint",
+      "from flask.views import MethodView",
+      'api = Blueprint("api", __name__, url_prefix="/notes")',
+      '@api.route("/", methods=["GET", "POST"])',
+      "def list_notes():",
+      "    pass",
+      "def health():",
+      "    pass",
+      'api.add_url_rule("/health", view_func=health, methods=["GET"])',
+      "class NoteView(MethodView):",
+      "    def delete(self):",
+      "        pass",
+      'api.add_url_rule("/<int:note_id>", view_func=NoteView.as_view("note"))',
+      '# api.add_url_rule("/ignored", view_func=health)',
+      "",
+    ].join("\n"),
+  });
+  const endpoints = graph.nodes.map((node) => facet(node, "endpoint"));
+  assert.deepEqual(
+    new Set(endpoints.map((endpoint) => `${endpoint.method}:${endpoint.path}`)),
+    new Set([
+      "GET:/api/v1/notes",
+      "POST:/api/v1/notes",
+      "GET:/api/v1/notes/health",
+      "DELETE:/api/v1/notes/<int:note_id>",
+    ]),
+  );
+  assert.equal(endpoints.every((endpoint) => endpoint.provider === "flask"), true);
+  assert.equal(graph.edges.filter((edge) => edge.kind === "routes-to").length, 3);
+  assert.equal(
+    graph.nodes.find((node) => node.label === "GET /api/v1/notes")
+      ?.evidence[0]?.range.startLine,
+    4,
+  );
+  assert.equal(
+    endpoints.some((endpoint) => endpoint.path.includes("ignored")),
+    false,
+  );
+});
+
+test("Flask adapter ignores FastAPI router decorators", async () => {
+  const graph = await adapt(flaskHttpAdapter, [pythonExtractor], {
+    "api.py": [
+      "from fastapi import APIRouter",
+      "router = APIRouter()",
+      '@router.get("/notes")',
+      "def list_notes():",
+      "    pass",
+      "",
+    ].join("\n"),
+  });
+  assert.equal(graph.nodes.length, 0);
+  assert.equal(graph.edges.length, 0);
+});
+
+test("same-named Flask blueprints keep their own mount prefixes", async () => {
+  const graph = await adapt(flaskHttpAdapter, [pythonExtractor], {
+    "app.py": [
+      "from flask import Flask",
+      "from admin import bp as admin_bp",
+      "from public import bp as public_bp",
+      "app = Flask(__name__)",
+      'app.register_blueprint(admin_bp, url_prefix="/admin")',
+      'app.register_blueprint(public_bp, url_prefix="/public")',
+      "",
+    ].join("\n"),
+    "admin.py": [
+      "from flask import Blueprint",
+      'bp = Blueprint("admin", __name__)',
+      '@bp.get("/users")',
+      "def users():",
+      "    pass",
+      "",
+    ].join("\n"),
+    "public.py": [
+      "from flask import Blueprint",
+      'bp = Blueprint("public", __name__)',
+      '@bp.get("/about")',
+      "def about():",
+      "    pass",
+      "",
+    ].join("\n"),
+  });
+  const endpoints = graph.nodes.map((node) => facet(node, "endpoint"));
+  assert.deepEqual(
+    new Set(endpoints.map((endpoint) => endpoint.path)),
+    new Set(["/admin/users", "/public/about"]),
+  );
+});
+
 test("node-cron normalizes a trigger, job, and handler binding", async () => {
   const graph = await adapt(nodeScheduledWorkAdapter, [typescriptExtractor], {
     "src/jobs.ts": [
@@ -358,7 +459,7 @@ test("unsupported scheduler dependencies produce an explicit diagnostic", async 
 test("unsupported HTTP frameworks produce explicit diagnostics", async () => {
   const graph = await adapt(unsupportedHttpAdapter, [], {
     "package.json": JSON.stringify({ dependencies: { hono: "latest" } }),
-    "requirements.txt": "flask==3.1.0\n",
+    "requirements.txt": "sanic==24.12.0\n",
   });
   assert.deepEqual(
     graph.diagnostics.map(({ code }) => code),
@@ -366,6 +467,6 @@ test("unsupported HTTP frameworks produce explicit diagnostics", async () => {
   );
   assert.deepEqual(
     new Set(graph.diagnostics.map(({ message }) => message.split(" detected")[0])),
-    new Set(["hono", "flask"]),
+    new Set(["hono", "sanic"]),
   );
 });
