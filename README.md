@@ -15,13 +15,21 @@ was derived.
 
 ## Status
 
+**MVP wedge:** evidence-backed **product map** (activation) plus deterministic
+**change impact** (retention)—understand what a change touches before you make
+or merge it. Product decision:
+[`docs/PRODUCT_MVP.md`](docs/PRODUCT_MVP.md). Next technical phase: TypeScript
+semantic reachability + impact CLI
+([`docs/loopplans/TS_REACHABILITY_CHANGE_IMPACT.md`](docs/loopplans/TS_REACHABILITY_CHANGE_IMPACT.md)).
+Framework breadth is frozen until that validates with real users.
+
 **v0.2 semantic contract in development.** Language and infrastructure
 extractors establish base facts; capability adapters normalize framework
 semantics into one evidence-backed model. Evidence is marked `observed`,
 `derived`, or `inferred`; unsupported scheduler and HTTP frameworks are reported
 rather than guessed.
 
-Supported in v0:
+Supported in v0 (depth varies; TypeScript web product is the validation focus):
 
 - TypeScript/JavaScript — modules, React/Next UI, Express routes, BullMQ
 - Next.js App Router — pages, layouts, route handlers, server actions
