@@ -125,9 +125,8 @@ interface only after repeated implementations reveal a stable abstraction.
 
 ## Product wedge (MVP freeze)
 
-Product priority is **not** horizontal adapter expansion. See
+Product priority is not horizontal adapter expansion. See
 [`PRODUCT_MVP.md`](PRODUCT_MVP.md): repository map for activation, deterministic
-**change impact** for retention, powered by TypeScript semantic reachability.
-Until that phase validates with real users, prefer improving symbol identity,
-call resolution (including explicit unresolved/ambiguous calls), path queries,
-and revision diff impact over new frameworks.
+change impact for retention. Prefer reachability and impact precision (including
+anonymous route handlers as the next follow-up) over new frameworks until user
+gates pass.

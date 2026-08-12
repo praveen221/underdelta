@@ -17,11 +17,10 @@ was derived.
 
 **MVP wedge:** evidence-backed **product map** (activation) plus deterministic
 **change impact** (retention)—understand what a change touches before you make
-or merge it. Product decision:
-[`docs/PRODUCT_MVP.md`](docs/PRODUCT_MVP.md). Next technical phase: TypeScript
-semantic reachability + impact CLI
-([`docs/loopplans/TS_REACHABILITY_CHANGE_IMPACT.md`](docs/loopplans/TS_REACHABILITY_CHANGE_IMPACT.md)).
-Framework breadth is frozen until that validates with real users.
+or merge it. See [`docs/PRODUCT_MVP.md`](docs/PRODUCT_MVP.md). The TypeScript
+reachability engine and `impact` CLI have shipped as a capability; customer
+value is not validated. Framework breadth stays frozen. Docs index:
+[`docs/README.md`](docs/README.md).
 
 **v0.2 semantic contract in development.** Language and infrastructure
 extractors establish base facts; capability adapters normalize framework

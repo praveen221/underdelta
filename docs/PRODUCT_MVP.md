@@ -1,55 +1,25 @@
-# Underdelta product MVP (canonical)
+# Product MVP
 
-**Status:** active product decision  
-**Date:** 2026-08-12  
-**Supersedes:** informal “Monday map / three systems max / no orphan nodes” framing  
-**Related technical plan:** [`loopplans/TS_REACHABILITY_CHANGE_IMPACT.md`](loopplans/TS_REACHABILITY_CHANGE_IMPACT.md)
+**Status:** capability shipped; customer value not validated
+**Updated:** 2026-08-13
+**Engine loop:** [loopplans/TS_REACHABILITY_CHANGE_IMPACT.md](loopplans/TS_REACHABILITY_CHANGE_IMPACT.md)
 
-This document is the wedge we build and validate against. Architecture depth
-exists to serve these workflows—not the reverse.
+Architecture depth exists to serve these workflows, not the reverse.
 
 ---
 
-## What we keep from the discipline critique
+## Wedge
 
-- Freeze framework breadth temporarily.
-- One initial customer: developers / small teams on a TypeScript web product.
-- Make the supported stack feel complete before advertising universal coverage.
-- Evidence and explicit unknowns are core product principles.
-- Test with real users and **locally ignored** real repositories.
-- Measure **repeat usage**, not praise or extractor count.
-- AI consumes deterministic facts; it does not invent structure.
-- Do not compete with runtime observability (LangSmith, APM) or general code search.
+> Understand what a change touches before you make or merge it.
 
-The central risk remains correct: optimizing the architecture compiler without a
-habitual customer workflow produces an impressive platform nobody opens again.
+Two connected surfaces:
 
----
+1. **Repository map** (activation) — What does this product contain?
+2. **Change impact** (retention) — What product behavior could this change affect?
 
-## What we reject or refine
+The map is the entry experience. Change impact is the recurring reason to return.
 
-| Weak framing | Replacement |
-|--------------|-------------|
-| “Monday map” as retention habit | Map for **activation / onboarding**; **change impact** for retention |
-| “Three systems maximum” hard rule | Beginner shows the **smallest number of meaningful product systems** needed to explain the repo (adaptive grouping) |
-| “No orphan nodes” absolute | Hide code noise on Beginner; **never invent** edges; surface unresolved relationships honestly and measure coverage |
-| Committed full-repo goldens as product proof | Three **locally ignored** real repos for **evaluation**; unit/contract tests stay small and intentional |
-
----
-
-## Product wedge
-
-> **Understand what a change touches before you make or merge it.**
-
-Two connected workflows:
-
-1. **Repository map** — What does this product contain?  
-2. **Change impact** — What product behavior could this change affect?
-
-The map is the entry experience. Change impact is the recurring reason to return
-(every meaningful feature, refactor, and pull request).
-
-### Example (target UX, not current CLI)
+Target report (not a prettier overview):
 
 ```text
 Changed: src/billing/calculate.ts
@@ -66,121 +36,103 @@ Evidence: 8 observed links
 Unresolved: paymentProvider.charge()
 ```
 
-That is more valuable than another prettier overview.
-
 ---
 
-## Persona, stack, promise
+## Who and what
 
-| | MVP choice |
-|--|------------|
+| | Choice |
+|--|--------|
 | **Persona** | TypeScript product engineers in small teams |
 | **Stack** | Next.js or Express; Prisma/Postgres or MongoDB; optional BullMQ/cron |
-| **Promise** | Scan the repository and understand the product; inspect a change and see which product systems it may affect, with source evidence |
-| **Non-promise** | Universal multi-language coverage, runtime traces, full agent debugging, enterprise multi-repo catalog |
+| **Promise** | Scan the repo and understand the product; inspect a change and see which product systems it may affect, with source evidence |
+| **Not promised** | Universal language coverage, runtime traces, agent debugging, multi-repo catalogs |
 
-### Freeze list (until validation gates pass)
+### Freeze (until user gates pass)
 
-Do **not** expand these for MVP:
-
-- New language extractors (Python/Flask depth, etc.) beyond keeping existing green
-- New deploy/IaC frameworks
-- LangChain / LangGraph / OpenAI / Claude SDK adapters as a breadth play
+- New language or deploy adapters beyond keeping existing tests green
+- LangChain / LangGraph / OpenAI / Claude adapters as a breadth play
 - Matcher DSLs, plugin marketplaces, multi-repo federation
-- Competing with LangSmith on traces/evals
+- Competing with LangSmith or general code search
 
-AI SDKs remain a **later consumer** of the same reachability engine (symbol →
-endpoint/job/resource), not a parallel ontology sprint.
-
----
-
-## Twin surfaces
-
-### 1. Repository map (activation)
-
-- Evidence-backed product systems (UI, HTTP API, data, jobs, messaging when present).
-- Progressive disclosure: Beginner story → Intermediate neighborhood → Advanced code.
-- Adaptive system count: as few meaningful systems as the repo requires.
-- Detected capabilities + partial/empty/unsupported honesty (`analysis` path).
-
-### 2. Change impact (retention)
-
-Inputs (v1):
-
-- A path, file list, or Git range (`base...head` or working tree vs revision).
-
-Outputs:
-
-- Changed symbols (stable identities).
-- Reachable **product** systems and story nodes (endpoints, handlers, tables,
-  queues, jobs)—not a raw call-hairball dump.
-- Bounded impact subgraph for the viewer.
-- Text + JSON report with evidence counts and **explicit unresolved** edges.
-
-Precision over recall. Prefer fewer correct impact claims over invented paths.
+AI later **consumes** deterministic facts. It does not invent structure.
 
 ---
 
-## Engine (shared foundation)
+## Principles
 
-TypeScript **semantic reachability** is the next substantial technical phase:
-
-1. Stable identities for modules, exports, classes, methods, functions.
-2. Resolve imports, aliases, re-exports, method calls, same-repo call targets.
-3. Preserve unresolved and ambiguous calls explicitly (measurable coverage).
-4. Bind HTTP handlers, jobs, queues, and DB ops to those symbols.
-5. Deterministic path queries (endpoint→DB, endpoint→queue, job→external, function→systems).
-6. Compare two revisions: changed symbols + reachable systems.
-7. Render bounded impact subgraph + textual/JSON report.
-
-This foundation powers:
-
-- Architecture maps  
-- Pull request impact  
-- Blast-radius analysis  
-- Repository onboarding  
-- Agent context retrieval  
-- Later: AI explanations **over** deterministic facts  
-
-Technical breakdown: [`loopplans/TS_REACHABILITY_CHANGE_IMPACT.md`](loopplans/TS_REACHABILITY_CHANGE_IMPACT.md).
+- Evidence and explicit unknowns are product features.
+- Precision before recall. Never invent edges.
+- Beginner shows the smallest number of **meaningful** product systems for this repo (adaptive, not a hard cap of three).
+- Hide code-level orphans on Beginner; measure unresolved calls so coverage can improve.
+- Evaluate on locally ignored real repositories, not committed full-repo golden snapshots.
+- Measure repeat usage, not praise or extractor count.
 
 ---
 
-## Validation (definition of MVP done)
+## Surfaces
 
-### Evaluation method
+### Map
 
-- **Three locally ignored real repositories** (under `.dogfood-repos/` or equivalent).
-  Not committed full-repository golden snapshots with brittle label assertions.
-- Predefined architecture questions per repo (human checklist).
-- Compact unit/contract tests for reachability and impact **logic** remain in-repo.
+Evidence-backed product systems (UI, HTTP API, data, jobs, messaging when present).
+Progressive disclosure: Beginner story → Intermediate neighborhood → Advanced code.
+Detected capabilities plus mapped / partial / empty honesty.
 
-### User gates
+### Impact
+
+Inputs: file list, dirty worktree (including untracked), or `base...head` merge-base range.
+
+Outputs: changed symbols, reachable product anchors (endpoints, tables, jobs, queues, systems), bounded highlight, text + `impact.json`, explicit unresolved/ambiguous calls.
+
+Named `--head` must match a clean checkout until historical graphs exist. Do not combine `--files` with `--base`/`--head`. Invalid revisions fail the CLI. Deleted files are listed; deleted-symbol impact needs a base graph.
+
+---
+
+## Engine
+
+TypeScript semantic reachability bound to product facets:
+
+1. Stable identities for modules, exports, classes, methods, functions
+2. Import, re-export, and same-repo call resolution
+3. Explicit unresolved and ambiguous calls
+4. Bind HTTP handlers, jobs, queues, and DB operations to those symbols
+5. Deterministic path queries
+6. Change → symbols → reachable systems
+7. Bounded impact subgraph + report
+
+This is the shared foundation for maps, PR impact, blast radius, onboarding, and later agent context.
+
+---
+
+## Honest status (2026-08-13)
+
+**Shipped (this capability):** `underdelta impact`, call metrics, import/re-export/namespace resolution, class-qualified methods, merge-base ranges, untracked worktree files, upstream evidence paths, loud git failures.
+
+**Not a validated customer product.** Merge readiness ≠ product-market fit.
+
+**RealWorld (Node/Express/Prisma) dogfood:** changing `article.controller.ts` reached 11 HTTP endpoints, Article/Comment/Tag/User tables, and evidence-backed service/Prisma paths. Changing `article.service.ts` reached the four data resources but **no HTTP endpoints**.
+
+Cause: Express routes use anonymous inline callbacks; calls inside them are owned by the module, so we cannot form `route → anonymous handler → service`. That is a recall miss, not an invented claim.
+
+**Immediate follow-up (new branch, not this one):**
+
+1. Stable symbols for inline route callbacks
+2. Bind `route → callback`
+3. Attribute calls inside the callback to that symbol
+4. Confirm a service-file change reaches the Express routes
+5. Repeat on one real Next.js repository
+
+Then: 10 external users, ≥5 return, ≥3 share.
+
+---
+
+## Validation gates
 
 | Gate | Target |
 |------|--------|
 | External users who scan their own repo | ≥ 10 |
-| Successfully answer predefined architecture questions | majority of sessions |
+| Answer predefined architecture questions | majority of sessions |
 | Return for another change or PR | ≥ 5 |
 | Share output with another developer | ≥ 3 |
-| Extraction quality | **Precision before recall** on impact paths |
+| Quality | Precision before recall |
 
-### Anti-metrics (do not optimize)
-
-- Extractor / adapter count  
-- “Supported frameworks” marketing list  
-- Praise without a second session  
-- Coverage of nodes that never appear in Beginner or impact reports  
-
----
-
-## Bottom line
-
-> **Evidence-backed product map plus deterministic change impact.**
-
-- Viewer = entry experience  
-- Function-call + semantic graph = engine  
-- Change impact, agent context, and eventual AI explanations = recurring value  
-
-Horizontal adapter expansion without this wedge is a business risk. This MVP is
-the correction.
+Do not optimize extractor count, marketing framework lists, or praise without a second session.
