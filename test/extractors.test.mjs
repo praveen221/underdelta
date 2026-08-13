@@ -38,6 +38,42 @@ test("typescript extracts declarations, imports, calls, and HTTP routes", async 
   assert.equal(graph.nodes.some((node) => node.kind === "route" && node.label.includes("not-a-route")), false);
 });
 
+test("typescript binds inline Express route callbacks and owns their calls", async () => {
+  const graph = await extract(typescriptExtractor, {
+    "src/articles.ts": "export function getArticle() { return prisma.article.findMany(); }\n",
+    "src/controller.ts": [
+      'import { getArticle } from "./articles";',
+      'router.get("/articles", auth.required, function (req, res) {',
+      "  return getArticle();",
+      "});",
+      'router.post("/articles", (req, res) => getArticle());',
+      "",
+    ].join("\n"),
+  });
+  const routeGet = nodeBy(graph, "route", "GET /articles");
+  const routePost = nodeBy(graph, "route", "POST /articles");
+  const service = nodeBy(graph, "function", "getArticle");
+  const getHandler = graph.nodes.find(
+    (node) =>
+      node.kind === "function" &&
+      node.metadata?.declaration === "route-handler" &&
+      node.metadata?.method === "GET",
+  );
+  const postHandler = graph.nodes.find(
+    (node) =>
+      node.kind === "function" &&
+      node.metadata?.declaration === "route-handler" &&
+      node.metadata?.method === "POST",
+  );
+  assert.ok(getHandler, "expected anonymous GET handler symbol");
+  assert.ok(postHandler, "expected arrow POST handler symbol");
+  assert.equal(getHandler.metadata.anonymous, true);
+  edgeBy(graph, "routes-to", routeGet.id, getHandler.id);
+  edgeBy(graph, "routes-to", routePost.id, postHandler.id);
+  edgeBy(graph, "calls", getHandler.id, service.id);
+  edgeBy(graph, "calls", postHandler.id, service.id);
+});
+
 test("typescript emits explicit Prisma read, write, and query bindings", async () => {
   const graph = await extract(typescriptExtractor, {
     "src/notes.ts": [

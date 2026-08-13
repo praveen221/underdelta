@@ -269,6 +269,61 @@ test("findPaths stops at product anchors with evidence certainty", async () => {
   );
 });
 
+test("service-file impact reaches Express routes through inline callbacks", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-anon-"));
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(
+      path.join(root, "package.json"),
+      JSON.stringify({ name: "anon-express" }),
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, "src", "article.service.ts"),
+      [
+        "export function getArticle() {",
+        "  return prisma.article.findMany();",
+        "}",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, "src", "article.controller.ts"),
+      [
+        'import { getArticle } from "./article.service";',
+        'router.get("/articles", auth.required, function (req, res) {',
+        "  return getArticle();",
+        "});",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const graph = await compileRepository(root);
+    const impact = computeChangeImpact(graph, ["src/article.service.ts"]);
+    assert.ok(
+      impact.impact.endpoints.some(
+        (endpoint) =>
+          endpoint.method === "GET" && endpoint.path === "/articles",
+      ),
+      `expected GET /articles from service change, got ${JSON.stringify(impact.impact.endpoints)}`,
+    );
+    assert.ok(
+      impact.impact.resources.some((resource) => resource.label === "article"),
+    );
+    const route = graph.nodes.find(
+      (node) => node.kind === "route" && node.label === "GET /articles",
+    );
+    assert.ok(route);
+    assert.ok(
+      impact.paths.some((path) => path.fromSymbolId === route.id),
+      "expected upstream path from the route into the changed service",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("worktree change list includes untracked files", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-git-"));
   try {

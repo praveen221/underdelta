@@ -48,15 +48,11 @@ Historical tree compile is **not** in this loop.
 
 ---
 
-## Next loop (do not extend this branch)
+## Follow-up branch
 
-Anonymous inline Express route callbacks:
-
-1. Give inline route callbacks stable anonymous-handler symbols
-2. Bind `route → callback`
-3. Attribute calls inside the callback to that symbol
-4. Confirm a service-file change reaches the corresponding Express routes
-5. Repeat on one real Next.js repository
+`inline-route-handlers-13082026` — inline Express/Fastify route callbacks
+get stable handler symbols and own their calls. Service-file impact can
+reach those routes. Next.js named route exports were already symbols.
 
 Customer validation (10 users / 5 returns / 3 shares) remains human-owned.
 
