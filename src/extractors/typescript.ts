@@ -869,9 +869,63 @@ export const typescriptExtractor: ArchitectureExtractor = {
         return queueId;
       };
 
+      /** Inline route callbacks → occurrence-specific handler symbols. */
+      const routeHandlerByNode = new Map<ts.Node, string>();
+
+      const ensureInlineRouteHandler = (
+        handler: ts.ArrowFunction | ts.FunctionExpression,
+        method: string,
+        routePath: string,
+      ): string => {
+        const existing = routeHandlerByNode.get(handler);
+        if (existing) return existing;
+        const named =
+          ts.isFunctionExpression(handler) && handler.name
+            ? handler.name.text
+            : undefined;
+        const range = rangeFor(file.source, handler);
+        // Named function expressions are body-scoped. Never reuse a file-level
+        // declaration named `handler` — identity is route + source position.
+        const id = stableId(
+          "function",
+          file.relative,
+          "route-handler",
+          method.toUpperCase(),
+          routePath,
+          String(range.startLine),
+          String(range.startColumn),
+        );
+        const label = named ?? `${method.toUpperCase()} ${routePath} handler`;
+        nodes.push({
+          id,
+          kind: "function",
+          label,
+          qualifiedName: named
+            ? `${file.relative}#${named}@${range.startLine}`
+            : `${file.relative}#${method.toUpperCase()} ${routePath}`,
+          parentId: file.moduleId,
+          metadata: {
+            declaration: "route-handler",
+            anonymous: named === undefined,
+            method: method.toUpperCase(),
+            path: routePath,
+          },
+          semantics: symbolFacet("function"),
+          evidence: [evidenceFor(file, handler)],
+        });
+        edges.push(
+          edgeFrom("contains", file.moduleId, id, evidenceFor(file, handler)),
+        );
+        routeHandlerByNode.set(handler, id);
+        return id;
+      };
+
       const visit = (node: ts.Node, ownerId = file.moduleId): void => {
         let nextOwner = ownerId;
-        if (ts.isClassDeclaration(node) && node.name) {
+        const inlineHandlerId = routeHandlerByNode.get(node);
+        if (inlineHandlerId) {
+          nextOwner = inlineHandlerId;
+        } else if (ts.isClassDeclaration(node) && node.name) {
           // Enter class scope so methods resolve against methodsByOwner[classId].
           nextOwner = localDeclarations.get(node.name.text) ?? ownerId;
         } else if (ts.isFunctionDeclaration(node) && node.name) {
@@ -989,6 +1043,23 @@ export const typescriptExtractor: ArchitectureExtractor = {
                     ),
                   );
                 }
+              } else if (
+                handler &&
+                (ts.isFunctionExpression(handler) || ts.isArrowFunction(handler))
+              ) {
+                const handlerId = ensureInlineRouteHandler(
+                  handler,
+                  method,
+                  routePath,
+                );
+                edges.push(
+                  edgeFrom(
+                    "routes-to",
+                    routeId,
+                    handlerId,
+                    evidenceFor(file, handler),
+                  ),
+                );
               }
             }
           }

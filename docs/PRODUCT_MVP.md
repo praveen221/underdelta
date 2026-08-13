@@ -103,6 +103,23 @@ This is the shared foundation for maps, PR impact, blast radius, onboarding, and
 
 ---
 
+## Agent contract (inspiration, not a pivot)
+
+Worth taking from [deterministic “graph not text” agent tools](https://x.com/devagrawal09/status/2087640940593000767):
+binding resolution, classify-before-transform, honesty by construction,
+read-only analysis. Not worth becoming a migration-codemod company.
+
+| Layer | Owns |
+|-------|------|
+| Deterministic graph | Facts: resolved bindings, file:line, observed/derived/inferred, unresolved |
+| Model (later) | Judgment over those facts — never upgrades an unknown into a claim |
+| Human | Decisions neither can make |
+
+Impact output is already that layer: a sorted ledger of observations with
+explicit limits. Do not let an LLM write the graph.
+
+---
+
 ## Honest status (2026-08-13)
 
 **Shipped (this capability):** `underdelta impact`, call metrics, import/re-export/namespace resolution, class-qualified methods, merge-base ranges, untracked worktree files, upstream evidence paths, loud git failures.
@@ -113,13 +130,14 @@ This is the shared foundation for maps, PR impact, blast radius, onboarding, and
 
 Cause: Express routes use anonymous inline callbacks; calls inside them are owned by the module, so we cannot form `route → anonymous handler → service`. That is a recall miss, not an invented claim.
 
-**Immediate follow-up (new branch, not this one):**
+**Follow-up (`inline-route-handlers-13082026`):** inline Express route
+callbacks get occurrence-specific handler symbols, `routes-to` bindings, and
+own their inner calls so a service-file change can reach a **typed** HTTP
+endpoint. Fastify (and other unsupported HTTP frameworks) stay diagnostics,
+not impact endpoint claims.
 
-1. Stable symbols for inline route callbacks
-2. Bind `route → callback`
-3. Attribute calls inside the callback to that symbol
-4. Confirm a service-file change reaches the Express routes
-5. Repeat on one real Next.js repository
+Next.js App Router named `GET`/`POST` exports were already first-class
+functions. Repeat dogfood on one real Next.js repo after this lands.
 
 Then: 10 external users, ≥5 return, ≥3 share.
 
