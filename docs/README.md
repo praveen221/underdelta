@@ -10,5 +10,7 @@ Canonical product and architecture notes. Dated loop plans live under
 | [WALKABLE_GRAPH_CONTEXT.md](WALKABLE_GRAPH_CONTEXT.md) | Beginner / Intermediate / Advanced viewer |
 | [V0_BUILD_CONTEXT.md](V0_BUILD_CONTEXT.md) | Historical v0 capability ladder (not current verify) |
 | [loopplans/](loopplans/) | Closed and active implementation loops |
+| [loopplans/NAVIGABLE_GRAPH_14082026.md](loopplans/NAVIGABLE_GRAPH_14082026.md) | **Active loop** — cardinality clusters, back walk, operation edges |
 
 **Read first for product direction:** [PRODUCT_MVP.md](PRODUCT_MVP.md).
+**Active overnight loop:** [NAVIGABLE_GRAPH_14082026.md](loopplans/NAVIGABLE_GRAPH_14082026.md).
