@@ -8,6 +8,10 @@ import {
   projectSemanticArchitecture,
 } from "../dist/project.js";
 import {
+  clusterWalkAncestors,
+  isClusterWalkHub,
+} from "../dist/projection/clusterWalk.js";
+import {
   isClientApiFunction,
   isClientApisOnlyHttpApi,
   liftFePageStoryEdges,
@@ -623,6 +627,48 @@ test("small domain groups do not grow nested subresource hubs", () => {
     graph.nodes.filter((item) => item.kind === "route" && item.parentId === profiles.id).length,
     3,
   );
+});
+
+test("cluster walk ancestors seed API → Articles under Comments", () => {
+  const product = node("product", "product", "Demo");
+  const routes = [
+    endpointRoute("r-list", "GET", "/articles"),
+    endpointRoute("r-create", "POST", "/articles"),
+    endpointRoute("r-get", "GET", "/articles/:slug"),
+    endpointRoute("r-put", "PUT", "/articles/:slug"),
+    endpointRoute("r-del", "DELETE", "/articles/:slug"),
+    endpointRoute("r-feed", "GET", "/articles/feed"),
+    endpointRoute("r-cget", "GET", "/articles/:slug/comments"),
+    endpointRoute("r-cpost", "POST", "/articles/:slug/comments"),
+    endpointRoute("r-cdel", "DELETE", "/articles/:slug/comments/:id"),
+    endpointRoute("r-fav", "POST", "/articles/:slug/favorite"),
+    endpointRoute("r-unfav", "DELETE", "/articles/:slug/favorite"),
+  ];
+  const graph = projectSemanticArchitecture({
+    schemaVersion: "0.2",
+    project: { name: "demo", root: "/demo" },
+    generatedAt: new Date(0).toISOString(),
+    extractors: [],
+    adapters: [],
+    nodes: [product, ...routes],
+    edges: [],
+    diagnostics: [],
+  });
+  const byId = new Map(graph.nodes.map((item) => [item.id, item]));
+  const api = graph.nodes.find((item) => item.metadata?.systemKey === "api");
+  const articles = graph.nodes.find(
+    (item) => item.metadata?.routeDomain === "articles" && !item.metadata?.routeGroupNested,
+  );
+  const comments = graph.nodes.find(
+    (item) => item.metadata?.routeGroupNested && item.metadata?.routeSubresource === "comments",
+  );
+  assert.ok(api && articles && comments);
+  assert.equal(isClusterWalkHub(api), false);
+  assert.equal(isClusterWalkHub(articles), true);
+  assert.equal(isClusterWalkHub(comments), true);
+  assert.deepEqual(clusterWalkAncestors(comments.id, byId), [api.id, articles.id]);
+  assert.deepEqual(clusterWalkAncestors(articles.id, byId), [api.id]);
+  assert.deepEqual(clusterWalkAncestors(api.id, byId), []);
 });
 
 

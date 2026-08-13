@@ -590,7 +590,12 @@ export function renderArchitectureHtml(
       }
       if (state.focus) {
         const label = byId.get(state.focus)?.label || "focus";
-        return "Intermediate · neighborhood of " + label + " — Back / Esc returns toward Beginner";
+        const stack = focusStack();
+        const parentId = stack.length >= 2 ? stack[stack.length - 2] : null;
+        const parentLabel = parentId
+          ? (byId.get(parentId)?.label || "previous")
+          : "Beginner";
+        return "Intermediate · neighborhood of " + label + " — Back / Esc returns to " + parentLabel;
       }
       if (state.tier === "intermediate") {
         return "Double-click a Product Flow system to walk in — View deepens inside a focus";
@@ -1972,7 +1977,14 @@ export function renderArchitectureHtml(
             ? visible.length + " in focus · " + visibleRelationships + " visible relationships · " + graph.edges.length + " total"
             : visible.length + " in neighborhood · " + visibleRelationships + " visible relationships · " + graph.edges.length + " total")
         : visible.length + " components · " + visibleRelationships + " visible relationships · " + graph.edges.length + " total";
-      document.getElementById("back").hidden = !state.focus && state.history.length === 0;
+      const backBtn = document.getElementById("back");
+      backBtn.hidden = !state.focus && state.history.length === 0;
+      const backStack = focusStack();
+      const backParentId = backStack.length >= 2 ? backStack[backStack.length - 2] : null;
+      const backLabel = backParentId
+        ? (byId.get(backParentId)?.label || "previous")
+        : "Beginner";
+      backBtn.title = "Back to " + backLabel + " (Esc)";
       const walkHint = document.getElementById("walk-hint");
       if (walkHint) walkHint.textContent = walkHintText();
     }
@@ -2722,13 +2734,52 @@ export function renderArchitectureHtml(
       render();
     }
 
+    // Mirrors src/projection/clusterWalk.ts — keep in sync.
+    function isClusterWalkHub(node) {
+      return !!(
+        node &&
+        node.metadata &&
+        (node.metadata.routeGroup === true || node.metadata.kindCluster === true)
+      );
+    }
+    function isClusterWalkFrame(node) {
+      if (!node || node.kind === "product") return false;
+      if (node.kind === "api" || (node.metadata && node.metadata.systemKey === "api")) {
+        return true;
+      }
+      return isClusterWalkHub(node);
+    }
+    function clusterWalkAncestors(focusId) {
+      const frames = [];
+      const seen = new Set([focusId]);
+      let current = byId.get(focusId);
+      while (current) {
+        const parentId = current.parentId;
+        if (!parentId || seen.has(parentId)) break;
+        seen.add(parentId);
+        const parent = byId.get(parentId);
+        if (!parent || parent.kind === "product") break;
+        if (isClusterWalkFrame(parent)) frames.unshift(parent.id);
+        current = parent;
+      }
+      return frames;
+    }
+
     function focusNode(id) {
       // Dead-end Intermediate leaves (e.g. extractor services with no children)
       // escalate via resolveWalkFocus to the parent system at Advanced.
       const walk = resolveWalkFocus(id);
-      const prevFocus = state.focus;
-      if (prevFocus && prevFocus !== walk.focusId) {
-        state.history.push(prevFocus);
+      const focused = byId.get(walk.focusId);
+      // Cluster hubs are their own frames. Seed API → Articles so Find
+      // "Comments" cannot dump the user at a nested room with no way
+      // back except Overview (H2).
+      if (isClusterWalkHub(focused)) {
+        state.history = clusterWalkAncestors(walk.focusId);
+      } else {
+        const prevFocus = state.focus;
+        if (prevFocus && prevFocus !== walk.focusId) {
+          state.history.push(prevFocus);
+        }
       }
       state.focus = walk.focusId;
       state.tier = walk.tier;
