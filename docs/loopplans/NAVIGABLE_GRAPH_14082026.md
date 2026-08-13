@@ -155,7 +155,7 @@ opening bet. After each dogfood, rewrite the list.
 | ID | Hypothesis | Why start here | Kill if |
 |----|------------|----------------|---------|
 | H1 | **Kind clusters at >10 (fallback).** Ungrouped same-kind siblings under a product parent collapse to `HTTP endpoints (N)` when count > 10. **Do not nest** inside an existing domain route group. | Human request; ungrouped phonebooks | Tiny graphs grow fake hubs; wrapping Articles hides the 11 routes you drilled for |
-| H5 | **Sub-prefix groups inside a domain cluster.** Articles should open as feed / comments / favorite + a short CRUD strip, not 11 peer verbs. | RealWorld dogfood: API is calm; Articles is still a phonebook | Prefixes are noise on non-REST apps — fall back to H1 kind clusters |
+| H5 | **Sub-prefix groups inside a domain cluster.** Oversized domain hubs (>10 routes) peel 2+ member subresources (`comments`, `favorite`) into nested groups. Singleton `feed` stays a route. | RealWorld dogfood: API is calm; Articles was a 11-verb phonebook | Prefixes are noise on non-REST apps — fall back to H1; 1-member hubs |
 | H2 | **Back stack = focus stack + cluster stack.** Entering a cluster is a navigation frame, same as focusing a system. | Drill without Back is the trapped feeling | Extra frames confuse existing crumb tests |
 | H3 | **Operation labels on story edges.** Show `POST /articles`, `writes Article`, `publishes X` on Intermediate edges; hide raw `calls`/`imports`. | “What’s happening in the operation” | Labels collide / unreadable at scale — then label only on select/hover |
 | H4 | **Don’t fit-to-dump.** If visible node count > N, fit the **hubs**, not every leaf. | Zoom-out postage stamp | People miss that more nodes exist — need a “47 more” affordance |
@@ -166,6 +166,7 @@ opening bet. After each dogfood, rewrite the list.
 - Threshold is **>10** (10 siblings stay naked). Never cluster modules/functions/capabilities.
 - Skip parents that are already `routeGroup` hubs (Users / Articles). H1 is the fallback when prefixes do not form.
 - Domain groups (already on master) are what made RealWorld API Intermediate readable.
+- Nested subresource groups (`routeGroupNested`) only form when the domain hub has **>10** routes and the bucket has **≥2** members. Hide them on ancestor Intermediate (same as kind-cluster hubs).
 
 ---
 
@@ -231,13 +232,13 @@ ACTIVE
 - [x] Prior 3-tier walk exists on master (do not rebuild tiers from scratch)
 - [x] **H1 spike:** `projectKindClusters` collapses ungrouped >10 same-kind siblings to a projection hub; viewer hides members until the hub is focused; 10-or-fewer stay naked
 - [x] **Dogfood note:** RealWorld + self-map + node-cron after H1 (see Learning log)
+- [x] **H5:** oversized domain hubs peel Comments / Favorite nested groups; feed stays a route; viewer hides nested hubs on API Intermediate
 
 ### In progress / next (keep ≥ 3 unchecked until LOOP COMPLETE)
 
-- [ ] **H5:** sub-prefix groups inside Articles (feed / comments / favorite) on Express RealWorld
-- [ ] **H2:** cluster enter/leave is a Back frame (crumb + Esc)
-- [ ] **H4:** stop fit-to-view from shrinking a dump into dust
+- [ ] **H2:** cluster enter/leave is a Back frame (crumb + Esc) — now that Articles → Comments is a real extra step
 - [ ] **H3:** operation labels on Intermediate story edges
+- [ ] **H4:** stop fit-to-view from shrinking a dump into dust
 - [ ] Verify floors for cluster hubs + Back through a cluster (projection floors exist; Back/Playwright still open)
 
 ### Seed backlog
@@ -251,7 +252,7 @@ ACTIVE
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (H1 kind-cluster for ungrouped >10; skip inside routeGroup hubs). Now try H5 because dogfood felt: RealWorld API Intermediate is already a map (Articles / Profiles / User / Users + GET / + GET /tags), but double-clicking Articles still dumps 11 peer verbs. Group `/articles/:slug/comments`, `/favorite`, and `/feed` so the Articles room is a handful of named clusters, not a CRUD phonebook.
+> **Next focus:** This work is done (H5: Articles opens as 5 CRUD + feed + Comments + Favorite, not 11 verbs; FastAPI RealWorld matches). Now try H2 because dogfood felt: the new Comments drill is a real extra room — Back / Esc / crumb must return Articles → API → Beginner one frame at a time or the nested groups will feel like a trap. Then H3 (edges still unlabeled `reads`/`writes`).
 
 ---
 
@@ -263,6 +264,7 @@ ACTIVE
 
 - 2026-08-14 | Plan created on `navigable-graph-14082026` | Done: living plan + dogfood protocol | Felt: n/a (no code yet) | Plan change: opening bet is H1 cardinality collapse, then Back frames, then operation labels | Next: H1 on Express RealWorld
 - 2026-08-13 19:30 UTC | Hypothesis: H1 kind-cluster >10 same-kind siblings | Done: `src/projection/kindClusters.ts` + viewer hide-until-focus; skip nest inside `routeGroup`; verify 66 pass | Felt (node-express-realworld): Beginner is HTTP API → Data access (readable in 10s). API Intermediate is **clusters** (Articles/Profiles/User/Users + GET / + GET /tags + 4 story tables) — not a 20-route starfield. Wrapping Articles’ 11 routes in `HTTP endpoints (11)` felt like a trap (extra click to see the routes you drilled for); skipped. Articles still a 11-verb phonebook. Self-map: no fake clusters; Beginner still CLI → Compile pipeline → … → Viewer. node-cron-betterstack: 1 cron + 1 job, no 1-endpoint hub. Edges still unlabeled `reads`/`writes` (H3). Would show Beginner + API Intermediate to a stranger; not Articles yet. | Plan change: H1 is fallback for ungrouped dumps; promote H5 (sub-prefix inside Articles) over nesting kind clusters; standing rule: never wrap a domain group | Next: H5 Articles feed/comments/favorite
+- 2026-08-13 19:55 UTC | Hypothesis: H5 sub-prefix groups inside Articles | Done: `httpRouteSubresourceKey` + nested `routeGroupNested` hubs for ≥2 member buckets when domain has >10 routes; viewer hides nested hubs on API Intermediate; verify 69 pass | Felt (node-express-realworld): Beginner still 10s (HTTP API → Data). API Intermediate unchanged (4 domain groups + GET / + GET /tags + 4 tables) — Comments/Favorite do **not** leak. Articles Intermediate is a **map**: 5 CRUD + GET /articles/feed + Comments + Favorite (9 nodes, 6 peer routes). Comments drill = 3 comment routes. Singleton feed correctly stayed a route. fastapi-realworld matches (same Articles room). Self-map: no nested/kind hubs; CLI → … → Viewer intact. Edges still unlabeled (H3). Would show Articles to a stranger now. | Plan change: H5 standing rule (only peel >10 domain hubs, ≥2 members, hide nested on ancestors); next is H2 because the extra Comments room makes Back the trap risk | Next: H2 Back through Articles → Comments
 
 ---
 

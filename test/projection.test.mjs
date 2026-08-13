@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { edgeFrom } from "../dist/graph.js";
-import { isClientApisOnlyHttpApi as projectClientApisOnly } from "../dist/project.js";
+import {
+  httpRouteSubresourceKey,
+  isClientApisOnlyHttpApi as projectClientApisOnly,
+  projectSemanticArchitecture,
+} from "../dist/project.js";
 import {
   isClientApiFunction,
   isClientApisOnlyHttpApi,
@@ -26,7 +30,6 @@ import {
   kindClusterLabel,
   projectKindClusters,
 } from "../dist/projection/kindClusters.js";
-import { projectSemanticArchitecture } from "../dist/project.js";
 import {
   createScheduledWorkSystem,
   humanizeCronExpression,
@@ -488,4 +491,138 @@ test("projection of 11 unique Express routes collapses under HTTP API", () => {
   );
   assert.equal(clustered.length, 11);
 });
+
+test("HTTP subresource keys peel comments/favorite/feed off a domain path", () => {
+  assert.equal(httpRouteSubresourceKey("/articles/:slug/comments", "articles"), "comments");
+  assert.equal(
+    httpRouteSubresourceKey("/articles/:slug/comments/:id", "articles"),
+    "comments",
+  );
+  assert.equal(httpRouteSubresourceKey("/articles/:slug/favorite", "articles"), "favorite");
+  assert.equal(httpRouteSubresourceKey("/articles/feed", "articles"), "feed");
+  assert.equal(httpRouteSubresourceKey("/articles/:slug", "articles"), null);
+  assert.equal(httpRouteSubresourceKey("/articles", "articles"), null);
+  assert.equal(
+    httpRouteSubresourceKey("/api/articles/{slug}/comments", "articles"),
+    "comments",
+  );
+  assert.equal(httpRouteSubresourceKey("/users/login", "users"), "login");
+  assert.equal(httpRouteSubresourceKey("/profiles/:username", "profiles"), null);
+});
+
+function endpointRoute(id, method, path) {
+  return node(id, "route", `${method} ${path}`, {
+    semantics: [{
+      kind: "endpoint",
+      protocol: "http",
+      method,
+      path,
+      provider: "express",
+      declaration: "code",
+    }],
+    metadata: { method, path, framework: "express" },
+  });
+}
+
+test("Articles with 11 RealWorld verbs peels Comments and Favorite, keeps CRUD naked", () => {
+  const product = node("product", "product", "Demo");
+  const routes = [
+    endpointRoute("r-list", "GET", "/articles"),
+    endpointRoute("r-create", "POST", "/articles"),
+    endpointRoute("r-get", "GET", "/articles/:slug"),
+    endpointRoute("r-put", "PUT", "/articles/:slug"),
+    endpointRoute("r-del", "DELETE", "/articles/:slug"),
+    endpointRoute("r-feed", "GET", "/articles/feed"),
+    endpointRoute("r-cget", "GET", "/articles/:slug/comments"),
+    endpointRoute("r-cpost", "POST", "/articles/:slug/comments"),
+    endpointRoute("r-cdel", "DELETE", "/articles/:slug/comments/:id"),
+    endpointRoute("r-fav", "POST", "/articles/:slug/favorite"),
+    endpointRoute("r-unfav", "DELETE", "/articles/:slug/favorite"),
+  ];
+  const graph = projectSemanticArchitecture({
+    schemaVersion: "0.2",
+    project: { name: "demo", root: "/demo" },
+    generatedAt: new Date(0).toISOString(),
+    extractors: [],
+    adapters: [],
+    nodes: [product, ...routes],
+    edges: [],
+    diagnostics: [],
+  });
+  const articles = graph.nodes.find(
+    (item) => item.metadata?.routeDomain === "articles" && !item.metadata?.routeGroupNested,
+  );
+  assert.ok(articles, "expected Articles domain group");
+  const comments = graph.nodes.find(
+    (item) => item.metadata?.routeSubresource === "comments" && item.metadata?.routeGroupNested,
+  );
+  const favorite = graph.nodes.find(
+    (item) => item.metadata?.routeSubresource === "favorite" && item.metadata?.routeGroupNested,
+  );
+  const feedHub = graph.nodes.find(
+    (item) => item.metadata?.routeSubresource === "feed" && item.kind === "system",
+  );
+  assert.ok(comments, "expected Comments nested group");
+  assert.ok(favorite, "expected Favorite nested group");
+  assert.equal(comments.parentId, articles.id);
+  assert.equal(favorite.parentId, articles.id);
+  assert.equal(comments.label, "Comments");
+  assert.equal(favorite.label, "Favorite");
+  assert.equal(feedHub, undefined, "singleton feed must stay a route, not a 1-endpoint hub");
+  assert.equal(
+    graph.nodes.filter((item) => item.kind === "route" && item.parentId === comments.id).length,
+    3,
+  );
+  assert.equal(
+    graph.nodes.filter((item) => item.kind === "route" && item.parentId === favorite.id).length,
+    2,
+  );
+  const naked = graph.nodes
+    .filter((item) => item.kind === "route" && item.parentId === articles.id)
+    .map((item) => item.label)
+    .sort();
+  assert.deepEqual(naked, [
+    "DELETE /articles/:slug",
+    "GET /articles",
+    "GET /articles/:slug",
+    "GET /articles/feed",
+    "POST /articles",
+    "PUT /articles/:slug",
+  ]);
+  assert.equal(
+    graph.nodes.some((item) => item.metadata?.kindCluster === true),
+    false,
+    "must not wrap Articles in HTTP endpoints (11)",
+  );
+});
+
+test("small domain groups do not grow nested subresource hubs", () => {
+  const product = node("product", "product", "Demo");
+  const routes = [
+    endpointRoute("p-get", "GET", "/profiles/:username"),
+    endpointRoute("p-follow", "POST", "/profiles/:username/follow"),
+    endpointRoute("p-unfollow", "DELETE", "/profiles/:username/follow"),
+  ];
+  const graph = projectSemanticArchitecture({
+    schemaVersion: "0.2",
+    project: { name: "demo", root: "/demo" },
+    generatedAt: new Date(0).toISOString(),
+    extractors: [],
+    adapters: [],
+    nodes: [product, ...routes],
+    edges: [],
+    diagnostics: [],
+  });
+  const profiles = graph.nodes.find((item) => item.metadata?.routeDomain === "profiles");
+  assert.ok(profiles, "expected Profiles domain group");
+  assert.equal(
+    graph.nodes.some((item) => item.metadata?.routeGroupNested === true),
+    false,
+  );
+  assert.equal(
+    graph.nodes.filter((item) => item.kind === "route" && item.parentId === profiles.id).length,
+    3,
+  );
+});
+
 

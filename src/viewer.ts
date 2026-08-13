@@ -384,10 +384,22 @@ export function renderArchitectureHtml(
     function isKindClusterMember(node) {
       return !!(node && node.metadata && node.metadata.kindClusterMember === true);
     }
-    // Kind-cluster hubs + members stay off Beginner and off a parent's
-    // Intermediate until that hub (or its parent, for the hub itself) is focused.
+    function isNestedRouteGroupHub(node) {
+      return !!(
+        node &&
+        node.metadata &&
+        node.metadata.routeGroup === true &&
+        node.metadata.routeGroupNested === true
+      );
+    }
+    // Kind-cluster hubs, nested route groups (Comments under Articles), and
+    // their members stay off Beginner / ancestor Intermediate until focused.
     function clusterMemberVisible(node, focusId) {
-      if (isKindClusterHub(node) || isKindClusterMember(node)) {
+      if (
+        isKindClusterHub(node) ||
+        isKindClusterMember(node) ||
+        isNestedRouteGroupHub(node)
+      ) {
         if (!focusId) return false;
         return node.parentId === focusId || node.id === focusId;
       }
@@ -2007,6 +2019,7 @@ export function renderArchitectureHtml(
       "collapsedInOverview",
       "overviewHub",
       "routeGroup", "routeGroupMember", "routeDomain", "routeMolecule",
+      "routeGroupNested", "routeSubresource",
       "kindCluster", "kindClusterMember", "clusterKind", "memberCount",
       "shellHub", "shell", "access", "surface", "reachability", "projectedShell",
       "intermediateOmitted", "intermediateOmitReason",
@@ -2029,6 +2042,18 @@ export function renderArchitectureHtml(
         if (meta.shell === "protected") return "Protected app — nested routes";
         if (meta.shell === "public") return "Public shell — marketing routes";
         return "Front-end access shell";
+      }
+      if (meta.routeGroupNested === true) {
+        const sub = typeof meta.routeSubresource === "string" && meta.routeSubresource
+          ? meta.routeSubresource
+          : "subresource";
+        return "Route group · " + sub + " (projection, not a product system)";
+      }
+      if (meta.routeGroup === true) {
+        const domain = typeof meta.routeDomain === "string" && meta.routeDomain
+          ? meta.routeDomain
+          : "domain";
+        return "Route group · " + domain;
       }
       if (meta.kindCluster === true) {
         const count = typeof meta.memberCount === "number" ? meta.memberCount : 0;
