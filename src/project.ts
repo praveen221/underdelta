@@ -45,12 +45,18 @@ import {
   endpointFacet,
   projectHttpArchitecture,
 } from "./projection/http.js";
+import { projectKindClusters } from "./projection/kindClusters.js";
 
 export { isClientApisOnlyHttpApi } from "./projection/feStories.js";
 export { isTrivialMongoAggregateLabel } from "./projection/data.js";
 export { humanizeIdentifierLabel } from "./projection/labels.js";
 export { humanizeCronExpression } from "./projection/scheduledWork.js";
 export { endpointFacet } from "./projection/http.js";
+export {
+  KIND_CLUSTER_THRESHOLD,
+  kindClusterLabel,
+  projectKindClusters,
+} from "./projection/kindClusters.js";
 export {
   humanizeKubernetesLabel,
   humanizeTerraformLabel,
@@ -4213,6 +4219,15 @@ export function projectSemanticArchitecture(
   // so API focus is Users/Articles hubs (≤8 leftover samples when grouped),
   // not a route phonebook; modules/functions wait for Advanced.
   projectApiRouteDomainGroups(systems, nodes, edges, attachToSystem);
+
+  // Cardinality collapse: >10 same-kind siblings become a projection hub
+  // (`HTTP endpoints (47)`), not a Beginner product system. Runs after domain
+  // groups so prefix hubs form first; leftover phonebooks still collapse.
+  projectKindClusters({
+    nodes,
+    edges,
+    attach: attachToSystem,
+  });
 
   // Scholar / FE-only honesty: when pages exist but no static API/Data/Jobs
   // surface survived quieting, mark the product UI-only (never invent backend).

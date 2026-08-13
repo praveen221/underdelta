@@ -22,6 +22,12 @@ import {
   projectHttpArchitecture,
 } from "../dist/projection/http.js";
 import {
+  KIND_CLUSTER_THRESHOLD,
+  kindClusterLabel,
+  projectKindClusters,
+} from "../dist/projection/kindClusters.js";
+import { projectSemanticArchitecture } from "../dist/project.js";
+import {
   createScheduledWorkSystem,
   humanizeCronExpression,
   projectScheduledWork,
@@ -300,3 +306,186 @@ test("six-field cron expressions produce useful second-level labels", () => {
   assert.equal(humanizeCronExpression("*/5 * * * * *"), "every 5 seconds");
   assert.equal(humanizeCronExpression("0 0 * * * *"), "every hour");
 });
+
+function attachParent(nodes, edges) {
+  return (nodeId, systemId, itemEvidence) => {
+    const child = nodes.get(nodeId);
+    if (!child) return;
+    if (child.metadata?.projection === "semantic") return;
+    child.parentId = systemId;
+    nodes.set(nodeId, child);
+    const contains = edgeFrom(
+      "contains",
+      systemId,
+      nodeId,
+      itemEvidence ?? evidence,
+    );
+    edges.set(contains.id, contains);
+  };
+}
+
+test("kind cluster label names HTTP endpoints with the member count", () => {
+  assert.equal(kindClusterLabel("route", 47), "HTTP endpoints (47)");
+  assert.equal(kindClusterLabel("table", 15), "Tables (15)");
+  assert.equal(KIND_CLUSTER_THRESHOLD, 10);
+});
+
+test("more than 10 same-kind siblings collapse to a projection hub", () => {
+  const api = node("api", "api", "HTTP API", {
+    metadata: { projection: "semantic", systemKey: "api" },
+  });
+  const routes = Array.from({ length: 11 }, (_, index) =>
+    node(`route-${index}`, "route", `GET /r${index}`, {
+      parentId: api.id,
+      metadata: { method: "GET", path: `/r${index}` },
+    }),
+  );
+  const nodes = new Map([api, ...routes].map((item) => [item.id, item]));
+  const edges = new Map();
+  projectKindClusters({ nodes, edges, attach: attachParent(nodes, edges) });
+
+  const hub = [...nodes.values()].find((item) => item.metadata?.kindCluster === true);
+  assert.ok(hub, "expected a kind-cluster hub");
+  assert.equal(hub.label, "HTTP endpoints (11)");
+  assert.equal(hub.metadata.projection, "semantic");
+  assert.equal(hub.metadata.clusterKind, "route");
+  assert.equal(hub.metadata.memberCount, 11);
+  assert.equal(hub.parentId, api.id);
+  for (const route of routes) {
+    assert.equal(nodes.get(route.id).parentId, hub.id);
+    assert.equal(nodes.get(route.id).metadata.kindClusterMember, true);
+    assert.ok(
+      nodes.get(route.id).evidence.length >= 1,
+      "member evidence must survive re-parent",
+    );
+  }
+  assert.equal(
+    [...nodes.values()].filter((item) => item.parentId === api.id && item.kind === "route")
+      .length,
+    0,
+    "API must not keep 11 naked route peers",
+  );
+});
+
+test("10 same-kind siblings stay naked — no fake cluster", () => {
+  const api = node("api", "api", "HTTP API", {
+    metadata: { projection: "semantic", systemKey: "api" },
+  });
+  const routes = Array.from({ length: 10 }, (_, index) =>
+    node(`route-${index}`, "route", `GET /r${index}`, {
+      parentId: api.id,
+      metadata: { method: "GET", path: `/r${index}` },
+    }),
+  );
+  const nodes = new Map([api, ...routes].map((item) => [item.id, item]));
+  const edges = new Map();
+  projectKindClusters({ nodes, edges, attach: attachParent(nodes, edges) });
+
+  assert.equal(
+    [...nodes.values()].some((item) => item.metadata?.kindCluster === true),
+    false,
+  );
+  for (const route of routes) {
+    assert.equal(nodes.get(route.id).parentId, api.id);
+  }
+});
+
+test("kind clusters do not wrap members of an existing domain route group", () => {
+  const api = node("api", "api", "HTTP API", {
+    metadata: { projection: "semantic", systemKey: "api" },
+  });
+  const articles = node("articles", "system", "Articles", {
+    parentId: api.id,
+    metadata: {
+      projection: "semantic",
+      routeGroup: true,
+      systemKey: "routes:articles",
+    },
+  });
+  const routes = Array.from({ length: 11 }, (_, index) =>
+    node(`route-${index}`, "route", `GET /articles/${index}`, {
+      parentId: articles.id,
+      metadata: { method: "GET", path: `/articles/${index}` },
+    }),
+  );
+  const nodes = new Map(
+    [api, articles, ...routes].map((item) => [item.id, item]),
+  );
+  const edges = new Map();
+  projectKindClusters({ nodes, edges, attach: attachParent(nodes, edges) });
+
+  assert.equal(
+    [...nodes.values()].some((item) => item.metadata?.kindCluster === true),
+    false,
+    "Articles is already the cluster — do not nest HTTP endpoints (11)",
+  );
+  for (const route of routes) {
+    assert.equal(nodes.get(route.id).parentId, articles.id);
+  }
+});
+
+test("kind clusters skip modules and other semantic hubs", () => {
+  const api = node("api", "api", "HTTP API", {
+    metadata: { projection: "semantic", systemKey: "api" },
+  });
+  const modules = Array.from({ length: 12 }, (_, index) =>
+    node(`mod-${index}`, "module", `src/r${index}.ts`, { parentId: api.id }),
+  );
+  const group = node("articles", "system", "Articles", {
+    parentId: api.id,
+    metadata: { projection: "semantic", routeGroup: true, systemKey: "routes:articles" },
+  });
+  const nodes = new Map([api, group, ...modules].map((item) => [item.id, item]));
+  const edges = new Map();
+  projectKindClusters({ nodes, edges, attach: attachParent(nodes, edges) });
+
+  assert.equal(
+    [...nodes.values()].some((item) => item.metadata?.kindCluster === true),
+    false,
+    "modules and semantic groups must not become kind clusters",
+  );
+  assert.equal(nodes.get(group.id).parentId, api.id);
+});
+
+test("projection of 11 unique Express routes collapses under HTTP API", () => {
+  const product = node("product", "product", "Demo");
+  const routes = Array.from({ length: 11 }, (_, index) => {
+    const path = `/thing${index}`;
+    return node(`route-${index}`, "route", `legacy ${index}`, {
+      semantics: [{
+        kind: "endpoint",
+        protocol: "http",
+        method: "GET",
+        path,
+        provider: "express",
+        declaration: "code",
+      }],
+      metadata: { method: "GET", path, framework: "express" },
+    });
+  });
+  const graph = projectSemanticArchitecture({
+    schemaVersion: "0.2",
+    project: { name: "demo", root: "/demo" },
+    generatedAt: new Date(0).toISOString(),
+    extractors: [],
+    adapters: [],
+    nodes: [product, ...routes],
+    edges: [],
+    diagnostics: [],
+  });
+  const hub = graph.nodes.find((item) => item.metadata?.kindCluster === true);
+  const api = graph.nodes.find((item) => item.metadata?.systemKey === "api");
+  assert.ok(api, "expected HTTP API system");
+  assert.ok(hub, "expected kind-cluster hub for 11 unique routes");
+  assert.equal(hub.label, "HTTP endpoints (11)");
+  assert.equal(hub.parentId, api.id);
+  const nakedRoutes = graph.nodes.filter(
+    (item) => item.kind === "route" && item.parentId === api.id,
+  );
+  assert.equal(nakedRoutes.length, 0);
+  const clustered = graph.nodes.filter(
+    (item) => item.kind === "route" && item.parentId === hub.id,
+  );
+  assert.equal(clustered.length, 11);
+});
+

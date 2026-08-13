@@ -154,15 +154,18 @@ opening bet. After each dogfood, rewrite the list.
 
 | ID | Hypothesis | Why start here | Kill if |
 |----|------------|----------------|---------|
-| H1 | **Kind clusters at >10.** Same `kind` (or endpoint facet) under one parent collapses to a hub when count > 10. | Human request; RealWorld API fan-out | Tiny graphs grow fake hubs; clusters hide the only 3 routes |
+| H1 | **Kind clusters at >10 (fallback).** Ungrouped same-kind siblings under a product parent collapse to `HTTP endpoints (N)` when count > 10. **Do not nest** inside an existing domain route group. | Human request; ungrouped phonebooks | Tiny graphs grow fake hubs; wrapping Articles hides the 11 routes you drilled for |
+| H5 | **Sub-prefix groups inside a domain cluster.** Articles should open as feed / comments / favorite + a short CRUD strip, not 11 peer verbs. | RealWorld dogfood: API is calm; Articles is still a phonebook | Prefixes are noise on non-REST apps — fall back to H1 kind clusters |
 | H2 | **Back stack = focus stack + cluster stack.** Entering a cluster is a navigation frame, same as focusing a system. | Drill without Back is the trapped feeling | Extra frames confuse existing crumb tests |
 | H3 | **Operation labels on story edges.** Show `POST /articles`, `writes Article`, `publishes X` on Intermediate edges; hide raw `calls`/`imports`. | “What’s happening in the operation” | Labels collide / unreadable at scale — then label only on select/hover |
 | H4 | **Don’t fit-to-dump.** If visible node count > N, fit the **hubs**, not every leaf. | Zoom-out postage stamp | People miss that more nodes exist — need a “47 more” affordance |
-| H5 | **Prefix / resource groups inside a cluster.** `/articles*` vs `/users*` beats a flat 47-endpoint list. | Second-level calm after H1 | Prefixes are noise on non-REST apps — fall back to kind clusters |
 
-**Default first tick:** H1 on Express RealWorld API neighborhood. Smallest
-projection or viewer grouping that collapses >10 routes. Then dogfood. Then
-rewrite this table.
+**Standing rules (from tick 1 dogfood):**
+
+- Kind clusters are `projection: semantic` + `kindCluster: true` — not product systems.
+- Threshold is **>10** (10 siblings stay naked). Never cluster modules/functions/capabilities.
+- Skip parents that are already `routeGroup` hubs (Users / Articles). H1 is the fallback when prefixes do not form.
+- Domain groups (already on master) are what made RealWorld API Intermediate readable.
 
 ---
 
@@ -226,29 +229,29 @@ ACTIVE
 - [x] This loop plan created on `navigable-graph-14082026`
 - [x] Soft-stop / idle protocol written
 - [x] Prior 3-tier walk exists on master (do not rebuild tiers from scratch)
+- [x] **H1 spike:** `projectKindClusters` collapses ungrouped >10 same-kind siblings to a projection hub; viewer hides members until the hub is focused; 10-or-fewer stay naked
+- [x] **Dogfood note:** RealWorld + self-map + node-cron after H1 (see Learning log)
 
 ### In progress / next (keep ≥ 3 unchecked until LOOP COMPLETE)
 
-- [ ] **H1 spike:** collapse >10 same-kind siblings (start: routes under API) on Express RealWorld
-- [ ] **Dogfood note:** write felt result for RealWorld + self-map after H1
+- [ ] **H5:** sub-prefix groups inside Articles (feed / comments / favorite) on Express RealWorld
 - [ ] **H2:** cluster enter/leave is a Back frame (crumb + Esc)
 - [ ] **H4:** stop fit-to-view from shrinking a dump into dust
 - [ ] **H3:** operation labels on Intermediate story edges
-- [ ] Verify floors for cluster hubs + Back through a cluster
+- [ ] Verify floors for cluster hubs + Back through a cluster (projection floors exist; Back/Playwright still open)
 
 ### Seed backlog
 
-- H5 prefix groups inside an endpoint cluster
-- Page large clusters (first 10 + “show more”) if grouping still overflows
+- Page large clusters (first 10 + “show more”) if H5 grouping still overflows
 - Hover/select-only labels if always-on labels collide
 - Keyboard: ` [` / `]` sibling clusters
-- Inspector: “this cluster is a view, here are the members + evidence”
 - Density legend (“47 endpoints clustered”)
 - Playwright: cluster + back path on a fixture with 12 dummy routes
+- API Intermediate still paints 4 story-edge tables beside the route groups — maybe too many hallway neighbors
 
 ### Next focus (edit every tick)
 
-> **Next focus:** Hypothesis H1 — on `.dogfood-repos/node-express-realworld`, focusing the HTTP API / route neighborhood should not paint every route as a peer. Implement the smallest kind-cluster (>10) that keeps evidence. Then scan RealWorld + self-map, write how it felt, and rewrite the hypothesis table if prefix groups (H5) or fit-to-dump (H4) hurt more than raw sibling count.
+> **Next focus:** This work is done (H1 kind-cluster for ungrouped >10; skip inside routeGroup hubs). Now try H5 because dogfood felt: RealWorld API Intermediate is already a map (Articles / Profiles / User / Users + GET / + GET /tags), but double-clicking Articles still dumps 11 peer verbs. Group `/articles/:slug/comments`, `/favorite`, and `/feed` so the Articles room is a handful of named clusters, not a CRUD phonebook.
 
 ---
 
@@ -259,6 +262,7 @@ ACTIVE
 ```
 
 - 2026-08-14 | Plan created on `navigable-graph-14082026` | Done: living plan + dogfood protocol | Felt: n/a (no code yet) | Plan change: opening bet is H1 cardinality collapse, then Back frames, then operation labels | Next: H1 on Express RealWorld
+- 2026-08-13 19:30 UTC | Hypothesis: H1 kind-cluster >10 same-kind siblings | Done: `src/projection/kindClusters.ts` + viewer hide-until-focus; skip nest inside `routeGroup`; verify 66 pass | Felt (node-express-realworld): Beginner is HTTP API → Data access (readable in 10s). API Intermediate is **clusters** (Articles/Profiles/User/Users + GET / + GET /tags + 4 story tables) — not a 20-route starfield. Wrapping Articles’ 11 routes in `HTTP endpoints (11)` felt like a trap (extra click to see the routes you drilled for); skipped. Articles still a 11-verb phonebook. Self-map: no fake clusters; Beginner still CLI → Compile pipeline → … → Viewer. node-cron-betterstack: 1 cron + 1 job, no 1-endpoint hub. Edges still unlabeled `reads`/`writes` (H3). Would show Beginner + API Intermediate to a stranger; not Articles yet. | Plan change: H1 is fallback for ungrouped dumps; promote H5 (sub-prefix inside Articles) over nesting kind clusters; standing rule: never wrap a domain group | Next: H5 Articles feed/comments/favorite
 
 ---
 

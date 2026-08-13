@@ -138,6 +138,8 @@ export function renderArchitectureHtml(
     .node[data-kind="module"] { --kind-color: #77808d; border-radius: 4px 10px 10px; }
     .node[data-kind="module"]::before { content: ""; position: absolute; width: 48px; height: 5px; left: -1px; top: -6px; border: 1px solid var(--kind-color); border-bottom: 0; border-radius: 5px 6px 0 0; background: var(--panel); }
     .node[data-kind="system"] { --kind-color: #7c9cff; min-height: 72px; width: 210px; border-width: 2px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kind-color) 25%, transparent); }
+    /* Kind clusters are a view, not a product system — dashed so they don't fake a hub. */
+    .node[data-kind-cluster="true"] { --kind-color: #4d8ed5; border-style: dashed; box-shadow: none; }
     .node[data-kind="service"] { --kind-color: #8b7cf6; min-height: 68px; outline: 1px solid color-mix(in srgb, var(--kind-color) 35%, transparent); outline-offset: 3px; }
     .node[data-kind="component"], .node[data-kind="page"], .node[data-kind="ui"] { --kind-color: #63a8e8; border-radius: 5px 5px 14px 14px; border-top-width: 5px; }
     .node[data-kind="hook"] { --kind-color: #5dbfc1; width: 176px; min-height: 48px; border-style: dashed; border-radius: 999px; }
@@ -375,6 +377,21 @@ export function renderArchitectureHtml(
       if (!isRouteGroupMember(node)) return true;
       if (!focusId) return false;
       return node.parentId === focusId || node.id === focusId;
+    }
+    function isKindClusterHub(node) {
+      return !!(node && node.metadata && node.metadata.kindCluster === true);
+    }
+    function isKindClusterMember(node) {
+      return !!(node && node.metadata && node.metadata.kindClusterMember === true);
+    }
+    // Kind-cluster hubs + members stay off Beginner and off a parent's
+    // Intermediate until that hub (or its parent, for the hub itself) is focused.
+    function clusterMemberVisible(node, focusId) {
+      if (isKindClusterHub(node) || isKindClusterMember(node)) {
+        if (!focusId) return false;
+        return node.parentId === focusId || node.id === focusId;
+      }
+      return routeGroupMemberVisible(node, focusId);
     }
     function laneNameFor(node) {
       if (isDetectionSurface(node)) return "Detects";
@@ -1058,7 +1075,7 @@ export function renderArchitectureHtml(
         ) {
           return false;
         }
-        if (!routeGroupMemberVisible(node, rootId)) return false;
+        if (!clusterMemberVisible(node, rootId)) return false;
         const isOverviewHub = node.metadata && node.metadata.overviewHub;
         if (advancedKinds.has(node.kind) && !isOverviewHub) return false;
         return true;
@@ -1083,7 +1100,7 @@ export function renderArchitectureHtml(
         // leafChrome (Card/Button) is Advanced-only — keep here, hide Intermediate.
         // Route-group members stay Intermediate furniture of their group, not of
         // the parent API Advanced room (drill the Users/Articles hub instead).
-        if (!routeGroupMemberVisible(node, rootId)) return false;
+        if (!clusterMemberVisible(node, rootId)) return false;
         const isOverviewHub = node.metadata && node.metadata.overviewHub;
         if (advancedKinds.has(node.kind) && !isOverviewHub) {
           if (node.kind === "function") {
@@ -1138,6 +1155,14 @@ export function renderArchitectureHtml(
       if (isRouteMoleculeHub(clicked)) {
         return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
       }
+      // Domain groups + kind clusters are Intermediate rooms even when they
+      // only contain one nested hub (H1 collapse must not thin-room to Advanced).
+      if (
+        clicked.metadata &&
+        (clicked.metadata.routeGroup === true || clicked.metadata.kindCluster === true)
+      ) {
+        return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
+      }
       // Scheduled work is a semantic room even when it has only one trigger,
       // one job, and one code handler. Enter the trigger/job story before code.
       if (
@@ -1163,7 +1188,9 @@ export function renderArchitectureHtml(
       // Heart API Intermediate payoff is domain route groups (Users / Articles).
       // Prefer that room over a thin-room Advanced module dump.
       const routeGroupFurniture = roomOthers.filter(
-        (node) => node.metadata && node.metadata.routeGroup === true,
+        (node) =>
+          node.metadata &&
+          (node.metadata.routeGroup === true || node.metadata.kindCluster === true),
       );
       if (routeGroupFurniture.length >= 1) {
         return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
@@ -1271,7 +1298,7 @@ export function renderArchitectureHtml(
         }
         // Domain-grouped routes: only paint when their Users/Articles hub is focused
         // (API Intermediate shows groups, not the route phonebook).
-        if (!routeGroupMemberVisible(node, state.focus)) return false;
+        if (!clusterMemberVisible(node, state.focus)) return false;
         // overviewHub (auth/billing actions, Helm Chart/resources, mongo
         // aggregates) bypasses advanced-kind hides so hubs can appear once the
         // user focuses a system (Intermediate neighborhood / Advanced-in-focus).
@@ -1379,9 +1406,14 @@ export function renderArchitectureHtml(
       element.dataset.id = node.id;
       element.dataset.manualPosition = manual ? "true" : "false";
       if (node.metadata && node.metadata.role) element.dataset.role = node.metadata.role;
+      if (node.metadata && node.metadata.kindCluster === true) element.dataset.kindCluster = "true";
       element.style.left = placedX + "px";
       element.style.top = placedY + "px";
-      element.innerHTML = '<div class="top"><span class="glyph">' + iconForKind(node.kind) + '</span><span class="label"></span></div><div class="kind">' + node.kind.replace("-", " ") + (node.technology ? " · " + node.technology : "") + "</div>";
+      const kindLine = (node.metadata && node.metadata.kindCluster === true)
+        ? ("cluster · " + (node.metadata.memberCount || "?") + " " + (node.metadata.clusterKind || "node") +
+          ((node.metadata.memberCount === 1) ? "" : "s"))
+        : (node.kind.replace("-", " ") + (node.technology ? " · " + node.technology : ""));
+      element.innerHTML = '<div class="top"><span class="glyph">' + iconForKind(node.kind) + '</span><span class="label"></span></div><div class="kind">' + kindLine + "</div>";
       const label = element.querySelector(".label");
       label.textContent = node.label;
       label.title = node.label;
@@ -1975,6 +2007,7 @@ export function renderArchitectureHtml(
       "collapsedInOverview",
       "overviewHub",
       "routeGroup", "routeGroupMember", "routeDomain", "routeMolecule",
+      "kindCluster", "kindClusterMember", "clusterKind", "memberCount",
       "shellHub", "shell", "access", "surface", "reachability", "projectedShell",
       "intermediateOmitted", "intermediateOmitReason",
       "beginnerRouteHub", "beginnerOmitted", "beginnerOmitReason", "beginnerHero",
@@ -1996,6 +2029,14 @@ export function renderArchitectureHtml(
         if (meta.shell === "protected") return "Protected app — nested routes";
         if (meta.shell === "public") return "Public shell — marketing routes";
         return "Front-end access shell";
+      }
+      if (meta.kindCluster === true) {
+        const count = typeof meta.memberCount === "number" ? meta.memberCount : 0;
+        const clustered = typeof meta.clusterKind === "string" && meta.clusterKind
+          ? meta.clusterKind
+          : "node";
+        return "Clustered view — " + count + " " + clustered +
+          (count === 1 ? "" : "s") + " (projection, not a product system)";
       }
       if (meta.routeMolecule === true) {
         const path = typeof meta.path === "string" && meta.path ? meta.path : "";
@@ -2179,6 +2220,30 @@ export function renderArchitectureHtml(
         pills.push('<span class="pill">Provider: ' + escapeHtml(resource.provider) + "</span>");
       }
       return "<h3>Data resource</h3>" + pills.join("");
+    }
+
+    function kindClusterHtml(node) {
+      if (!isKindClusterHub(node)) return "";
+      const members = graph.nodes
+        .filter((child) => child.parentId === node.id && isKindClusterMember(child))
+        .sort((a, b) => String(a.label).localeCompare(String(b.label)));
+      const count = typeof node.metadata.memberCount === "number"
+        ? node.metadata.memberCount
+        : members.length;
+      const clustered = typeof node.metadata.clusterKind === "string"
+        ? node.metadata.clusterKind
+        : "node";
+      const pills = members.slice(0, 12).map((member) =>
+        '<button class="pill connection" data-id="' + member.id + '">' +
+          escapeHtml(member.label) +
+        "</button>",
+      ).join("");
+      const extra = members.length > 12
+        ? '<p class="inspector-more">+' + (members.length - 12) + " more — double-click this hub to walk them</p>"
+        : "";
+      return "<h3>Clustered members</h3><p>This hub is a view of " +
+        count + " " + escapeHtml(clustered) + (count === 1 ? "" : "s") +
+        " — evidence still lives on the real nodes.</p>" + pills + extra;
     }
 
     function deployUnitHtml(node) {
@@ -2466,6 +2531,7 @@ export function renderArchitectureHtml(
       const httpEndpoint = httpEndpointHtml(node);
       const scheduledWork = scheduledWorkHtml(node);
       const dataResource = dataResourceHtml(node);
+      const kindCluster = kindClusterHtml(node);
       const deployUnit = deployUnitHtml(node);
       // Table migration lineage is owned by the Prisma / SQL section.
       // Table↔table relation names are owned by the Relations section.
@@ -2602,6 +2668,7 @@ export function renderArchitectureHtml(
       inspector.innerHTML =
         "<h2></h2>" +
         roleHtml +
+        kindCluster +
         httpEndpoint +
         scheduledWork +
         dataResource +
