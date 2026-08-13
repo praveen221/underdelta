@@ -130,9 +130,11 @@ explicit limits. Do not let an LLM write the graph.
 
 Cause: Express routes use anonymous inline callbacks; calls inside them are owned by the module, so we cannot form `route → anonymous handler → service`. That is a recall miss, not an invented claim.
 
-**Follow-up (`inline-route-handlers-13082026`):** inline Express/Fastify
-route callbacks get stable handler symbols, `routes-to` bindings, and own
-their inner calls so a service-file change can reach the HTTP route.
+**Follow-up (`inline-route-handlers-13082026`):** inline Express route
+callbacks get occurrence-specific handler symbols, `routes-to` bindings, and
+own their inner calls so a service-file change can reach a **typed** HTTP
+endpoint. Fastify (and other unsupported HTTP frameworks) stay diagnostics,
+not impact endpoint claims.
 
 Next.js App Router named `GET`/`POST` exports were already first-class
 functions. Repeat dogfood on one real Next.js repo after this lands.

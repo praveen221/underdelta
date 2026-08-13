@@ -869,7 +869,7 @@ export const typescriptExtractor: ArchitectureExtractor = {
         return queueId;
       };
 
-      /** Inline Express/Fastify route callbacks → stable handler symbols. */
+      /** Inline route callbacks → occurrence-specific handler symbols. */
       const routeHandlerByNode = new Map<ts.Node, string>();
 
       const ensureInlineRouteHandler = (
@@ -883,33 +883,25 @@ export const typescriptExtractor: ArchitectureExtractor = {
           ts.isFunctionExpression(handler) && handler.name
             ? handler.name.text
             : undefined;
+        const range = rangeFor(file.source, handler);
+        // Named function expressions are body-scoped. Never reuse a file-level
+        // declaration named `handler` — identity is route + source position.
+        const id = stableId(
+          "function",
+          file.relative,
+          "route-handler",
+          method.toUpperCase(),
+          routePath,
+          String(range.startLine),
+          String(range.startColumn),
+        );
         const label = named ?? `${method.toUpperCase()} ${routePath} handler`;
-        const id = named
-          ? stableId("function", file.relative, named)
-          : stableId(
-              "function",
-              file.relative,
-              "route-handler",
-              method.toUpperCase(),
-              routePath,
-            );
-        if (named) {
-          if (!localDeclarations.has(named)) {
-            localDeclarations.set(named, id);
-            const byName = declarationsByName.get(named) ?? [];
-            byName.push(id);
-            declarationsByName.set(named, byName);
-          } else {
-            routeHandlerByNode.set(handler, localDeclarations.get(named)!);
-            return localDeclarations.get(named)!;
-          }
-        }
         nodes.push({
           id,
           kind: "function",
           label,
           qualifiedName: named
-            ? `${file.relative}#${named}`
+            ? `${file.relative}#${named}@${range.startLine}`
             : `${file.relative}#${method.toUpperCase()} ${routePath}`,
           parentId: file.moduleId,
           metadata: {

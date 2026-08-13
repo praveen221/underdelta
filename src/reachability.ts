@@ -99,7 +99,9 @@ export function hasFacet(node: ArchitectureNode, kind: string): boolean {
 }
 
 export function isProductAnchor(node: ArchitectureNode): boolean {
-  if (node.kind === "system" || node.kind === "route" || node.kind === "queue" || node.kind === "topic") {
+  // Raw `route` nodes without an endpoint facet are extractor facts, not
+  // product HTTP claims (e.g. Fastify while unsupported).
+  if (node.kind === "system" || node.kind === "queue" || node.kind === "topic") {
     return true;
   }
   if (node.kind === "table" || node.kind === "collection" || node.kind === "database") {

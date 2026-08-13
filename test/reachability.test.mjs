@@ -146,7 +146,10 @@ test("call metrics, endpoint impact, and upstream paths are evidence-backed", as
     await mkdir(path.join(root, "src"), { recursive: true });
     await writeFile(
       path.join(root, "package.json"),
-      JSON.stringify({ name: "reach-fixture" }),
+      JSON.stringify({
+        name: "reach-fixture",
+        dependencies: { express: "4.21.0" },
+      }),
       "utf8",
     );
     await writeFile(
@@ -275,7 +278,10 @@ test("service-file impact reaches Express routes through inline callbacks", asyn
     await mkdir(path.join(root, "src"), { recursive: true });
     await writeFile(
       path.join(root, "package.json"),
-      JSON.stringify({ name: "anon-express" }),
+      JSON.stringify({
+        name: "anon-express",
+        dependencies: { express: "4.21.0" },
+      }),
       "utf8",
     );
     await writeFile(
@@ -319,6 +325,58 @@ test("service-file impact reaches Express routes through inline callbacks", asyn
       impact.paths.some((path) => path.fromSymbolId === route.id),
       "expected upstream path from the route into the changed service",
     );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("unsupported Fastify routes are not impact endpoint claims", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-fastify-"));
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(
+      path.join(root, "package.json"),
+      JSON.stringify({
+        name: "fastify-app",
+        dependencies: { fastify: "5.0.0" },
+      }),
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, "src", "service.ts"),
+      "export function loadX() { return 1; }\n",
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, "src", "server.ts"),
+      [
+        'import Fastify from "fastify";',
+        'import { loadX } from "./service";',
+        "const fastify = Fastify();",
+        'fastify.get("/x", async function () { return loadX(); });',
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const graph = await compileRepository(root);
+    assert.ok(
+      graph.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.code === "unsupported-http-framework" &&
+          /fastify/i.test(diagnostic.message),
+      ),
+      "expected unsupported-http-framework for Fastify",
+    );
+    const impact = computeChangeImpact(graph, ["src/service.ts"]);
+    assert.equal(
+      impact.impact.endpoints.length,
+      0,
+      `Fastify must not produce product endpoints, got ${JSON.stringify(impact.impact.endpoints)}`,
+    );
+    const faceted = graph.nodes.filter((node) =>
+      node.semantics?.some((facet) => facet.kind === "endpoint"),
+    );
+    assert.equal(faceted.length, 0);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
