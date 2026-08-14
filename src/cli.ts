@@ -5,6 +5,7 @@ import path from "node:path";
 import { Command } from "commander";
 import { analyzeArchitecture, formatAnalysisLines } from "./analysis.js";
 import { compileRepository } from "./compile.js";
+import { persistArchitectureGraph } from "./graphCache.js";
 import {
   assertImpactCompileSource,
   computeChangeImpact,
@@ -59,13 +60,10 @@ async function runScan(
   const output = path.resolve(root, options.output);
   const graph = await compileRepository(root);
   const analysis = analyzeArchitecture(graph);
-  await mkdir(output, { recursive: true });
+  await persistArchitectureGraph(output, graph, root);
   const graphPath = path.join(output, "architecture.json");
   const viewerPath = path.join(output, "index.html");
-  await Promise.all([
-    writeFile(graphPath, `${JSON.stringify(graph, null, 2)}\n`, "utf8"),
-    writeFile(viewerPath, renderArchitectureHtml(graph), "utf8"),
-  ]);
+  await writeFile(viewerPath, renderArchitectureHtml(graph), "utf8");
   process.stdout.write(
     [
       `Compiled ${graph.project.name}`,
@@ -219,6 +217,7 @@ program
         ignoreOutput: output,
       });
       const graph = await compileRepository(root);
+      await persistArchitectureGraph(output, graph, root);
       const changed = await listChangedFiles(root, {
         ...(options.base && !filesOnly
           ? { baseRevision: options.base }
@@ -250,7 +249,6 @@ program
       const impactPath = path.join(output, "impact.json");
       const viewerPath = path.join(output, "index.html");
       await Promise.all([
-        writeFile(graphPath, `${JSON.stringify(graph, null, 2)}\n`, "utf8"),
         writeFile(impactPath, `${JSON.stringify(report, null, 2)}\n`, "utf8"),
         writeFile(
           viewerPath,
@@ -331,12 +329,12 @@ query
       text?: boolean;
     };
     const root = await resolveRepository(options.cwd);
-    const graph = await loadArchitectureGraph(root, {
+    const loaded = await loadArchitectureGraph(root, {
       output: options.output,
       ...(options.graph ? { graph: options.graph } : {}),
       ...(options.rescan ? { rescan: true } : {}),
     });
-    const result = queryWrites(graph, resource);
+    const result = queryWrites(loaded.graph, resource, loaded.source);
     process.stdout.write(
       (options.text
         ? formatQueryText(result)
@@ -369,11 +367,12 @@ query
       filesOnly,
       ignoreOutput: path.resolve(root, options.output),
     });
-    const graph = await loadArchitectureGraph(root, {
+    const loaded = await loadArchitectureGraph(root, {
       output: options.output,
       ...(options.graph ? { graph: options.graph } : {}),
       ...(options.rescan ? { rescan: true } : {}),
     });
+    const graph = loaded.graph;
     const changed = await listChangedFiles(root, {
       ...(options.base && !filesOnly ? { baseRevision: options.base } : {}),
       ...(options.head && !filesOnly ? { headRevision: options.head } : {}),
@@ -389,6 +388,7 @@ query
     const result = queryImpactFromGraph(graph, changed.files, {
       ...(changed.baseRevision ? { baseRevision: changed.baseRevision } : {}),
       ...(changed.headRevision ? { headRevision: changed.headRevision } : {}),
+      source: loaded.source,
     });
     process.stdout.write(
       (options.text
@@ -400,6 +400,11 @@ query
 query
   .command("unknown")
   .description("What Underdelta detected but refused to invent")
+  .option(
+    "--limit <n>",
+    "max items per unknown list (0 = no truncation)",
+    "40",
+  )
   .action(async (_opts, command) => {
     const options = command.optsWithGlobals() as {
       cwd: string;
@@ -407,14 +412,20 @@ query
       graph?: string;
       rescan?: boolean;
       text?: boolean;
+      limit?: string;
     };
     const root = await resolveRepository(options.cwd);
-    const graph = await loadArchitectureGraph(root, {
+    const loaded = await loadArchitectureGraph(root, {
       output: options.output,
       ...(options.graph ? { graph: options.graph } : {}),
       ...(options.rescan ? { rescan: true } : {}),
     });
-    const result = queryUnknown(graph);
+    const parsedLimit = Number(options.limit);
+    const limit = Number.isFinite(parsedLimit) ? parsedLimit : 40;
+    const result = queryUnknown(loaded.graph, {
+      limit,
+      source: loaded.source,
+    });
     process.stdout.write(
       (options.text
         ? formatQueryText(result)

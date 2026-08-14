@@ -173,6 +173,12 @@ function parseNextAppFile(relative: string): NextAppFile | undefined {
   };
 }
 
+function isInlineRouteHandler(
+  node: ts.Expression,
+): node is ts.ArrowFunction | ts.FunctionExpression {
+  return ts.isArrowFunction(node) || ts.isFunctionExpression(node);
+}
+
 function isCreateRouterCall(node: ts.CallExpression): boolean {
   if (ts.isIdentifier(node.expression)) {
     return node.expression.text === "createRouter";
@@ -477,7 +483,7 @@ function symbolFacet(
 
 export const typescriptExtractor: ArchitectureExtractor = {
   id: "typescript",
-  version: "0.1.0",
+  version: "0.2.0",
   extensions,
 
   async extract(context: ExtractionContext) {
@@ -810,6 +816,7 @@ export const typescriptExtractor: ArchitectureExtractor = {
       const importBindings =
         importBindingsByFile.get(file.relative) ?? new Map<string, ImportBinding>();
       const queueBindings = new Map<string, string>();
+      const inlineHandlerOwners = new Map<ts.Node, string>();
 
       const resolveName = (
         name: string,
@@ -871,7 +878,10 @@ export const typescriptExtractor: ArchitectureExtractor = {
 
       const visit = (node: ts.Node, ownerId = file.moduleId): void => {
         let nextOwner = ownerId;
-        if (ts.isClassDeclaration(node) && node.name) {
+        const inlineOwner = inlineHandlerOwners.get(node);
+        if (inlineOwner) {
+          nextOwner = inlineOwner;
+        } else if (ts.isClassDeclaration(node) && node.name) {
           // Enter class scope so methods resolve against methodsByOwner[classId].
           nextOwner = localDeclarations.get(node.name.text) ?? ownerId;
         } else if (ts.isFunctionDeclaration(node) && node.name) {
@@ -976,19 +986,76 @@ export const typescriptExtractor: ArchitectureExtractor = {
                   evidenceFor(file, node),
                 ),
               );
-              const handler = node.arguments.at(-1);
-              if (handler && ts.isIdentifier(handler)) {
-                const resolved = resolveName(handler.text);
-                if (resolved.status === "resolved") {
-                  edges.push(
-                    edgeFrom(
-                      "routes-to",
-                      routeId,
-                      resolved.id,
-                      evidenceFor(file, handler),
-                    ),
-                  );
+              const httpMethod = method.toUpperCase();
+              for (const [index, argument] of node.arguments.entries()) {
+                if (index === 0) continue;
+                if (ts.isIdentifier(argument)) {
+                  const resolved = resolveName(argument.text);
+                  if (resolved.status === "resolved") {
+                    edges.push(
+                      edgeFrom(
+                        "routes-to",
+                        routeId,
+                        resolved.id,
+                        evidenceFor(file, argument),
+                      ),
+                    );
+                  }
+                  continue;
                 }
+                if (!isInlineRouteHandler(argument)) continue;
+                const named =
+                  ts.isFunctionExpression(argument) && argument.name
+                    ? argument.name.text
+                    : undefined;
+                const handlerId = stableId(
+                  "function",
+                  file.relative,
+                  httpMethod,
+                  routePath,
+                  "inline-handler",
+                  String(index),
+                );
+                nodes.push({
+                  id: handlerId,
+                  kind: "function",
+                  label: named ?? `${httpMethod} ${routePath} handler`,
+                  qualifiedName: named
+                    ? `${file.relative}#${named}`
+                    : `${file.relative}#<${httpMethod} ${routePath}>`,
+                  parentId: file.moduleId,
+                  metadata: {
+                    declaration: "inline-handler",
+                    method: httpMethod,
+                    path: routePath,
+                    ...(named ? { handlerName: named } : {}),
+                  },
+                  semantics: symbolFacet("function"),
+                  evidence: [evidenceFor(file, argument)],
+                });
+                edges.push(
+                  edgeFrom(
+                    "contains",
+                    file.moduleId,
+                    handlerId,
+                    evidenceFor(file, argument),
+                  ),
+                );
+                if (named) {
+                  localDeclarations.set(named, handlerId);
+                  const byName = declarationsByName.get(named) ?? [];
+                  byName.push(handlerId);
+                  declarationsByName.set(named, byName);
+                }
+                edges.push(
+                  edgeFrom(
+                    "routes-to",
+                    routeId,
+                    handlerId,
+                    evidenceFor(file, argument),
+                  ),
+                );
+                inlineHandlerOwners.set(argument, handlerId);
               }
             }
           }

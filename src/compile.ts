@@ -45,9 +45,61 @@ import type { ArchitectureGraph, ArchitectureNode } from "./schema.js";
 
 const execFileAsync = promisify(execFile);
 
+export const COMPILER_TOOL_VERSION = "0.1.0";
+
 export interface CompileOptions {
   extractors?: ArchitectureExtractor[];
   adapters?: SemanticAdapter[];
+}
+
+export function defaultExtractors(): ArchitectureExtractor[] {
+  return [
+    typescriptExtractor,
+    pythonExtractor,
+    mongoExtractor,
+    openapiExtractor,
+    graphqlExtractor,
+    dockerExtractor,
+    terraformExtractor,
+    kubernetesExtractor,
+    kustomizeExtractor,
+    helmExtractor,
+    prismaExtractor,
+    sqlExtractor,
+  ];
+}
+
+export function defaultAdapters(): SemanticAdapter[] {
+  return [
+    dataResourceAdapter,
+    deployUnitAdapter,
+    httpEndpointAdapter,
+    flaskHttpAdapter,
+    unsupportedHttpAdapter,
+    nodeScheduledWorkAdapter,
+    celeryScheduledWorkAdapter,
+    kubernetesScheduledWorkAdapter,
+    unsupportedScheduledWorkAdapter,
+  ];
+}
+
+export function currentPipelineVersions(): {
+  extractors: Array<{ id: string; version: string }>;
+  adapters: Array<{ id: string; version: string; capability: string }>;
+  toolVersion: string;
+} {
+  return {
+    extractors: defaultExtractors().map((extractor) => ({
+      id: extractor.id,
+      version: extractor.version,
+    })),
+    adapters: defaultAdapters().map((adapter) => ({
+      id: adapter.id,
+      version: adapter.version,
+      capability: adapter.capability,
+    })),
+    toolVersion: COMPILER_TOOL_VERSION,
+  };
 }
 
 async function readPackageManifest(
@@ -133,37 +185,14 @@ export async function compileRepository(
 ): Promise<ArchitectureGraph> {
   const root = path.resolve(input);
   const files = await discoverFiles(root);
-  const extractors = options.extractors ?? [
-    typescriptExtractor,
-    pythonExtractor,
-    mongoExtractor,
-    openapiExtractor,
-    graphqlExtractor,
-    dockerExtractor,
-    terraformExtractor,
-    kubernetesExtractor,
-    kustomizeExtractor,
-    helmExtractor,
-    prismaExtractor,
-    sqlExtractor,
-  ];
+  const extractors = options.extractors ?? defaultExtractors();
   const contributions = await Promise.all(
     extractors.map((extractor) => runExtractor(extractor, root, files)),
   );
   const extracted = new GraphBuilder();
   for (const contribution of contributions) extracted.add(contribution);
   const snapshot = extracted.snapshot();
-  const adapters = options.adapters ?? [
-    dataResourceAdapter,
-    deployUnitAdapter,
-    httpEndpointAdapter,
-    flaskHttpAdapter,
-    unsupportedHttpAdapter,
-    nodeScheduledWorkAdapter,
-    celeryScheduledWorkAdapter,
-    kubernetesScheduledWorkAdapter,
-    unsupportedScheduledWorkAdapter,
-  ];
+  const adapters = options.adapters ?? defaultAdapters();
   const adapterContributions = await Promise.all(
     adapters.map((adapter) =>
       runSemanticAdapter(adapter, {

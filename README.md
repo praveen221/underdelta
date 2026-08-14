@@ -82,6 +82,8 @@ node dist/cli.js impact . --base main --head HEAD
 node dist/cli.js query writes Article          # who writes this resource (JSON)
 node dist/cli.js query impact --files src/foo.ts
 node dist/cli.js query unknown                 # unsupported / unresolved, not guesses
+# query reuses .underdelta only when the cache fingerprint still matches
+# the working tree and extractor/adapter versions; --rescan forces compile
 ```
 
 `inspect` requires a path and scans only that path. Use it to assess a real

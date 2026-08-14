@@ -140,6 +140,55 @@ test("typescript records ambiguous same-name calls without inventing edges", asy
   );
 });
 
+test("service-file change reaches an endpoint through an inline imported handler", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-reach-inline-"));
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(
+      path.join(root, "package.json"),
+      JSON.stringify({
+        name: "reach-inline",
+        dependencies: { express: "4.21.0" },
+      }),
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, "src", "article.service.ts"),
+      "export const createArticle = async () => prisma.article.create({});\n",
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, "src", "article.controller.ts"),
+      [
+        'import { createArticle } from "./article.service";',
+        'router.post("/articles", auth.required, async (req, res, next) => {',
+        "  return createArticle();",
+        "});",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const graph = await compileRepository(root);
+    const report = impactReportSchema.parse(
+      computeChangeImpact(graph, ["src/article.service.ts"]),
+    );
+    assert.ok(
+      report.impact.endpoints.some(
+        (endpoint) =>
+          endpoint.method === "POST" && endpoint.path === "/articles",
+      ),
+      `expected POST /articles from service change, got ${JSON.stringify(report.impact.endpoints)}`,
+    );
+    assert.ok(
+      report.impact.resources.some((resource) =>
+        /article/i.test(resource.label),
+      ),
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("call metrics, endpoint impact, and upstream paths are evidence-backed", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-reach-"));
   try {

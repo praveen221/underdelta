@@ -47,7 +47,16 @@ node dist/cli.js query unknown -C /path/to/repo
 ```
 
 `--text` prints a short human summary. `--graph path/to/architecture.json`
-skips rescan. `--rescan` forces a new compile.
+trusts that file (not checked against the working tree). Cached
+`.underdelta/architecture.json` is reused only when a fingerprint still
+matches the current files plus extractor/adapter versions. `--rescan`
+forces a new compile. Every result includes `graph.source` and
+`graph.generatedAt` — repeat those when the user might think the answer
+is live.
+
+`query unknown --limit 0` returns the full lists. A default run may
+truncate; read `totals` and `truncated` before saying the list is
+complete.
 
 ## How to answer
 
@@ -58,6 +67,10 @@ skips rescan. `--rescan` forces a new compile.
    into invented routes or tables.
 5. If `query writes` finds no resource, say so. Do not guess a similar name
    unless you run the command again with that name.
+6. If `query writes` returns `ambiguous: true`, do not pick a candidate.
+   Re-run with one `candidates[].id`.
+7. If `truncated.*` is true, say how many items were omitted (`totals`)
+   or re-run with `--limit 0`.
 
 ## Do not
 
