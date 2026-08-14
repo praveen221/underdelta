@@ -168,7 +168,7 @@ opening bet. After each dogfood, rewrite the list.
 | H12 | **Peel huge service clusters by native deploy kind.** Services (135) drill is still a mixed phonebook (42 Service / 37 Deployment / 17 Ingress / …). Nested groups when a native kind has ≥2 members. | H11 dogfood: hub is honest; drill is still 10 random + 125 more | One-kind repos grow a fake wrapper; 12-route Playwright must stay flat |
 | R1 | **[P1] Gate route→resource lifts on typed `endpoint` facets.** Fastify (unsupported-http-framework, 0 endpoint facets) must not get `POST /articles → writes article`. **Shipped.** | Human review 2026-08-14: `src/projection/data.ts` ~575 loops raw `route` nodes | Express RealWorld loses operation badges — then keep facet gate and fix adapter coverage, do not reopen raw routes |
 | R2 | **[P2] Skip `intermediateOmitted` nodes when building kind clusters.** 11 SQL migrations must not become empty `Schemas (11)` under Data. **Shipped.** | Human review: `kindClusters.ts` ~122 includes omitted members | RealWorld Data room grows a fake empty hub — then omit clustering for that parent |
-| R3 | **[P2] Generic clusters keep their walkable parent on Back.** `Services (135)` under Introduction to Kubernetes must crumb/Back to that room, not jump to Beginner. HTTP API is not the only non-cluster frame. | Human review: `clusterWalk.ts` ~17 only special-cases HTTP API | Extractors / CLI crumbs regress — then add Deploy→Services Playwright, keep existing 12-route HTTP floor |
+| R3 | **[P2] Generic clusters keep their walkable parent on Back.** `Services (135)` under Introduction to Kubernetes must crumb/Back to that room, not jump to Beginner. HTTP API is not the only non-cluster frame. **Shipped.** | Human review: `clusterWalk.ts` ~17 only special-cases HTTP API | Extractors / CLI crumbs regress — then add Deploy→Services Playwright, keep existing 12-route HTTP floor |
 | R4 | **[P2] Compute table-focus allowed route IDs once per focus/render.** `isTableFocusOperationRoute` is quadratic in endpoint count (full route scan per node). | Human review: `viewer.ts` ~430 | Writer-route rooms go empty — then keep the set, fix the filter |
 
 **Standing rules (from tick 1 dogfood):**
@@ -180,7 +180,7 @@ opening bet. After each dogfood, rewrite the list.
 - Skip parents that are already `routeGroup` hubs (Users / Articles). H1 is the fallback when prefixes do not form.
 - Domain groups (already on master) are what made RealWorld API Intermediate readable.
 - Nested subresource groups (`routeGroupNested`) only form when the domain hub has **>10** routes and the bucket has **≥2** members. Hide them on ancestor Intermediate (same as kind-cluster hubs).
-- Entering a cluster hub sets `history` to `clusterWalkAncestors` (API → Articles under Comments). Do **not** rewrite history for Extractors / CLI / modules.
+- Entering a cluster hub sets `history` to `clusterWalkAncestors` (API → Articles under Comments; Deploy → Services). Walkable frames include HTTP API **and** other semantic systems (`systemKey: deploy` / Introduction to Kubernetes). Do **not** rewrite history for Extractors / CLI / modules — they are rooms, not cluster hubs. Playwright locks both the 12-route HTTP floor and Deploy → `Services (12)` Back.
 - Lifted data-story labels are operations (`writes Article`), never handler names (`createArticle`). Route→table lifts only via `routes-to` or a same-file `calls` inside the route evidence span. Do **not** lift route→Data (that would drag Data access into every Articles room).
 - Route→resource operation lifts require a typed `endpoint` facet on the route. Raw extractor `route` nodes (Fastify / unsupported HTTP) keep `unsupported-http-framework` and must **not** receive `POST /articles → writes article`. If Express loses badges, keep the gate and fix adapter coverage — do not reopen raw-route lifts.
 - Intermediate always-on badges for reads/writes/queries and labeled uses/renders/triggers. Route→table badge prefers `writes` over `writes · reads`. Beginner stays unlabeled except narrative/relation. `calls`/`imports` stay off Intermediate.
@@ -276,12 +276,12 @@ ACTIVE
 - [x] **H11:** kind-cluster hubs show `N … clustered` + hatch bar; k8s hallway is `135 services clustered`; Playwright 12-route hallway caption locked
 - [x] **R1 [P1]:** route→table lifts require `endpoint` facet; Fastify compile keeps `unsupported-http-framework`, 0 facets, no `POST /articles → writes article`; Express RealWorld still `POST /articles → writes Article`
 - [x] **R2 [P2]:** kind clusters skip `intermediateOmitted`; 11 omitted migrations stay under Data — no empty `Schemas (11)`; RealWorld Data has 0 schema hubs
+- [x] **R3 [P2]:** semantic systems are walk frames; k8s `Services (135)` ancestors = Introduction to Kubernetes; Playwright Deploy → `Services (12)` Back; 12-route HTTP floor kept
 
 ### In progress / next (keep ≥ 3 unchecked until LOOP COMPLETE)
 
-- [ ] **R3 [P2]:** `clusterWalkAncestors` includes walkable parent of generic clusters; Deploy → Services browser test
 - [ ] **R4 [P2]:** precompute table-focus operation-route ids once per focus/render
-- [ ] H12 peel Services (135) by native deploy kind (Deployment / Service / Ingress) — **after R3–R4**
+- [ ] H12 peel Services (135) by native deploy kind (Deployment / Service / Ingress) — **after R4**
 - [ ] Hover/select-only labels if always-on badges collide on a later repo
 - [ ] Keyboard: ` [` / `]` sibling clusters
 
@@ -296,7 +296,7 @@ ACTIVE
 
 ### Next focus (edit every tick)
 
-> **Next focus:** R2 is done (omitted migrations no longer become empty `Schemas (11)`). **Do not start H12.** Now R3 [P2]: `src/projection/clusterWalk.ts` must include the walkable parent of generic clusters so kubernetes-training `Services (135)` Back/crumb goes to Introduction to Kubernetes, not Beginner. Add a Deploy → Services browser test. Keep the 12-route HTTP API Back floor. Then R4 quadratic table-focus scan. Dogfood kubernetes-training + Express RealWorld.
+> **Next focus:** R3 is done (k8s Services Back parent is Introduction to Kubernetes; Deploy → Services Playwright). **Do not start H12.** Now R4 [P2]: `src/viewer.ts` `isTableFocusOperationRoute` must compute allowed route IDs **once** per focused resource/render, not scan every route for every node. Do not change which routes are allowed unless a test proves the old set was wrong. Dogfood Express RealWorld table rooms (Article writers). Then H12 only after R4.
 
 ---
 
@@ -314,13 +314,11 @@ Do **not** mark LOOP COMPLETE while any of R1–R4 are open. Do **not** “just 
 
 `projectKindClusters` skips `intermediateOmitted` members. 11 omitted SQL migrations stay under Data; no `Schemas (11)` hub. RealWorld Data: 4 omitted migrations, 0 schema hubs.
 
-### R3–R4 still open — do not start H12
+### R3 [P2] Generic clusters lose their parent on Back — **shipped**
 
-### R3 [P2] Generic clusters lose their parent on Back
+`isClusterWalkFrame` includes semantic systems (Deploy / Introduction to Kubernetes). k8s `Services (135)` ancestors = that room. Playwright: Deploy → `Services (12)` Back; 12-route HTTP floor kept.
 
-`src/projection/clusterWalk.ts` (~17–23) only treats HTTP API as a non-cluster frame. On kubernetes-training, `Services (135)` sits under `Introduction to Kubernetes`, but `clusterWalkAncestors()` returns `[]`; Back jumps to Beginner.
-
-**Fix:** include the walkable parent of generic clusters. Add a Deploy → Services browser test. Keep the existing 12-route HTTP API Back floor.
+### R4 still open — do not start H12
 
 ### R4 [P2] Table focus recomputes every route for every route
 
@@ -339,6 +337,8 @@ Direction is useful (bounded drills, semantic labels, calmer rooms). The loop va
 ```text
 - YYYY-MM-DD HH:MM UTC | Hypothesis: … | Done: … | Felt (repo): … | Plan change: … | Next: …
 ```
+
+- 2026-08-14 10:06 UTC | Hypothesis: R3 generic clusters keep their walkable parent on Back | Done: `isClusterWalkFrame` includes semantic systems; viewer clone synced; unit test Deploy → Services ancestors; Playwright Deploy → `Services (12)` Back + 12-route HTTP floor still green | Felt (kubernetes-training): Services (135) crumb parent is **Introduction to Kubernetes**, not a jump to Beginner. Express Comments still Overview › HTTP API › Articles. POST /articles → writes Article intact. Would show the k8s Services Back walk to a stranger. | Plan change: standing rule — semantic systems (Deploy) are walk frames, not only HTTP API. R3 done. Interrupt continues: **R4 next** (quadratic table-focus). H12 still blocked. | Next: R4 precompute table-focus route ids
 
 - 2026-08-14 09:34 UTC | Hypothesis: R2 skip `intermediateOmitted` nodes when building kind clusters | Done: `projectKindClusters` skips omitted members; full `projectSemanticArchitecture` test with 11 migration schemas + 4 tables — no `Schemas (11)`, migrations stay under Data | Felt (node-express-realworld): Beginner still 10s. Data Intermediate still tables + Prisma — **no empty Schemas hub** (4 omitted migrations, 0 clustered). POST /articles → writes Article intact. kubernetes-training: Services (135) still the hallway hub. Would show the Data room; kill-if did not fire. | Plan change: standing rule — omitted members never kind-cluster. R2 done. Interrupt continues: **R3 next** (k8s Services Back parent), then R4. H12 still blocked. | Next: R3 generic cluster walkable parent
 

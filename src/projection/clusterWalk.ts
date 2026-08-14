@@ -14,12 +14,20 @@ export function isClusterWalkHub(
   );
 }
 
-/** Product-flow API + cluster hubs that belong on the crumb/Back path. */
+/**
+ * Rooms that belong on the crumb/Back path. HTTP API is one frame;
+ * Deploy / Data / other semantic systems are too — otherwise a
+ * `Services (135)` hub under Introduction to Kubernetes has no parent
+ * and Back jumps to Beginner.
+ */
 export function isClusterWalkFrame(
   node: ArchitectureNode | undefined,
 ): boolean {
   if (!node || node.kind === "product") return false;
   if (node.kind === "api" || node.metadata?.systemKey === "api") return true;
+  if (node.kind === "system" && node.metadata?.projection === "semantic") {
+    return true;
+  }
   return isClusterWalkHub(node);
 }
 

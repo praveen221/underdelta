@@ -20,8 +20,10 @@ let viewerUrl;
 let largeViewerUrl;
 let scheduledViewerUrl;
 let clusterViewerUrl;
+let servicesViewerUrl;
 let scheduledRoot;
 let clusterRoot;
+let servicesRoot;
 
 test.beforeAll(async () => {
   const graph = await compileRepository(repoRoot);
@@ -122,6 +124,22 @@ test.beforeAll(async () => {
   const clusterHtml = renderArchitectureHtml(
     await compileRepository(clusterRoot),
   );
+  servicesRoot = await mkdtemp(path.join(os.tmpdir(), "underdelta-services-viewer-"));
+  await writeFile(
+    path.join(servicesRoot, "docker-compose.yml"),
+    [
+      "services:",
+      ...Array.from({ length: 12 }, (_, index) => [
+        `  svc${index}:`,
+        `    image: example/svc${index}:1`,
+      ]).flat(),
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  const servicesHtml = renderArchitectureHtml(
+    await compileRepository(servicesRoot),
+  );
   server = createServer((request, response) => {
     response.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8",
@@ -134,7 +152,9 @@ test.beforeAll(async () => {
           ? scheduledHtml
           : request.url === "/cluster"
             ? clusterHtml
-            : html,
+            : request.url === "/services"
+              ? servicesHtml
+              : html,
     );
   });
   await new Promise((resolve, reject) => {
@@ -147,12 +167,14 @@ test.beforeAll(async () => {
   largeViewerUrl = `http://127.0.0.1:${address.port}/large`;
   scheduledViewerUrl = `http://127.0.0.1:${address.port}/scheduled`;
   clusterViewerUrl = `http://127.0.0.1:${address.port}/cluster`;
+  servicesViewerUrl = `http://127.0.0.1:${address.port}/services`;
 });
 
 test.afterAll(async () => {
   await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   if (scheduledRoot) await rm(scheduledRoot, { recursive: true, force: true });
   if (clusterRoot) await rm(clusterRoot, { recursive: true, force: true });
+  if (servicesRoot) await rm(servicesRoot, { recursive: true, force: true });
 });
 
 function node(page, label) {
@@ -426,6 +448,36 @@ test("kind cluster of 12 dummy routes walks Back through HTTP API", async ({ pag
   await expect(page.locator("#tier")).toHaveText("View: Beginner");
   await expect(node(page, "HTTP API")).toBeVisible();
   await expect(page.locator('.node[data-kind="route"]')).toHaveCount(0);
+});
+
+test("kind cluster of 12 deploy services walks Back through Deploy", async ({ page }) => {
+  await page.goto(servicesViewerUrl);
+  await expect(page.locator("#tier")).toHaveText("View: Beginner");
+  await expect(node(page, "Deploy")).toBeVisible();
+  await expect(node(page, "Services (12)")).toHaveCount(0);
+
+  await node(page, "Deploy").dblclick();
+  await expect(page.locator("#tier")).toHaveText("View: Intermediate");
+  const cluster = node(page, "Services (12)");
+  await expect(cluster).toBeVisible();
+  await expect(cluster).toHaveAttribute("data-kind-cluster", "true");
+  await expect(cluster).toHaveAttribute("data-density-legend", "12 services clustered");
+
+  await cluster.dblclick();
+  await expect(page.locator("#tier")).toHaveText("View: Intermediate");
+  await expect(page.locator("#focus-crumb")).toContainText("Overview");
+  await expect(page.locator("#focus-crumb")).toContainText("Deploy");
+  await expect(page.locator("#focus-crumb")).toContainText("Services (12)");
+  await expect(page.locator("#back")).toHaveAttribute("title", /Deploy/);
+
+  await page.locator("#back").click();
+  await expect(page.locator("#tier")).toHaveText("View: Intermediate");
+  await expect(node(page, "Services (12)")).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#tier")).toHaveText("View: Beginner");
+  await expect(node(page, "Deploy")).toBeVisible();
+  await expect(node(page, "Services (12)")).toHaveCount(0);
 });
 
 test("HTTP endpoints walk from the API system to framework and handler facts", async ({ page }) => {

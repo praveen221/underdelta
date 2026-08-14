@@ -3154,6 +3154,13 @@ export function renderArchitectureHtml(
       if (node.kind === "api" || (node.metadata && node.metadata.systemKey === "api")) {
         return true;
       }
+      if (
+        node.kind === "system" &&
+        node.metadata &&
+        node.metadata.projection === "semantic"
+      ) {
+        return true;
+      }
       return isClusterWalkHub(node);
     }
     function clusterWalkAncestors(focusId) {

@@ -13,6 +13,7 @@ import {
 } from "../dist/project.js";
 import {
   clusterWalkAncestors,
+  isClusterWalkFrame,
   isClusterWalkHub,
 } from "../dist/projection/clusterWalk.js";
 import {
@@ -1113,4 +1114,35 @@ test("cluster walk ancestors seed API → Articles under Comments", () => {
   assert.deepEqual(clusterWalkAncestors(comments.id, byId), [api.id, articles.id]);
   assert.deepEqual(clusterWalkAncestors(articles.id, byId), [api.id]);
   assert.deepEqual(clusterWalkAncestors(api.id, byId), []);
+});
+
+test("kind-cluster under Deploy walks Back to Deploy not Beginner", () => {
+  const product = node("product", "product", "Kubernetes Training");
+  const deploy = node("deploy", "system", "Introduction to Kubernetes", {
+    metadata: { projection: "semantic", systemKey: "deploy" },
+  });
+  const hub = node("hub", "system", "Services (12)", {
+    parentId: deploy.id,
+    metadata: {
+      projection: "semantic",
+      systemKey: "kind-cluster:service:deploy",
+      kindCluster: true,
+      clusterKind: "service",
+    },
+  });
+  const extractors = node("extractors", "system", "Extractors", {
+    metadata: { projection: "semantic", systemKey: "extractors" },
+  });
+  const byId = new Map(
+    [product, deploy, hub, extractors].map((item) => [item.id, item]),
+  );
+  assert.equal(isClusterWalkHub(deploy), false);
+  assert.equal(isClusterWalkFrame(deploy), true);
+  assert.equal(isClusterWalkHub(hub), true);
+  assert.deepEqual(clusterWalkAncestors(hub.id, byId), [deploy.id]);
+  assert.deepEqual(
+    clusterWalkAncestors(extractors.id, byId),
+    [],
+    "Extractors is a room, not a cluster — no invented ancestor frames",
+  );
 });
