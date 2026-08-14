@@ -103,25 +103,19 @@ This is the shared foundation for maps, PR impact, blast radius, onboarding, and
 
 ---
 
-## Honest status (2026-08-13)
+## Honest status
 
-**Shipped (this capability):** `underdelta impact`, call metrics, import/re-export/namespace resolution, class-qualified methods, merge-base ranges, untracked worktree files, upstream evidence paths, loud git failures.
+**How we proceed now:** [mindset/2026-08-15.md](mindset/2026-08-15.md).
+That file supersedes the Express/Next follow-up list below. Phase 1 is
+`query writes` / `impact` / `unknown`, a skill, and one-repo A/B — not more
+frameworks or another viewer loop.
+
+**Shipped:** `underdelta impact`, TypeScript reachability, inline Express
+route handlers, navigable-graph clustering, evidence-backed HTTP/data/jobs/deploy
+facets. Inline-handler follow-up landed; service-file changes can reach typed
+Express endpoints.
 
 **Not a validated customer product.** Merge readiness ≠ product-market fit.
-
-**RealWorld (Node/Express/Prisma) dogfood:** changing `article.controller.ts` reached 11 HTTP endpoints, Article/Comment/Tag/User tables, and evidence-backed service/Prisma paths. Changing `article.service.ts` reached the four data resources but **no HTTP endpoints**.
-
-Cause: Express routes use anonymous inline callbacks; calls inside them are owned by the module, so we cannot form `route → anonymous handler → service`. That is a recall miss, not an invented claim.
-
-**Immediate follow-up (new branch, not this one):**
-
-1. Stable symbols for inline route callbacks
-2. Bind `route → callback`
-3. Attribute calls inside the callback to that symbol
-4. Confirm a service-file change reaches the Express routes
-5. Repeat on one real Next.js repository
-
-Then: 10 external users, ≥5 return, ≥3 share.
 
 ---
 

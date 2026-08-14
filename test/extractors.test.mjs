@@ -15,6 +15,72 @@ import { terraformExtractor } from "../dist/extractors/terraform.js";
 import { typescriptExtractor } from "../dist/extractors/typescript.js";
 import { assertObserved, edgeBy, extract, nodeBy } from "./helpers.mjs";
 
+test("typescript binds inline Express handlers and attributes imported calls", async () => {
+  const graph = await extract(typescriptExtractor, {
+    "src/article.service.ts":
+      "export const getArticles = async () => prisma.article.findMany();\n",
+    "src/article.controller.ts": [
+      'import { getArticles } from "./article.service";',
+      'router.get("/articles", auth.optional, async (req, res, next) => {',
+      "  return getArticles();",
+      "});",
+      "",
+    ].join("\n"),
+  });
+  const route = nodeBy(graph, "route", "GET /articles");
+  const handler = graph.nodes.find(
+    (node) =>
+      node.kind === "function" &&
+      node.metadata?.declaration === "inline-handler" &&
+      node.metadata?.path === "/articles",
+  );
+  const service = graph.nodes.find(
+    (node) =>
+      node.kind === "function" && node.qualifiedName === "src/article.service.ts#getArticles",
+  );
+  assert.ok(handler, "expected a stable inline-handler symbol");
+  assert.ok(service);
+  edgeBy(graph, "routes-to", route.id, handler.id);
+  edgeBy(graph, "calls", handler.id, service.id);
+});
+
+test("named inline route callbacks stay out of file-wide call resolution", async () => {
+  const graph = await extract(typescriptExtractor, {
+    "src/routes.ts": [
+      'router.get("/x", function handler() { return handler(); });',
+      "export function other() { return handler(); }",
+      "",
+    ].join("\n"),
+  });
+  const other = nodeBy(graph, "function", "other");
+  const inline = graph.nodes.find(
+    (node) =>
+      node.kind === "function" && node.metadata?.declaration === "inline-handler",
+  );
+  assert.ok(inline);
+  assert.equal(inline.metadata?.handlerName, "handler");
+  assert.equal(
+    graph.edges.some(
+      (edge) =>
+        edge.kind === "calls" &&
+        edge.source === other.id &&
+        edge.target === inline.id,
+    ),
+    false,
+    "unrelated handler() must not resolve to the route callback",
+  );
+  assert.equal(
+    graph.edges.some(
+      (edge) =>
+        edge.kind === "calls" &&
+        edge.source === inline.id &&
+        edge.target === inline.id,
+    ),
+    false,
+    "self-call inside the named callback must not invent a calls edge",
+  );
+});
+
 test("typescript extracts declarations, imports, calls, and HTTP routes", async () => {
   const graph = await extract(typescriptExtractor, {
     "src/helper.ts": "export function loadNotes() { return []; }\n",

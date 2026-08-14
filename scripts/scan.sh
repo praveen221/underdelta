@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
-# Portable one-liner: scan any repository with Underdelta (no prior install).
+# Portable launcher: run Underdelta with no prior install (no npm package).
 #
-# From any project:
+# Map the current project:
 #   curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/scripts/scan.sh | bash
 #
-# Or with an explicit target / options:
+# Query any project (cwd is the repo being analyzed):
+#   curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/scripts/scan.sh | bash -s -- query writes Article
+#   curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/scripts/scan.sh | bash -s -- query impact --files src/foo.ts
+#   curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/scripts/scan.sh | bash -s -- query unknown
+#
+# Local copies:
 #   bash scan.sh /path/to/repo
 #   bash scan.sh . --port 4173
+#   bash scan.sh query writes Article
 #   UNDERDELTA_HOME=~/src/underdelta bash scan.sh .
 #
 # First run clones + builds Underdelta into a cache dir; later runs reuse it.
@@ -20,6 +26,14 @@ NPM_CACHE="${UNDERDELTA_NPM_CACHE:-$HOME/.npm-cache-underdelta}"
 PORT="${UNDERDELTA_PORT:-4173}"
 TARGET="."
 SERVE=1
+ORIG_CWD="$(pwd)"
+
+is_cli_verb() {
+  case "${1:-}" in
+    scan|query|impact|render) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 args=()
 while [[ $# -gt 0 ]]; do
@@ -37,7 +51,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      sed -n '2,16p' "$0" | sed 's/^# \?//'
+      sed -n '2,19p' "$0" | sed 's/^# \?//'
       exit 0
       ;;
     *)
@@ -47,11 +61,16 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ ${#args[@]} -gt 0 ]]; then
+CLI_MODE=0
+if [[ ${#args[@]} -gt 0 ]] && is_cli_verb "${args[0]}"; then
+  CLI_MODE=1
+elif [[ ${#args[@]} -gt 0 ]]; then
   TARGET="${args[0]}"
 fi
 
-TARGET="$(cd "$TARGET" && pwd)"
+if [[ "$CLI_MODE" -eq 0 ]]; then
+  TARGET="$(cd "$TARGET" && pwd)"
+fi
 TOOL_DIR="$CACHE_ROOT/src"
 
 need_cmd() {
@@ -115,6 +134,12 @@ if [[ ! -f dist/cli.js || "$built_key" != "$build_key" ]]; then
   printf '%s\n' "$build_key" > "$build_stamp"
 else
   echo "→ Build current"
+fi
+
+if [[ "$CLI_MODE" -eq 1 ]]; then
+  echo "→ underdelta ${args[*]}"
+  cd "$ORIG_CWD"
+  exec node "$TOOL_DIR/dist/cli.js" "${args[@]}"
 fi
 
 echo "→ Scanning $TARGET"
