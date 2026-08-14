@@ -406,6 +406,42 @@ export function renderArchitectureHtml(
       }
       return routeGroupMemberVisible(node, focusId);
     }
+    function hasRouteGroupChild(focusId) {
+      if (!focusId) return false;
+      return graph.nodes.some((node) =>
+        !!(node.parentId === focusId && node.metadata && node.metadata.routeGroup === true),
+      );
+    }
+    function storyTouches(edge, leftId, rightId) {
+      if (!neighborhoodEdgeKinds.has(edge.kind)) return false;
+      return (
+        (edge.source === leftId && edge.target === rightId) ||
+        (edge.source === rightId && edge.target === leftId)
+      );
+    }
+    function visibleRouteStoriesTo(focusId, resourceId) {
+      const allowed = focusNeighborhood(focusId);
+      for (const node of graph.nodes) {
+        if (node.kind !== "route") continue;
+        if (!allowed.has(node.id)) continue;
+        if (!clusterMemberVisible(node, focusId)) continue;
+        const edges = [...(outgoing.get(node.id) || []), ...(incoming.get(node.id) || [])];
+        for (const edge of edges) {
+          if (storyTouches(edge, node.id, resourceId)) return true;
+        }
+      }
+      return false;
+    }
+    // API hallway: Article/User/Comment live in Articles/Users rooms.
+    // Keep ungrouped leftovers (GET /tags → Tag). Intermediate only.
+    function isHallwayTable(node, focusId) {
+      if (!focusId) return false;
+      if (node.kind !== "table" && node.kind !== "collection") return false;
+      if (node.id === focusId) return false;
+      if (!hasRouteGroupChild(focusId)) return false;
+      if (visibleRouteStoriesTo(focusId, node.id)) return false;
+      return true;
+    }
     function laneNameFor(node) {
       if (isDetectionSurface(node)) return "Detects";
       if (isMongoAggregateHub(node)) return "Data & automation";
@@ -1097,6 +1133,7 @@ export function renderArchitectureHtml(
           return false;
         }
         if (!clusterMemberVisible(node, rootId)) return false;
+        if (isHallwayTable(node, rootId)) return false;
         const isOverviewHub = node.metadata && node.metadata.overviewHub;
         if (advancedKinds.has(node.kind) && !isOverviewHub) return false;
         return true;
@@ -1320,6 +1357,9 @@ export function renderArchitectureHtml(
         // Domain-grouped routes: only paint when their Users/Articles hub is focused
         // (API Intermediate shows groups, not the route phonebook).
         if (!clusterMemberVisible(node, state.focus)) return false;
+        if (state.focus && !isAdvancedTier() && isHallwayTable(node, state.focus)) {
+          return false;
+        }
         // overviewHub (auth/billing actions, Helm Chart/resources, mongo
         // aggregates) bypasses advanced-kind hides so hubs can appear once the
         // user focuses a system (Intermediate neighborhood / Advanced-in-focus).
