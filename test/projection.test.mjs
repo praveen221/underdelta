@@ -256,6 +256,68 @@ test("SQL migration schemas omit from Intermediate when tables exist", () => {
   assert.equal(nodes.get(database.id).metadata.intermediateOmitted, undefined);
 });
 
+test("11 omitted migration schemas do not become an empty Schemas cluster", () => {
+  const product = node("product", "product", "Demo");
+  const tables = ["Article", "Comment", "Tag", "User"].map((label) =>
+    node(`table-${label.toLowerCase()}`, "table", label, {
+      technology: "prisma",
+      semantics: [{
+        kind: "resource",
+        resourceKind: "table",
+        provider: "prisma",
+      }],
+    }),
+  );
+  const migrations = Array.from({ length: 11 }, (_, index) =>
+    node(`mig-${index}`, "schema", `prisma/migrations/${index}/migration.sql`, {
+      technology: "sql",
+      metadata: { role: "migration" },
+    }),
+  );
+  const database = node("db", "database", "Prisma database", {
+    technology: "prisma",
+  });
+  const graph = projectSemanticArchitecture({
+    schemaVersion: "0.2",
+    project: { name: "demo", root: "/demo" },
+    generatedAt: new Date(0).toISOString(),
+    extractors: [],
+    adapters: [],
+    nodes: [product, database, ...tables, ...migrations],
+    edges: [],
+    diagnostics: [],
+  });
+  const data = graph.nodes.find((item) => item.metadata?.systemKey === "data");
+  assert.ok(data, "expected Data access system");
+  const schemaHub = graph.nodes.find(
+    (item) =>
+      item.metadata?.kindCluster === true && item.metadata?.clusterKind === "schema",
+  );
+  assert.equal(
+    schemaHub,
+    undefined,
+    "omitted migrations must not become Schemas (11)",
+  );
+  assert.equal(
+    graph.nodes.some((item) => /^Schemas \(\d+\)$/.test(item.label)),
+    false,
+  );
+  const omitted = graph.nodes.filter(
+    (item) => item.kind === "schema" && item.metadata?.role === "migration",
+  );
+  assert.equal(omitted.length, 11);
+  for (const item of omitted) {
+    assert.equal(item.metadata.intermediateOmitted, true);
+    assert.equal(item.metadata.intermediateOmitReason, "migration-lineage");
+    assert.equal(item.parentId, data.id, "migrations stay under Data, not a hub");
+    assert.equal(item.metadata.kindClusterMember, undefined);
+  }
+  const dataTables = graph.nodes.filter(
+    (item) => item.kind === "table" && item.parentId === data.id,
+  );
+  assert.equal(dataTables.length, 4);
+});
+
 test("Find User ranks the table above the same-label route group", () => {
   const table = searchMatchScore({
     query: "user",
@@ -1052,4 +1114,3 @@ test("cluster walk ancestors seed API → Articles under Comments", () => {
   assert.deepEqual(clusterWalkAncestors(articles.id, byId), [api.id]);
   assert.deepEqual(clusterWalkAncestors(api.id, byId), []);
 });
-

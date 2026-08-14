@@ -124,6 +124,9 @@ export function projectKindClusters(args: {
     if (isKindClusterHub(node) || isKindClusterMember(node)) continue;
     if (!KIND_CLUSTERABLE.has(node.kind)) continue;
     if (node.metadata?.projection === "semantic") continue;
+    // Already hidden on Intermediate (SQL migrations, overflow routes).
+    // Clustering them builds an empty `Schemas (11)` room.
+    if (node.metadata?.intermediateOmitted === true) continue;
     const bucket = childrenByParent.get(node.parentId) ?? [];
     bucket.push(node);
     childrenByParent.set(node.parentId, bucket);
