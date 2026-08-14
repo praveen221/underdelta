@@ -11,5 +11,7 @@ Canonical product and architecture notes. Dated loop plans live under
 | [V0_BUILD_CONTEXT.md](V0_BUILD_CONTEXT.md) | Historical v0 capability ladder (not current verify) |
 | [loopplans/](loopplans/) | Closed and active implementation loops |
 | [loopplans/NAVIGABLE_GRAPH_14082026.md](loopplans/NAVIGABLE_GRAPH_14082026.md) | Completed — cardinality clusters, back walk, operation edges |
+| [mindset/](mindset/) | Dated product judgment (how we proceed) |
 
 **Read first for product direction:** [PRODUCT_MVP.md](PRODUCT_MVP.md).
+**How we proceed right now:** [mindset/2026-08-15.md](mindset/2026-08-15.md).
