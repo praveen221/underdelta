@@ -114,4 +114,5 @@ test("Underdelta compiles its own structural compiler story", async () => {
   assert.match(html, /isHallwayTable/);
   assert.match(html, /visibleRouteStoriesTo/);
   assert.match(html, /isMigrationSchemaLeaf/);
+  assert.match(html, /isDataRoomApiLeftover/);
 });

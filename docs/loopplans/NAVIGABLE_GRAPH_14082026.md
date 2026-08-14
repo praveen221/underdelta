@@ -160,6 +160,8 @@ opening bet. After each dogfood, rewrite the list.
 | H3 | **Operation labels on story edges.** Lift route→table (`routes-to` or in-range controller `calls`) as `writes Article`; Intermediate always-on badges; hide raw `calls`/`imports`. | “What’s happening in the operation” | Labels collide / unreadable at scale — then label only on select/hover |
 | H4 | **Don’t fit-to-dump.** If visible node count > N, fit the **hubs**, not every leaf. | Zoom-out postage stamp | RealWorld Data access was 12 readable nodes, not dust — peel furniture first. Kill if a “47 more” affordance is missing after we stop shrinking |
 | H6 | **Hallway tables stay in the room they explain.** API Intermediate hides tables unless a *visible* leftover route stories to them (`GET /tags → Tag`). Grouped Article/User/Comment stay in their domain rooms. | H3 dogfood: API hallway still 4 labeled tables | Hiding them also hides GET /tags → Tag on the ungrouped leftover |
+| H7 | **Data Intermediate is tables, not API leftovers.** Focusing Data access hides HTTP API + leftover routes (`GET /tags`). Table focus still shows who writes. | H4 peel: Data room still had GET /tags + HTTP API | Table Intermediate loses writers — then keep API on table focus only |
+| H8 | **Table Intermediate shows the writing routes.** Double-click Article from Data should read `POST /articles → writes`, not only an HTTP API box. Cap so 11 Articles verbs do not dump. | H7 dogfood: Article room is HTTP API + Article | Phonebook of every GET — then mutations-only or page |
 
 **Standing rules (from tick 1 dogfood):**
 
@@ -174,6 +176,7 @@ opening bet. After each dogfood, rewrite the list.
 - Neighborhood seeds skip hidden cluster members so Comments routes cannot park a stray Comment table in the Articles room.
 - API Intermediate hides tables/collections when the focus has `routeGroup` children and no visible leftover route stories to that table. Do **not** hide `GET /tags → Tag`. Do not apply this in the Data access room or on Advanced.
 - SQL migration `schema` nodes (`role: migration`) omit from Intermediate when tables already tell the data story (`intermediateOmitReason: migration-lineage`). Keep them on Advanced; table `migrates` evidence stays. Do not hide the Prisma/database hub.
+- Data access Intermediate hides HTTP API and leftover routes. Do **not** apply that hide when the focus is a table/collection — that room still answers “who writes this?”.
 
 ---
 
@@ -244,12 +247,13 @@ ACTIVE
 - [x] **H3:** route→table operation lifts + Intermediate always-on badges (`POST /articles → writes Article`); API→table labels are `writes Article` not `createArticle`
 - [x] **H6:** API Intermediate hides grouped hallway tables; `GET /tags → Tag` stays; Articles/Users rooms still own their tables
 - [x] **Data access migrations:** SQL migration schemas omit from Intermediate; 4 RealWorld `migration.sql` files left the Data room
+- [x] **H7:** Data Intermediate hides HTTP API + leftover routes; room is 4 tables + Prisma database
 
 ### In progress / next (keep ≥ 3 unchecked until LOOP COMPLETE)
 
+- [ ] **H8:** Table Intermediate should show writing routes (`POST /articles → writes`), not only the HTTP API box
 - [ ] **H4:** fit hubs (not every leaf) when a room is actually a dump — deferred; RealWorld Data access was furniture, not postage stamps
 - [ ] Playwright: cluster + Back path on a fixture with 12 dummy routes (verify floors cover ancestors; browser still open)
-- [ ] **H7:** Data access Intermediate still pulls GET /tags + HTTP API as story neighbors beside the four tables
 
 ### Seed backlog
 
@@ -261,7 +265,7 @@ ACTIVE
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (H4 falsified for RealWorld Data access — 12 nodes were readable; peeled 4 migration schemas instead). Now try H7 because dogfood felt: Data access is now 4 tables + Prisma database, but GET /tags and HTTP API still sit in that room as leftover story neighbors. Then H4 only if a later room actually shrinks to dust.
+> **Next focus:** This work is done (H7: Data Intermediate is Prisma + Article/Comment/Tag/User — GET /tags and HTTP API left). Now try H8 because dogfood felt: the Data room is a map, but double-clicking Article only shows HTTP API, not `POST /articles → writes`. Cap mutations if 11 verbs dump. Then Playwright to lock Back.
 
 ---
 
@@ -278,6 +282,7 @@ ACTIVE
 - 2026-08-14 03:42 UTC | Hypothesis: H3 operation labels on Intermediate story edges | Done: `operationStoryLabel` + route→table lift (`routes-to` or in-range controller `calls`); viewer always-on operation badges; neighborhood seeds skip hidden cluster members; verify 74 pass | Felt (node-express-realworld): Beginner still 10s (HTTP API → Data). Articles Intermediate is the payoff — `POST /articles → writes`, GETs `reads` Article; Comments is POST `writes` Comment; Favorite is two `writes` Article. 19/20 routes bound; GET / (no table) correctly unbound. API Intermediate clusters remain, now with `writes · reads Article` on the 4 hallway tables — labeled but still clutter beside Articles/Users. Self-map: no fake reads/writes; CLI → Compile → … → Viewer intact; Intermediate uses stay `extract`/`normalize`. node-cron-betterstack: 1 cron + 1 job, no operation spam. fastapi-realworld has routes-to but no table IO, so no new badges. Would show Articles/Comments/Users rooms to a stranger; not the API hallway yet. | Plan change: H3 standing rules (operation labels, span-bound route lifts, no route→Data, skip hidden seeds); promote H6 hallway tables over H4 | Next: H6 hide API hallway tables when domain groups exist
 - 2026-08-14 04:05 UTC | Hypothesis: H6 hallway tables stay in the room they explain | Done: `isHallwayTable` — hide table/collection on Intermediate when focus has routeGroup children and no visible leftover route stories to it; verify 74 pass | Felt (node-express-realworld): Beginner still 10s. API Intermediate is now a **map** (Articles/Profiles/User/Users + GET / + GET /tags → Tag + Data access) — Article/Comment/User left the hallway. Kill-if did **not** fire: Tag stays with GET /tags. Articles still `POST /articles → writes` Article; Comments/Users rooms unchanged. Self-map: CLI → Compile → … → Viewer intact; no fake tables/clusters. node-cron-betterstack: 1 cron + 1 job. Would show the API hallway to a stranger now. Data access Intermediate still 4 tables + 4 migration schemas. | Plan change: H6 standing rule (hide grouped hallway tables; keep leftover route→table); next is H4 on the Data access dump | Next: H4 fit-to-view / peel Data access migrations
 - 2026-08-14 04:37 UTC | Hypothesis: H4 fit-to-view / peel Data access migrations | Done: H4 falsified on RealWorld Data access (12 nodes, not dust). `isSqlMigrationSchema` + `intermediateOmitReason: migration-lineage`; viewer hides migration schemas on Intermediate; verify 75 pass | Felt (node-express-realworld): Beginner still 10s; API hallway still groups + GET /tags → Tag. Data access Intermediate is now 8 nodes (4 tables + Prisma database + HTTP API + GET /tags) — migrations gone, tables readable, not a postage stamp. Self-map: no migration schemas; CLI → … → Viewer intact. node-cron-betterstack: unchanged. Would show Data tables to a stranger; GET /tags still feels like API leftover in the Data room. | Plan change: standing rule — omit SQL migrations on Intermediate when tables exist; demote H4 to true dumps; add H7 leftover API neighbors in Data | Next: H7 hide GET /tags + HTTP API from Data access Intermediate
+- 2026-08-14 05:04 UTC | Hypothesis: H7 Data Intermediate is tables not API leftovers | Done: `isDataRoomApiLeftover` hides HTTP API + routes when focus is Data access; table focus still keeps HTTP API; verify 75 pass | Felt (node-express-realworld): Beginner still 10s. API hallway unchanged (groups + GET /tags → Tag). Data Intermediate is now a **map**: Prisma database + Article/Comment/Tag/User (6 nodes). GET /tags and HTTP API left. Double-click Article still shows HTTP API (kill-if did not fire) but not the writing routes — those stay in the Articles room. Self-map: no Data access; CLI → … → Viewer intact. node-cron-betterstack: unchanged. Would show the Data room to a stranger. | Plan change: H7 standing rule (hide API leftovers only on Data hub focus); next is H8 table→writing-routes | Next: H8 table Intermediate shows POST /articles → writes
 
 ---
 

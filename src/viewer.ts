@@ -452,6 +452,18 @@ export function renderArchitectureHtml(
           node.metadata.intermediateOmitReason === "migration-lineage")
       );
     }
+    // Data Intermediate is tables + the database hub. HTTP API / leftover
+    // routes (GET /tags) belong in the API hallway. Table focus still shows
+    // who writes the row.
+    function isDataRoomApiLeftover(node, focusId) {
+      if (!focusId) return false;
+      const focused = byId.get(focusId);
+      if (!isDataAccessSystem(focused)) return false;
+      if (node.id === focusId) return false;
+      if (isHttpApiStoryHub(node)) return true;
+      if (node.kind === "route") return true;
+      return !!(node.metadata && node.metadata.routeGroup === true);
+    }
     function laneNameFor(node) {
       if (isDetectionSurface(node)) return "Detects";
       if (isMongoAggregateHub(node)) return "Data & automation";
@@ -1145,6 +1157,7 @@ export function renderArchitectureHtml(
         if (!clusterMemberVisible(node, rootId)) return false;
         if (isHallwayTable(node, rootId)) return false;
         if (isMigrationSchemaLeaf(node) && node.id !== rootId) return false;
+        if (isDataRoomApiLeftover(node, rootId)) return false;
         const isOverviewHub = node.metadata && node.metadata.overviewHub;
         if (advancedKinds.has(node.kind) && !isOverviewHub) return false;
         return true;
@@ -1377,6 +1390,9 @@ export function renderArchitectureHtml(
           isMigrationSchemaLeaf(node) &&
           node.id !== state.focus
         ) {
+          return false;
+        }
+        if (state.focus && !isAdvancedTier() && isDataRoomApiLeftover(node, state.focus)) {
           return false;
         }
         // overviewHub (auth/billing actions, Helm Chart/resources, mongo
