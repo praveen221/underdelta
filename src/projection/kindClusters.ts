@@ -4,8 +4,10 @@ import type {
   ArchitectureNode,
   Evidence,
   NodeKind,
+  SemanticFacet,
 } from "../schema.js";
 import { dedupeEvidence, projectionEvidence } from "./common.js";
+import { humanizeIdentifierLabel } from "./labels.js";
 
 /**
  * Same-kind siblings above this count collapse to a projection hub
@@ -69,6 +71,45 @@ export function kindClusterSystemKey(
   kind: NodeKind,
 ): string {
   return `kind-cluster:${kind}:${parentId}`;
+}
+
+export function kindClusterNativeSystemKey(
+  parentId: string,
+  nativeKind: string,
+): string {
+  return `kind-cluster-native:${nativeKind}:${parentId}`;
+}
+
+/** Canvas title for a native-kind peel (`Deployment (37)`). */
+export function formatNativeKindTitle(nativeKind: string): string {
+  const trimmed = nativeKind.trim();
+  if (!trimmed) return trimmed;
+  // Kubernetes kinds stay PascalCase so Service ≠ the parent Services hub.
+  if (/^[A-Z][A-Za-z0-9]+$/.test(trimmed)) return trimmed;
+  return humanizeIdentifierLabel(trimmed);
+}
+
+export function kindClusterNativeLabel(
+  nativeKind: string,
+  count: number,
+): string {
+  return `${formatNativeKindTitle(nativeKind)} (${count})`;
+}
+
+export function kindClusterNativeDensityLegend(
+  nativeKind: string,
+  count: number,
+): string {
+  return `${count} ${formatNativeKindTitle(nativeKind)} clustered`;
+}
+
+function nativeDeployKind(node: ArchitectureNode): string | undefined {
+  const facet = node.semantics?.find(
+    (item): item is Extract<SemanticFacet, { kind: "deploy-unit" }> =>
+      item.kind === "deploy-unit",
+  );
+  const native = facet?.nativeKind;
+  return typeof native === "string" && native.trim() ? native.trim() : undefined;
 }
 
 export function kindClusterLabel(kind: NodeKind, count: number): string {
@@ -158,6 +199,8 @@ export function projectKindClusters(args: {
       ensureKindCluster(args, parent, kind, members);
     }
   }
+
+  projectKindClusterNativeGroups(args);
 }
 
 function ensureKindCluster(
@@ -223,6 +266,137 @@ function ensureKindCluster(
       ...hub.evidence,
       { ...seed, detail },
     ]);
+    args.nodes.set(hub.id, hub);
+  }
+
+  for (const member of members) {
+    const memberEvidence = member.evidence[0] ?? seed;
+    args.attach(member.id, hub.id, memberEvidence);
+    const updated = args.nodes.get(member.id);
+    if (!updated || updated.parentId !== hub.id) continue;
+    updated.metadata = {
+      ...updated.metadata,
+      kindClusterMember: true,
+      kindCluster: key,
+    };
+    args.nodes.set(updated.id, updated);
+  }
+
+  hub.evidence = dedupeEvidence(hub.evidence);
+  args.nodes.set(hub.id, hub);
+}
+
+/**
+ * Inside an oversized Services hub, peel 2+ member native deploy kinds
+ * (Deployment / Service / Ingress) into nested hubs. One-kind piles
+ * (12 Compose services) stay flat — no fake wrapper.
+ */
+function projectKindClusterNativeGroups(args: {
+  nodes: Map<string, ArchitectureNode>;
+  edges: Map<string, ArchitectureEdge>;
+  attach(nodeId: string, systemId: string, evidence: Evidence): void;
+}): void {
+  const hubs = [...args.nodes.values()]
+    .filter(
+      (node) =>
+        isKindClusterHub(node) &&
+        node.metadata?.kindClusterNested !== true &&
+        node.metadata?.clusterKind === "service",
+    )
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  for (const hub of hubs) {
+    const members = [...args.nodes.values()]
+      .filter(
+        (node) =>
+          node.parentId === hub.id &&
+          node.kind === "service" &&
+          isKindClusterMember(node),
+      )
+      .sort((a, b) => a.id.localeCompare(b.id));
+    if (members.length <= KIND_CLUSTER_THRESHOLD) continue;
+
+    const byNative = new Map<string, ArchitectureNode[]>();
+    for (const member of members) {
+      const native = nativeDeployKind(member);
+      if (!native) continue;
+      const bucket = byNative.get(native) ?? [];
+      bucket.push(member);
+      byNative.set(native, bucket);
+    }
+
+    const peelable = [...byNative.entries()].filter(
+      ([, bucket]) => bucket.length >= 2,
+    );
+    const leftovers = members.filter((member) => {
+      const native = nativeDeployKind(member);
+      if (!native) return true;
+      return (byNative.get(native)?.length ?? 0) < 2;
+    });
+    // All one native kind (Compose-only / one-kind repo) — keep the flat page.
+    if (peelable.length === 0) continue;
+    if (peelable.length === 1 && leftovers.length === 0) continue;
+
+    peelable.sort(([left], [right]) => left.localeCompare(right));
+    for (const [nativeKind, bucket] of peelable) {
+      ensureNativeKindCluster(args, hub, nativeKind, bucket);
+    }
+  }
+}
+
+function ensureNativeKindCluster(
+  args: {
+    nodes: Map<string, ArchitectureNode>;
+    edges: Map<string, ArchitectureEdge>;
+    attach(nodeId: string, systemId: string, evidence: Evidence): void;
+  },
+  parent: ArchitectureNode,
+  nativeKind: string,
+  members: ArchitectureNode[],
+): void {
+  const key = kindClusterNativeSystemKey(parent.id, nativeKind);
+  const hubId = stableId("system", key);
+  const evidence = dedupeEvidence(
+    members.flatMap((member) => member.evidence).slice(0, 8),
+  );
+  const seed =
+    evidence[0] ??
+    projectionEvidence(
+      members[0]?.evidence[0]?.file ?? ".",
+      `Native-kind cluster of ${members.length} ${nativeKind} nodes`,
+    );
+  const detail = `Projection cluster of ${members.length} ${nativeKind} deploy units under ${parent.label} (not a product system)`;
+  let hub = args.nodes.get(hubId);
+  const metadata = {
+    projection: "semantic" as const,
+    systemKey: key,
+    kindCluster: true,
+    kindClusterNested: true,
+    clusterKind: "service" as const,
+    clusterNativeKind: nativeKind,
+    memberCount: members.length,
+    densityLegend: kindClusterNativeDensityLegend(nativeKind, members.length),
+    densityFill: kindClusterDensityFillPercent(members.length),
+    collapsedInOverview: true,
+  };
+  if (!hub) {
+    hub = {
+      id: hubId,
+      kind: "system",
+      label: kindClusterNativeLabel(nativeKind, members.length),
+      technology: "semantic",
+      parentId: parent.id,
+      metadata,
+      evidence: [{ ...seed, detail }],
+    };
+    args.nodes.set(hub.id, hub);
+    const contains = edgeFrom("contains", parent.id, hub.id, seed);
+    args.edges.set(contains.id, contains);
+  } else {
+    hub.label = kindClusterNativeLabel(nativeKind, members.length);
+    hub.parentId = parent.id;
+    hub.metadata = { ...hub.metadata, ...metadata };
+    hub.evidence = dedupeEvidence([...hub.evidence, { ...seed, detail }]);
     args.nodes.set(hub.id, hub);
   }
 

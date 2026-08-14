@@ -42,6 +42,8 @@ import {
   kindClusterDensityFillPercent,
   kindClusterDensityLegend,
   kindClusterLabel,
+  kindClusterNativeDensityLegend,
+  kindClusterNativeLabel,
   projectKindClusters,
 } from "../dist/projection/kindClusters.js";
 import {
@@ -775,6 +777,111 @@ test("more than 10 deploy services collapse to a Services hub", () => {
   assert.equal(hub.metadata.clusterKind, "service");
   assert.equal(hub.metadata.densityLegend, "11 services clustered");
   assert.equal(hub.parentId, deploy.id);
+  for (const item of services) {
+    assert.equal(nodes.get(item.id).parentId, hub.id);
+  }
+});
+
+function k8sUnit(id, label, nativeKind, parentId) {
+  return node(id, "service", label, {
+    parentId,
+    semantics: [{
+      kind: "deploy-unit",
+      deployKind: nativeKind === "Service" || nativeKind === "Ingress"
+        ? "service"
+        : "workload",
+      provider: "kubernetes",
+      nativeKind,
+    }],
+  });
+}
+
+test("kind cluster native labels keep Kubernetes PascalCase", () => {
+  assert.equal(kindClusterNativeLabel("Deployment", 37), "Deployment (37)");
+  assert.equal(kindClusterNativeLabel("Service", 42), "Service (42)");
+  assert.equal(kindClusterNativeLabel("Ingress", 17), "Ingress (17)");
+  assert.equal(kindClusterNativeLabel("Docker image", 15), "Docker image (15)");
+  assert.equal(
+    kindClusterNativeLabel("azurerm_role_assignment", 2),
+    "Azurerm role assignment (2)",
+  );
+  assert.equal(
+    kindClusterNativeDensityLegend("Deployment", 37),
+    "37 Deployment clustered",
+  );
+});
+
+test("mixed native kinds inside Services peel into nested hubs", () => {
+  const deploy = node("deploy", "system", "Introduction to Kubernetes", {
+    metadata: { projection: "semantic", systemKey: "deploy" },
+  });
+  const units = [
+    ...Array.from({ length: 5 }, (_, index) =>
+      k8sUnit(`dep-${index}`, `App ${index} · Deployment`, "Deployment", deploy.id),
+    ),
+    ...Array.from({ length: 5 }, (_, index) =>
+      k8sUnit(`svc-${index}`, `App ${index} · Service`, "Service", deploy.id),
+    ),
+    ...Array.from({ length: 2 }, (_, index) =>
+      k8sUnit(`ing-${index}`, `App ${index} · Ingress`, "Ingress", deploy.id),
+    ),
+  ];
+  const nodes = new Map([deploy, ...units].map((item) => [item.id, item]));
+  const edges = new Map();
+  projectKindClusters({ nodes, edges, attach: attachParent(nodes, edges) });
+
+  const hub = [...nodes.values()].find(
+    (item) => item.metadata?.kindCluster === true && !item.metadata?.kindClusterNested,
+  );
+  assert.ok(hub, "expected Services (12) hub");
+  assert.equal(hub.label, "Services (12)");
+  const nested = [...nodes.values()]
+    .filter((item) => item.metadata?.kindClusterNested === true)
+    .sort((a, b) => a.label.localeCompare(b.label));
+  assert.deepEqual(
+    nested.map((item) => item.label),
+    ["Deployment (5)", "Ingress (2)", "Service (5)"],
+  );
+  for (const group of nested) {
+    assert.equal(group.parentId, hub.id);
+    assert.equal(group.metadata.clusterKind, "service");
+    assert.equal(group.metadata.kindCluster, true);
+  }
+  const leftover = units.filter((item) => nodes.get(item.id).parentId === hub.id);
+  assert.equal(leftover.length, 0, "every mixed member should sit in a native hub");
+  const deploymentHub = nested.find((item) => item.metadata?.clusterNativeKind === "Deployment");
+  assert.ok(deploymentHub);
+  assert.equal(
+    units.filter((item) => nodes.get(item.id).parentId === deploymentHub.id).length,
+    5,
+  );
+  const byId = new Map(nodes);
+  assert.deepEqual(clusterWalkAncestors(deploymentHub.id, byId), [deploy.id, hub.id]);
+});
+
+test("one-kind Services hub stays flat — no fake native wrapper", () => {
+  const deploy = node("deploy", "system", "Deploy", {
+    metadata: { projection: "semantic", systemKey: "deploy" },
+  });
+  const services = Array.from({ length: 12 }, (_, index) =>
+    node(`svc-${index}`, "service", `svc${index}`, {
+      parentId: deploy.id,
+      semantics: [{
+        kind: "deploy-unit",
+        deployKind: "container",
+        provider: "docker-compose",
+        nativeKind: "Compose service",
+      }],
+    }),
+  );
+  const nodes = new Map([deploy, ...services].map((item) => [item.id, item]));
+  const edges = new Map();
+  projectKindClusters({ nodes, edges, attach: attachParent(nodes, edges) });
+
+  const nested = [...nodes.values()].filter((item) => item.metadata?.kindClusterNested);
+  assert.equal(nested.length, 0, "12 Compose services must not wrap in Compose service (12)");
+  const hub = [...nodes.values()].find((item) => item.metadata?.kindCluster === true);
+  assert.equal(hub.label, "Services (12)");
   for (const item of services) {
     assert.equal(nodes.get(item.id).parentId, hub.id);
   }

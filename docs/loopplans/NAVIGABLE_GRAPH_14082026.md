@@ -165,7 +165,7 @@ opening bet. After each dogfood, rewrite the list.
 | H9 | **Hide the HTTP API box on table Intermediate when writer routes are already visible.** POST /articles is the story; the molecule hub restates it. | H8 dogfood: Article room is 5 mutations + leftover HTTP API | Table with no writer routes loses “who writes this?” |
 | H10 | **Page large kind-cluster drills.** First 10 members + a `N more` node that reveals the next 10. Services (135) must not dump on double-click. | k8s dogfood: hallway calm, drill is a starfield | 12-route Playwright floor must still reach all 12 via one more-click |
 | H11 | **Density legend on kind-cluster hubs.** Hub subtitle is `N endpoints clustered` plus a hatch bar (not `system · semantic`). | H10 dogfood: hallway hub looked like any other system | Caption collides with the title — then bar-only |
-| H12 | **Peel huge service clusters by native deploy kind.** Services (135) drill is still a mixed phonebook (42 Service / 37 Deployment / 17 Ingress / …). Nested groups when a native kind has ≥2 members. | H11 dogfood: hub is honest; drill is still 10 random + 125 more | One-kind repos grow a fake wrapper; 12-route Playwright must stay flat |
+| H12 | **Peel huge service clusters by native deploy kind.** Services (135) drill is still a mixed phonebook (42 Service / 37 Deployment / 17 Ingress / …). Nested groups when a native kind has ≥2 members. **Shipped.** | H11 dogfood: hub is honest; drill is still 10 random + 125 more | One-kind repos grow a fake wrapper; 12-route Playwright must stay flat |
 | R1 | **[P1] Gate route→resource lifts on typed `endpoint` facets.** Fastify (unsupported-http-framework, 0 endpoint facets) must not get `POST /articles → writes article`. **Shipped.** | Human review 2026-08-14: `src/projection/data.ts` ~575 loops raw `route` nodes | Express RealWorld loses operation badges — then keep facet gate and fix adapter coverage, do not reopen raw routes |
 | R2 | **[P2] Skip `intermediateOmitted` nodes when building kind clusters.** 11 SQL migrations must not become empty `Schemas (11)` under Data. **Shipped.** | Human review: `kindClusters.ts` ~122 includes omitted members | RealWorld Data room grows a fake empty hub — then omit clustering for that parent |
 | R3 | **[P2] Generic clusters keep their walkable parent on Back.** `Services (135)` under Introduction to Kubernetes must crumb/Back to that room, not jump to Beginner. HTTP API is not the only non-cluster frame. **Shipped.** | Human review: `clusterWalk.ts` ~17 only special-cases HTTP API | Extractors / CLI crumbs regress — then add Deploy→Services Playwright, keep existing 12-route HTTP floor |
@@ -195,6 +195,7 @@ opening bet. After each dogfood, rewrite the list.
 - Find ranks an exact-match table/collection above a same-label `routeGroup`. Enter focuses the table room (writer routes), not Data access and not the User route group. The group stays in the list as “route group”.
 - Kind-cluster Intermediate pages members: first 10, then a `N more` node / inspector button adds 10. Advanced still shows the full set. Playwright 12-route drill: 10 + `2 more` → 12.
 - Kind-cluster hubs carry `densityLegend` (`135 services clustered` / `12 endpoints clustered`) and a hatch bar (`densityFill` 22–100%). Dashed border + caption — never `system · semantic`. Playwright asserts the 12-route hallway caption.
+- Oversized `service` kind clusters peel native deploy kinds with **≥2** members into nested hubs (`Deployment (37)`, `Service (42)`). One-kind piles (12 Compose services) stay flat. Singletons stay on the parent Services room. Nested hubs are `kindClusterNested` walk frames (Deploy › Services › Deployment).
 
 ---
 
@@ -247,7 +248,7 @@ Otherwise: no invent, no commit, no push. Exit: `IDLE: LOOP COMPLETE — no push
 ### Loop status
 
 ```text
-ACTIVE
+LOOP COMPLETE
 ```
 
 ---
@@ -279,27 +280,25 @@ ACTIVE
 - [x] **R2 [P2]:** kind clusters skip `intermediateOmitted`; 11 omitted migrations stay under Data — no empty `Schemas (11)`; RealWorld Data has 0 schema hubs
 - [x] **R3 [P2]:** semantic systems are walk frames; k8s `Services (135)` ancestors = Introduction to Kubernetes; Playwright Deploy → `Services (12)` Back; 12-route HTTP floor kept
 - [x] **R4 [P2]:** `tableFocusOperationRouteIds` once per table focus; Express Article still 5 writers (`POST /articles` …); Tag still `GET /tags`
+- [x] **H12:** Services (135) peels Deployment (37) / Service (42) / Ingress (17) / …; 12 Compose services stay flat; Playwright 12-route + Deploy→Services floors green
 
 ### In progress / next (keep ≥ 3 unchecked until LOOP COMPLETE)
 
-- [ ] H12 peel Services (135) by native deploy kind (Deployment / Service / Ingress)
-- [ ] Hover/select-only labels if always-on badges collide on a later repo
-- [ ] Keyboard: ` [` / `]` sibling clusters
-- [ ] Hover/select-only labels if always-on badges collide on a later repo
-- [ ] Keyboard: ` [` / `]` sibling clusters
+- [x] Hover/select-only labels if always-on badges collide — **cancelled:** RealWorld + k8s badges stay readable after H12; reopen if a later repo collides
+- [x] Keyboard: ` [` / `]` sibling clusters — **cancelled:** not felt after kind peel; Back/Esc/crumb already walk the rooms
 
 ### Seed backlog
 
 - Hover/select-only labels if always-on labels collide
 - Keyboard: ` [` / `]` sibling clusters
-- Peel huge service clusters by native k8s kind (H12) — unblocked (R1–R4 shipped)
+- Peel huge service clusters by native k8s kind (H12) — shipped
 - Playwright: cluster + Back path on a fixture with 12 dummy routes (shipped)
 - Density legend on kind-cluster hubs (shipped H11)
 - Page large clusters (first 10 + “show more”) (shipped H10)
 
 ### Next focus (edit every tick)
 
-> **Next focus:** R1–R4 interrupt is closed (Fastify facet gate, no empty Schemas, Deploy Back parent, table-focus O(n) set). R4 is done — Article writers unchanged. Now H12: peel kubernetes-training `Services (135)` by native deploy kind (Deployment / Service / Ingress) when a kind has ≥2 members. 12-route Playwright must stay flat. Dogfood kubernetes-training Services drill.
+> **Next focus:** Idle. LOOP COMPLETE — cluster / small-graph / Back / operation-edge (including Fastify-no-lifts) / verify / self-map gates hold after H12. Next tick: re-check gates only, no invent, no push.
 
 ---
 
@@ -307,7 +306,7 @@ ACTIVE
 
 Another agent reviewed the branch **between ticks**. These compose-policy bugs beat H12.
 
-R1–R4 are **shipped**. H12 is unblocked. Do **not** mark LOOP COMPLETE while the k8s Services drill is still a mixed phonebook (H12) unless that item is cancelled with a Learning-log reason.
+R1–R4 and H12 are **shipped**. Services drill is native-kind groups, not a mixed phonebook.
 
 ### R1 [P1] Unsupported HTTP frameworks gain product operation claims — **shipped**
 
@@ -327,7 +326,7 @@ R1–R4 are **shipped**. H12 is unblocked. Do **not** mark LOOP COMPLETE while t
 
 ### Human review interrupt closed
 
-R1–R4 shipped. H12 (native-kind peel) is unblocked. Do not mark LOOP COMPLETE until H12 is done or cancelled with a Learning-log reason — the k8s Services drill is still a mixed phonebook.
+R1–R4 and H12 shipped. Loop is complete unless a gate regresses.
 
 ### Review assessment (do not argue it away)
 
@@ -340,6 +339,8 @@ Direction is useful (bounded drills, semantic labels, calmer rooms). The loop va
 ```text
 - YYYY-MM-DD HH:MM UTC | Hypothesis: … | Done: … | Felt (repo): … | Plan change: … | Next: …
 ```
+
+- 2026-08-14 11:06 UTC | Hypothesis: H12 peel Services (135) by native deploy kind | Done: `projectKindClusterNativeGroups` nested hubs for ≥2 native kinds; skip one-kind piles; unit tests mixed peel + 12 Compose flat; Playwright 12-route + Deploy→Services still green | Felt (kubernetes-training): Services drill is a **map** — Deployment (37), Service (42), Ingress (17), Docker image (15), … plus 6 terraform leftovers — not 10 random + 125 more. Back from Deployment is Introduction to Kubernetes › Services (135). Express unchanged (POST /articles → writes Article; no native peels). Would show the k8s Services drill to a stranger. | Plan change: standing rule — peel mixed service clusters by nativeKind; one-kind stays flat. **LOOP COMPLETE** (gates 1–8). Cancelled hover-only labels + `[`/`]` keyboard (not felt). | Next: idle — re-check gates only
 
 - 2026-08-14 10:35 UTC | Hypothesis: R4 precompute table-focus operation-route ids once per focus | Done: `tableFocusOperationRouteIds` cache in viewer; `isTableFocusOperationRoute` / `tableHasWriterRoutes` reuse the set; self-map asserts the helper name | Felt (node-express-realworld): Article room still **5 writers** (POST /articles, PUT, DELETE, two favorites) — not empty, kill-if did not fire. Comment 2 writers; User 4; Tag still GET /tags. Beginner/API hallway unchanged. Would show Article table room to a stranger. | Plan change: standing rule — compute the allowed set once per table focus. **R1–R4 interrupt closed.** Next is H12 (k8s native-kind peel). Loop stays ACTIVE. | Next: H12 peel Services (135) by native deploy kind
 
