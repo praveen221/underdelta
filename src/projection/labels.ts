@@ -76,3 +76,16 @@ export function humanizeIdentifierLabel(label: string): string {
     .map((part, index) => formatProductWord(part, index))
     .join(" ");
 }
+
+/** Canvas/inspector verb for a data story edge (`writes Article`, not `createArticle`). */
+export function operationStoryLabel(
+  kind: "queries" | "reads" | "writes",
+  targetLabel: string,
+  targetKind?: string,
+): string {
+  if (targetKind === "table" || targetKind === "collection") {
+    const name = targetLabel.trim();
+    return name ? `${kind} ${name}` : kind;
+  }
+  return kind;
+}

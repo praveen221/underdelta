@@ -1,17 +1,33 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
+import { compileRepository } from "../dist/compile.js";
 import { edgeFrom } from "../dist/graph.js";
-import { isClientApisOnlyHttpApi as projectClientApisOnly } from "../dist/project.js";
+import {
+  httpRouteSubresourceKey,
+  isClientApisOnlyHttpApi as projectClientApisOnly,
+  projectSemanticArchitecture,
+} from "../dist/project.js";
+import {
+  clusterWalkAncestors,
+  isClusterWalkFrame,
+  isClusterWalkHub,
+} from "../dist/projection/clusterWalk.js";
 import {
   isClientApiFunction,
   isClientApisOnlyHttpApi,
   liftFePageStoryEdges,
 } from "../dist/projection/feStories.js";
 import {
+  isSqlMigrationSchema,
   liftDataAccessStoryEdges,
   projectDataArchitecture,
 } from "../dist/projection/data.js";
+import { operationStoryLabel } from "../dist/projection/labels.js";
+import { searchMatchScore } from "../dist/projection/searchRank.js";
 import {
   humanizeDeployNodeLabel,
   projectDeployArchitecture,
@@ -21,6 +37,15 @@ import {
   endpointFacet,
   projectHttpArchitecture,
 } from "../dist/projection/http.js";
+import {
+  KIND_CLUSTER_THRESHOLD,
+  kindClusterDensityFillPercent,
+  kindClusterDensityLegend,
+  kindClusterLabel,
+  kindClusterNativeDensityLegend,
+  kindClusterNativeLabel,
+  projectKindClusters,
+} from "../dist/projection/kindClusters.js";
 import {
   createScheduledWorkSystem,
   humanizeCronExpression,
@@ -180,6 +205,484 @@ test("data projection unifies resources and lifts explicit query bindings", () =
       (edge) => edge.kind === "queries" && edge.source === api.id && edge.target === tables[0].id,
     ),
   );
+  const apiToNote = [...edges.values()].find(
+    (edge) =>
+      edge.kind === "queries" &&
+      edge.source === api.id &&
+      edge.target === tables[0].id,
+  );
+  assert.equal(apiToNote.label, "queries Note");
+  assert.equal(apiToNote.metadata.operationStory, true);
+});
+
+test("SQL migration schemas omit from Intermediate when tables exist", () => {
+  const data = node("data-system", "system", "Data access", {
+    metadata: { projection: "semantic", systemKey: "data" },
+  });
+  const table = node("article", "table", "Article", {
+    technology: "prisma",
+    semantics: [{
+      kind: "resource",
+      resourceKind: "table",
+      provider: "prisma",
+    }],
+  });
+  const migration = node("mig", "schema", "prisma/migrations/1.sql", {
+    technology: "sql",
+    metadata: { role: "migration" },
+  });
+  const database = node("db", "database", "Prisma database", {
+    technology: "prisma",
+  });
+  const nodes = new Map(
+    [data, table, migration, database].map((item) => [item.id, item]),
+  );
+  const edges = new Map();
+  const systems = new Map([["data", data]]);
+
+  projectDataArchitecture({
+    nodes,
+    edges,
+    systems,
+    attachToSystem(id, parentId) {
+      nodes.get(id).parentId = parentId;
+    },
+  });
+
+  assert.equal(isSqlMigrationSchema(nodes.get(migration.id)), true);
+  assert.equal(nodes.get(migration.id).metadata.intermediateOmitted, true);
+  assert.equal(
+    nodes.get(migration.id).metadata.intermediateOmitReason,
+    "migration-lineage",
+  );
+  assert.equal(nodes.get(database.id).metadata.collapsedInOverview, true);
+  assert.equal(nodes.get(database.id).metadata.intermediateOmitted, undefined);
+});
+
+test("11 omitted migration schemas do not become an empty Schemas cluster", () => {
+  const product = node("product", "product", "Demo");
+  const tables = ["Article", "Comment", "Tag", "User"].map((label) =>
+    node(`table-${label.toLowerCase()}`, "table", label, {
+      technology: "prisma",
+      semantics: [{
+        kind: "resource",
+        resourceKind: "table",
+        provider: "prisma",
+      }],
+    }),
+  );
+  const migrations = Array.from({ length: 11 }, (_, index) =>
+    node(`mig-${index}`, "schema", `prisma/migrations/${index}/migration.sql`, {
+      technology: "sql",
+      metadata: { role: "migration" },
+    }),
+  );
+  const database = node("db", "database", "Prisma database", {
+    technology: "prisma",
+  });
+  const graph = projectSemanticArchitecture({
+    schemaVersion: "0.2",
+    project: { name: "demo", root: "/demo" },
+    generatedAt: new Date(0).toISOString(),
+    extractors: [],
+    adapters: [],
+    nodes: [product, database, ...tables, ...migrations],
+    edges: [],
+    diagnostics: [],
+  });
+  const data = graph.nodes.find((item) => item.metadata?.systemKey === "data");
+  assert.ok(data, "expected Data access system");
+  const schemaHub = graph.nodes.find(
+    (item) =>
+      item.metadata?.kindCluster === true && item.metadata?.clusterKind === "schema",
+  );
+  assert.equal(
+    schemaHub,
+    undefined,
+    "omitted migrations must not become Schemas (11)",
+  );
+  assert.equal(
+    graph.nodes.some((item) => /^Schemas \(\d+\)$/.test(item.label)),
+    false,
+  );
+  const omitted = graph.nodes.filter(
+    (item) => item.kind === "schema" && item.metadata?.role === "migration",
+  );
+  assert.equal(omitted.length, 11);
+  for (const item of omitted) {
+    assert.equal(item.metadata.intermediateOmitted, true);
+    assert.equal(item.metadata.intermediateOmitReason, "migration-lineage");
+    assert.equal(item.parentId, data.id, "migrations stay under Data, not a hub");
+    assert.equal(item.metadata.kindClusterMember, undefined);
+  }
+  const dataTables = graph.nodes.filter(
+    (item) => item.kind === "table" && item.parentId === data.id,
+  );
+  assert.equal(dataTables.length, 4);
+});
+
+test("Find User ranks the table above the same-label route group", () => {
+  const table = searchMatchScore({
+    query: "user",
+    label: "User",
+    kind: "table",
+  });
+  const group = searchMatchScore({
+    query: "user",
+    label: "User",
+    kind: "system",
+    routeGroup: true,
+  });
+  const users = searchMatchScore({
+    query: "user",
+    label: "Users",
+    kind: "system",
+    routeGroup: true,
+  });
+  assert.ok(table > group, "exact table must beat exact route group");
+  assert.ok(group > users, "exact User group still ranks above Users prefix");
+});
+
+test("operation story labels say writes Article not createArticle", () => {
+  assert.equal(operationStoryLabel("writes", "Article", "table"), "writes Article");
+  assert.equal(operationStoryLabel("reads", "User", "table"), "reads User");
+  assert.equal(operationStoryLabel("writes", "Data access", "system"), "writes");
+});
+
+function rangedEvidence(file, startLine, endLine = startLine) {
+  return {
+    file,
+    extractor: "typescript",
+    certainty: "observed",
+    range: {
+      startLine,
+      startColumn: 0,
+      endLine,
+      endColumn: 1,
+    },
+  };
+}
+
+test("HTTP route in-range controller call lifts POST /articles writes Article", () => {
+  const api = node("api", "api", "HTTP API", {
+    metadata: { projection: "semantic", systemKey: "api" },
+  });
+  const data = node("data", "system", "Data access", {
+    metadata: { projection: "semantic", systemKey: "data" },
+  });
+  const route = node("route", "route", "POST /articles", {
+    parentId: api.id,
+    semantics: [{
+      kind: "endpoint",
+      protocol: "http",
+      method: "POST",
+      path: "/articles",
+      provider: "express",
+      declaration: "code",
+    }],
+    evidence: [rangedEvidence("article.controller.ts", 71, 78)],
+  });
+  const create = node("create", "function", "createArticle", {
+    parentId: api.id,
+  });
+  const article = node("article", "table", "Article", { parentId: data.id });
+  const nodes = new Map(
+    [api, data, route, create, article].map((item) => [item.id, item]),
+  );
+  const write = edgeFrom(
+    "writes",
+    create.id,
+    article.id,
+    rangedEvidence("article.service.ts", 40),
+  );
+  const call = edgeFrom(
+    "calls",
+    api.id,
+    create.id,
+    rangedEvidence("article.controller.ts", 73),
+  );
+  const edges = new Map([[write.id, write], [call.id, call]]);
+  const systems = new Map([["api", api], ["data", data]]);
+
+  liftDataAccessStoryEdges(nodes, edges, systems);
+
+  const routeWrite = [...edges.values()].find(
+    (edge) =>
+      edge.kind === "writes" &&
+      edge.source === route.id &&
+      edge.target === article.id,
+  );
+  assert.ok(routeWrite, "expected POST /articles → writes Article");
+  assert.equal(routeWrite.label, "writes Article");
+  assert.equal(routeWrite.metadata.operationStory, true);
+  const apiWrite = [...edges.values()].find(
+    (edge) =>
+      edge.kind === "writes" &&
+      edge.source === api.id &&
+      edge.target === article.id,
+  );
+  assert.ok(apiWrite);
+  assert.equal(apiWrite.label, "writes Article");
+});
+
+test("HTTP route routes-to handler lifts writes table", () => {
+  const api = node("api", "api", "HTTP API", {
+    metadata: { projection: "semantic", systemKey: "api" },
+  });
+  const data = node("data", "system", "Data access", {
+    metadata: { projection: "semantic", systemKey: "data" },
+  });
+  const route = node("route", "route", "POST /notes", {
+    parentId: api.id,
+    semantics: [{
+      kind: "endpoint",
+      protocol: "http",
+      method: "POST",
+      path: "/notes",
+      provider: "express",
+      declaration: "code",
+    }],
+  });
+  const handler = node("handler", "function", "createNote", { parentId: api.id });
+  const note = node("note", "table", "Note", { parentId: data.id });
+  const nodes = new Map(
+    [api, data, route, handler, note].map((item) => [item.id, item]),
+  );
+  const write = edgeFrom("writes", handler.id, note.id, evidence);
+  const bind = edgeFrom("routes-to", route.id, handler.id, evidence);
+  const edges = new Map([[write.id, write], [bind.id, bind]]);
+  const systems = new Map([["api", api], ["data", data]]);
+
+  liftDataAccessStoryEdges(nodes, edges, systems);
+
+  assert.ok(
+    [...edges.values()].some(
+      (edge) =>
+        edge.kind === "writes" &&
+        edge.source === route.id &&
+        edge.target === note.id &&
+        edge.label === "writes Note",
+    ),
+  );
+});
+
+test("controller call outside the route span does not bind the operation", () => {
+  const api = node("api", "api", "HTTP API", {
+    metadata: { projection: "semantic", systemKey: "api" },
+  });
+  const data = node("data", "system", "Data access", {
+    metadata: { projection: "semantic", systemKey: "data" },
+  });
+  const route = node("route", "route", "POST /articles", {
+    parentId: api.id,
+    semantics: [{
+      kind: "endpoint",
+      protocol: "http",
+      method: "POST",
+      path: "/articles",
+      provider: "express",
+      declaration: "code",
+    }],
+    evidence: [rangedEvidence("article.controller.ts", 71, 78)],
+  });
+  const other = node("other", "function", "addComment", { parentId: api.id });
+  const comment = node("comment", "table", "Comment", { parentId: data.id });
+  const nodes = new Map(
+    [api, data, route, other, comment].map((item) => [item.id, item]),
+  );
+  const write = edgeFrom("writes", other.id, comment.id, evidence);
+  const call = edgeFrom(
+    "calls",
+    api.id,
+    other.id,
+    rangedEvidence("article.controller.ts", 175),
+  );
+  const edges = new Map([[write.id, write], [call.id, call]]);
+  const systems = new Map([["api", api], ["data", data]]);
+
+  liftDataAccessStoryEdges(nodes, edges, systems);
+
+  assert.equal(
+    [...edges.values()].some(
+      (edge) => edge.source === route.id && edge.target === comment.id,
+    ),
+    false,
+    "out-of-range controller call must not invent POST /articles → Comment",
+  );
+});
+
+test("route without a typed endpoint facet does not lift writes table", () => {
+  const api = node("api", "api", "HTTP API", {
+    metadata: { projection: "semantic", systemKey: "api" },
+  });
+  const data = node("data", "system", "Data access", {
+    metadata: { projection: "semantic", systemKey: "data" },
+  });
+  const route = node("route", "route", "POST /articles", { parentId: api.id });
+  const handler = node("handler", "function", "createArticle", {
+    parentId: api.id,
+  });
+  const article = node("article", "table", "Article", { parentId: data.id });
+  const nodes = new Map(
+    [api, data, route, handler, article].map((item) => [item.id, item]),
+  );
+  const write = edgeFrom("writes", handler.id, article.id, evidence);
+  const bind = edgeFrom("routes-to", route.id, handler.id, evidence);
+  const edges = new Map([[write.id, write], [bind.id, bind]]);
+  const systems = new Map([["api", api], ["data", data]]);
+
+  liftDataAccessStoryEdges(nodes, edges, systems);
+
+  assert.equal(
+    [...edges.values()].some(
+      (edge) =>
+        edge.kind === "writes" &&
+        edge.source === route.id &&
+        edge.target === article.id,
+    ),
+    false,
+    "raw route nodes without an endpoint facet must not claim writes Article",
+  );
+});
+
+test("12 Fastify routes do not become HTTP endpoint clusters or Comments groups", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-fastify-cluster-"));
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(
+      path.join(root, "package.json"),
+      JSON.stringify({
+        name: "fastify-cluster",
+        dependencies: { fastify: "5.0.0" },
+      }),
+      "utf8",
+    );
+    const lines = [
+      'import Fastify from "fastify";',
+      "const app = Fastify();",
+    ];
+    for (let index = 0; index < 12; index += 1) {
+      lines.push(`app.get("/articles/item${index}/comments", () => ${index});`);
+    }
+    lines.push('app.post("/articles/:id/favorite", () => 1);');
+    lines.push('app.delete("/articles/:id/favorite", () => 1);');
+    lines.push('app.post("/articles/:id/share", () => 1);');
+    lines.push('app.delete("/articles/:id/share", () => 1);');
+    lines.push("");
+    await writeFile(path.join(root, "src", "app.ts"), lines.join("\n"), "utf8");
+    const graph = await compileRepository(root);
+    assert.ok(
+      graph.diagnostics.some(
+        (diagnostic) => diagnostic.code === "unsupported-http-framework",
+      ),
+    );
+    assert.equal(
+      graph.nodes.some((item) =>
+        item.semantics?.some((facet) => facet.kind === "endpoint"),
+      ),
+      false,
+    );
+    assert.equal(
+      graph.nodes.some(
+        (item) =>
+          item.metadata?.kindCluster === true && item.metadata?.clusterKind === "route",
+      ),
+      false,
+      "unsupported Fastify routes must not become HTTP endpoints (N)",
+    );
+    assert.equal(
+      graph.nodes.some((item) => item.metadata?.routeGroup === true),
+      false,
+      "unsupported Fastify routes must not become Comments/Favorite groups",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("join-table siblings do not inflate a Tables hub", () => {
+  const data = node("data", "system", "Data access", {
+    metadata: { projection: "semantic", systemKey: "data" },
+  });
+  const tables = Array.from({ length: 9 }, (_, index) =>
+    node(`table-${index}`, "table", `Model${index}`, { parentId: data.id }),
+  );
+  const joins = Array.from({ length: 3 }, (_, index) =>
+    node(`join-${index}`, "table", `_Join${index}`, {
+      parentId: data.id,
+      metadata: { joinTable: true },
+    }),
+  );
+  const nodes = new Map([data, ...tables, ...joins].map((item) => [item.id, item]));
+  const edges = new Map();
+  projectKindClusters({ nodes, edges, attach: attachParent(nodes, edges) });
+  assert.equal(
+    [...nodes.values()].some(
+      (item) => item.metadata?.kindCluster === true && item.metadata?.clusterKind === "table",
+    ),
+    false,
+    "9 product tables + 3 join tables must not become Tables (12)",
+  );
+});
+
+test("Fastify compile keeps unsupported-http-framework and does not lift POST /articles", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-fastify-"));
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(
+      path.join(root, "package.json"),
+      JSON.stringify({
+        name: "fastify-articles",
+        dependencies: { fastify: "5.0.0" },
+      }),
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, "src", "app.ts"),
+      [
+        'import Fastify from "fastify";',
+        "const app = Fastify();",
+        "export function createArticle() {",
+        "  return prisma.article.create({});",
+        "}",
+        'app.post("/articles", createArticle);',
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const graph = await compileRepository(root);
+    assert.ok(
+      graph.diagnostics.some(
+        (diagnostic) => diagnostic.code === "unsupported-http-framework",
+      ),
+      "Fastify must still warn unsupported-http-framework",
+    );
+    assert.equal(
+      graph.nodes.some((item) =>
+        item.semantics?.some((facet) => facet.kind === "endpoint"),
+      ),
+      false,
+      "Fastify must not receive typed endpoint facets",
+    );
+    const route = graph.nodes.find(
+      (item) => item.kind === "route" && item.label === "POST /articles",
+    );
+    assert.ok(route, "extractor still records the raw Fastify route");
+    assert.equal(
+      graph.edges.some(
+        (edge) =>
+          edge.source === route.id &&
+          (edge.kind === "writes" ||
+            edge.kind === "reads" ||
+            edge.kind === "queries") &&
+          edge.metadata?.operationStory === true,
+      ),
+      false,
+      "Fastify must not get POST /articles → writes article",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("scheduled-work projection creates calm labels and preserves the handler chain", () => {
@@ -299,4 +802,587 @@ test("deploy projection attaches only typed units and derives calm labels", () =
 test("six-field cron expressions produce useful second-level labels", () => {
   assert.equal(humanizeCronExpression("*/5 * * * * *"), "every 5 seconds");
   assert.equal(humanizeCronExpression("0 0 * * * *"), "every hour");
+});
+
+function attachParent(nodes, edges) {
+  return (nodeId, systemId, itemEvidence) => {
+    const child = nodes.get(nodeId);
+    if (!child) return;
+    if (child.metadata?.projection === "semantic") return;
+    child.parentId = systemId;
+    nodes.set(nodeId, child);
+    const contains = edgeFrom(
+      "contains",
+      systemId,
+      nodeId,
+      itemEvidence ?? evidence,
+    );
+    edges.set(contains.id, contains);
+  };
+}
+
+test("kind cluster label names HTTP endpoints with the member count", () => {
+  assert.equal(kindClusterLabel("route", 47), "HTTP endpoints (47)");
+  assert.equal(kindClusterLabel("table", 15), "Tables (15)");
+  assert.equal(kindClusterLabel("service", 135), "Services (135)");
+  assert.equal(KIND_CLUSTER_THRESHOLD, 10);
+});
+
+test("kind cluster density legend names the collapsed pile", () => {
+  assert.equal(kindClusterDensityLegend("route", 47), "47 endpoints clustered");
+  assert.equal(kindClusterDensityLegend("service", 135), "135 services clustered");
+  assert.equal(kindClusterDensityLegend("table", 1), "1 table clustered");
+  assert.equal(kindClusterDensityFillPercent(11), 23);
+  assert.equal(kindClusterDensityFillPercent(12), 24);
+  assert.equal(kindClusterDensityFillPercent(100), 100);
+  assert.equal(kindClusterDensityFillPercent(135), 100);
+});
+
+test("more than 10 deploy services collapse to a Services hub", () => {
+  const deploy = node("deploy", "system", "Deploy", {
+    metadata: { projection: "semantic", systemKey: "deploy" },
+  });
+  const services = Array.from({ length: 11 }, (_, index) =>
+    node(`svc-${index}`, "service", `Workload ${index}`, {
+      parentId: deploy.id,
+    }),
+  );
+  const nodes = new Map([deploy, ...services].map((item) => [item.id, item]));
+  const edges = new Map();
+  projectKindClusters({ nodes, edges, attach: attachParent(nodes, edges) });
+
+  const hub = [...nodes.values()].find((item) => item.metadata?.kindCluster === true);
+  assert.ok(hub, "expected a Services kind-cluster hub");
+  assert.equal(hub.label, "Services (11)");
+  assert.equal(hub.metadata.clusterKind, "service");
+  assert.equal(hub.metadata.densityLegend, "11 services clustered");
+  assert.equal(hub.parentId, deploy.id);
+  for (const item of services) {
+    assert.equal(nodes.get(item.id).parentId, hub.id);
+  }
+});
+
+function k8sUnit(id, label, nativeKind, parentId) {
+  return node(id, "service", label, {
+    parentId,
+    semantics: [{
+      kind: "deploy-unit",
+      deployKind: nativeKind === "Service" || nativeKind === "Ingress"
+        ? "service"
+        : "workload",
+      provider: "kubernetes",
+      nativeKind,
+    }],
+  });
+}
+
+test("kind cluster native labels keep Kubernetes PascalCase", () => {
+  assert.equal(kindClusterNativeLabel("Deployment", 37), "Deployment (37)");
+  assert.equal(kindClusterNativeLabel("Service", 42), "Service (42)");
+  assert.equal(kindClusterNativeLabel("Ingress", 17), "Ingress (17)");
+  assert.equal(kindClusterNativeLabel("Docker image", 15), "Docker image (15)");
+  assert.equal(
+    kindClusterNativeLabel("azurerm_role_assignment", 2),
+    "Azurerm role assignment (2)",
+  );
+  assert.equal(
+    kindClusterNativeDensityLegend("Deployment", 37),
+    "37 Deployment clustered",
+  );
+});
+
+test("mixed native kinds inside Services peel into nested hubs", () => {
+  const deploy = node("deploy", "system", "Introduction to Kubernetes", {
+    metadata: { projection: "semantic", systemKey: "deploy" },
+  });
+  const units = [
+    ...Array.from({ length: 5 }, (_, index) =>
+      k8sUnit(`dep-${index}`, `App ${index} · Deployment`, "Deployment", deploy.id),
+    ),
+    ...Array.from({ length: 5 }, (_, index) =>
+      k8sUnit(`svc-${index}`, `App ${index} · Service`, "Service", deploy.id),
+    ),
+    ...Array.from({ length: 2 }, (_, index) =>
+      k8sUnit(`ing-${index}`, `App ${index} · Ingress`, "Ingress", deploy.id),
+    ),
+  ];
+  const nodes = new Map([deploy, ...units].map((item) => [item.id, item]));
+  const edges = new Map();
+  projectKindClusters({ nodes, edges, attach: attachParent(nodes, edges) });
+
+  const hub = [...nodes.values()].find(
+    (item) => item.metadata?.kindCluster === true && !item.metadata?.kindClusterNested,
+  );
+  assert.ok(hub, "expected Services (12) hub");
+  assert.equal(hub.label, "Services (12)");
+  const nested = [...nodes.values()]
+    .filter((item) => item.metadata?.kindClusterNested === true)
+    .sort((a, b) => a.label.localeCompare(b.label));
+  assert.deepEqual(
+    nested.map((item) => item.label),
+    ["Deployment (5)", "Ingress (2)", "Service (5)"],
+  );
+  for (const group of nested) {
+    assert.equal(group.parentId, hub.id);
+    assert.equal(group.metadata.clusterKind, group.metadata.clusterNativeKind);
+    assert.equal(group.metadata.kindCluster, true);
+  }
+  const leftover = units.filter((item) => nodes.get(item.id).parentId === hub.id);
+  assert.equal(leftover.length, 0, "every mixed member should sit in a native hub");
+  assert.equal(hub.metadata.nestedClusterCount, 3);
+  assert.equal(hub.metadata.leftoverMemberCount, 0);
+  const deploymentHub = nested.find((item) => item.metadata?.clusterNativeKind === "Deployment");
+  assert.ok(deploymentHub);
+  assert.equal(
+    units.filter((item) => nodes.get(item.id).parentId === deploymentHub.id).length,
+    5,
+  );
+  const byId = new Map(nodes);
+  assert.deepEqual(clusterWalkAncestors(deploymentHub.id, byId), [deploy.id, hub.id]);
+});
+
+test("one-kind Services hub stays flat — no fake native wrapper", () => {
+  const deploy = node("deploy", "system", "Deploy", {
+    metadata: { projection: "semantic", systemKey: "deploy" },
+  });
+  const services = Array.from({ length: 12 }, (_, index) =>
+    node(`svc-${index}`, "service", `svc${index}`, {
+      parentId: deploy.id,
+      semantics: [{
+        kind: "deploy-unit",
+        deployKind: "container",
+        provider: "docker-compose",
+        nativeKind: "Compose service",
+      }],
+    }),
+  );
+  const nodes = new Map([deploy, ...services].map((item) => [item.id, item]));
+  const edges = new Map();
+  projectKindClusters({ nodes, edges, attach: attachParent(nodes, edges) });
+
+  const nested = [...nodes.values()].filter((item) => item.metadata?.kindClusterNested);
+  assert.equal(nested.length, 0, "12 Compose services must not wrap in Compose service (12)");
+  const hub = [...nodes.values()].find((item) => item.metadata?.kindCluster === true);
+  assert.equal(hub.label, "Services (12)");
+  for (const item of services) {
+    assert.equal(nodes.get(item.id).parentId, hub.id);
+  }
+});
+
+test("more than 10 same-kind siblings collapse to a projection hub", () => {
+  const api = node("api", "api", "HTTP API", {
+    metadata: { projection: "semantic", systemKey: "api" },
+  });
+  const routes = Array.from({ length: 11 }, (_, index) =>
+    node(`route-${index}`, "route", `GET /r${index}`, {
+      parentId: api.id,
+      metadata: { method: "GET", path: `/r${index}` },
+      semantics: [{
+        kind: "endpoint",
+        protocol: "http",
+        method: "GET",
+        path: `/r${index}`,
+        provider: "express",
+        declaration: "code",
+      }],
+    }),
+  );
+  const nodes = new Map([api, ...routes].map((item) => [item.id, item]));
+  const edges = new Map();
+  projectKindClusters({ nodes, edges, attach: attachParent(nodes, edges) });
+
+  const hub = [...nodes.values()].find((item) => item.metadata?.kindCluster === true);
+  assert.ok(hub, "expected a kind-cluster hub");
+  assert.equal(hub.label, "HTTP endpoints (11)");
+  assert.equal(hub.metadata.projection, "semantic");
+  assert.equal(hub.metadata.clusterKind, "route");
+  assert.equal(hub.metadata.memberCount, 11);
+  assert.equal(hub.metadata.densityLegend, "11 endpoints clustered");
+  assert.equal(hub.metadata.densityFill, kindClusterDensityFillPercent(11));
+  assert.equal(hub.parentId, api.id);
+  for (const route of routes) {
+    assert.equal(nodes.get(route.id).parentId, hub.id);
+    assert.equal(nodes.get(route.id).metadata.kindClusterMember, true);
+    assert.ok(
+      nodes.get(route.id).evidence.length >= 1,
+      "member evidence must survive re-parent",
+    );
+  }
+  assert.equal(
+    [...nodes.values()].filter((item) => item.parentId === api.id && item.kind === "route")
+      .length,
+    0,
+    "API must not keep 11 naked route peers",
+  );
+});
+
+test("10 same-kind siblings stay naked — no fake cluster", () => {
+  const api = node("api", "api", "HTTP API", {
+    metadata: { projection: "semantic", systemKey: "api" },
+  });
+  const routes = Array.from({ length: 10 }, (_, index) =>
+    node(`route-${index}`, "route", `GET /r${index}`, {
+      parentId: api.id,
+      metadata: { method: "GET", path: `/r${index}` },
+    }),
+  );
+  const nodes = new Map([api, ...routes].map((item) => [item.id, item]));
+  const edges = new Map();
+  projectKindClusters({ nodes, edges, attach: attachParent(nodes, edges) });
+
+  assert.equal(
+    [...nodes.values()].some((item) => item.metadata?.kindCluster === true),
+    false,
+  );
+  for (const route of routes) {
+    assert.equal(nodes.get(route.id).parentId, api.id);
+  }
+});
+
+test("kind clusters do not wrap members of an existing domain route group", () => {
+  const api = node("api", "api", "HTTP API", {
+    metadata: { projection: "semantic", systemKey: "api" },
+  });
+  const articles = node("articles", "system", "Articles", {
+    parentId: api.id,
+    metadata: {
+      projection: "semantic",
+      routeGroup: true,
+      systemKey: "routes:articles",
+    },
+  });
+  const routes = Array.from({ length: 11 }, (_, index) =>
+    node(`route-${index}`, "route", `GET /articles/${index}`, {
+      parentId: articles.id,
+      metadata: { method: "GET", path: `/articles/${index}` },
+    }),
+  );
+  const nodes = new Map(
+    [api, articles, ...routes].map((item) => [item.id, item]),
+  );
+  const edges = new Map();
+  projectKindClusters({ nodes, edges, attach: attachParent(nodes, edges) });
+
+  assert.equal(
+    [...nodes.values()].some((item) => item.metadata?.kindCluster === true),
+    false,
+    "Articles is already the cluster — do not nest HTTP endpoints (11)",
+  );
+  for (const route of routes) {
+    assert.equal(nodes.get(route.id).parentId, articles.id);
+  }
+});
+
+test("kind clusters skip modules and other semantic hubs", () => {
+  const api = node("api", "api", "HTTP API", {
+    metadata: { projection: "semantic", systemKey: "api" },
+  });
+  const modules = Array.from({ length: 12 }, (_, index) =>
+    node(`mod-${index}`, "module", `src/r${index}.ts`, { parentId: api.id }),
+  );
+  const group = node("articles", "system", "Articles", {
+    parentId: api.id,
+    metadata: { projection: "semantic", routeGroup: true, systemKey: "routes:articles" },
+  });
+  const nodes = new Map([api, group, ...modules].map((item) => [item.id, item]));
+  const edges = new Map();
+  projectKindClusters({ nodes, edges, attach: attachParent(nodes, edges) });
+
+  assert.equal(
+    [...nodes.values()].some((item) => item.metadata?.kindCluster === true),
+    false,
+    "modules and semantic groups must not become kind clusters",
+  );
+  assert.equal(nodes.get(group.id).parentId, api.id);
+});
+
+test("projection of 11 unique Express routes collapses under HTTP API", () => {
+  const product = node("product", "product", "Demo");
+  const routes = Array.from({ length: 11 }, (_, index) => {
+    const path = `/thing${index}`;
+    return node(`route-${index}`, "route", `legacy ${index}`, {
+      semantics: [{
+        kind: "endpoint",
+        protocol: "http",
+        method: "GET",
+        path,
+        provider: "express",
+        declaration: "code",
+      }],
+      metadata: { method: "GET", path, framework: "express" },
+    });
+  });
+  const graph = projectSemanticArchitecture({
+    schemaVersion: "0.2",
+    project: { name: "demo", root: "/demo" },
+    generatedAt: new Date(0).toISOString(),
+    extractors: [],
+    adapters: [],
+    nodes: [product, ...routes],
+    edges: [],
+    diagnostics: [],
+  });
+  const hub = graph.nodes.find((item) => item.metadata?.kindCluster === true);
+  const api = graph.nodes.find((item) => item.metadata?.systemKey === "api");
+  assert.ok(api, "expected HTTP API system");
+  assert.ok(hub, "expected kind-cluster hub for 11 unique routes");
+  assert.equal(hub.label, "HTTP endpoints (11)");
+  assert.equal(hub.parentId, api.id);
+  const nakedRoutes = graph.nodes.filter(
+    (item) => item.kind === "route" && item.parentId === api.id,
+  );
+  assert.equal(nakedRoutes.length, 0);
+  const clustered = graph.nodes.filter(
+    (item) => item.kind === "route" && item.parentId === hub.id,
+  );
+  assert.equal(clustered.length, 11);
+});
+
+test("HTTP subresource keys peel comments/favorite/feed off a domain path", () => {
+  assert.equal(httpRouteSubresourceKey("/articles/:slug/comments", "articles"), "comments");
+  assert.equal(
+    httpRouteSubresourceKey("/articles/:slug/comments/:id", "articles"),
+    "comments",
+  );
+  assert.equal(httpRouteSubresourceKey("/articles/:slug/favorite", "articles"), "favorite");
+  assert.equal(httpRouteSubresourceKey("/articles/feed", "articles"), "feed");
+  assert.equal(httpRouteSubresourceKey("/articles/:slug", "articles"), null);
+  assert.equal(httpRouteSubresourceKey("/articles", "articles"), null);
+  assert.equal(
+    httpRouteSubresourceKey("/api/articles/{slug}/comments", "articles"),
+    "comments",
+  );
+  assert.equal(httpRouteSubresourceKey("/users/login", "users"), "login");
+  assert.equal(httpRouteSubresourceKey("/profiles/:username", "profiles"), null);
+});
+
+function endpointRoute(id, method, path) {
+  return node(id, "route", `${method} ${path}`, {
+    semantics: [{
+      kind: "endpoint",
+      protocol: "http",
+      method,
+      path,
+      provider: "express",
+      declaration: "code",
+    }],
+    metadata: { method, path, framework: "express" },
+  });
+}
+
+test("Articles with 11 RealWorld verbs peels Comments and Favorite, keeps CRUD naked", () => {
+  const product = node("product", "product", "Demo");
+  const routes = [
+    endpointRoute("r-list", "GET", "/articles"),
+    endpointRoute("r-create", "POST", "/articles"),
+    endpointRoute("r-get", "GET", "/articles/:slug"),
+    endpointRoute("r-put", "PUT", "/articles/:slug"),
+    endpointRoute("r-del", "DELETE", "/articles/:slug"),
+    endpointRoute("r-feed", "GET", "/articles/feed"),
+    endpointRoute("r-cget", "GET", "/articles/:slug/comments"),
+    endpointRoute("r-cpost", "POST", "/articles/:slug/comments"),
+    endpointRoute("r-cdel", "DELETE", "/articles/:slug/comments/:id"),
+    endpointRoute("r-fav", "POST", "/articles/:slug/favorite"),
+    endpointRoute("r-unfav", "DELETE", "/articles/:slug/favorite"),
+  ];
+  const graph = projectSemanticArchitecture({
+    schemaVersion: "0.2",
+    project: { name: "demo", root: "/demo" },
+    generatedAt: new Date(0).toISOString(),
+    extractors: [],
+    adapters: [],
+    nodes: [product, ...routes],
+    edges: [],
+    diagnostics: [],
+  });
+  const articles = graph.nodes.find(
+    (item) => item.metadata?.routeDomain === "articles" && !item.metadata?.routeGroupNested,
+  );
+  assert.ok(articles, "expected Articles domain group");
+  const comments = graph.nodes.find(
+    (item) => item.metadata?.routeSubresource === "comments" && item.metadata?.routeGroupNested,
+  );
+  const favorite = graph.nodes.find(
+    (item) => item.metadata?.routeSubresource === "favorite" && item.metadata?.routeGroupNested,
+  );
+  const feedHub = graph.nodes.find(
+    (item) => item.metadata?.routeSubresource === "feed" && item.kind === "system",
+  );
+  assert.ok(comments, "expected Comments nested group");
+  assert.ok(favorite, "expected Favorite nested group");
+  assert.equal(comments.parentId, articles.id);
+  assert.equal(favorite.parentId, articles.id);
+  assert.equal(comments.label, "Comments");
+  assert.equal(favorite.label, "Favorite");
+  assert.equal(feedHub, undefined, "singleton feed must stay a route, not a 1-endpoint hub");
+  assert.equal(
+    graph.nodes.filter((item) => item.kind === "route" && item.parentId === comments.id).length,
+    3,
+  );
+  assert.equal(
+    graph.nodes.filter((item) => item.kind === "route" && item.parentId === favorite.id).length,
+    2,
+  );
+  const naked = graph.nodes
+    .filter((item) => item.kind === "route" && item.parentId === articles.id)
+    .map((item) => item.label)
+    .sort();
+  assert.deepEqual(naked, [
+    "DELETE /articles/:slug",
+    "GET /articles",
+    "GET /articles/:slug",
+    "GET /articles/feed",
+    "POST /articles",
+    "PUT /articles/:slug",
+  ]);
+  assert.equal(
+    graph.nodes.some((item) => item.metadata?.kindCluster === true),
+    false,
+    "must not wrap Articles in HTTP endpoints (11)",
+  );
+});
+
+test("small domain groups do not grow nested subresource hubs", () => {
+  const product = node("product", "product", "Demo");
+  const routes = [
+    endpointRoute("p-get", "GET", "/profiles/:username"),
+    endpointRoute("p-follow", "POST", "/profiles/:username/follow"),
+    endpointRoute("p-unfollow", "DELETE", "/profiles/:username/follow"),
+  ];
+  const graph = projectSemanticArchitecture({
+    schemaVersion: "0.2",
+    project: { name: "demo", root: "/demo" },
+    generatedAt: new Date(0).toISOString(),
+    extractors: [],
+    adapters: [],
+    nodes: [product, ...routes],
+    edges: [],
+    diagnostics: [],
+  });
+  const profiles = graph.nodes.find((item) => item.metadata?.routeDomain === "profiles");
+  assert.ok(profiles, "expected Profiles domain group");
+  assert.equal(
+    graph.nodes.some((item) => item.metadata?.routeGroupNested === true),
+    false,
+  );
+  assert.equal(
+    graph.nodes.filter((item) => item.kind === "route" && item.parentId === profiles.id).length,
+    3,
+  );
+});
+
+test("cluster walk ancestors seed API → Articles under Comments", () => {
+  const product = node("product", "product", "Demo");
+  const routes = [
+    endpointRoute("r-list", "GET", "/articles"),
+    endpointRoute("r-create", "POST", "/articles"),
+    endpointRoute("r-get", "GET", "/articles/:slug"),
+    endpointRoute("r-put", "PUT", "/articles/:slug"),
+    endpointRoute("r-del", "DELETE", "/articles/:slug"),
+    endpointRoute("r-feed", "GET", "/articles/feed"),
+    endpointRoute("r-cget", "GET", "/articles/:slug/comments"),
+    endpointRoute("r-cpost", "POST", "/articles/:slug/comments"),
+    endpointRoute("r-cdel", "DELETE", "/articles/:slug/comments/:id"),
+    endpointRoute("r-fav", "POST", "/articles/:slug/favorite"),
+    endpointRoute("r-unfav", "DELETE", "/articles/:slug/favorite"),
+  ];
+  const graph = projectSemanticArchitecture({
+    schemaVersion: "0.2",
+    project: { name: "demo", root: "/demo" },
+    generatedAt: new Date(0).toISOString(),
+    extractors: [],
+    adapters: [],
+    nodes: [product, ...routes],
+    edges: [],
+    diagnostics: [],
+  });
+  const byId = new Map(graph.nodes.map((item) => [item.id, item]));
+  const api = graph.nodes.find((item) => item.metadata?.systemKey === "api");
+  const articles = graph.nodes.find(
+    (item) => item.metadata?.routeDomain === "articles" && !item.metadata?.routeGroupNested,
+  );
+  const comments = graph.nodes.find(
+    (item) => item.metadata?.routeGroupNested && item.metadata?.routeSubresource === "comments",
+  );
+  assert.ok(api && articles && comments);
+  assert.equal(isClusterWalkHub(api), false);
+  assert.equal(isClusterWalkHub(articles), true);
+  assert.equal(isClusterWalkHub(comments), true);
+  assert.deepEqual(clusterWalkAncestors(comments.id, byId), [api.id, articles.id]);
+  assert.deepEqual(clusterWalkAncestors(articles.id, byId), [api.id]);
+  assert.deepEqual(clusterWalkAncestors(api.id, byId), []);
+});
+
+test("kind-cluster under a pipeline or component walks Back to that parent", () => {
+  const product = node("product", "product", "App");
+  const pipeline = node("pipe", "pipeline", "Release pipeline", {
+    parentId: product.id,
+  });
+  const jobs = node("jobs-hub", "system", "Jobs (11)", {
+    parentId: pipeline.id,
+    metadata: { projection: "semantic", kindCluster: true, clusterKind: "job" },
+  });
+  const shell = node("shell", "component", "Dashboard Shell", {
+    parentId: product.id,
+  });
+  const hooks = node("hooks-hub", "system", "Hooks (11)", {
+    parentId: shell.id,
+    metadata: { projection: "semantic", kindCluster: true, clusterKind: "hook" },
+  });
+  const byId = new Map(
+    [product, pipeline, jobs, shell, hooks].map((item) => [item.id, item]),
+  );
+  assert.equal(isClusterWalkFrame(pipeline), true);
+  assert.equal(isClusterWalkFrame(shell), true);
+  assert.deepEqual(clusterWalkAncestors(jobs.id, byId), [pipeline.id]);
+  assert.deepEqual(clusterWalkAncestors(hooks.id, byId), [shell.id]);
+});
+
+test("kind-cluster under a page walks Back to that page", () => {
+  const product = node("product", "product", "App");
+  const dashboard = node("dash", "page", "Dashboard", { parentId: product.id });
+  const hub = node("hub", "system", "Components (11)", {
+    parentId: dashboard.id,
+    metadata: {
+      projection: "semantic",
+      kindCluster: true,
+      clusterKind: "component",
+    },
+  });
+  const byId = new Map(
+    [product, dashboard, hub].map((item) => [item.id, item]),
+  );
+  assert.equal(isClusterWalkFrame(dashboard), true);
+  assert.deepEqual(clusterWalkAncestors(hub.id, byId), [dashboard.id]);
+});
+
+test("kind-cluster under Deploy walks Back to Deploy not Beginner", () => {
+  const product = node("product", "product", "Kubernetes Training");
+  const deploy = node("deploy", "system", "Introduction to Kubernetes", {
+    metadata: { projection: "semantic", systemKey: "deploy" },
+  });
+  const hub = node("hub", "system", "Services (12)", {
+    parentId: deploy.id,
+    metadata: {
+      projection: "semantic",
+      systemKey: "kind-cluster:service:deploy",
+      kindCluster: true,
+      clusterKind: "service",
+    },
+  });
+  const extractors = node("extractors", "system", "Extractors", {
+    metadata: { projection: "semantic", systemKey: "extractors" },
+  });
+  const byId = new Map(
+    [product, deploy, hub, extractors].map((item) => [item.id, item]),
+  );
+  assert.equal(isClusterWalkHub(deploy), false);
+  assert.equal(isClusterWalkFrame(deploy), true);
+  assert.equal(isClusterWalkHub(hub), true);
+  assert.deepEqual(clusterWalkAncestors(hub.id, byId), [deploy.id]);
+  assert.deepEqual(
+    clusterWalkAncestors(extractors.id, byId),
+    [],
+    "Extractors is a room, not a cluster — no invented ancestor frames",
+  );
 });

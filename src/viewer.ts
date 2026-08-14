@@ -109,6 +109,7 @@ export function renderArchitectureHtml(
     .edge-badge-bg { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
     .edge-badge { fill: var(--text); font: 650 10px/1 Inter, ui-sans-serif, system-ui, sans-serif; }
     .edge-badge-group.relation .edge-badge-bg { stroke: color-mix(in srgb, #52a976 55%, var(--line)); }
+    .edge-badge-group.operation .edge-badge-bg { stroke: color-mix(in srgb, #6e8fe0 55%, var(--line)); }
     #nodes { position: absolute; inset: 0; }
     .lane-label { position: absolute; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
     .node { --kind-color: #77808d; position: absolute; width: 190px; min-height: 58px; background: var(--panel); border: 1px solid var(--kind-color); border-radius: 9px; padding: 9px 10px; cursor: grab; touch-action: none; user-select: none; transition: opacity .12s, border-color .12s, background .12s; }
@@ -138,6 +139,23 @@ export function renderArchitectureHtml(
     .node[data-kind="module"] { --kind-color: #77808d; border-radius: 4px 10px 10px; }
     .node[data-kind="module"]::before { content: ""; position: absolute; width: 48px; height: 5px; left: -1px; top: -6px; border: 1px solid var(--kind-color); border-bottom: 0; border-radius: 5px 6px 0 0; background: var(--panel); }
     .node[data-kind="system"] { --kind-color: #7c9cff; min-height: 72px; width: 210px; border-width: 2px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kind-color) 25%, transparent); }
+    /* Kind clusters are a view, not a product system — dashed so they don't fake a hub. */
+    .node[data-kind-cluster="true"] { --kind-color: #4d8ed5; border-style: dashed; box-shadow: none; min-height: 86px; width: 220px; }
+    .node[data-cluster-more="true"] { --kind-color: #4d8ed5; border-style: dashed; min-height: 52px; }
+    .node .density-legend { margin: 7px 0 0 34px; }
+    .node .density-track {
+      height: 7px; border-radius: 2px; overflow: hidden;
+      background: color-mix(in srgb, var(--kind-color) 18%, transparent);
+    }
+    .node .density-fill {
+      height: 100%; border-radius: 2px;
+      background: repeating-linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--kind-color) 90%, #fff) 0 2px,
+        transparent 2px 4px
+      );
+    }
+    .node .density-caption { color: var(--muted); font-size: 10px; margin-top: 3px; letter-spacing: .01em; }
     .node[data-kind="service"] { --kind-color: #8b7cf6; min-height: 68px; outline: 1px solid color-mix(in srgb, var(--kind-color) 35%, transparent); outline-offset: 3px; }
     .node[data-kind="component"], .node[data-kind="page"], .node[data-kind="ui"] { --kind-color: #63a8e8; border-radius: 5px 5px 14px 14px; border-top-width: 5px; }
     .node[data-kind="hook"] { --kind-color: #5dbfc1; width: 176px; min-height: 48px; border-style: dashed; border-radius: 999px; }
@@ -257,7 +275,7 @@ export function renderArchitectureHtml(
         </div>
         <div id="canvas-chrome">
           <div id="walk-hint">Beginner · Product Flow — select to inspect, double-click to walk in</div>
-          <div id="legend"><span>observed</span><span class="derived">derived</span><span class="inferred">inferred</span><span class="collab">collaboration</span><span class="narrative">publishes / migrates</span><span class="relation">table relations</span></div>
+          <div id="legend"><span>observed</span><span class="derived">derived</span><span class="inferred">inferred</span><span class="collab">operations</span><span class="narrative">publishes / migrates</span><span class="relation">table relations</span></div>
         </div>
       </main>
       <aside id="inspector-panel">
@@ -376,6 +394,229 @@ export function renderArchitectureHtml(
       if (!focusId) return false;
       return node.parentId === focusId || node.id === focusId;
     }
+    function isKindClusterHub(node) {
+      return !!(node && node.metadata && node.metadata.kindCluster === true);
+    }
+    function isKindClusterMember(node) {
+      return !!(node && node.metadata && node.metadata.kindClusterMember === true);
+    }
+    function isNestedRouteGroupHub(node) {
+      return !!(
+        node &&
+        node.metadata &&
+        node.metadata.routeGroup === true &&
+        node.metadata.routeGroupNested === true
+      );
+    }
+    function routeHasStoryKindTo(route, resourceId, kind) {
+      const edges = [...(outgoing.get(route.id) || []), ...(incoming.get(route.id) || [])];
+      for (const edge of edges) {
+        if (edge.kind !== kind) continue;
+        if (edge.source === resourceId || edge.target === resourceId) return true;
+      }
+      return false;
+    }
+    const TABLE_FOCUS_ROUTE_CAP = 10;
+    const KIND_CLUSTER_PAGE = 10;
+    // Allowed writer/reader route IDs for a table/collection focus.
+    // Computed once per focus id — the old per-node scan was O(routes²).
+    const tableFocusOperationCache = new Map();
+    function tableFocusOperationRouteIds(focusId) {
+      if (!focusId) return { allowed: new Set(), hasWriters: false };
+      const hit = tableFocusOperationCache.get(focusId);
+      if (hit) return hit;
+      const focused = byId.get(focusId);
+      if (!focused || (focused.kind !== "table" && focused.kind !== "collection")) {
+        const miss = { allowed: new Set(), hasWriters: false };
+        tableFocusOperationCache.set(focusId, miss);
+        return miss;
+      }
+      const writeMatches = [];
+      const readMatches = [];
+      for (const route of graph.nodes) {
+        if (route.kind !== "route") continue;
+        if (routeHasStoryKindTo(route, focused.id, "writes")) {
+          writeMatches.push(route);
+        } else if (
+          routeHasStoryKindTo(route, focused.id, "reads") ||
+          routeHasStoryKindTo(route, focused.id, "queries")
+        ) {
+          readMatches.push(route);
+        }
+      }
+      const hasWriters = writeMatches.length > 0;
+      const matches = hasWriters ? writeMatches : readMatches;
+      matches.sort((a, b) => String(a.label).localeCompare(String(b.label)));
+      const computed = {
+        allowed: new Set(matches.slice(0, TABLE_FOCUS_ROUTE_CAP).map((route) => route.id)),
+        hasWriters,
+      };
+      tableFocusOperationCache.set(focusId, computed);
+      return computed;
+    }
+    function tableHasWriterRoutes(tableId) {
+      return tableFocusOperationRouteIds(tableId).hasWriters;
+    }
+    // Table Intermediate: mutation routes (POST /articles → writes), not every GET.
+    // Cap so an 11-verb domain cannot dump the table room.
+    function isTableFocusOperationRoute(node, focusId) {
+      if (!focusId || node.kind !== "route") return false;
+      return tableFocusOperationRouteIds(focusId).allowed.has(node.id);
+    }
+    const kindClusterMemberListCache = new Map();
+    const kindClusterPageCache = new Map();
+    function kindClusterMembersSorted(hubId) {
+      const hit = kindClusterMemberListCache.get(hubId);
+      if (hit) return hit;
+      const members = graph.nodes
+        .filter((node) => node.parentId === hubId && isKindClusterMember(node))
+        .sort((a, b) => String(a.label).localeCompare(String(b.label)));
+      kindClusterMemberListCache.set(hubId, members);
+      return members;
+    }
+    function isPagedClusterHub(node) {
+      if (!node || !node.metadata) return false;
+      if (node.metadata.kindCluster === true) return true;
+      if (node.metadata.routeGroup === true && node.metadata.routeDomain === "_more") {
+        return true;
+      }
+      return !!(
+        node.metadata.routeGroup === true &&
+        node.metadata.routeGroupNested === true
+      );
+    }
+    function pagedClusterMembersSorted(hubId) {
+      const focused = byId.get(hubId);
+      if (isKindClusterHub(focused)) return kindClusterMembersSorted(hubId);
+      const key = "routes:" + hubId;
+      const hit = kindClusterMemberListCache.get(key);
+      if (hit) return hit;
+      const members = graph.nodes
+        .filter((node) => node.parentId === hubId && node.kind === "route")
+        .sort((a, b) => String(a.label).localeCompare(String(b.label)));
+      kindClusterMemberListCache.set(key, members);
+      return members;
+    }
+    function kindClusterPage(focusId) {
+      if (!focusId) return null;
+      const focused = byId.get(focusId);
+      if (!isPagedClusterHub(focused)) return null;
+      const limit = state.clusterReveal[focusId] || KIND_CLUSTER_PAGE;
+      const cacheKey = focusId + ":" + limit;
+      const cached = kindClusterPageCache.get(cacheKey);
+      if (cached) return cached;
+      const members = pagedClusterMembersSorted(focusId);
+      const shown = members.slice(0, limit);
+      const native = focused.metadata && focused.metadata.clusterNativeKind;
+      const page = {
+        members,
+        shown,
+        shownIds: new Set(shown.map((node) => node.id)),
+        hidden: Math.max(0, members.length - shown.length),
+        kind: native || (focused.metadata && focused.metadata.clusterKind) || "node",
+      };
+      kindClusterPageCache.set(cacheKey, page);
+      return page;
+    }
+    function revealMoreClusterMembers() {
+      if (!state.focus) return;
+      const page = kindClusterPage(state.focus);
+      if (!page || page.hidden <= 0) return;
+      const current = state.clusterReveal[state.focus] || KIND_CLUSTER_PAGE;
+      state.clusterReveal[state.focus] = current + KIND_CLUSTER_PAGE;
+      render();
+    }
+    // Kind-cluster hubs, nested route groups (Comments under Articles), and
+    // their members stay off Beginner / ancestor Intermediate until focused.
+    // Focused kind-cluster rooms page members (first 10 + show more).
+    function clusterMemberVisible(node, focusId) {
+      if (isTableFocusOperationRoute(node, focusId)) return true;
+      if (isKindClusterMember(node) || (node.kind === "route" && isPagedClusterHub(byId.get(focusId)))) {
+        if (!focusId) return false;
+        if (node.id === focusId) return true;
+        if (node.parentId !== focusId) return false;
+        if (isAdvancedTier()) return true;
+        const page = kindClusterPage(focusId);
+        return !page || page.shownIds.has(node.id);
+      }
+      if (isKindClusterHub(node) || isNestedRouteGroupHub(node)) {
+        if (!focusId) return false;
+        return node.parentId === focusId || node.id === focusId;
+      }
+      return routeGroupMemberVisible(node, focusId);
+    }
+    function hasRouteGroupChild(focusId) {
+      if (!focusId) return false;
+      return graph.nodes.some((node) =>
+        !!(node.parentId === focusId && node.metadata && node.metadata.routeGroup === true),
+      );
+    }
+    function storyTouches(edge, leftId, rightId) {
+      if (!neighborhoodEdgeKinds.has(edge.kind)) return false;
+      return (
+        (edge.source === leftId && edge.target === rightId) ||
+        (edge.source === rightId && edge.target === leftId)
+      );
+    }
+    function visibleRouteStoriesTo(focusId, resourceId) {
+      const allowed = focusNeighborhood(focusId);
+      for (const node of graph.nodes) {
+        if (node.kind !== "route") continue;
+        if (!allowed.has(node.id)) continue;
+        if (!clusterMemberVisible(node, focusId)) continue;
+        const edges = [...(outgoing.get(node.id) || []), ...(incoming.get(node.id) || [])];
+        for (const edge of edges) {
+          if (storyTouches(edge, node.id, resourceId)) return true;
+        }
+      }
+      return false;
+    }
+    // API hallway: Article/User/Comment live in Articles/Users rooms.
+    // Keep ungrouped leftovers (GET /tags → Tag). Intermediate only.
+    function isHallwayTable(node, focusId) {
+      if (!focusId) return false;
+      if (node.kind !== "table" && node.kind !== "collection") return false;
+      if (node.id === focusId) return false;
+      const focused = byId.get(focusId);
+      if (!isHttpApiStoryHub(focused)) return false;
+      if (!hasRouteGroupChild(focusId)) return false;
+      if (visibleRouteStoriesTo(focusId, node.id)) return false;
+      return true;
+    }
+    // SQL migration files are lineage, not Data Intermediate furniture.
+    // Advanced-in-focus can still open them. Tables keep migrates evidence.
+    function isMigrationSchemaLeaf(node) {
+      return !!(
+        node.kind === "schema" &&
+        node.metadata &&
+        (node.metadata.role === "migration" ||
+          node.metadata.intermediateOmitReason === "migration-lineage")
+      );
+    }
+    // Data Intermediate is tables + the database hub. HTTP API / leftover
+    // routes (GET /tags) belong in the API hallway. Table focus still shows
+    // who writes the row.
+    function isDataRoomApiLeftover(node, focusId) {
+      if (!focusId) return false;
+      const focused = byId.get(focusId);
+      if (!isDataAccessSystem(focused)) return false;
+      if (node.id === focusId) return false;
+      if (isHttpApiStoryHub(node)) return true;
+      if (node.kind === "route") return true;
+      return !!(node.metadata && node.metadata.routeGroup === true);
+    }
+    // Table Intermediate: hide the HTTP API molecule when writer routes
+    // already tell POST /articles → writes. Keep API when no writers exist.
+    function isTableFocusApiLeftover(node, focusId) {
+      if (!focusId) return false;
+      if (!isHttpApiStoryHub(node)) return false;
+      const focused = byId.get(focusId);
+      if (!focused || (focused.kind !== "table" && focused.kind !== "collection")) {
+        return false;
+      }
+      if (node.id === focusId) return false;
+      return tableHasWriterRoutes(focused.id);
+    }
     function laneNameFor(node) {
       if (isDetectionSurface(node)) return "Detects";
       if (isMongoAggregateHub(node)) return "Data & automation";
@@ -439,6 +680,7 @@ export function renderArchitectureHtml(
       selected: null,
       tier: "beginner",
       history: [],
+      clusterReveal: {},
     };
     // Reload comfort: remember last walk (tier + focus stack) for this project root.
     const projectStorageId = graph.project.root || graph.project.name || "default";
@@ -561,7 +803,16 @@ export function renderArchitectureHtml(
       }
       if (state.focus) {
         const label = byId.get(state.focus)?.label || "focus";
-        return "Intermediate · neighborhood of " + label + " — Back / Esc returns toward Beginner";
+        const stack = focusStack();
+        const parentId = stack.length >= 2 ? stack[stack.length - 2] : null;
+        const parentLabel = parentId
+          ? (byId.get(parentId)?.label || "previous")
+          : "Beginner";
+        const page = kindClusterPage(state.focus);
+        const pageNote = page && page.hidden > 0
+          ? " · showing " + page.shown.length + " of " + page.members.length + " — click " + page.hidden + " more"
+          : "";
+        return "Intermediate · neighborhood of " + label + pageNote + " — Back / Esc returns to " + parentLabel;
       }
       if (state.tier === "intermediate") {
         return "Double-click a Product Flow system to walk in — View deepens inside a focus";
@@ -792,6 +1043,14 @@ export function renderArchitectureHtml(
       const node = byId.get(id);
       if (!node || node.kind === "product") return null;
       if (
+        node.metadata &&
+        (node.metadata.kindClusterMember === true || node.metadata.routeGroupMember === true) &&
+        node.parentId &&
+        byId.has(node.parentId)
+      ) {
+        return node.parentId;
+      }
+      if (
         node.kind === "system" ||
         node.kind === "pipeline" ||
         node.kind === "api" ||
@@ -800,6 +1059,10 @@ export function renderArchitectureHtml(
         node.kind === "ui" ||
         node.kind === "module"
       ) {
+        return node.id;
+      }
+      // Tables/collections are their own Intermediate rooms (writer routes).
+      if (node.kind === "table" || node.kind === "collection") {
         return node.id;
       }
       // Code leaves: open the code container so Advanced can show them.
@@ -848,6 +1111,21 @@ export function renderArchitectureHtml(
       }
       return node.id;
     }
+    function searchMatchScore(node, query) {
+      const label = String(node.label).toLowerCase();
+      let score = 40;
+      if (label === query) score = 100;
+      else if (label.startsWith(query)) score = 80;
+      else if (label.includes(query)) score = 60;
+      if (node.kind === "table" || node.kind === "collection") {
+        score += label === query ? 8 : 4;
+      } else if (node.metadata && node.metadata.routeGroup === true) {
+        score += 1;
+      } else if (node.kind === "system" || node.kind === "pipeline") score += 3;
+      else if (node.kind === "api" || node.kind === "service" || node.kind === "ui") score += 2;
+      else if (advancedKinds.has(node.kind)) score -= 1;
+      return score;
+    }
     function searchMatchNodes() {
       const query = search.value.trim().toLowerCase();
       if (!query) return [];
@@ -856,15 +1134,7 @@ export function renderArchitectureHtml(
         if (node.kind === "product") continue;
         const hay = (node.label + " " + node.kind + " " + (node.qualifiedName || "")).toLowerCase();
         if (!hay.includes(query)) continue;
-        const label = String(node.label).toLowerCase();
-        let score = 40;
-        if (label === query) score = 100;
-        else if (label.startsWith(query)) score = 80;
-        else if (label.includes(query)) score = 60;
-        if (node.kind === "system" || node.kind === "pipeline") score += 3;
-        else if (node.kind === "api" || node.kind === "service" || node.kind === "ui") score += 2;
-        else if (advancedKinds.has(node.kind)) score -= 1;
-        scored.push({ node, score });
+        scored.push({ node, score: searchMatchScore(node, query) });
       }
       scored.sort((a, b) => b.score - a.score || String(a.node.label).localeCompare(String(b.node.label)));
       return scored.map((item) => item.node).slice(0, 12);
@@ -908,7 +1178,9 @@ export function renderArchitectureHtml(
         const root = rootId ? byId.get(rootId) : null;
         button.querySelector(".match-label").textContent = node.label;
         button.querySelector(".match-meta").textContent =
-          node.kind + (node.technology ? " · " + node.technology : "");
+          node.metadata && node.metadata.routeGroup === true
+            ? "route group"
+            : node.kind + (node.technology ? " · " + node.technology : "");
         button.querySelector(".match-hint").textContent = root && root.id !== node.id
           ? "Enter → " + root.label + " cluster"
           : "Enter focuses this cluster";
@@ -1018,6 +1290,9 @@ export function renderArchitectureHtml(
         if (!node) continue;
         const isOverviewHub = node.metadata && node.metadata.overviewHub;
         if (advancedKinds.has(node.kind) && !isOverviewHub) continue;
+        // Hidden nested routes (Comments under Articles) must not pull their
+        // tables into the parent room — drill the hub to see those operations.
+        if (!clusterMemberVisible(node, rootId)) continue;
         seeds.push(id);
       }
       for (const id of seeds) {
@@ -1058,7 +1333,11 @@ export function renderArchitectureHtml(
         ) {
           return false;
         }
-        if (!routeGroupMemberVisible(node, rootId)) return false;
+        if (!clusterMemberVisible(node, rootId)) return false;
+        if (isHallwayTable(node, rootId)) return false;
+        if (isMigrationSchemaLeaf(node) && node.id !== rootId) return false;
+        if (isDataRoomApiLeftover(node, rootId)) return false;
+        if (isTableFocusApiLeftover(node, rootId)) return false;
         const isOverviewHub = node.metadata && node.metadata.overviewHub;
         if (advancedKinds.has(node.kind) && !isOverviewHub) return false;
         return true;
@@ -1083,7 +1362,7 @@ export function renderArchitectureHtml(
         // leafChrome (Card/Button) is Advanced-only — keep here, hide Intermediate.
         // Route-group members stay Intermediate furniture of their group, not of
         // the parent API Advanced room (drill the Users/Articles hub instead).
-        if (!routeGroupMemberVisible(node, rootId)) return false;
+        if (!clusterMemberVisible(node, rootId)) return false;
         const isOverviewHub = node.metadata && node.metadata.overviewHub;
         if (advancedKinds.has(node.kind) && !isOverviewHub) {
           if (node.kind === "function") {
@@ -1138,6 +1417,14 @@ export function renderArchitectureHtml(
       if (isRouteMoleculeHub(clicked)) {
         return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
       }
+      // Domain groups + kind clusters are Intermediate rooms even when they
+      // only contain one nested hub (H1 collapse must not thin-room to Advanced).
+      if (
+        clicked.metadata &&
+        (clicked.metadata.routeGroup === true || clicked.metadata.kindCluster === true)
+      ) {
+        return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
+      }
       // Scheduled work is a semantic room even when it has only one trigger,
       // one job, and one code handler. Enter the trigger/job story before code.
       if (
@@ -1163,7 +1450,9 @@ export function renderArchitectureHtml(
       // Heart API Intermediate payoff is domain route groups (Users / Articles).
       // Prefer that room over a thin-room Advanced module dump.
       const routeGroupFurniture = roomOthers.filter(
-        (node) => node.metadata && node.metadata.routeGroup === true,
+        (node) =>
+          node.metadata &&
+          (node.metadata.routeGroup === true || node.metadata.kindCluster === true),
       );
       if (routeGroupFurniture.length >= 1) {
         return { focusId: clickedId, tier: "intermediate", selectedId: clickedId };
@@ -1271,7 +1560,24 @@ export function renderArchitectureHtml(
         }
         // Domain-grouped routes: only paint when their Users/Articles hub is focused
         // (API Intermediate shows groups, not the route phonebook).
-        if (!routeGroupMemberVisible(node, state.focus)) return false;
+        if (!clusterMemberVisible(node, state.focus)) return false;
+        if (state.focus && !isAdvancedTier() && isHallwayTable(node, state.focus)) {
+          return false;
+        }
+        if (
+          state.focus &&
+          !isAdvancedTier() &&
+          isMigrationSchemaLeaf(node) &&
+          node.id !== state.focus
+        ) {
+          return false;
+        }
+        if (state.focus && !isAdvancedTier() && isDataRoomApiLeftover(node, state.focus)) {
+          return false;
+        }
+        if (state.focus && !isAdvancedTier() && isTableFocusApiLeftover(node, state.focus)) {
+          return false;
+        }
         // overviewHub (auth/billing actions, Helm Chart/resources, mongo
         // aggregates) bypasses advanced-kind hides so hubs can appear once the
         // user focuses a system (Intermediate neighborhood / Advanced-in-focus).
@@ -1361,6 +1667,40 @@ export function renderArchitectureHtml(
       return 190;
     }
 
+    function kindClusterDensityCaption(node) {
+      if (node && node.metadata && typeof node.metadata.densityLegend === "string" && node.metadata.densityLegend) {
+        return node.metadata.densityLegend;
+      }
+      const count = node && node.metadata && typeof node.metadata.memberCount === "number"
+        ? node.metadata.memberCount
+        : 0;
+      const kind = node && node.metadata && typeof node.metadata.clusterKind === "string" && node.metadata.clusterKind
+        ? node.metadata.clusterKind
+        : "node";
+      const noun = kind === "route"
+        ? (count === 1 ? "endpoint" : "endpoints")
+        : (count === 1 ? kind : kind + "s");
+      return count + " " + noun + " clustered";
+    }
+
+    function kindClusterDensityFillPercent(count) {
+      const over = Math.max(0, Number(count) - 10);
+      return Math.max(22, Math.min(100, Math.round(22 + (over / 90) * 78)));
+    }
+
+    function densityLegendHtml(node) {
+      const count = node && node.metadata && typeof node.metadata.memberCount === "number"
+        ? node.metadata.memberCount
+        : 0;
+      const caption = kindClusterDensityCaption(node);
+      const fill = typeof node.metadata.densityFill === "number"
+        ? Math.max(22, Math.min(100, Math.round(node.metadata.densityFill)))
+        : kindClusterDensityFillPercent(count);
+      return '<div class="density-legend" title="' + escapeHtml(caption) + '">' +
+        '<div class="density-track"><div class="density-fill" style="width:' + fill +
+        '%"></div></div><div class="density-caption">' + escapeHtml(caption) + "</div></div>";
+    }
+
     function flowOrderOf(node) {
       const value = node.metadata && node.metadata.flowOrder;
       return typeof value === "number" ? value : null;
@@ -1379,9 +1719,18 @@ export function renderArchitectureHtml(
       element.dataset.id = node.id;
       element.dataset.manualPosition = manual ? "true" : "false";
       if (node.metadata && node.metadata.role) element.dataset.role = node.metadata.role;
+      if (node.metadata && node.metadata.kindCluster === true) {
+        element.dataset.kindCluster = "true";
+        element.dataset.densityLegend = kindClusterDensityCaption(node);
+      }
       element.style.left = placedX + "px";
       element.style.top = placedY + "px";
-      element.innerHTML = '<div class="top"><span class="glyph">' + iconForKind(node.kind) + '</span><span class="label"></span></div><div class="kind">' + node.kind.replace("-", " ") + (node.technology ? " · " + node.technology : "") + "</div>";
+      const isClusterHub = !!(node.metadata && node.metadata.kindCluster === true);
+      const kindLine = node.kind.replace("-", " ") + (node.technology ? " · " + node.technology : "");
+      const subtitle = isClusterHub
+        ? densityLegendHtml(node)
+        : '<div class="kind">' + kindLine + "</div>";
+      element.innerHTML = '<div class="top"><span class="glyph">' + iconForKind(node.kind) + '</span><span class="label"></span></div>' + subtitle;
       const label = element.querySelector(".label");
       label.textContent = node.label;
       label.title = node.label;
@@ -1418,6 +1767,30 @@ export function renderArchitectureHtml(
       const height = element.offsetHeight || 58;
       positionsScratch.set(node.id, { x: placedX, y: placedY, width, height });
       return placedY + height;
+    }
+
+    function placeClusterMoreNode(hidden, clusterKind, x, y) {
+      const element = document.createElement("div");
+      element.className = "node";
+      element.dataset.clusterMore = "true";
+      element.dataset.kind = "system";
+      element.style.left = x + "px";
+      element.style.top = y + "px";
+      const next = Math.min(KIND_CLUSTER_PAGE, hidden);
+      const kindWord = clusterKind === "route" ? "endpoints" : (clusterKind + (hidden === 1 ? "" : "s"));
+      element.innerHTML = '<div class="top"><span class="glyph">' + iconForKind("unknown") +
+        '</span><span class="label"></span></div><div class="kind"></div>';
+      element.querySelector(".label").textContent = hidden + " more";
+      element.querySelector(".kind").textContent = "show next " + next + " " + kindWord;
+      element.onclick = (event) => {
+        event.stopPropagation();
+        revealMoreClusterMembers();
+      };
+      element.ondblclick = (event) => {
+        event.stopPropagation();
+        revealMoreClusterMembers();
+      };
+      nodesLayer.appendChild(element);
     }
 
     function edgeGeometry(source, target) {
@@ -1622,6 +1995,13 @@ export function renderArchitectureHtml(
         });
       });
 
+      const clusterPage = !isAdvancedTier() ? kindClusterPage(state.focus) : null;
+      if (clusterPage && clusterPage.hidden > 0) {
+        const moreY = maxHeight + 8;
+        placeClusterMoreNode(clusterPage.hidden, clusterPage.kind, 0, moreY);
+        maxHeight = moreY + 78;
+      }
+
       const measuredBounds = contentBounds();
       if (measuredBounds) {
         maxWidth = Math.max(maxWidth, measuredBounds.maxX + 100);
@@ -1714,16 +2094,71 @@ export function renderArchitectureHtml(
         edgesLayer.appendChild(group);
       }
 
-      // On selection: label collab edges. Skip flows-to (Product flow band).
-      // Table relations get always-on badges below (data story must read cold).
+      // On selection: leftover collab (unlabeled uses…). Skip flows-to and
+      // operation-story edges (those get always-on badges in Intermediate).
       function selectionEdgeBadgeLabel(edge) {
         if (edge.kind === "flows-to") return null;
         if (isTableRelationEdge(edge)) return null;
+        if (isOperationStoryEdge(edge)) return null;
         if (collaborationKinds.has(edge.kind)) {
           if (edge.label && edge.label !== edge.kind) return edge.label;
           return edge.kind;
         }
         return null;
+      }
+
+      function isOperationStoryEdge(edge) {
+        if (edge.kind === "flows-to") return false;
+        if (isTableRelationEdge(edge)) return false;
+        if (narrativeKinds.has(edge.kind)) return false;
+        if (edge.kind === "reads" || edge.kind === "writes" || edge.kind === "queries") {
+          return true;
+        }
+        if (
+          collaborationKinds.has(edge.kind) &&
+          edge.label &&
+          edge.label !== edge.kind
+        ) {
+          return true;
+        }
+        return !!(edge.metadata && edge.metadata.operationStory);
+      }
+
+      function operationBadgeLabel(edges, sourceId, targetId) {
+        const source = byId.get(sourceId);
+        const target = byId.get(targetId);
+        const order = [
+          "writes", "reads", "queries", "uses", "renders",
+          "triggers", "exposes", "configures",
+        ];
+        const kinds = [...new Set(edges.map((edge) => edge.kind))].sort(
+          (a, b) => order.indexOf(a) - order.indexOf(b),
+        );
+        const sourceIsRoute = !!(
+          source &&
+          (source.kind === "route" ||
+            (source.semantics || []).some((facet) => facet.kind === "endpoint"))
+        );
+        const targetIsResource = !!(
+          target &&
+          (target.kind === "table" ||
+            target.kind === "collection" ||
+            isDataAccessSystem(target))
+        );
+        if (sourceIsRoute && targetIsResource) {
+          if (kinds.includes("writes")) return "writes";
+          if (kinds.includes("reads")) return "reads";
+          return kinds.join(" · ");
+        }
+        if (target && (target.kind === "table" || target.kind === "collection")) {
+          return kinds.join(" · ") + " " + target.label;
+        }
+        if (targetIsResource) return kinds.join(" · ");
+        const labels = [...new Set(edges.map((edge) => {
+          if (edge.label && edge.label !== edge.kind) return edge.label;
+          return edge.kind;
+        }))];
+        return labels.join(" · ");
       }
 
       // Group table↔table relations by directed pair → one labeled green path.
@@ -1813,12 +2248,67 @@ export function renderArchitectureHtml(
         );
       }
 
+      // Group operation story edges (reads/writes/queries, labeled uses…)
+      // by directed pair into one labeled path. Intermediate should read
+      // POST /articles writes Article, not anonymous blue lines.
+      const operationGroups = new Map();
+      const operationEdgeIds = new Set();
+      for (const edge of graph.edges) {
+        if (!isOperationStoryEdge(edge)) continue;
+        if (!visibleIds.has(edge.source) || !visibleIds.has(edge.target)) continue;
+        if (!positions.get(edge.source) || !positions.get(edge.target)) continue;
+        const key = edge.source + "|" + edge.target;
+        if (!operationGroups.has(key)) operationGroups.set(key, []);
+        operationGroups.get(key).push(edge);
+        operationEdgeIds.add(edge.id);
+      }
+
+      for (const [key, edges] of operationGroups) {
+        const sourceId = key.slice(0, key.indexOf("|"));
+        const targetId = key.slice(key.indexOf("|") + 1);
+        const source = positions.get(sourceId);
+        const target = positions.get(targetId);
+        if (!source || !target) continue;
+        const geom = edgeGeometry(source, target);
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", geom.d);
+        const kinds = [...new Set(edges.map((edge) => edge.kind))];
+        const classes = ["edge", "collab", "operation", ...kinds];
+        if (edges.some((edge) => certaintyOf(edge) === "inferred")) classes.push("inferred");
+        else if (edges.some((edge) => certaintyOf(edge) === "derived")) classes.push("derived");
+        const active = state.selected === sourceId || state.selected === targetId;
+        if (active) classes.push("active");
+        path.setAttribute("class", classes.join(" "));
+        path.setAttribute("data-kind", kinds.join(" "));
+        path.setAttribute("data-source", sourceId);
+        path.setAttribute("data-target", targetId);
+        path.setAttribute("data-operation", "true");
+        path.setAttribute(
+          "marker-end",
+          "url(#" + (active ? "arrow-active" : "arrow-collab") + ")",
+        );
+        edgesLayer.appendChild(path);
+        const alwaysOn = state.tier !== "beginner" || !!state.focus;
+        if (alwaysOn) {
+          appendEdgeBadge(
+            geom.mx,
+            geom.my,
+            operationBadgeLabel(edges, sourceId, targetId),
+            false,
+            "operation",
+            sourceId,
+            targetId,
+          );
+        }
+      }
+
       // Collapse structural hairlines by directed pair (one quiet path, not a fan).
       const structuralDrawn = new Set();
       for (const edge of graph.edges) {
         if (!visibleIds.has(edge.source) || !visibleIds.has(edge.target)) continue;
         if (narrativeEdgeIds.has(edge.id)) continue;
         if (relationEdgeIds.has(edge.id)) continue;
+        if (operationEdgeIds.has(edge.id)) continue;
         // Ownership fans (contains) + unselected derived depends-on/calls stay off
         // Intermediate canvas — neighborhood layout already shows children.
         if (!showsStructuralEdge(edge)) continue;
@@ -1928,7 +2418,14 @@ export function renderArchitectureHtml(
             ? visible.length + " in focus · " + visibleRelationships + " visible relationships · " + graph.edges.length + " total"
             : visible.length + " in neighborhood · " + visibleRelationships + " visible relationships · " + graph.edges.length + " total")
         : visible.length + " components · " + visibleRelationships + " visible relationships · " + graph.edges.length + " total";
-      document.getElementById("back").hidden = !state.focus && state.history.length === 0;
+      const backBtn = document.getElementById("back");
+      backBtn.hidden = !state.focus && state.history.length === 0;
+      const backStack = focusStack();
+      const backParentId = backStack.length >= 2 ? backStack[backStack.length - 2] : null;
+      const backLabel = backParentId
+        ? (byId.get(backParentId)?.label || "previous")
+        : "Beginner";
+      backBtn.title = "Back to " + backLabel + " (Esc)";
       const walkHint = document.getElementById("walk-hint");
       if (walkHint) walkHint.textContent = walkHintText();
     }
@@ -1975,6 +2472,9 @@ export function renderArchitectureHtml(
       "collapsedInOverview",
       "overviewHub",
       "routeGroup", "routeGroupMember", "routeDomain", "routeMolecule",
+      "routeGroupNested", "routeSubresource",
+      "kindCluster", "kindClusterMember", "clusterKind", "memberCount",
+      "densityLegend", "densityFill",
       "shellHub", "shell", "access", "surface", "reachability", "projectedShell",
       "intermediateOmitted", "intermediateOmitReason",
       "beginnerRouteHub", "beginnerOmitted", "beginnerOmitReason", "beginnerHero",
@@ -1996,6 +2496,21 @@ export function renderArchitectureHtml(
         if (meta.shell === "protected") return "Protected app — nested routes";
         if (meta.shell === "public") return "Public shell — marketing routes";
         return "Front-end access shell";
+      }
+      if (meta.routeGroupNested === true) {
+        const sub = typeof meta.routeSubresource === "string" && meta.routeSubresource
+          ? meta.routeSubresource
+          : "subresource";
+        return "Route group · " + sub + " (projection, not a product system)";
+      }
+      if (meta.routeGroup === true) {
+        const domain = typeof meta.routeDomain === "string" && meta.routeDomain
+          ? meta.routeDomain
+          : "domain";
+        return "Route group · " + domain;
+      }
+      if (meta.kindCluster === true) {
+        return kindClusterDensityCaption(node) + " (projection, not a product system)";
       }
       if (meta.routeMolecule === true) {
         const path = typeof meta.path === "string" && meta.path ? meta.path : "";
@@ -2181,6 +2696,54 @@ export function renderArchitectureHtml(
       return "<h3>Data resource</h3>" + pills.join("");
     }
 
+    function kindClusterHtml(node) {
+      if (!isKindClusterHub(node)) return "";
+      const nestedHubs = graph.nodes
+        .filter((child) => child.parentId === node.id && isKindClusterHub(child))
+        .sort((a, b) => String(a.label).localeCompare(String(b.label)));
+      const page = kindClusterPage(node.id) || {
+        members: [],
+        shown: [],
+        hidden: 0,
+        kind: "node",
+      };
+      const leftovers = page.members.length ? page.members : kindClusterMembersSorted(node.id);
+      const shownLeftovers = state.focus === node.id && !isAdvancedTier()
+        ? (page.shown.length ? page.shown : leftovers.slice(0, KIND_CLUSTER_PAGE))
+        : leftovers.slice(0, KIND_CLUSTER_PAGE);
+      const hiddenLeftovers = state.focus === node.id && !isAdvancedTier()
+        ? page.hidden
+        : Math.max(0, leftovers.length - shownLeftovers.length);
+      const count = typeof node.metadata.memberCount === "number"
+        ? node.metadata.memberCount
+        : leftovers.length + nestedHubs.reduce(
+            (sum, hub) => sum + (typeof hub.metadata.memberCount === "number" ? hub.metadata.memberCount : 0),
+            0,
+          );
+      const legend = kindClusterDensityCaption(node);
+      const hubPills = nestedHubs.map((hub) =>
+        '<button class="pill connection" data-id="' + hub.id + '">' +
+          escapeHtml(hub.label) +
+        "</button>",
+      ).join("");
+      const leftoverPills = shownLeftovers.map((member) =>
+        '<button class="pill connection" data-id="' + member.id + '">' +
+          escapeHtml(member.label) +
+        "</button>",
+      ).join("");
+      const shownCount = nestedHubs.length + shownLeftovers.length;
+      const extra = hiddenLeftovers > 0
+        ? '<p class="inspector-more">Showing ' + shownCount + " of " + count +
+          ' — <button type="button" id="cluster-show-more">Show ' +
+          Math.min(KIND_CLUSTER_PAGE, hiddenLeftovers) + " more</button></p>"
+        : (nestedHubs.length > 0
+          ? '<p class="inspector-more">' + nestedHubs.length + " groups · " +
+            leftovers.length + " leftovers of " + count + "</p>"
+          : "");
+      return "<h3>Clustered members</h3><p>This hub is " + escapeHtml(legend) +
+        " — evidence still lives on the real nodes.</p>" + hubPills + leftoverPills + extra;
+    }
+
     function deployUnitHtml(node) {
       const semantics = Array.isArray(node.semantics) ? node.semantics : [];
       const unit = semantics.find((facet) => facet.kind === "deploy-unit");
@@ -2220,8 +2783,21 @@ export function renderArchitectureHtml(
 
     function collaborationItem(edge, id) {
       const other = byId.get(edge.source === id ? edge.target : edge.source);
+      const otherLabel = other?.label || "unknown";
       const detail = edgeDetailText(edge);
-      const button = '<button class="pill connection" data-id="' + (other?.id || "") + '">' + edge.kind + " · " + (other?.label || "unknown") + "</button>";
+      let caption = edge.kind + " · " + otherLabel;
+      if (edge.label && edge.label !== edge.kind) {
+        caption = edge.label.endsWith(" " + otherLabel)
+          ? edge.label
+          : edge.label + " · " + otherLabel;
+      } else if (
+        edge.kind === "reads" ||
+        edge.kind === "writes" ||
+        edge.kind === "queries"
+      ) {
+        caption = edge.kind + " · " + otherLabel;
+      }
+      const button = '<button class="pill connection" data-id="' + (other?.id || "") + '">' + caption + "</button>";
       const detailHtml = detail
         ? '<p class="collab-detail">' + detail + "</p>"
         : "";
@@ -2466,6 +3042,7 @@ export function renderArchitectureHtml(
       const httpEndpoint = httpEndpointHtml(node);
       const scheduledWork = scheduledWorkHtml(node);
       const dataResource = dataResourceHtml(node);
+      const kindCluster = kindClusterHtml(node);
       const deployUnit = deployUnitHtml(node);
       // Table migration lineage is owned by the Prisma / SQL section.
       // Table↔table relation names are owned by the Relations section.
@@ -2602,6 +3179,7 @@ export function renderArchitectureHtml(
       inspector.innerHTML =
         "<h2></h2>" +
         roleHtml +
+        kindCluster +
         httpEndpoint +
         scheduledWork +
         dataResource +
@@ -2626,17 +3204,62 @@ export function renderArchitectureHtml(
       inspector.querySelectorAll(".connection").forEach((button) => {
         button.onclick = () => selectNode(button.dataset.id);
       });
+      const showMore = inspector.querySelector("#cluster-show-more");
+      if (showMore) {
+        showMore.onclick = (event) => {
+          event.preventDefault();
+          revealMoreClusterMembers();
+        };
+      }
       openInspector();
       render();
+    }
+
+    // Mirrors src/projection/clusterWalk.ts — keep in sync.
+    function isClusterWalkHub(node) {
+      return !!(
+        node &&
+        node.metadata &&
+        (node.metadata.routeGroup === true || node.metadata.kindCluster === true)
+      );
+    }
+    function isClusterWalkFrame(node) {
+      if (!node || node.kind === "product") return false;
+      if (node.metadata && node.metadata.kindClusterMember === true) return false;
+      if (node.metadata && node.metadata.routeGroupMember === true) return false;
+      return true;
+    }
+    function clusterWalkAncestors(focusId) {
+      const frames = [];
+      const seen = new Set([focusId]);
+      let current = byId.get(focusId);
+      while (current) {
+        const parentId = current.parentId;
+        if (!parentId || seen.has(parentId)) break;
+        seen.add(parentId);
+        const parent = byId.get(parentId);
+        if (!parent || parent.kind === "product") break;
+        if (isClusterWalkFrame(parent)) frames.unshift(parent.id);
+        current = parent;
+      }
+      return frames;
     }
 
     function focusNode(id) {
       // Dead-end Intermediate leaves (e.g. extractor services with no children)
       // escalate via resolveWalkFocus to the parent system at Advanced.
       const walk = resolveWalkFocus(id);
-      const prevFocus = state.focus;
-      if (prevFocus && prevFocus !== walk.focusId) {
-        state.history.push(prevFocus);
+      const focused = byId.get(walk.focusId);
+      // Cluster hubs are their own frames. Seed API → Articles so Find
+      // "Comments" cannot dump the user at a nested room with no way
+      // back except Overview (H2).
+      if (isClusterWalkHub(focused)) {
+        state.history = clusterWalkAncestors(walk.focusId);
+      } else {
+        const prevFocus = state.focus;
+        if (prevFocus && prevFocus !== walk.focusId) {
+          state.history.push(prevFocus);
+        }
       }
       state.focus = walk.focusId;
       state.tier = walk.tier;

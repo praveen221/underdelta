@@ -19,7 +19,12 @@ let server;
 let viewerUrl;
 let largeViewerUrl;
 let scheduledViewerUrl;
+let clusterViewerUrl;
+let servicesViewerUrl;
+let mixedViewerUrl;
 let scheduledRoot;
+let clusterRoot;
+let servicesRoot;
 
 test.beforeAll(async () => {
   const graph = await compileRepository(repoRoot);
@@ -95,6 +100,192 @@ test.beforeAll(async () => {
   const scheduledHtml = renderArchitectureHtml(
     await compileRepository(scheduledRoot),
   );
+  clusterRoot = await mkdtemp(path.join(os.tmpdir(), "underdelta-cluster-viewer-"));
+  await mkdir(path.join(clusterRoot, "src"), { recursive: true });
+  await writeFile(
+    path.join(clusterRoot, "package.json"),
+    JSON.stringify({
+      name: "cluster-viewer",
+      dependencies: { express: "latest" },
+    }),
+    "utf8",
+  );
+  await writeFile(
+    path.join(clusterRoot, "src/api.ts"),
+    [
+      'import express from "express";',
+      "const app = express();",
+      ...Array.from({ length: 12 }, (_, index) =>
+        `app.get("/r${index}", (req, res) => res.send("${index}"));`,
+      ),
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  const clusterHtml = renderArchitectureHtml(
+    await compileRepository(clusterRoot),
+  );
+  servicesRoot = await mkdtemp(path.join(os.tmpdir(), "underdelta-services-viewer-"));
+  await writeFile(
+    path.join(servicesRoot, "docker-compose.yml"),
+    [
+      "services:",
+      ...Array.from({ length: 12 }, (_, index) => [
+        `  svc${index}:`,
+        `    image: example/svc${index}:1`,
+      ]).flat(),
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  const servicesHtml = renderArchitectureHtml(
+    await compileRepository(servicesRoot),
+  );
+  const observed = {
+    file: "deploy.yaml",
+    extractor: "test",
+    certainty: "observed",
+  };
+  const mixedHtml = renderArchitectureHtml({
+    schemaVersion: "0.2",
+    project: { name: "mixed-k8s", root: "/virtual/mixed-k8s" },
+    generatedAt: new Date(0).toISOString(),
+    extractors: [],
+    adapters: [],
+    nodes: [
+      {
+        id: "product",
+        kind: "product",
+        label: "K8s",
+        metadata: {},
+        evidence: [observed],
+      },
+      {
+        id: "deploy",
+        kind: "system",
+        label: "Introduction to Kubernetes",
+        metadata: {
+          projection: "semantic",
+          systemKey: "deploy",
+          flowOrder: 1,
+        },
+        evidence: [observed],
+      },
+      {
+        id: "hub",
+        kind: "system",
+        label: "Services (12)",
+        parentId: "deploy",
+        metadata: {
+          projection: "semantic",
+          kindCluster: true,
+          clusterKind: "service",
+          memberCount: 12,
+          densityLegend: "12 services clustered",
+          nestedClusterCount: 2,
+          leftoverMemberCount: 2,
+        },
+        evidence: [observed],
+      },
+      {
+        id: "dep-hub",
+        kind: "system",
+        label: "Deployment (5)",
+        parentId: "hub",
+        metadata: {
+          projection: "semantic",
+          kindCluster: true,
+          kindClusterNested: true,
+          clusterNativeKind: "Deployment",
+          clusterKind: "Deployment",
+          memberCount: 5,
+        },
+        evidence: [observed],
+      },
+      {
+        id: "svc-hub",
+        kind: "system",
+        label: "Service (5)",
+        parentId: "hub",
+        metadata: {
+          projection: "semantic",
+          kindCluster: true,
+          kindClusterNested: true,
+          clusterNativeKind: "Service",
+          clusterKind: "Service",
+          memberCount: 5,
+        },
+        evidence: [observed],
+      },
+      {
+        id: "left-a",
+        kind: "service",
+        label: "orphan-a",
+        parentId: "hub",
+        metadata: { kindClusterMember: true },
+        evidence: [observed],
+      },
+      {
+        id: "left-b",
+        kind: "service",
+        label: "orphan-b",
+        parentId: "hub",
+        metadata: { kindClusterMember: true },
+        evidence: [observed],
+      },
+    ],
+    edges: [
+      {
+        id: "e-pd",
+        kind: "contains",
+        source: "product",
+        target: "deploy",
+        metadata: {},
+        evidence: [observed],
+      },
+      {
+        id: "e-dh",
+        kind: "contains",
+        source: "deploy",
+        target: "hub",
+        metadata: {},
+        evidence: [observed],
+      },
+      {
+        id: "e-hd",
+        kind: "contains",
+        source: "hub",
+        target: "dep-hub",
+        metadata: {},
+        evidence: [observed],
+      },
+      {
+        id: "e-hs",
+        kind: "contains",
+        source: "hub",
+        target: "svc-hub",
+        metadata: {},
+        evidence: [observed],
+      },
+      {
+        id: "e-la",
+        kind: "contains",
+        source: "hub",
+        target: "left-a",
+        metadata: {},
+        evidence: [observed],
+      },
+      {
+        id: "e-lb",
+        kind: "contains",
+        source: "hub",
+        target: "left-b",
+        metadata: {},
+        evidence: [observed],
+      },
+    ],
+    diagnostics: [],
+  });
   server = createServer((request, response) => {
     response.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8",
@@ -105,7 +296,13 @@ test.beforeAll(async () => {
         ? largeHtml
         : request.url === "/scheduled"
           ? scheduledHtml
-          : html,
+          : request.url === "/cluster"
+            ? clusterHtml
+            : request.url === "/services"
+              ? servicesHtml
+              : request.url === "/mixed"
+                ? mixedHtml
+                : html,
     );
   });
   await new Promise((resolve, reject) => {
@@ -117,11 +314,16 @@ test.beforeAll(async () => {
   viewerUrl = `http://127.0.0.1:${address.port}/`;
   largeViewerUrl = `http://127.0.0.1:${address.port}/large`;
   scheduledViewerUrl = `http://127.0.0.1:${address.port}/scheduled`;
+  clusterViewerUrl = `http://127.0.0.1:${address.port}/cluster`;
+  servicesViewerUrl = `http://127.0.0.1:${address.port}/services`;
+  mixedViewerUrl = `http://127.0.0.1:${address.port}/mixed`;
 });
 
 test.afterAll(async () => {
   await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   if (scheduledRoot) await rm(scheduledRoot, { recursive: true, force: true });
+  if (clusterRoot) await rm(clusterRoot, { recursive: true, force: true });
+  if (servicesRoot) await rm(servicesRoot, { recursive: true, force: true });
 });
 
 function node(page, label) {
@@ -352,6 +554,91 @@ test("analysis distinguishes mapped capabilities from unsupported technology", a
   await expect(page.locator("#inspector")).toContainText("Deployment: 1");
   await expect(page.locator("#inspector")).toContainText("agenda detected");
   await expect(page.locator("#inspector")).toContainText("package.json:1");
+});
+
+test("kind cluster of 12 dummy routes walks Back through HTTP API", async ({ page }) => {
+  await page.goto(clusterViewerUrl);
+  await expect(page.locator("#tier")).toHaveText("View: Beginner");
+  await expect(node(page, "HTTP API")).toBeVisible();
+  await expect(page.locator('.node[data-kind="route"]')).toHaveCount(0);
+  await expect(node(page, "HTTP endpoints (12)")).toHaveCount(0);
+
+  await node(page, "HTTP API").dblclick();
+  await expect(page.locator("#tier")).toHaveText("View: Intermediate");
+  const cluster = node(page, "HTTP endpoints (12)");
+  await expect(cluster).toBeVisible();
+  await expect(cluster).toHaveAttribute("data-kind-cluster", "true");
+  await expect(cluster).toHaveAttribute("data-density-legend", "12 endpoints clustered");
+  await expect(cluster.locator(".density-caption")).toHaveText("12 endpoints clustered");
+  await expect(cluster.locator(".density-fill")).toBeVisible();
+  await expect(page.locator('.node[data-kind="route"]')).toHaveCount(0);
+  await cluster.click();
+  await expect(page.locator("#inspector")).toContainText("12 endpoints clustered");
+
+  await cluster.dblclick();
+  await expect(page.locator("#tier")).toHaveText("View: Intermediate");
+  await expect(page.locator('.node[data-kind="route"]')).toHaveCount(10);
+  await expect(node(page, "GET /r0")).toBeVisible();
+  await expect(node(page, "2 more")).toBeVisible();
+  await node(page, "2 more").click();
+  await expect(page.locator('.node[data-kind="route"]')).toHaveCount(12);
+  await expect(node(page, "2 more")).toHaveCount(0);
+  await expect(page.locator("#focus-crumb")).toContainText("Overview");
+  await expect(page.locator("#focus-crumb")).toContainText("HTTP API");
+  await expect(page.locator("#focus-crumb")).toContainText("HTTP endpoints (12)");
+  await expect(page.locator("#back")).toHaveAttribute("title", /HTTP API/);
+
+  await page.locator("#back").click();
+  await expect(page.locator("#tier")).toHaveText("View: Intermediate");
+  await expect(node(page, "HTTP endpoints (12)")).toBeVisible();
+  await expect(page.locator('.node[data-kind="route"]')).toHaveCount(0);
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#tier")).toHaveText("View: Beginner");
+  await expect(node(page, "HTTP API")).toBeVisible();
+  await expect(page.locator('.node[data-kind="route"]')).toHaveCount(0);
+});
+
+test("mixed Services inspector lists native hubs not only leftovers", async ({ page }) => {
+  await page.goto(mixedViewerUrl);
+  await node(page, "Introduction to Kubernetes").dblclick();
+  const cluster = node(page, "Services (12)");
+  await expect(cluster).toBeVisible();
+  await cluster.click();
+  await expect(page.locator("#inspector")).toContainText("Deployment (5)");
+  await expect(page.locator("#inspector")).toContainText("Service (5)");
+  await expect(page.locator("#inspector")).toContainText("orphan-a");
+  await expect(page.locator("#inspector")).toContainText("2 groups");
+});
+
+test("kind cluster of 12 deploy services walks Back through Deploy", async ({ page }) => {
+  await page.goto(servicesViewerUrl);
+  await expect(page.locator("#tier")).toHaveText("View: Beginner");
+  await expect(node(page, "Deploy")).toBeVisible();
+  await expect(node(page, "Services (12)")).toHaveCount(0);
+
+  await node(page, "Deploy").dblclick();
+  await expect(page.locator("#tier")).toHaveText("View: Intermediate");
+  const cluster = node(page, "Services (12)");
+  await expect(cluster).toBeVisible();
+  await expect(cluster).toHaveAttribute("data-kind-cluster", "true");
+  await expect(cluster).toHaveAttribute("data-density-legend", "12 services clustered");
+
+  await cluster.dblclick();
+  await expect(page.locator("#tier")).toHaveText("View: Intermediate");
+  await expect(page.locator("#focus-crumb")).toContainText("Overview");
+  await expect(page.locator("#focus-crumb")).toContainText("Deploy");
+  await expect(page.locator("#focus-crumb")).toContainText("Services (12)");
+  await expect(page.locator("#back")).toHaveAttribute("title", /Deploy/);
+
+  await page.locator("#back").click();
+  await expect(page.locator("#tier")).toHaveText("View: Intermediate");
+  await expect(node(page, "Services (12)")).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#tier")).toHaveText("View: Beginner");
+  await expect(node(page, "Deploy")).toBeVisible();
+  await expect(node(page, "Services (12)")).toHaveCount(0);
 });
 
 test("HTTP endpoints walk from the API system to framework and handler facts", async ({ page }) => {

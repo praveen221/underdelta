@@ -45,12 +45,23 @@ import {
   endpointFacet,
   projectHttpArchitecture,
 } from "./projection/http.js";
+import {
+  KIND_CLUSTER_THRESHOLD,
+  projectKindClusters,
+} from "./projection/kindClusters.js";
 
 export { isClientApisOnlyHttpApi } from "./projection/feStories.js";
 export { isTrivialMongoAggregateLabel } from "./projection/data.js";
 export { humanizeIdentifierLabel } from "./projection/labels.js";
 export { humanizeCronExpression } from "./projection/scheduledWork.js";
 export { endpointFacet } from "./projection/http.js";
+export {
+  KIND_CLUSTER_THRESHOLD,
+  kindClusterDensityFillPercent,
+  kindClusterDensityLegend,
+  kindClusterLabel,
+  projectKindClusters,
+} from "./projection/kindClusters.js";
 export {
   humanizeKubernetesLabel,
   humanizeTerraformLabel,
@@ -2419,6 +2430,40 @@ export function httpRouteDomainKey(path: string): string | null {
   return seg;
 }
 
+/**
+ * Second-level REST noun under a domain: `/articles/:slug/comments` →
+ * `comments`, `/articles/feed` → `feed`, `/articles/:slug` → null (item CRUD
+ * stays on the domain hub). Strips `api` / `vN` the same way as domain keys.
+ */
+export function httpRouteSubresourceKey(
+  path: string,
+  domain: string,
+): string | null {
+  let raw = path.trim();
+  if (!raw) return null;
+  if (!raw.startsWith("/")) raw = `/${raw}`;
+  const noQuery = raw.split("?")[0] ?? raw;
+  const parts = noQuery.split("/").filter(Boolean);
+  while (parts.length && /^(api|v\d+)$/i.test(parts[0]!)) {
+    parts.shift();
+  }
+  if (!parts.length) return null;
+  const first = parts
+    .shift()!
+    .replace(/\{([^}]+)\}/g, "$1")
+    .replace(/^:/, "")
+    .toLowerCase();
+  if (first !== domain.toLowerCase()) return null;
+  for (const seg of parts) {
+    if (/^[:{<]/.test(seg) || seg.includes(":")) continue;
+    const key = seg.replace(/\{([^}]+)\}/g, "$1").replace(/^:/, "").toLowerCase();
+    if (!key) continue;
+    if (/^(healthz?|readyz?|livez?|ping|status)$/.test(key)) return null;
+    return key;
+  }
+  return null;
+}
+
 function routeGroupSystemKey(domain: string): string {
   return `routes:${domain}`;
 }
@@ -2470,7 +2515,8 @@ function projectApiRouteDomainGroups(
       node.kind === "route" &&
       node.parentId === api.id &&
       node.metadata?.projection !== "semantic" &&
-      !isContractSurfaceRoute(node),
+      !isContractSurfaceRoute(node) &&
+      !!endpointFacet(node),
   );
   if (routes.length < 2) return;
 
@@ -2619,6 +2665,135 @@ function projectApiRouteDomainGroups(
   nodes.set(more.id, more);
 }
 
+/**
+ * Inside an oversized domain hub (Articles with 11 verbs), peel 2+ member
+ * subresources (`comments`, `favorite`) into nested route groups. Collection
+ * and item CRUD stay naked on the domain hub. Skip groups at ≤10 routes so
+ * Profiles / Users stay a short list.
+ */
+function projectApiRouteSubresourceGroups(
+  nodes: Map<string, ArchitectureNode>,
+  edges: Map<string, ArchitectureEdge>,
+  attachToSystem: (
+    nodeId: string,
+    systemId: string,
+    evidence: Evidence,
+  ) => void,
+): void {
+  const groups = [...nodes.values()]
+    .filter(
+      (node) =>
+        node.metadata?.routeGroup === true &&
+        node.metadata?.routeGroupNested !== true &&
+        typeof node.metadata?.routeDomain === "string" &&
+        node.metadata.routeDomain !== "_more",
+    )
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  for (const group of groups) {
+    const domain = String(group.metadata?.routeDomain);
+    const routes = [...nodes.values()]
+      .filter(
+        (node) =>
+          node.kind === "route" &&
+          node.parentId === group.id &&
+          !!endpointFacet(node),
+      )
+      .sort((a, b) => a.id.localeCompare(b.id));
+    if (routes.length <= KIND_CLUSTER_THRESHOLD) continue;
+
+    const bySub = new Map<string, ArchitectureNode[]>();
+    for (const route of routes) {
+      const path =
+        typeof route.metadata?.path === "string" ? route.metadata.path : "";
+      const sub = path ? httpRouteSubresourceKey(path, domain) : null;
+      if (!sub) continue;
+      const bucket = bySub.get(sub) ?? [];
+      bucket.push(route);
+      bySub.set(sub, bucket);
+    }
+
+    const subs = [...bySub.keys()].sort((a, b) => a.localeCompare(b));
+    for (const sub of subs) {
+      const members = bySub.get(sub) ?? [];
+      if (members.length < 2) continue;
+      const nestedKey = routeGroupSystemKey(`${domain}:${sub}`);
+      const nestedId = stableId("system", nestedKey);
+      const evidence = dedupeEvidence(
+        members.flatMap((route) => route.evidence).slice(0, 8),
+      );
+      const seed =
+        evidence[0] ??
+        projectionEvidence(
+          members[0]?.evidence[0]?.file ?? ".",
+          `API route subresource group ${domain}/${sub}`,
+        );
+      let nested = nodes.get(nestedId);
+      if (!nested) {
+        nested = {
+          id: nestedId,
+          kind: "system",
+          label: humanizeIdentifierLabel(sub),
+          technology: "semantic",
+          parentId: group.id,
+          metadata: {
+            projection: "semantic",
+            systemKey: nestedKey,
+            routeGroup: true,
+            routeGroupNested: true,
+            routeDomain: domain,
+            routeSubresource: sub,
+            collapsedInOverview: true,
+          },
+          evidence: [
+            {
+              ...seed,
+              detail: seed.detail ?? `Route subresource ${domain}/${sub}`,
+            },
+          ],
+        };
+        nodes.set(nested.id, nested);
+        const contains = edgeFrom("contains", group.id, nested.id, seed);
+        edges.set(contains.id, contains);
+      } else {
+        nested.label = humanizeIdentifierLabel(sub);
+        nested.parentId = group.id;
+        nested.metadata = {
+          ...nested.metadata,
+          projection: "semantic",
+          systemKey: nestedKey,
+          routeGroup: true,
+          routeGroupNested: true,
+          routeDomain: domain,
+          routeSubresource: sub,
+          collapsedInOverview: true,
+        };
+        nested.evidence = dedupeEvidence([...nested.evidence, ...evidence]);
+        nodes.set(nested.id, nested);
+      }
+
+      for (const route of members) {
+        attachToSystem(
+          route.id,
+          nested.id,
+          route.evidence[0] ?? projectionEvidence("."),
+        );
+        const updated = nodes.get(route.id);
+        if (!updated || updated.parentId !== nested.id) continue;
+        updated.metadata = {
+          ...updated.metadata,
+          routeGroupMember: true,
+          routeGroup: nestedKey,
+          routeSubresource: sub,
+          projectedSystem: nestedKey,
+        };
+        nodes.set(updated.id, updated);
+      }
+      nested.evidence = dedupeEvidence(nested.evidence);
+      nodes.set(nested.id, nested);
+    }
+  }
+}
 
 /**
  * HTTP route labels for the North star non-coder.
@@ -4209,10 +4384,17 @@ export function projectSemanticArchitecture(
     }
   }
 
-  // Heart / Express Intermediate calm: domain route groups + naked-route cap
-  // so API focus is Users/Articles hubs (≤8 leftover samples when grouped),
-  // not a route phonebook; modules/functions wait for Advanced.
+  // Domain groups + leftover cap so API Intermediate is Users/Articles, not
+  // a route phonebook. Only typed endpoints participate.
   projectApiRouteDomainGroups(systems, nodes, edges, attachToSystem);
+  projectApiRouteSubresourceGroups(nodes, edges, attachToSystem);
+
+  // >10 same-kind siblings become a projection hub, after prefix groups.
+  projectKindClusters({
+    nodes,
+    edges,
+    attach: attachToSystem,
+  });
 
   // Scholar / FE-only honesty: when pages exist but no static API/Data/Jobs
   // surface survived quieting, mark the product UI-only (never invent backend).
