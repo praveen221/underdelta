@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
+import { compileRepository } from "../dist/compile.js";
 import { edgeFrom } from "../dist/graph.js";
 import {
   httpRouteSubresourceKey,
@@ -363,7 +367,17 @@ test("HTTP route routes-to handler lifts writes table", () => {
   const data = node("data", "system", "Data access", {
     metadata: { projection: "semantic", systemKey: "data" },
   });
-  const route = node("route", "route", "POST /notes", { parentId: api.id });
+  const route = node("route", "route", "POST /notes", {
+    parentId: api.id,
+    semantics: [{
+      kind: "endpoint",
+      protocol: "http",
+      method: "POST",
+      path: "/notes",
+      provider: "express",
+      declaration: "code",
+    }],
+  });
   const handler = node("handler", "function", "createNote", { parentId: api.id });
   const note = node("note", "table", "Note", { parentId: data.id });
   const nodes = new Map(
@@ -396,6 +410,14 @@ test("controller call outside the route span does not bind the operation", () =>
   });
   const route = node("route", "route", "POST /articles", {
     parentId: api.id,
+    semantics: [{
+      kind: "endpoint",
+      protocol: "http",
+      method: "POST",
+      path: "/articles",
+      provider: "express",
+      declaration: "code",
+    }],
     evidence: [rangedEvidence("article.controller.ts", 71, 78)],
   });
   const other = node("other", "function", "addComment", { parentId: api.id });
@@ -422,6 +444,100 @@ test("controller call outside the route span does not bind the operation", () =>
     false,
     "out-of-range controller call must not invent POST /articles → Comment",
   );
+});
+
+test("route without a typed endpoint facet does not lift writes table", () => {
+  const api = node("api", "api", "HTTP API", {
+    metadata: { projection: "semantic", systemKey: "api" },
+  });
+  const data = node("data", "system", "Data access", {
+    metadata: { projection: "semantic", systemKey: "data" },
+  });
+  const route = node("route", "route", "POST /articles", { parentId: api.id });
+  const handler = node("handler", "function", "createArticle", {
+    parentId: api.id,
+  });
+  const article = node("article", "table", "Article", { parentId: data.id });
+  const nodes = new Map(
+    [api, data, route, handler, article].map((item) => [item.id, item]),
+  );
+  const write = edgeFrom("writes", handler.id, article.id, evidence);
+  const bind = edgeFrom("routes-to", route.id, handler.id, evidence);
+  const edges = new Map([[write.id, write], [bind.id, bind]]);
+  const systems = new Map([["api", api], ["data", data]]);
+
+  liftDataAccessStoryEdges(nodes, edges, systems);
+
+  assert.equal(
+    [...edges.values()].some(
+      (edge) =>
+        edge.kind === "writes" &&
+        edge.source === route.id &&
+        edge.target === article.id,
+    ),
+    false,
+    "raw route nodes without an endpoint facet must not claim writes Article",
+  );
+});
+
+test("Fastify compile keeps unsupported-http-framework and does not lift POST /articles", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-fastify-"));
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(
+      path.join(root, "package.json"),
+      JSON.stringify({
+        name: "fastify-articles",
+        dependencies: { fastify: "5.0.0" },
+      }),
+      "utf8",
+    );
+    await writeFile(
+      path.join(root, "src", "app.ts"),
+      [
+        'import Fastify from "fastify";',
+        "const app = Fastify();",
+        "export function createArticle() {",
+        "  return prisma.article.create({});",
+        "}",
+        'app.post("/articles", createArticle);',
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const graph = await compileRepository(root);
+    assert.ok(
+      graph.diagnostics.some(
+        (diagnostic) => diagnostic.code === "unsupported-http-framework",
+      ),
+      "Fastify must still warn unsupported-http-framework",
+    );
+    assert.equal(
+      graph.nodes.some((item) =>
+        item.semantics?.some((facet) => facet.kind === "endpoint"),
+      ),
+      false,
+      "Fastify must not receive typed endpoint facets",
+    );
+    const route = graph.nodes.find(
+      (item) => item.kind === "route" && item.label === "POST /articles",
+    );
+    assert.ok(route, "extractor still records the raw Fastify route");
+    assert.equal(
+      graph.edges.some(
+        (edge) =>
+          edge.source === route.id &&
+          (edge.kind === "writes" ||
+            edge.kind === "reads" ||
+            edge.kind === "queries") &&
+          edge.metadata?.operationStory === true,
+      ),
+      false,
+      "Fastify must not get POST /articles → writes article",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("scheduled-work projection creates calm labels and preserves the handler chain", () => {
@@ -936,5 +1052,4 @@ test("cluster walk ancestors seed API → Articles under Comments", () => {
   assert.deepEqual(clusterWalkAncestors(articles.id, byId), [api.id]);
   assert.deepEqual(clusterWalkAncestors(api.id, byId), []);
 });
-
 

@@ -11,6 +11,7 @@ import {
   isProductAcronym,
   operationStoryLabel,
 } from "./labels.js";
+import { endpointFacet } from "./http.js";
 import { scheduledWorkSourcesForHandler } from "./scheduledWork.js";
 
 type AttachToSystem = (
@@ -572,8 +573,12 @@ export function liftDataAccessStoryEdges(
 
   // HTTP operations: route → table so Intermediate can read
   // `POST /articles → writes Article` instead of a nameless API→table line.
+  // Only typed endpoint facets count — Fastify (and other unsupported
+  // frameworks) still extract raw `route` nodes but must not receive a
+  // confident product story from syntax we do not normalize.
   for (const route of nodes.values()) {
     if (route.kind !== "route") continue;
+    if (!endpointFacet(route)) continue;
     const bound = new Map<string, ArchitectureNode>();
     for (const edge of edges.values()) {
       if (edge.kind === "routes-to" && edge.source === route.id) {
