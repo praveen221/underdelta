@@ -19,7 +19,9 @@ let server;
 let viewerUrl;
 let largeViewerUrl;
 let scheduledViewerUrl;
+let clusterViewerUrl;
 let scheduledRoot;
+let clusterRoot;
 
 test.beforeAll(async () => {
   const graph = await compileRepository(repoRoot);
@@ -95,6 +97,31 @@ test.beforeAll(async () => {
   const scheduledHtml = renderArchitectureHtml(
     await compileRepository(scheduledRoot),
   );
+  clusterRoot = await mkdtemp(path.join(os.tmpdir(), "underdelta-cluster-viewer-"));
+  await mkdir(path.join(clusterRoot, "src"), { recursive: true });
+  await writeFile(
+    path.join(clusterRoot, "package.json"),
+    JSON.stringify({
+      name: "cluster-viewer",
+      dependencies: { express: "latest" },
+    }),
+    "utf8",
+  );
+  await writeFile(
+    path.join(clusterRoot, "src/api.ts"),
+    [
+      'import express from "express";',
+      "const app = express();",
+      ...Array.from({ length: 12 }, (_, index) =>
+        `app.get("/r${index}", (req, res) => res.send("${index}"));`,
+      ),
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  const clusterHtml = renderArchitectureHtml(
+    await compileRepository(clusterRoot),
+  );
   server = createServer((request, response) => {
     response.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8",
@@ -105,7 +132,9 @@ test.beforeAll(async () => {
         ? largeHtml
         : request.url === "/scheduled"
           ? scheduledHtml
-          : html,
+          : request.url === "/cluster"
+            ? clusterHtml
+            : html,
     );
   });
   await new Promise((resolve, reject) => {
@@ -117,11 +146,13 @@ test.beforeAll(async () => {
   viewerUrl = `http://127.0.0.1:${address.port}/`;
   largeViewerUrl = `http://127.0.0.1:${address.port}/large`;
   scheduledViewerUrl = `http://127.0.0.1:${address.port}/scheduled`;
+  clusterViewerUrl = `http://127.0.0.1:${address.port}/cluster`;
 });
 
 test.afterAll(async () => {
   await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   if (scheduledRoot) await rm(scheduledRoot, { recursive: true, force: true });
+  if (clusterRoot) await rm(clusterRoot, { recursive: true, force: true });
 });
 
 function node(page, label) {
@@ -352,6 +383,40 @@ test("analysis distinguishes mapped capabilities from unsupported technology", a
   await expect(page.locator("#inspector")).toContainText("Deployment: 1");
   await expect(page.locator("#inspector")).toContainText("agenda detected");
   await expect(page.locator("#inspector")).toContainText("package.json:1");
+});
+
+test("kind cluster of 12 dummy routes walks Back through HTTP API", async ({ page }) => {
+  await page.goto(clusterViewerUrl);
+  await expect(page.locator("#tier")).toHaveText("View: Beginner");
+  await expect(node(page, "HTTP API")).toBeVisible();
+  await expect(page.locator('.node[data-kind="route"]')).toHaveCount(0);
+  await expect(node(page, "HTTP endpoints (12)")).toHaveCount(0);
+
+  await node(page, "HTTP API").dblclick();
+  await expect(page.locator("#tier")).toHaveText("View: Intermediate");
+  const cluster = node(page, "HTTP endpoints (12)");
+  await expect(cluster).toBeVisible();
+  await expect(cluster).toHaveAttribute("data-kind-cluster", "true");
+  await expect(page.locator('.node[data-kind="route"]')).toHaveCount(0);
+
+  await cluster.dblclick();
+  await expect(page.locator("#tier")).toHaveText("View: Intermediate");
+  await expect(page.locator('.node[data-kind="route"]')).toHaveCount(12);
+  await expect(node(page, "GET /r0")).toBeVisible();
+  await expect(page.locator("#focus-crumb")).toContainText("Overview");
+  await expect(page.locator("#focus-crumb")).toContainText("HTTP API");
+  await expect(page.locator("#focus-crumb")).toContainText("HTTP endpoints (12)");
+  await expect(page.locator("#back")).toHaveAttribute("title", /HTTP API/);
+
+  await page.locator("#back").click();
+  await expect(page.locator("#tier")).toHaveText("View: Intermediate");
+  await expect(node(page, "HTTP endpoints (12)")).toBeVisible();
+  await expect(page.locator('.node[data-kind="route"]')).toHaveCount(0);
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#tier")).toHaveText("View: Beginner");
+  await expect(node(page, "HTTP API")).toBeVisible();
+  await expect(page.locator('.node[data-kind="route"]')).toHaveCount(0);
 });
 
 test("HTTP endpoints walk from the API system to framework and handler facts", async ({ page }) => {
