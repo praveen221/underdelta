@@ -463,25 +463,60 @@ export function renderArchitectureHtml(
       if (!focusId || node.kind !== "route") return false;
       return tableFocusOperationRouteIds(focusId).allowed.has(node.id);
     }
+    const kindClusterMemberListCache = new Map();
+    const kindClusterPageCache = new Map();
     function kindClusterMembersSorted(hubId) {
-      return graph.nodes
+      const hit = kindClusterMemberListCache.get(hubId);
+      if (hit) return hit;
+      const members = graph.nodes
         .filter((node) => node.parentId === hubId && isKindClusterMember(node))
         .sort((a, b) => String(a.label).localeCompare(String(b.label)));
+      kindClusterMemberListCache.set(hubId, members);
+      return members;
+    }
+    function isPagedClusterHub(node) {
+      if (!node || !node.metadata) return false;
+      if (node.metadata.kindCluster === true) return true;
+      if (node.metadata.routeGroup === true && node.metadata.routeDomain === "_more") {
+        return true;
+      }
+      return !!(
+        node.metadata.routeGroup === true &&
+        node.metadata.routeGroupNested === true
+      );
+    }
+    function pagedClusterMembersSorted(hubId) {
+      const focused = byId.get(hubId);
+      if (isKindClusterHub(focused)) return kindClusterMembersSorted(hubId);
+      const key = "routes:" + hubId;
+      const hit = kindClusterMemberListCache.get(key);
+      if (hit) return hit;
+      const members = graph.nodes
+        .filter((node) => node.parentId === hubId && node.kind === "route")
+        .sort((a, b) => String(a.label).localeCompare(String(b.label)));
+      kindClusterMemberListCache.set(key, members);
+      return members;
     }
     function kindClusterPage(focusId) {
       if (!focusId) return null;
       const focused = byId.get(focusId);
-      if (!isKindClusterHub(focused)) return null;
-      const members = kindClusterMembersSorted(focusId);
+      if (!isPagedClusterHub(focused)) return null;
       const limit = state.clusterReveal[focusId] || KIND_CLUSTER_PAGE;
+      const cacheKey = focusId + ":" + limit;
+      const cached = kindClusterPageCache.get(cacheKey);
+      if (cached) return cached;
+      const members = pagedClusterMembersSorted(focusId);
       const shown = members.slice(0, limit);
-      return {
+      const native = focused.metadata && focused.metadata.clusterNativeKind;
+      const page = {
         members,
         shown,
         shownIds: new Set(shown.map((node) => node.id)),
         hidden: Math.max(0, members.length - shown.length),
-        kind: (focused.metadata && focused.metadata.clusterKind) || "node",
+        kind: native || (focused.metadata && focused.metadata.clusterKind) || "node",
       };
+      kindClusterPageCache.set(cacheKey, page);
+      return page;
     }
     function revealMoreClusterMembers() {
       if (!state.focus) return;
@@ -496,7 +531,7 @@ export function renderArchitectureHtml(
     // Focused kind-cluster rooms page members (first 10 + show more).
     function clusterMemberVisible(node, focusId) {
       if (isTableFocusOperationRoute(node, focusId)) return true;
-      if (isKindClusterMember(node)) {
+      if (isKindClusterMember(node) || (node.kind === "route" && isPagedClusterHub(byId.get(focusId)))) {
         if (!focusId) return false;
         if (node.id === focusId) return true;
         if (node.parentId !== focusId) return false;
@@ -542,6 +577,8 @@ export function renderArchitectureHtml(
       if (!focusId) return false;
       if (node.kind !== "table" && node.kind !== "collection") return false;
       if (node.id === focusId) return false;
+      const focused = byId.get(focusId);
+      if (!isHttpApiStoryHub(focused)) return false;
       if (!hasRouteGroupChild(focusId)) return false;
       if (visibleRouteStoriesTo(focusId, node.id)) return false;
       return true;
@@ -1005,6 +1042,14 @@ export function renderArchitectureHtml(
     function clusterRootFor(id) {
       const node = byId.get(id);
       if (!node || node.kind === "product") return null;
+      if (
+        node.metadata &&
+        (node.metadata.kindClusterMember === true || node.metadata.routeGroupMember === true) &&
+        node.parentId &&
+        byId.has(node.parentId)
+      ) {
+        return node.parentId;
+      }
       if (
         node.kind === "system" ||
         node.kind === "pipeline" ||
@@ -2653,37 +2698,50 @@ export function renderArchitectureHtml(
 
     function kindClusterHtml(node) {
       if (!isKindClusterHub(node)) return "";
+      const nestedHubs = graph.nodes
+        .filter((child) => child.parentId === node.id && isKindClusterHub(child))
+        .sort((a, b) => String(a.label).localeCompare(String(b.label)));
       const page = kindClusterPage(node.id) || {
         members: [],
         shown: [],
         hidden: 0,
         kind: "node",
       };
-      const members = page.members.length ? page.members : graph.nodes
-        .filter((child) => child.parentId === node.id && isKindClusterMember(child))
-        .sort((a, b) => String(a.label).localeCompare(String(b.label)));
-      const shown = state.focus === node.id && !isAdvancedTier()
-        ? (page.shown.length ? page.shown : members.slice(0, KIND_CLUSTER_PAGE))
-        : members.slice(0, KIND_CLUSTER_PAGE);
-      const hidden = state.focus === node.id && !isAdvancedTier()
+      const leftovers = page.members.length ? page.members : kindClusterMembersSorted(node.id);
+      const shownLeftovers = state.focus === node.id && !isAdvancedTier()
+        ? (page.shown.length ? page.shown : leftovers.slice(0, KIND_CLUSTER_PAGE))
+        : leftovers.slice(0, KIND_CLUSTER_PAGE);
+      const hiddenLeftovers = state.focus === node.id && !isAdvancedTier()
         ? page.hidden
-        : Math.max(0, members.length - shown.length);
+        : Math.max(0, leftovers.length - shownLeftovers.length);
       const count = typeof node.metadata.memberCount === "number"
         ? node.metadata.memberCount
-        : members.length;
+        : leftovers.length + nestedHubs.reduce(
+            (sum, hub) => sum + (typeof hub.metadata.memberCount === "number" ? hub.metadata.memberCount : 0),
+            0,
+          );
       const legend = kindClusterDensityCaption(node);
-      const pills = shown.map((member) =>
+      const hubPills = nestedHubs.map((hub) =>
+        '<button class="pill connection" data-id="' + hub.id + '">' +
+          escapeHtml(hub.label) +
+        "</button>",
+      ).join("");
+      const leftoverPills = shownLeftovers.map((member) =>
         '<button class="pill connection" data-id="' + member.id + '">' +
           escapeHtml(member.label) +
         "</button>",
       ).join("");
-      const extra = hidden > 0
-        ? '<p class="inspector-more">Showing ' + shown.length + " of " + count +
+      const shownCount = nestedHubs.length + shownLeftovers.length;
+      const extra = hiddenLeftovers > 0
+        ? '<p class="inspector-more">Showing ' + shownCount + " of " + count +
           ' — <button type="button" id="cluster-show-more">Show ' +
-          Math.min(KIND_CLUSTER_PAGE, hidden) + " more</button></p>"
-        : "";
+          Math.min(KIND_CLUSTER_PAGE, hiddenLeftovers) + " more</button></p>"
+        : (nestedHubs.length > 0
+          ? '<p class="inspector-more">' + nestedHubs.length + " groups · " +
+            leftovers.length + " leftovers of " + count + "</p>"
+          : "");
       return "<h3>Clustered members</h3><p>This hub is " + escapeHtml(legend) +
-        " — evidence still lives on the real nodes.</p>" + pills + extra;
+        " — evidence still lives on the real nodes.</p>" + hubPills + leftoverPills + extra;
     }
 
     function deployUnitHtml(node) {
@@ -3167,17 +3225,17 @@ export function renderArchitectureHtml(
     }
     function isClusterWalkFrame(node) {
       if (!node || node.kind === "product") return false;
-      if (node.kind === "api" || (node.metadata && node.metadata.systemKey === "api")) {
-        return true;
-      }
-      if (
-        node.kind === "system" &&
-        node.metadata &&
-        node.metadata.projection === "semantic"
-      ) {
-        return true;
-      }
-      return isClusterWalkHub(node);
+      if (isClusterWalkHub(node)) return true;
+      if (node.metadata && node.metadata.kindClusterMember === true) return false;
+      if (node.metadata && node.metadata.routeGroupMember === true) return false;
+      return (
+        node.kind === "system" ||
+        node.kind === "api" ||
+        node.kind === "ui" ||
+        node.kind === "page" ||
+        node.kind === "service" ||
+        node.kind === "capability"
+      );
     }
     function clusterWalkAncestors(focusId) {
       const frames = [];

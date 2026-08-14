@@ -545,6 +545,86 @@ test("route without a typed endpoint facet does not lift writes table", () => {
   );
 });
 
+test("12 Fastify routes do not become HTTP endpoint clusters or Comments groups", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-fastify-cluster-"));
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(
+      path.join(root, "package.json"),
+      JSON.stringify({
+        name: "fastify-cluster",
+        dependencies: { fastify: "5.0.0" },
+      }),
+      "utf8",
+    );
+    const lines = [
+      'import Fastify from "fastify";',
+      "const app = Fastify();",
+    ];
+    for (let index = 0; index < 12; index += 1) {
+      lines.push(`app.get("/articles/item${index}/comments", () => ${index});`);
+    }
+    lines.push('app.post("/articles/:id/favorite", () => 1);');
+    lines.push('app.delete("/articles/:id/favorite", () => 1);');
+    lines.push('app.post("/articles/:id/share", () => 1);');
+    lines.push('app.delete("/articles/:id/share", () => 1);');
+    lines.push("");
+    await writeFile(path.join(root, "src", "app.ts"), lines.join("\n"), "utf8");
+    const graph = await compileRepository(root);
+    assert.ok(
+      graph.diagnostics.some(
+        (diagnostic) => diagnostic.code === "unsupported-http-framework",
+      ),
+    );
+    assert.equal(
+      graph.nodes.some((item) =>
+        item.semantics?.some((facet) => facet.kind === "endpoint"),
+      ),
+      false,
+    );
+    assert.equal(
+      graph.nodes.some(
+        (item) =>
+          item.metadata?.kindCluster === true && item.metadata?.clusterKind === "route",
+      ),
+      false,
+      "unsupported Fastify routes must not become HTTP endpoints (N)",
+    );
+    assert.equal(
+      graph.nodes.some((item) => item.metadata?.routeGroup === true),
+      false,
+      "unsupported Fastify routes must not become Comments/Favorite groups",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("join-table siblings do not inflate a Tables hub", () => {
+  const data = node("data", "system", "Data access", {
+    metadata: { projection: "semantic", systemKey: "data" },
+  });
+  const tables = Array.from({ length: 9 }, (_, index) =>
+    node(`table-${index}`, "table", `Model${index}`, { parentId: data.id }),
+  );
+  const joins = Array.from({ length: 3 }, (_, index) =>
+    node(`join-${index}`, "table", `_Join${index}`, {
+      parentId: data.id,
+      metadata: { joinTable: true },
+    }),
+  );
+  const nodes = new Map([data, ...tables, ...joins].map((item) => [item.id, item]));
+  const edges = new Map();
+  projectKindClusters({ nodes, edges, attach: attachParent(nodes, edges) });
+  assert.equal(
+    [...nodes.values()].some(
+      (item) => item.metadata?.kindCluster === true && item.metadata?.clusterKind === "table",
+    ),
+    false,
+    "9 product tables + 3 join tables must not become Tables (12)",
+  );
+});
+
 test("Fastify compile keeps unsupported-http-framework and does not lift POST /articles", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-fastify-"));
   try {
@@ -844,11 +924,13 @@ test("mixed native kinds inside Services peel into nested hubs", () => {
   );
   for (const group of nested) {
     assert.equal(group.parentId, hub.id);
-    assert.equal(group.metadata.clusterKind, "service");
+    assert.equal(group.metadata.clusterKind, group.metadata.clusterNativeKind);
     assert.equal(group.metadata.kindCluster, true);
   }
   const leftover = units.filter((item) => nodes.get(item.id).parentId === hub.id);
   assert.equal(leftover.length, 0, "every mixed member should sit in a native hub");
+  assert.equal(hub.metadata.nestedClusterCount, 3);
+  assert.equal(hub.metadata.leftoverMemberCount, 0);
   const deploymentHub = nested.find((item) => item.metadata?.clusterNativeKind === "Deployment");
   assert.ok(deploymentHub);
   assert.equal(
@@ -895,6 +977,14 @@ test("more than 10 same-kind siblings collapse to a projection hub", () => {
     node(`route-${index}`, "route", `GET /r${index}`, {
       parentId: api.id,
       metadata: { method: "GET", path: `/r${index}` },
+      semantics: [{
+        kind: "endpoint",
+        protocol: "http",
+        method: "GET",
+        path: `/r${index}`,
+        provider: "express",
+        declaration: "code",
+      }],
     }),
   );
   const nodes = new Map([api, ...routes].map((item) => [item.id, item]));
@@ -1221,6 +1311,24 @@ test("cluster walk ancestors seed API → Articles under Comments", () => {
   assert.deepEqual(clusterWalkAncestors(comments.id, byId), [api.id, articles.id]);
   assert.deepEqual(clusterWalkAncestors(articles.id, byId), [api.id]);
   assert.deepEqual(clusterWalkAncestors(api.id, byId), []);
+});
+
+test("kind-cluster under a page walks Back to that page", () => {
+  const product = node("product", "product", "App");
+  const dashboard = node("dash", "page", "Dashboard", { parentId: product.id });
+  const hub = node("hub", "system", "Components (11)", {
+    parentId: dashboard.id,
+    metadata: {
+      projection: "semantic",
+      kindCluster: true,
+      clusterKind: "component",
+    },
+  });
+  const byId = new Map(
+    [product, dashboard, hub].map((item) => [item.id, item]),
+  );
+  assert.equal(isClusterWalkFrame(dashboard), true);
+  assert.deepEqual(clusterWalkAncestors(hub.id, byId), [dashboard.id]);
 });
 
 test("kind-cluster under Deploy walks Back to Deploy not Beginner", () => {

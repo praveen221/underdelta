@@ -7,6 +7,7 @@ import type {
   SemanticFacet,
 } from "../schema.js";
 import { dedupeEvidence, projectionEvidence } from "./common.js";
+import { endpointFacet } from "./http.js";
 import { humanizeIdentifierLabel } from "./labels.js";
 
 /**
@@ -149,6 +150,21 @@ export function isKindClusterMember(
   return node?.metadata?.kindClusterMember === true;
 }
 
+/** Viewer-hidden Intermediate siblings must not inflate kind clusters. */
+export function isHiddenFromKindCluster(
+  node: ArchitectureNode | undefined,
+): boolean {
+  if (!node) return true;
+  const meta = node.metadata ?? {};
+  return (
+    meta.intermediateOmitted === true ||
+    meta.joinTable === true ||
+    meta.exampleChrome === true ||
+    meta.leafChrome === true ||
+    meta.kustomizeChrome === true
+  );
+}
+
 /**
  * Collapse >10 same-kind children under one parent into a semantic hub.
  * Hubs are projection (`projection: semantic`) — not invented product systems.
@@ -165,9 +181,9 @@ export function projectKindClusters(args: {
     if (isKindClusterHub(node) || isKindClusterMember(node)) continue;
     if (!KIND_CLUSTERABLE.has(node.kind)) continue;
     if (node.metadata?.projection === "semantic") continue;
-    // Already hidden on Intermediate (SQL migrations, overflow routes).
-    // Clustering them builds an empty `Schemas (11)` room.
-    if (node.metadata?.intermediateOmitted === true) continue;
+    if (isHiddenFromKindCluster(node)) continue;
+    // Raw Fastify/Koa routes are extractor facts, not product endpoints.
+    if (node.kind === "route" && !endpointFacet(node)) continue;
     const bucket = childrenByParent.get(node.parentId) ?? [];
     bucket.push(node);
     childrenByParent.set(node.parentId, bucket);
@@ -341,6 +357,15 @@ function projectKindClusterNativeGroups(args: {
     for (const [nativeKind, bucket] of peelable) {
       ensureNativeKindCluster(args, hub, nativeKind, bucket);
     }
+
+    const leftoverCount = leftovers.length;
+    const nestedCount = peelable.length;
+    hub.metadata = {
+      ...hub.metadata,
+      leftoverMemberCount: leftoverCount,
+      nestedClusterCount: nestedCount,
+    };
+    args.nodes.set(hub.id, hub);
   }
 }
 
@@ -372,7 +397,7 @@ function ensureNativeKindCluster(
     systemKey: key,
     kindCluster: true,
     kindClusterNested: true,
-    clusterKind: "service" as const,
+    clusterKind: nativeKind,
     clusterNativeKind: nativeKind,
     memberCount: members.length,
     densityLegend: kindClusterNativeDensityLegend(nativeKind, members.length),

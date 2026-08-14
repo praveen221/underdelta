@@ -2515,7 +2515,8 @@ function projectApiRouteDomainGroups(
       node.kind === "route" &&
       node.parentId === api.id &&
       node.metadata?.projection !== "semantic" &&
-      !isContractSurfaceRoute(node),
+      !isContractSurfaceRoute(node) &&
+      !!endpointFacet(node),
   );
   if (routes.length < 2) return;
 
@@ -2692,7 +2693,12 @@ function projectApiRouteSubresourceGroups(
   for (const group of groups) {
     const domain = String(group.metadata?.routeDomain);
     const routes = [...nodes.values()]
-      .filter((node) => node.kind === "route" && node.parentId === group.id)
+      .filter(
+        (node) =>
+          node.kind === "route" &&
+          node.parentId === group.id &&
+          !!endpointFacet(node),
+      )
       .sort((a, b) => a.id.localeCompare(b.id));
     if (routes.length <= KIND_CLUSTER_THRESHOLD) continue;
 
@@ -4378,17 +4384,12 @@ export function projectSemanticArchitecture(
     }
   }
 
-  // Heart / Express Intermediate calm: domain route groups + naked-route cap
-  // so API focus is Users/Articles hubs (≤8 leftover samples when grouped),
-  // not a route phonebook; modules/functions wait for Advanced.
+  // Domain groups + leftover cap so API Intermediate is Users/Articles, not
+  // a route phonebook. Only typed endpoints participate.
   projectApiRouteDomainGroups(systems, nodes, edges, attachToSystem);
-  // H5: oversized domain hubs (Articles) peel comments/favorite into nested
-  // groups so the domain room is CRUD + a handful of named clusters.
   projectApiRouteSubresourceGroups(nodes, edges, attachToSystem);
 
-  // Cardinality collapse: >10 same-kind siblings become a projection hub
-  // (`HTTP endpoints (47)`), not a Beginner product system. Runs after domain
-  // groups so prefix hubs form first; leftover phonebooks still collapse.
+  // >10 same-kind siblings become a projection hub, after prefix groups.
   projectKindClusters({
     nodes,
     edges,

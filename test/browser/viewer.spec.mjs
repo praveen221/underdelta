@@ -21,6 +21,7 @@ let largeViewerUrl;
 let scheduledViewerUrl;
 let clusterViewerUrl;
 let servicesViewerUrl;
+let mixedViewerUrl;
 let scheduledRoot;
 let clusterRoot;
 let servicesRoot;
@@ -140,6 +141,151 @@ test.beforeAll(async () => {
   const servicesHtml = renderArchitectureHtml(
     await compileRepository(servicesRoot),
   );
+  const observed = {
+    file: "deploy.yaml",
+    extractor: "test",
+    certainty: "observed",
+  };
+  const mixedHtml = renderArchitectureHtml({
+    schemaVersion: "0.2",
+    project: { name: "mixed-k8s", root: "/virtual/mixed-k8s" },
+    generatedAt: new Date(0).toISOString(),
+    extractors: [],
+    adapters: [],
+    nodes: [
+      {
+        id: "product",
+        kind: "product",
+        label: "K8s",
+        metadata: {},
+        evidence: [observed],
+      },
+      {
+        id: "deploy",
+        kind: "system",
+        label: "Introduction to Kubernetes",
+        metadata: {
+          projection: "semantic",
+          systemKey: "deploy",
+          flowOrder: 1,
+        },
+        evidence: [observed],
+      },
+      {
+        id: "hub",
+        kind: "system",
+        label: "Services (12)",
+        parentId: "deploy",
+        metadata: {
+          projection: "semantic",
+          kindCluster: true,
+          clusterKind: "service",
+          memberCount: 12,
+          densityLegend: "12 services clustered",
+          nestedClusterCount: 2,
+          leftoverMemberCount: 2,
+        },
+        evidence: [observed],
+      },
+      {
+        id: "dep-hub",
+        kind: "system",
+        label: "Deployment (5)",
+        parentId: "hub",
+        metadata: {
+          projection: "semantic",
+          kindCluster: true,
+          kindClusterNested: true,
+          clusterNativeKind: "Deployment",
+          clusterKind: "Deployment",
+          memberCount: 5,
+        },
+        evidence: [observed],
+      },
+      {
+        id: "svc-hub",
+        kind: "system",
+        label: "Service (5)",
+        parentId: "hub",
+        metadata: {
+          projection: "semantic",
+          kindCluster: true,
+          kindClusterNested: true,
+          clusterNativeKind: "Service",
+          clusterKind: "Service",
+          memberCount: 5,
+        },
+        evidence: [observed],
+      },
+      {
+        id: "left-a",
+        kind: "service",
+        label: "orphan-a",
+        parentId: "hub",
+        metadata: { kindClusterMember: true },
+        evidence: [observed],
+      },
+      {
+        id: "left-b",
+        kind: "service",
+        label: "orphan-b",
+        parentId: "hub",
+        metadata: { kindClusterMember: true },
+        evidence: [observed],
+      },
+    ],
+    edges: [
+      {
+        id: "e-pd",
+        kind: "contains",
+        source: "product",
+        target: "deploy",
+        metadata: {},
+        evidence: [observed],
+      },
+      {
+        id: "e-dh",
+        kind: "contains",
+        source: "deploy",
+        target: "hub",
+        metadata: {},
+        evidence: [observed],
+      },
+      {
+        id: "e-hd",
+        kind: "contains",
+        source: "hub",
+        target: "dep-hub",
+        metadata: {},
+        evidence: [observed],
+      },
+      {
+        id: "e-hs",
+        kind: "contains",
+        source: "hub",
+        target: "svc-hub",
+        metadata: {},
+        evidence: [observed],
+      },
+      {
+        id: "e-la",
+        kind: "contains",
+        source: "hub",
+        target: "left-a",
+        metadata: {},
+        evidence: [observed],
+      },
+      {
+        id: "e-lb",
+        kind: "contains",
+        source: "hub",
+        target: "left-b",
+        metadata: {},
+        evidence: [observed],
+      },
+    ],
+    diagnostics: [],
+  });
   server = createServer((request, response) => {
     response.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8",
@@ -154,7 +300,9 @@ test.beforeAll(async () => {
             ? clusterHtml
             : request.url === "/services"
               ? servicesHtml
-              : html,
+              : request.url === "/mixed"
+                ? mixedHtml
+                : html,
     );
   });
   await new Promise((resolve, reject) => {
@@ -168,6 +316,7 @@ test.beforeAll(async () => {
   scheduledViewerUrl = `http://127.0.0.1:${address.port}/scheduled`;
   clusterViewerUrl = `http://127.0.0.1:${address.port}/cluster`;
   servicesViewerUrl = `http://127.0.0.1:${address.port}/services`;
+  mixedViewerUrl = `http://127.0.0.1:${address.port}/mixed`;
 });
 
 test.afterAll(async () => {
@@ -448,6 +597,18 @@ test("kind cluster of 12 dummy routes walks Back through HTTP API", async ({ pag
   await expect(page.locator("#tier")).toHaveText("View: Beginner");
   await expect(node(page, "HTTP API")).toBeVisible();
   await expect(page.locator('.node[data-kind="route"]')).toHaveCount(0);
+});
+
+test("mixed Services inspector lists native hubs not only leftovers", async ({ page }) => {
+  await page.goto(mixedViewerUrl);
+  await node(page, "Introduction to Kubernetes").dblclick();
+  const cluster = node(page, "Services (12)");
+  await expect(cluster).toBeVisible();
+  await cluster.click();
+  await expect(page.locator("#inspector")).toContainText("Deployment (5)");
+  await expect(page.locator("#inspector")).toContainText("Service (5)");
+  await expect(page.locator("#inspector")).toContainText("orphan-a");
+  await expect(page.locator("#inspector")).toContainText("2 groups");
 });
 
 test("kind cluster of 12 deploy services walks Back through Deploy", async ({ page }) => {

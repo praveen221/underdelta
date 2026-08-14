@@ -15,20 +15,24 @@ export function isClusterWalkHub(
 }
 
 /**
- * Rooms that belong on the crumb/Back path. HTTP API is one frame;
- * Deploy / Data / other semantic systems are too — otherwise a
- * `Services (135)` hub under Introduction to Kubernetes has no parent
- * and Back jumps to Beginner.
+ * Any walkable parent of a cluster hub — not only HTTP API / semantic
+ * systems. Components (11) under a page must Back to that page.
  */
 export function isClusterWalkFrame(
   node: ArchitectureNode | undefined,
 ): boolean {
   if (!node || node.kind === "product") return false;
-  if (node.kind === "api" || node.metadata?.systemKey === "api") return true;
-  if (node.kind === "system" && node.metadata?.projection === "semantic") {
-    return true;
-  }
-  return isClusterWalkHub(node);
+  if (isClusterWalkHub(node)) return true;
+  if (node.metadata?.kindClusterMember === true) return false;
+  if (node.metadata?.routeGroupMember === true) return false;
+  return (
+    node.kind === "system" ||
+    node.kind === "api" ||
+    node.kind === "ui" ||
+    node.kind === "page" ||
+    node.kind === "service" ||
+    node.kind === "capability"
+  );
 }
 
 /**
