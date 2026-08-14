@@ -28,6 +28,7 @@ export const KIND_CLUSTERABLE = new Set<NodeKind>([
   "component",
   "hook",
   "database",
+  "service",
 ]);
 
 const KIND_CLUSTER_TITLES: Partial<Record<NodeKind, string>> = {
@@ -43,6 +44,7 @@ const KIND_CLUSTER_TITLES: Partial<Record<NodeKind, string>> = {
   component: "Components",
   hook: "Hooks",
   database: "Databases",
+  service: "Services",
 };
 
 export function kindClusterSystemKey(

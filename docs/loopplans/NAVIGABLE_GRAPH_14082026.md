@@ -158,7 +158,7 @@ opening bet. After each dogfood, rewrite the list.
 | H5 | **Sub-prefix groups inside a domain cluster.** Oversized domain hubs (>10 routes) peel 2+ member subresources (`comments`, `favorite`) into nested groups. Singleton `feed` stays a route. | RealWorld dogfood: API is calm; Articles was a 11-verb phonebook | Prefixes are noise on non-REST apps — fall back to H1; 1-member hubs |
 | H2 | **Back stack = focus stack + cluster stack.** Entering a `routeGroup` / `kindCluster` hub seeds ancestors (API → Articles) so Find/double-click cannot land in Comments with only Overview as the exit. | Nested Comments room from H5 | Extra frames on Extractors/self-map — only seed for cluster hubs |
 | H3 | **Operation labels on story edges.** Lift route→table (`routes-to` or in-range controller `calls`) as `writes Article`; Intermediate always-on badges; hide raw `calls`/`imports`. | “What’s happening in the operation” | Labels collide / unreadable at scale — then label only on select/hover |
-| H4 | **Don’t fit-to-dump.** If visible node count > N, fit the **hubs**, not every leaf. | Zoom-out postage stamp | RealWorld Data access was 12 readable nodes, not dust — peel furniture first. Kill if a “47 more” affordance is missing after we stop shrinking |
+| H4 | **Don’t fit-to-dump.** If visible node count > N, fit the **hubs**, not every leaf. | Zoom-out postage stamp | **Cancelled:** RealWorld rooms are readable; k8s 135-service dump needed a Services hub (H1), not a smaller zoom. Reopen if a mixed room still postage-stamps after clustering |
 | H6 | **Hallway tables stay in the room they explain.** API Intermediate hides tables unless a *visible* leftover route stories to them (`GET /tags → Tag`). Grouped Article/User/Comment stay in their domain rooms. | H3 dogfood: API hallway still 4 labeled tables | Hiding them also hides GET /tags → Tag on the ungrouped leftover |
 | H7 | **Data Intermediate is tables, not API leftovers.** Focusing Data access hides HTTP API + leftover routes (`GET /tags`). Table focus still shows who writes. | H4 peel: Data room still had GET /tags + HTTP API | Table Intermediate loses writers — then keep API on table focus only |
 | H8 | **Table Intermediate shows the writing routes.** Double-click Article from Data should read `POST /articles → writes`, not only an HTTP API box. Prefer writes; fall back to reads; cap 10. | H7 dogfood: Article room is HTTP API + Article | Phonebook of every GET — then mutations-only or page |
@@ -168,6 +168,7 @@ opening bet. After each dogfood, rewrite the list.
 
 - Kind clusters are `projection: semantic` + `kindCluster: true` — not product systems.
 - Threshold is **>10** (10 siblings stay naked). Never cluster modules/functions/capabilities.
+- Deploy `service` units are kind-clusterable (`Services (N)`). kubernetes-training’s 135 workloads collapse under Introduction to Kubernetes; a single App image / Express deploy unit stays naked.
 - Skip parents that are already `routeGroup` hubs (Users / Articles). H1 is the fallback when prefixes do not form.
 - Domain groups (already on master) are what made RealWorld API Intermediate readable.
 - Nested subresource groups (`routeGroupNested`) only form when the domain hub has **>10** routes and the bucket has **≥2** members. Hide them on ancestor Intermediate (same as kind-cluster hubs).
@@ -257,12 +258,14 @@ ACTIVE
 - [x] **H9:** hide HTTP API on table Intermediate when writer routes are visible; Tag (no writers) still keeps HTTP API
 - [x] **Playwright:** 12 dummy routes → `HTTP endpoints (12)`; Back/Esc HTTP API → Beginner (`kind cluster of 12 dummy routes walks Back through HTTP API`)
 - [x] **Find User:** exact table beats same-label route group; Enter opens the User table room
+- [x] **H4 cancelled:** no fit-to-view change — k8s dump was 135 unclustered services; `service` now kind-clusters to `Services (135)`
+- [x] **Service kind clusters:** `KIND_CLUSTERABLE` includes `service`; Express Deploy (1 unit) stays naked
 
 ### In progress / next (keep ≥ 3 unchecked until LOOP COMPLETE)
 
-- [ ] **H4:** fit hubs (not every leaf) when a room is actually a dump — deferred; RealWorld still has no postage-stamp room
-- [ ] Page large clusters (first 10 + “show more”) if a hub still overflows after H8’s cap of 10
+- [ ] **H10:** page large kind-cluster drills (first 10 + “show more”) — Services (135) still dumps on double-click
 - [ ] Hover/select-only labels if always-on badges collide on a later repo
+- [ ] Keyboard: ` [` / `]` sibling clusters
 
 ### Seed backlog
 
@@ -274,7 +277,7 @@ ACTIVE
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Find “User” ranks the User table first; Enter opens writer routes). Now try cancelling H4 because dogfood still has no dump that shrinks to dust — reopen only if a later repo postage-stamps. Keep page-large-clusters as the overflow valve.
+> **Next focus:** This work is done (H4 cancelled; k8s 135 services are now `Services (135)` on the hallway). Now try H10 because dogfood felt: the hallway is calm, but double-clicking Services (135) still lays out every workload. Then hover-only labels only if badges collide.
 
 ---
 
@@ -296,6 +299,7 @@ ACTIVE
 - 2026-08-14 06:04 UTC | Hypothesis: H9 hide HTTP API on table Intermediate when writers are visible | Done: `isTableFocusApiLeftover` — hide API hub only when the focused table has writer routes; verify 75 pass | Felt (node-express-realworld): Beginner still 10s. API hallway / Data / Articles rooms unchanged. Article Intermediate is now **five mutations + Article** (6 nodes) — POST /articles → writes, no molecule box. Comment is POST/DELETE comments. User table is four writers. Tag (no writers) still shows HTTP API + GET /tags — kill-if did not fire. Self-map: no tables; CLI → … → Viewer intact. node-cron-betterstack: unchanged. Would show Article/Comment/User table rooms to a stranger. | Plan change: H9 standing rule (hide API box only when writers exist); next is Playwright Back floor | Next: Playwright cluster + Back fixture
 - 2026-08-14 06:35 UTC | Hypothesis: Playwright cluster + Back fixture | Done: 12 Express `/r0`…`/r11` compile to `HTTP endpoints (12)`; browser walk API → hub → 12 routes; crumb Overview › HTTP API › hub; Back then Esc; verify 75 + playwright 10 pass | Felt (fixture + node-express-realworld): cluster Back is obvious in the browser — no trap. RealWorld walk still a map (API hallway / Data tables / Article mutations). Self-map compiler story intact. Would show the cluster Back walk to a stranger. | Plan change: standing rule — keep the 12-route Playwright floor; next is Find User collision | Next: Find User prefers the table over the route group
 - 2026-08-14 07:05 UTC | Hypothesis: Find User prefers the table over the route group | Done: `searchMatchScore` exact table +8 vs routeGroup +1; clusterRootFor tables enter the table room; list meta says “route group”; verify 76 pass | Felt (node-express-realworld): Find “user” ranks User table (108) above User route group (101) and Users (81). Enter would open the table’s writer routes, not the GET /user hallway. Self-map Find “extractors” / “cli” still hits the product systems first. Would show Find User to a stranger. | Plan change: standing rule — exact table beats same-label route group; next cancel H4 if still no dump | Next: cancel H4 unless a room postage-stamps
+- 2026-08-14 07:35 UTC | Hypothesis: cancel H4 unless a room postage-stamps | Done: H4 **cancelled** (not a zoom bug). kubernetes-training hallway was 135 naked `service` units — added `service` to `KIND_CLUSTERABLE` → `Services (135)`; Express Deploy stays 1 naked unit; verify 77 pass | Felt (kubernetes-training): Beginner/hallway now one Services hub, not a 135-box starfield. Double-click still dumps 135 workloads (H10). RealWorld unchanged (API hallway / Data / Article mutations). Self-map: no fake Services hub; CLI → … → Viewer intact. node-cron: 1 cron + 1 job. Would show the k8s hallway to a stranger; not the Services drill yet. | Plan change: cancel H4; standing rule service kind-clusters; next H10 page cluster drills | Next: H10 page Services (135) drill
 
 ---
 

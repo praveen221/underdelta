@@ -561,7 +561,31 @@ function attachParent(nodes, edges) {
 test("kind cluster label names HTTP endpoints with the member count", () => {
   assert.equal(kindClusterLabel("route", 47), "HTTP endpoints (47)");
   assert.equal(kindClusterLabel("table", 15), "Tables (15)");
+  assert.equal(kindClusterLabel("service", 135), "Services (135)");
   assert.equal(KIND_CLUSTER_THRESHOLD, 10);
+});
+
+test("more than 10 deploy services collapse to a Services hub", () => {
+  const deploy = node("deploy", "system", "Deploy", {
+    metadata: { projection: "semantic", systemKey: "deploy" },
+  });
+  const services = Array.from({ length: 11 }, (_, index) =>
+    node(`svc-${index}`, "service", `Workload ${index}`, {
+      parentId: deploy.id,
+    }),
+  );
+  const nodes = new Map([deploy, ...services].map((item) => [item.id, item]));
+  const edges = new Map();
+  projectKindClusters({ nodes, edges, attach: attachParent(nodes, edges) });
+
+  const hub = [...nodes.values()].find((item) => item.metadata?.kindCluster === true);
+  assert.ok(hub, "expected a Services kind-cluster hub");
+  assert.equal(hub.label, "Services (11)");
+  assert.equal(hub.metadata.clusterKind, "service");
+  assert.equal(hub.parentId, deploy.id);
+  for (const item of services) {
+    assert.equal(nodes.get(item.id).parentId, hub.id);
+  }
 });
 
 test("more than 10 same-kind siblings collapse to a projection hub", () => {
