@@ -19,6 +19,10 @@ type AttachToSystem = (
   evidence: Evidence,
 ) => void;
 
+export function isSqlMigrationSchema(node: ArchitectureNode): boolean {
+  return node.kind === "schema" && node.metadata?.role === "migration";
+}
+
 export function createDataAccessSystem(evidence: Evidence): ArchitectureNode {
   return {
     id: stableId("system", "data"),
@@ -754,16 +758,27 @@ export function projectDataArchitecture(args: {
     );
     if (hasTables) {
       for (const node of nodes.values()) {
-        if (
-          (node.kind === "database" || node.kind === "schema") &&
-          node.parentId === dataSystem.id
-        ) {
+        if (node.parentId !== dataSystem.id) continue;
+        if (node.kind === "database") {
           node.metadata = {
             ...node.metadata,
             collapsedInOverview: true,
           };
           nodes.set(node.id, node);
+          continue;
         }
+        if (!isSqlMigrationSchema(node) && node.kind !== "schema") continue;
+        node.metadata = {
+          ...node.metadata,
+          collapsedInOverview: true,
+          ...(isSqlMigrationSchema(node)
+            ? {
+                intermediateOmitted: true,
+                intermediateOmitReason: "migration-lineage",
+              }
+            : {}),
+        };
+        nodes.set(node.id, node);
       }
     }
   }
@@ -872,16 +887,27 @@ export function projectDataArchitecture(args: {
     );
     if (hasCollections) {
       for (const node of nodes.values()) {
-        if (
-          (node.kind === "database" || node.kind === "schema") &&
-          node.parentId === dataSystem.id
-        ) {
+        if (node.parentId !== dataSystem.id) continue;
+        if (node.kind === "database") {
           node.metadata = {
             ...node.metadata,
             collapsedInOverview: true,
           };
           nodes.set(node.id, node);
+          continue;
         }
+        if (!isSqlMigrationSchema(node) && node.kind !== "schema") continue;
+        node.metadata = {
+          ...node.metadata,
+          collapsedInOverview: true,
+          ...(isSqlMigrationSchema(node)
+            ? {
+                intermediateOmitted: true,
+                intermediateOmitReason: "migration-lineage",
+              }
+            : {}),
+        };
+        nodes.set(node.id, node);
       }
     }
 

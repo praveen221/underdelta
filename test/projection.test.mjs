@@ -17,6 +17,7 @@ import {
   liftFePageStoryEdges,
 } from "../dist/projection/feStories.js";
 import {
+  isSqlMigrationSchema,
   liftDataAccessStoryEdges,
   projectDataArchitecture,
 } from "../dist/projection/data.js";
@@ -202,6 +203,50 @@ test("data projection unifies resources and lifts explicit query bindings", () =
   );
   assert.equal(apiToNote.label, "queries Note");
   assert.equal(apiToNote.metadata.operationStory, true);
+});
+
+test("SQL migration schemas omit from Intermediate when tables exist", () => {
+  const data = node("data-system", "system", "Data access", {
+    metadata: { projection: "semantic", systemKey: "data" },
+  });
+  const table = node("article", "table", "Article", {
+    technology: "prisma",
+    semantics: [{
+      kind: "resource",
+      resourceKind: "table",
+      provider: "prisma",
+    }],
+  });
+  const migration = node("mig", "schema", "prisma/migrations/1.sql", {
+    technology: "sql",
+    metadata: { role: "migration" },
+  });
+  const database = node("db", "database", "Prisma database", {
+    technology: "prisma",
+  });
+  const nodes = new Map(
+    [data, table, migration, database].map((item) => [item.id, item]),
+  );
+  const edges = new Map();
+  const systems = new Map([["data", data]]);
+
+  projectDataArchitecture({
+    nodes,
+    edges,
+    systems,
+    attachToSystem(id, parentId) {
+      nodes.get(id).parentId = parentId;
+    },
+  });
+
+  assert.equal(isSqlMigrationSchema(nodes.get(migration.id)), true);
+  assert.equal(nodes.get(migration.id).metadata.intermediateOmitted, true);
+  assert.equal(
+    nodes.get(migration.id).metadata.intermediateOmitReason,
+    "migration-lineage",
+  );
+  assert.equal(nodes.get(database.id).metadata.collapsedInOverview, true);
+  assert.equal(nodes.get(database.id).metadata.intermediateOmitted, undefined);
 });
 
 test("operation story labels say writes Article not createArticle", () => {

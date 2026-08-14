@@ -442,6 +442,16 @@ export function renderArchitectureHtml(
       if (visibleRouteStoriesTo(focusId, node.id)) return false;
       return true;
     }
+    // SQL migration files are lineage, not Data Intermediate furniture.
+    // Advanced-in-focus can still open them. Tables keep migrates evidence.
+    function isMigrationSchemaLeaf(node) {
+      return !!(
+        node.kind === "schema" &&
+        node.metadata &&
+        (node.metadata.role === "migration" ||
+          node.metadata.intermediateOmitReason === "migration-lineage")
+      );
+    }
     function laneNameFor(node) {
       if (isDetectionSurface(node)) return "Detects";
       if (isMongoAggregateHub(node)) return "Data & automation";
@@ -1134,6 +1144,7 @@ export function renderArchitectureHtml(
         }
         if (!clusterMemberVisible(node, rootId)) return false;
         if (isHallwayTable(node, rootId)) return false;
+        if (isMigrationSchemaLeaf(node) && node.id !== rootId) return false;
         const isOverviewHub = node.metadata && node.metadata.overviewHub;
         if (advancedKinds.has(node.kind) && !isOverviewHub) return false;
         return true;
@@ -1358,6 +1369,14 @@ export function renderArchitectureHtml(
         // (API Intermediate shows groups, not the route phonebook).
         if (!clusterMemberVisible(node, state.focus)) return false;
         if (state.focus && !isAdvancedTier() && isHallwayTable(node, state.focus)) {
+          return false;
+        }
+        if (
+          state.focus &&
+          !isAdvancedTier() &&
+          isMigrationSchemaLeaf(node) &&
+          node.id !== state.focus
+        ) {
           return false;
         }
         // overviewHub (auth/billing actions, Helm Chart/resources, mongo

@@ -158,7 +158,7 @@ opening bet. After each dogfood, rewrite the list.
 | H5 | **Sub-prefix groups inside a domain cluster.** Oversized domain hubs (>10 routes) peel 2+ member subresources (`comments`, `favorite`) into nested groups. Singleton `feed` stays a route. | RealWorld dogfood: API is calm; Articles was a 11-verb phonebook | Prefixes are noise on non-REST apps — fall back to H1; 1-member hubs |
 | H2 | **Back stack = focus stack + cluster stack.** Entering a `routeGroup` / `kindCluster` hub seeds ancestors (API → Articles) so Find/double-click cannot land in Comments with only Overview as the exit. | Nested Comments room from H5 | Extra frames on Extractors/self-map — only seed for cluster hubs |
 | H3 | **Operation labels on story edges.** Lift route→table (`routes-to` or in-range controller `calls`) as `writes Article`; Intermediate always-on badges; hide raw `calls`/`imports`. | “What’s happening in the operation” | Labels collide / unreadable at scale — then label only on select/hover |
-| H4 | **Don’t fit-to-dump.** If visible node count > N, fit the **hubs**, not every leaf. | Zoom-out postage stamp | People miss that more nodes exist — need a “47 more” affordance |
+| H4 | **Don’t fit-to-dump.** If visible node count > N, fit the **hubs**, not every leaf. | Zoom-out postage stamp | RealWorld Data access was 12 readable nodes, not dust — peel furniture first. Kill if a “47 more” affordance is missing after we stop shrinking |
 | H6 | **Hallway tables stay in the room they explain.** API Intermediate hides tables unless a *visible* leftover route stories to them (`GET /tags → Tag`). Grouped Article/User/Comment stay in their domain rooms. | H3 dogfood: API hallway still 4 labeled tables | Hiding them also hides GET /tags → Tag on the ungrouped leftover |
 
 **Standing rules (from tick 1 dogfood):**
@@ -173,6 +173,7 @@ opening bet. After each dogfood, rewrite the list.
 - Intermediate always-on badges for reads/writes/queries and labeled uses/renders/triggers. Route→table badge prefers `writes` over `writes · reads`. Beginner stays unlabeled except narrative/relation. `calls`/`imports` stay off Intermediate.
 - Neighborhood seeds skip hidden cluster members so Comments routes cannot park a stray Comment table in the Articles room.
 - API Intermediate hides tables/collections when the focus has `routeGroup` children and no visible leftover route stories to that table. Do **not** hide `GET /tags → Tag`. Do not apply this in the Data access room or on Advanced.
+- SQL migration `schema` nodes (`role: migration`) omit from Intermediate when tables already tell the data story (`intermediateOmitReason: migration-lineage`). Keep them on Advanced; table `migrates` evidence stays. Do not hide the Prisma/database hub.
 
 ---
 
@@ -242,12 +243,13 @@ ACTIVE
 - [x] **H2:** cluster enter seeds `clusterWalkAncestors`; crumb Overview › HTTP API › Articles › Comments; Back/Esc hint names the parent; Extractors walk unchanged
 - [x] **H3:** route→table operation lifts + Intermediate always-on badges (`POST /articles → writes Article`); API→table labels are `writes Article` not `createArticle`
 - [x] **H6:** API Intermediate hides grouped hallway tables; `GET /tags → Tag` stays; Articles/Users rooms still own their tables
+- [x] **Data access migrations:** SQL migration schemas omit from Intermediate; 4 RealWorld `migration.sql` files left the Data room
 
 ### In progress / next (keep ≥ 3 unchecked until LOOP COMPLETE)
 
-- [ ] **H4:** stop fit-to-view from shrinking a dump into dust (Data access still 4 tables + 4 migrations)
+- [ ] **H4:** fit hubs (not every leaf) when a room is actually a dump — deferred; RealWorld Data access was furniture, not postage stamps
 - [ ] Playwright: cluster + Back path on a fixture with 12 dummy routes (verify floors cover ancestors; browser still open)
-- [ ] Data access Intermediate still dumps 4 SQL migration schema nodes as furniture
+- [ ] **H7:** Data access Intermediate still pulls GET /tags + HTTP API as story neighbors beside the four tables
 
 ### Seed backlog
 
@@ -259,7 +261,7 @@ ACTIVE
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (H6: API hallway is groups + GET / + GET /tags → Tag; Article/User/Comment left the hallway). Now try H4 because dogfood felt: API is showable, but Data access Intermediate still packs 4 tables + 4 migration schemas and may shrink to dust. If it does not feel like postage stamps, peel the migrations instead.
+> **Next focus:** This work is done (H4 falsified for RealWorld Data access — 12 nodes were readable; peeled 4 migration schemas instead). Now try H7 because dogfood felt: Data access is now 4 tables + Prisma database, but GET /tags and HTTP API still sit in that room as leftover story neighbors. Then H4 only if a later room actually shrinks to dust.
 
 ---
 
@@ -275,6 +277,7 @@ ACTIVE
 - 2026-08-13 20:24 UTC | Hypothesis: H2 cluster enter is a Back frame | Done: `clusterWalkAncestors` + viewer seeds history for routeGroup/kindCluster hubs; walk-hint and Back title name the parent frame; verify 70 pass | Felt (node-express-realworld): Comments crumb is Overview › HTTP API › Articles › Comments; Back → Articles (not a trap). Articles → HTTP API → Beginner. Find into Comments from cold open would have skipped the path before; now it cannot. Self-map Extractors is not a cluster hub — ancestors empty, existing Esc Advanced→Intermediate→Beginner walk unchanged. Beginner still 10s; API still clusters; edges still unlabeled (H3). Would show the Comments crumb to a stranger. | Plan change: standing rule — only rewrite history for cluster hubs; next is H3 operation labels (the remaining “just lines” feel) | Next: H3 operation labels on Intermediate story edges
 - 2026-08-14 03:42 UTC | Hypothesis: H3 operation labels on Intermediate story edges | Done: `operationStoryLabel` + route→table lift (`routes-to` or in-range controller `calls`); viewer always-on operation badges; neighborhood seeds skip hidden cluster members; verify 74 pass | Felt (node-express-realworld): Beginner still 10s (HTTP API → Data). Articles Intermediate is the payoff — `POST /articles → writes`, GETs `reads` Article; Comments is POST `writes` Comment; Favorite is two `writes` Article. 19/20 routes bound; GET / (no table) correctly unbound. API Intermediate clusters remain, now with `writes · reads Article` on the 4 hallway tables — labeled but still clutter beside Articles/Users. Self-map: no fake reads/writes; CLI → Compile → … → Viewer intact; Intermediate uses stay `extract`/`normalize`. node-cron-betterstack: 1 cron + 1 job, no operation spam. fastapi-realworld has routes-to but no table IO, so no new badges. Would show Articles/Comments/Users rooms to a stranger; not the API hallway yet. | Plan change: H3 standing rules (operation labels, span-bound route lifts, no route→Data, skip hidden seeds); promote H6 hallway tables over H4 | Next: H6 hide API hallway tables when domain groups exist
 - 2026-08-14 04:05 UTC | Hypothesis: H6 hallway tables stay in the room they explain | Done: `isHallwayTable` — hide table/collection on Intermediate when focus has routeGroup children and no visible leftover route stories to it; verify 74 pass | Felt (node-express-realworld): Beginner still 10s. API Intermediate is now a **map** (Articles/Profiles/User/Users + GET / + GET /tags → Tag + Data access) — Article/Comment/User left the hallway. Kill-if did **not** fire: Tag stays with GET /tags. Articles still `POST /articles → writes` Article; Comments/Users rooms unchanged. Self-map: CLI → Compile → … → Viewer intact; no fake tables/clusters. node-cron-betterstack: 1 cron + 1 job. Would show the API hallway to a stranger now. Data access Intermediate still 4 tables + 4 migration schemas. | Plan change: H6 standing rule (hide grouped hallway tables; keep leftover route→table); next is H4 on the Data access dump | Next: H4 fit-to-view / peel Data access migrations
+- 2026-08-14 04:37 UTC | Hypothesis: H4 fit-to-view / peel Data access migrations | Done: H4 falsified on RealWorld Data access (12 nodes, not dust). `isSqlMigrationSchema` + `intermediateOmitReason: migration-lineage`; viewer hides migration schemas on Intermediate; verify 75 pass | Felt (node-express-realworld): Beginner still 10s; API hallway still groups + GET /tags → Tag. Data access Intermediate is now 8 nodes (4 tables + Prisma database + HTTP API + GET /tags) — migrations gone, tables readable, not a postage stamp. Self-map: no migration schemas; CLI → … → Viewer intact. node-cron-betterstack: unchanged. Would show Data tables to a stranger; GET /tags still feels like API leftover in the Data room. | Plan change: standing rule — omit SQL migrations on Intermediate when tables exist; demote H4 to true dumps; add H7 leftover API neighbors in Data | Next: H7 hide GET /tags + HTTP API from Data access Intermediate
 
 ---
 
