@@ -163,6 +163,7 @@ opening bet. After each dogfood, rewrite the list.
 | H7 | **Data Intermediate is tables, not API leftovers.** Focusing Data access hides HTTP API + leftover routes (`GET /tags`). Table focus still shows who writes. | H4 peel: Data room still had GET /tags + HTTP API | Table Intermediate loses writers — then keep API on table focus only |
 | H8 | **Table Intermediate shows the writing routes.** Double-click Article from Data should read `POST /articles → writes`, not only an HTTP API box. Prefer writes; fall back to reads; cap 10. | H7 dogfood: Article room is HTTP API + Article | Phonebook of every GET — then mutations-only or page |
 | H9 | **Hide the HTTP API box on table Intermediate when writer routes are already visible.** POST /articles is the story; the molecule hub restates it. | H8 dogfood: Article room is 5 mutations + leftover HTTP API | Table with no writer routes loses “who writes this?” |
+| H10 | **Page large kind-cluster drills.** First 10 members + a `N more` node that reveals the next 10. Services (135) must not dump on double-click. | k8s dogfood: hallway calm, drill is a starfield | 12-route Playwright floor must still reach all 12 via one more-click |
 
 **Standing rules (from tick 1 dogfood):**
 
@@ -183,6 +184,7 @@ opening bet. After each dogfood, rewrite the list.
 - Hide the HTTP API box on table Intermediate when writer routes are already visible. Keep it when the table has no writers (Tag + GET /tags still needs a “who touches this?” neighbor).
 - Playwright locks the H1+H2 walk: 12 dummy ungrouped routes collapse to `HTTP endpoints (12)`; Back/Esc is Overview ‹ HTTP API ‹ hub. Keep that fixture if clustering or history changes.
 - Find ranks an exact-match table/collection above a same-label `routeGroup`. Enter focuses the table room (writer routes), not Data access and not the User route group. The group stays in the list as “route group”.
+- Kind-cluster Intermediate pages members: first 10, then a `N more` node / inspector button adds 10. Advanced still shows the full set. Playwright 12-route drill: 10 + `2 more` → 12.
 
 ---
 
@@ -260,10 +262,11 @@ ACTIVE
 - [x] **Find User:** exact table beats same-label route group; Enter opens the User table room
 - [x] **H4 cancelled:** no fit-to-view change — k8s dump was 135 unclustered services; `service` now kind-clusters to `Services (135)`
 - [x] **Service kind clusters:** `KIND_CLUSTERABLE` includes `service`; Express Deploy (1 unit) stays naked
+- [x] **H10:** kind-cluster drills page 10 + `N more`; Playwright 12-route walk clicks `2 more` to see all 12
 
 ### In progress / next (keep ≥ 3 unchecked until LOOP COMPLETE)
 
-- [ ] **H10:** page large kind-cluster drills (first 10 + “show more”) — Services (135) still dumps on double-click
+- [ ] Density legend on kind-cluster hubs (“135 services clustered”)
 - [ ] Hover/select-only labels if always-on badges collide on a later repo
 - [ ] Keyboard: ` [` / `]` sibling clusters
 
@@ -277,7 +280,7 @@ ACTIVE
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (H4 cancelled; k8s 135 services are now `Services (135)` on the hallway). Now try H10 because dogfood felt: the hallway is calm, but double-clicking Services (135) still lays out every workload. Then hover-only labels only if badges collide.
+> **Next focus:** This work is done (H10: Services (135) drill starts at 10 + 125 more; 12-route fixture pages 10 then 2 more). Now try a density legend on the hub because dogfood felt: paging works, but the hallway hub still looks like any other system. Then hover-only only if badges collide.
 
 ---
 
@@ -300,6 +303,7 @@ ACTIVE
 - 2026-08-14 06:35 UTC | Hypothesis: Playwright cluster + Back fixture | Done: 12 Express `/r0`…`/r11` compile to `HTTP endpoints (12)`; browser walk API → hub → 12 routes; crumb Overview › HTTP API › hub; Back then Esc; verify 75 + playwright 10 pass | Felt (fixture + node-express-realworld): cluster Back is obvious in the browser — no trap. RealWorld walk still a map (API hallway / Data tables / Article mutations). Self-map compiler story intact. Would show the cluster Back walk to a stranger. | Plan change: standing rule — keep the 12-route Playwright floor; next is Find User collision | Next: Find User prefers the table over the route group
 - 2026-08-14 07:05 UTC | Hypothesis: Find User prefers the table over the route group | Done: `searchMatchScore` exact table +8 vs routeGroup +1; clusterRootFor tables enter the table room; list meta says “route group”; verify 76 pass | Felt (node-express-realworld): Find “user” ranks User table (108) above User route group (101) and Users (81). Enter would open the table’s writer routes, not the GET /user hallway. Self-map Find “extractors” / “cli” still hits the product systems first. Would show Find User to a stranger. | Plan change: standing rule — exact table beats same-label route group; next cancel H4 if still no dump | Next: cancel H4 unless a room postage-stamps
 - 2026-08-14 07:35 UTC | Hypothesis: cancel H4 unless a room postage-stamps | Done: H4 **cancelled** (not a zoom bug). kubernetes-training hallway was 135 naked `service` units — added `service` to `KIND_CLUSTERABLE` → `Services (135)`; Express Deploy stays 1 naked unit; verify 77 pass | Felt (kubernetes-training): Beginner/hallway now one Services hub, not a 135-box starfield. Double-click still dumps 135 workloads (H10). RealWorld unchanged (API hallway / Data / Article mutations). Self-map: no fake Services hub; CLI → … → Viewer intact. node-cron: 1 cron + 1 job. Would show the k8s hallway to a stranger; not the Services drill yet. | Plan change: cancel H4; standing rule service kind-clusters; next H10 page cluster drills | Next: H10 page Services (135) drill
+- 2026-08-14 08:06 UTC | Hypothesis: H10 page large kind-cluster drills | Done: `kindClusterPage` first 10 + `N more` node / inspector Show more (+10); Advanced still full; Playwright 12-route: 10 then `2 more` → 12; verify 77 + playwright 10 pass | Felt (kubernetes-training + 12-route fixture): Services (135) drill is now a **page**, not a starfield (10 + 125 more). RealWorld unchanged (no kind-cluster drill). Self-map: CLI → … → Viewer intact. Would show the paged Services drill to a stranger; hub still looks like a generic system (density legend next). | Plan change: H10 standing rule (page 10); next density legend on the hub | Next: density legend on kind-cluster hubs
 
 ---
 

@@ -401,8 +401,12 @@ test("kind cluster of 12 dummy routes walks Back through HTTP API", async ({ pag
 
   await cluster.dblclick();
   await expect(page.locator("#tier")).toHaveText("View: Intermediate");
-  await expect(page.locator('.node[data-kind="route"]')).toHaveCount(12);
+  await expect(page.locator('.node[data-kind="route"]')).toHaveCount(10);
   await expect(node(page, "GET /r0")).toBeVisible();
+  await expect(node(page, "2 more")).toBeVisible();
+  await node(page, "2 more").click();
+  await expect(page.locator('.node[data-kind="route"]')).toHaveCount(12);
+  await expect(node(page, "2 more")).toHaveCount(0);
   await expect(page.locator("#focus-crumb")).toContainText("Overview");
   await expect(page.locator("#focus-crumb")).toContainText("HTTP API");
   await expect(page.locator("#focus-crumb")).toContainText("HTTP endpoints (12)");
