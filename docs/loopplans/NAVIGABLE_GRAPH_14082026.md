@@ -164,6 +164,8 @@ opening bet. After each dogfood, rewrite the list.
 | H8 | **Table Intermediate shows the writing routes.** Double-click Article from Data should read `POST /articles → writes`, not only an HTTP API box. Prefer writes; fall back to reads; cap 10. | H7 dogfood: Article room is HTTP API + Article | Phonebook of every GET — then mutations-only or page |
 | H9 | **Hide the HTTP API box on table Intermediate when writer routes are already visible.** POST /articles is the story; the molecule hub restates it. | H8 dogfood: Article room is 5 mutations + leftover HTTP API | Table with no writer routes loses “who writes this?” |
 | H10 | **Page large kind-cluster drills.** First 10 members + a `N more` node that reveals the next 10. Services (135) must not dump on double-click. | k8s dogfood: hallway calm, drill is a starfield | 12-route Playwright floor must still reach all 12 via one more-click |
+| H11 | **Density legend on kind-cluster hubs.** Hub subtitle is `N endpoints clustered` plus a hatch bar (not `system · semantic`). | H10 dogfood: hallway hub looked like any other system | Caption collides with the title — then bar-only |
+| H12 | **Peel huge service clusters by native deploy kind.** Services (135) drill is still a mixed phonebook (42 Service / 37 Deployment / 17 Ingress / …). Nested groups when a native kind has ≥2 members. | H11 dogfood: hub is honest; drill is still 10 random + 125 more | One-kind repos grow a fake wrapper; 12-route Playwright must stay flat |
 
 **Standing rules (from tick 1 dogfood):**
 
@@ -185,6 +187,7 @@ opening bet. After each dogfood, rewrite the list.
 - Playwright locks the H1+H2 walk: 12 dummy ungrouped routes collapse to `HTTP endpoints (12)`; Back/Esc is Overview ‹ HTTP API ‹ hub. Keep that fixture if clustering or history changes.
 - Find ranks an exact-match table/collection above a same-label `routeGroup`. Enter focuses the table room (writer routes), not Data access and not the User route group. The group stays in the list as “route group”.
 - Kind-cluster Intermediate pages members: first 10, then a `N more` node / inspector button adds 10. Advanced still shows the full set. Playwright 12-route drill: 10 + `2 more` → 12.
+- Kind-cluster hubs carry `densityLegend` (`135 services clustered` / `12 endpoints clustered`) and a hatch bar (`densityFill` 22–100%). Dashed border + caption — never `system · semantic`. Playwright asserts the 12-route hallway caption.
 
 ---
 
@@ -263,24 +266,26 @@ ACTIVE
 - [x] **H4 cancelled:** no fit-to-view change — k8s dump was 135 unclustered services; `service` now kind-clusters to `Services (135)`
 - [x] **Service kind clusters:** `KIND_CLUSTERABLE` includes `service`; Express Deploy (1 unit) stays naked
 - [x] **H10:** kind-cluster drills page 10 + `N more`; Playwright 12-route walk clicks `2 more` to see all 12
+- [x] **H11:** kind-cluster hubs show `N … clustered` + hatch bar; k8s hallway is `135 services clustered`; Playwright 12-route hallway caption locked
 
 ### In progress / next (keep ≥ 3 unchecked until LOOP COMPLETE)
 
-- [ ] Density legend on kind-cluster hubs (“135 services clustered”)
+- [ ] H12 peel Services (135) by native deploy kind (Deployment / Service / Ingress)
 - [ ] Hover/select-only labels if always-on badges collide on a later repo
 - [ ] Keyboard: ` [` / `]` sibling clusters
 
 ### Seed backlog
 
-- Page large clusters (first 10 + “show more”) if H5 grouping still overflows
 - Hover/select-only labels if always-on labels collide
 - Keyboard: ` [` / `]` sibling clusters
-- Density legend (“47 endpoints clustered”)
+- Peel huge service clusters by native k8s kind (H12)
 - Playwright: cluster + Back path on a fixture with 12 dummy routes (shipped)
+- Density legend on kind-cluster hubs (shipped H11)
+- Page large clusters (first 10 + “show more”) (shipped H10)
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (H10: Services (135) drill starts at 10 + 125 more; 12-route fixture pages 10 then 2 more). Now try a density legend on the hub because dogfood felt: paging works, but the hallway hub still looks like any other system. Then hover-only only if badges collide.
+> **Next focus:** This work is done (H11: Services hub reads `135 services clustered` with a full hatch; 12-route fixture caption locked). Now try peeling the Services drill by native deploy kind because dogfood felt: the hallway hub is honest, but double-click is still 10 mixed workloads + 125 more. Then hover-only only if badges collide.
 
 ---
 
@@ -304,6 +309,7 @@ ACTIVE
 - 2026-08-14 07:05 UTC | Hypothesis: Find User prefers the table over the route group | Done: `searchMatchScore` exact table +8 vs routeGroup +1; clusterRootFor tables enter the table room; list meta says “route group”; verify 76 pass | Felt (node-express-realworld): Find “user” ranks User table (108) above User route group (101) and Users (81). Enter would open the table’s writer routes, not the GET /user hallway. Self-map Find “extractors” / “cli” still hits the product systems first. Would show Find User to a stranger. | Plan change: standing rule — exact table beats same-label route group; next cancel H4 if still no dump | Next: cancel H4 unless a room postage-stamps
 - 2026-08-14 07:35 UTC | Hypothesis: cancel H4 unless a room postage-stamps | Done: H4 **cancelled** (not a zoom bug). kubernetes-training hallway was 135 naked `service` units — added `service` to `KIND_CLUSTERABLE` → `Services (135)`; Express Deploy stays 1 naked unit; verify 77 pass | Felt (kubernetes-training): Beginner/hallway now one Services hub, not a 135-box starfield. Double-click still dumps 135 workloads (H10). RealWorld unchanged (API hallway / Data / Article mutations). Self-map: no fake Services hub; CLI → … → Viewer intact. node-cron: 1 cron + 1 job. Would show the k8s hallway to a stranger; not the Services drill yet. | Plan change: cancel H4; standing rule service kind-clusters; next H10 page cluster drills | Next: H10 page Services (135) drill
 - 2026-08-14 08:06 UTC | Hypothesis: H10 page large kind-cluster drills | Done: `kindClusterPage` first 10 + `N more` node / inspector Show more (+10); Advanced still full; Playwright 12-route: 10 then `2 more` → 12; verify 77 + playwright 10 pass | Felt (kubernetes-training + 12-route fixture): Services (135) drill is now a **page**, not a starfield (10 + 125 more). RealWorld unchanged (no kind-cluster drill). Self-map: CLI → … → Viewer intact. Would show the paged Services drill to a stranger; hub still looks like a generic system (density legend next). | Plan change: H10 standing rule (page 10); next density legend on the hub | Next: density legend on kind-cluster hubs
+- 2026-08-14 08:37 UTC | Hypothesis: H11 density legend on kind-cluster hubs | Done: `kindClusterDensityLegend` + `densityFill` on hub metadata; viewer hatch bar + caption; Playwright 12-route hallway `12 endpoints clustered`; verify 78 + playwright 10 pass | Felt (kubernetes-training): hallway Services hub now reads **135 services clustered** (full hatch) — not a generic system. Drill still 10 mixed + 125 more (42 Service / 37 Deployment / 17 Ingress mashed). RealWorld: no kind-cluster hub (domain groups); API hallway / Data / Article mutations unchanged. Self-map: no fake hubs; CLI → Compile pipeline → … → Viewer intact. Would show the k8s hallway hub to a stranger; not the Services drill. | Plan change: H11 standing rule (caption + hatch); promote H12 native-kind peel over hover-only | Next: H12 peel Services (135) by native deploy kind
 
 ---
 

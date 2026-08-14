@@ -397,7 +397,12 @@ test("kind cluster of 12 dummy routes walks Back through HTTP API", async ({ pag
   const cluster = node(page, "HTTP endpoints (12)");
   await expect(cluster).toBeVisible();
   await expect(cluster).toHaveAttribute("data-kind-cluster", "true");
+  await expect(cluster).toHaveAttribute("data-density-legend", "12 endpoints clustered");
+  await expect(cluster.locator(".density-caption")).toHaveText("12 endpoints clustered");
+  await expect(cluster.locator(".density-fill")).toBeVisible();
   await expect(page.locator('.node[data-kind="route"]')).toHaveCount(0);
+  await cluster.click();
+  await expect(page.locator("#inspector")).toContainText("12 endpoints clustered");
 
   await cluster.dblclick();
   await expect(page.locator("#tier")).toHaveText("View: Intermediate");

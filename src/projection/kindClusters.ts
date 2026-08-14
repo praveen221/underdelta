@@ -47,6 +47,23 @@ const KIND_CLUSTER_TITLES: Partial<Record<NodeKind, string>> = {
   service: "Services",
 };
 
+/** Lowercase nouns for the on-hub density legend (`135 services clustered`). */
+const KIND_CLUSTER_NOUNS: Partial<Record<NodeKind, { one: string; many: string }>> = {
+  route: { one: "endpoint", many: "endpoints" },
+  table: { one: "table", many: "tables" },
+  collection: { one: "collection", many: "collections" },
+  schema: { one: "schema", many: "schemas" },
+  job: { one: "job", many: "jobs" },
+  cron: { one: "cron job", many: "cron jobs" },
+  queue: { one: "queue", many: "queues" },
+  topic: { one: "topic", many: "topics" },
+  page: { one: "page", many: "pages" },
+  component: { one: "component", many: "components" },
+  hook: { one: "hook", many: "hooks" },
+  database: { one: "database", many: "databases" },
+  service: { one: "service", many: "services" },
+};
+
 export function kindClusterSystemKey(
   parentId: string,
   kind: NodeKind,
@@ -57,6 +74,26 @@ export function kindClusterSystemKey(
 export function kindClusterLabel(kind: NodeKind, count: number): string {
   const title = KIND_CLUSTER_TITLES[kind] ?? `${kind}s`;
   return `${title} (${count})`;
+}
+
+export function kindClusterNoun(kind: NodeKind, count: number): string {
+  const pair = KIND_CLUSTER_NOUNS[kind];
+  if (!pair) return count === 1 ? kind : `${kind}s`;
+  return count === 1 ? pair.one : pair.many;
+}
+
+/** Hallway caption so a hub does not read as another product system. */
+export function kindClusterDensityLegend(kind: NodeKind, count: number): string {
+  return `${count} ${kindClusterNoun(kind, count)} clustered`;
+}
+
+/**
+ * Visual fill 22–100%. Just-over-threshold hubs stay a short hatch;
+ * 100+ members fill the track.
+ */
+export function kindClusterDensityFillPercent(count: number): number {
+  const over = Math.max(0, count - KIND_CLUSTER_THRESHOLD);
+  return Math.max(22, Math.min(100, Math.round(22 + (over / 90) * 78)));
 }
 
 export function isKindClusterHub(
@@ -156,6 +193,8 @@ function ensureKindCluster(
         kindCluster: true,
         clusterKind: kind,
         memberCount: members.length,
+        densityLegend: kindClusterDensityLegend(kind, members.length),
+        densityFill: kindClusterDensityFillPercent(members.length),
         collapsedInOverview: true,
       },
       evidence: [{ ...seed, detail }],
@@ -173,6 +212,8 @@ function ensureKindCluster(
       kindCluster: true,
       clusterKind: kind,
       memberCount: members.length,
+      densityLegend: kindClusterDensityLegend(kind, members.length),
+      densityFill: kindClusterDensityFillPercent(members.length),
       collapsedInOverview: true,
     };
     hub.evidence = dedupeEvidence([

@@ -57,6 +57,8 @@ export { humanizeCronExpression } from "./projection/scheduledWork.js";
 export { endpointFacet } from "./projection/http.js";
 export {
   KIND_CLUSTER_THRESHOLD,
+  kindClusterDensityFillPercent,
+  kindClusterDensityLegend,
   kindClusterLabel,
   projectKindClusters,
 } from "./projection/kindClusters.js";

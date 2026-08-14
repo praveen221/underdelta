@@ -140,8 +140,22 @@ export function renderArchitectureHtml(
     .node[data-kind="module"]::before { content: ""; position: absolute; width: 48px; height: 5px; left: -1px; top: -6px; border: 1px solid var(--kind-color); border-bottom: 0; border-radius: 5px 6px 0 0; background: var(--panel); }
     .node[data-kind="system"] { --kind-color: #7c9cff; min-height: 72px; width: 210px; border-width: 2px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--kind-color) 25%, transparent); }
     /* Kind clusters are a view, not a product system — dashed so they don't fake a hub. */
-    .node[data-kind-cluster="true"] { --kind-color: #4d8ed5; border-style: dashed; box-shadow: none; }
+    .node[data-kind-cluster="true"] { --kind-color: #4d8ed5; border-style: dashed; box-shadow: none; min-height: 86px; width: 220px; }
     .node[data-cluster-more="true"] { --kind-color: #4d8ed5; border-style: dashed; min-height: 52px; }
+    .node .density-legend { margin: 7px 0 0 34px; }
+    .node .density-track {
+      height: 7px; border-radius: 2px; overflow: hidden;
+      background: color-mix(in srgb, var(--kind-color) 18%, transparent);
+    }
+    .node .density-fill {
+      height: 100%; border-radius: 2px;
+      background: repeating-linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--kind-color) 90%, #fff) 0 2px,
+        transparent 2px 4px
+      );
+    }
+    .node .density-caption { color: var(--muted); font-size: 10px; margin-top: 3px; letter-spacing: .01em; }
     .node[data-kind="service"] { --kind-color: #8b7cf6; min-height: 68px; outline: 1px solid color-mix(in srgb, var(--kind-color) 35%, transparent); outline-offset: 3px; }
     .node[data-kind="component"], .node[data-kind="page"], .node[data-kind="ui"] { --kind-color: #63a8e8; border-radius: 5px 5px 14px 14px; border-top-width: 5px; }
     .node[data-kind="hook"] { --kind-color: #5dbfc1; width: 176px; min-height: 48px; border-style: dashed; border-radius: 999px; }
@@ -1592,6 +1606,40 @@ export function renderArchitectureHtml(
       return 190;
     }
 
+    function kindClusterDensityCaption(node) {
+      if (node && node.metadata && typeof node.metadata.densityLegend === "string" && node.metadata.densityLegend) {
+        return node.metadata.densityLegend;
+      }
+      const count = node && node.metadata && typeof node.metadata.memberCount === "number"
+        ? node.metadata.memberCount
+        : 0;
+      const kind = node && node.metadata && typeof node.metadata.clusterKind === "string" && node.metadata.clusterKind
+        ? node.metadata.clusterKind
+        : "node";
+      const noun = kind === "route"
+        ? (count === 1 ? "endpoint" : "endpoints")
+        : (count === 1 ? kind : kind + "s");
+      return count + " " + noun + " clustered";
+    }
+
+    function kindClusterDensityFillPercent(count) {
+      const over = Math.max(0, Number(count) - 10);
+      return Math.max(22, Math.min(100, Math.round(22 + (over / 90) * 78)));
+    }
+
+    function densityLegendHtml(node) {
+      const count = node && node.metadata && typeof node.metadata.memberCount === "number"
+        ? node.metadata.memberCount
+        : 0;
+      const caption = kindClusterDensityCaption(node);
+      const fill = typeof node.metadata.densityFill === "number"
+        ? Math.max(22, Math.min(100, Math.round(node.metadata.densityFill)))
+        : kindClusterDensityFillPercent(count);
+      return '<div class="density-legend" title="' + escapeHtml(caption) + '">' +
+        '<div class="density-track"><div class="density-fill" style="width:' + fill +
+        '%"></div></div><div class="density-caption">' + escapeHtml(caption) + "</div></div>";
+    }
+
     function flowOrderOf(node) {
       const value = node.metadata && node.metadata.flowOrder;
       return typeof value === "number" ? value : null;
@@ -1610,14 +1658,18 @@ export function renderArchitectureHtml(
       element.dataset.id = node.id;
       element.dataset.manualPosition = manual ? "true" : "false";
       if (node.metadata && node.metadata.role) element.dataset.role = node.metadata.role;
-      if (node.metadata && node.metadata.kindCluster === true) element.dataset.kindCluster = "true";
+      if (node.metadata && node.metadata.kindCluster === true) {
+        element.dataset.kindCluster = "true";
+        element.dataset.densityLegend = kindClusterDensityCaption(node);
+      }
       element.style.left = placedX + "px";
       element.style.top = placedY + "px";
-      const kindLine = (node.metadata && node.metadata.kindCluster === true)
-        ? ("cluster · " + (node.metadata.memberCount || "?") + " " + (node.metadata.clusterKind || "node") +
-          ((node.metadata.memberCount === 1) ? "" : "s"))
-        : (node.kind.replace("-", " ") + (node.technology ? " · " + node.technology : ""));
-      element.innerHTML = '<div class="top"><span class="glyph">' + iconForKind(node.kind) + '</span><span class="label"></span></div><div class="kind">' + kindLine + "</div>";
+      const isClusterHub = !!(node.metadata && node.metadata.kindCluster === true);
+      const kindLine = node.kind.replace("-", " ") + (node.technology ? " · " + node.technology : "");
+      const subtitle = isClusterHub
+        ? densityLegendHtml(node)
+        : '<div class="kind">' + kindLine + "</div>";
+      element.innerHTML = '<div class="top"><span class="glyph">' + iconForKind(node.kind) + '</span><span class="label"></span></div>' + subtitle;
       const label = element.querySelector(".label");
       label.textContent = node.label;
       label.title = node.label;
@@ -2361,6 +2413,7 @@ export function renderArchitectureHtml(
       "routeGroup", "routeGroupMember", "routeDomain", "routeMolecule",
       "routeGroupNested", "routeSubresource",
       "kindCluster", "kindClusterMember", "clusterKind", "memberCount",
+      "densityLegend", "densityFill",
       "shellHub", "shell", "access", "surface", "reachability", "projectedShell",
       "intermediateOmitted", "intermediateOmitReason",
       "beginnerRouteHub", "beginnerOmitted", "beginnerOmitReason", "beginnerHero",
@@ -2396,12 +2449,7 @@ export function renderArchitectureHtml(
         return "Route group · " + domain;
       }
       if (meta.kindCluster === true) {
-        const count = typeof meta.memberCount === "number" ? meta.memberCount : 0;
-        const clustered = typeof meta.clusterKind === "string" && meta.clusterKind
-          ? meta.clusterKind
-          : "node";
-        return "Clustered view — " + count + " " + clustered +
-          (count === 1 ? "" : "s") + " (projection, not a product system)";
+        return kindClusterDensityCaption(node) + " (projection, not a product system)";
       }
       if (meta.routeMolecule === true) {
         const path = typeof meta.path === "string" && meta.path ? meta.path : "";
@@ -2607,9 +2655,7 @@ export function renderArchitectureHtml(
       const count = typeof node.metadata.memberCount === "number"
         ? node.metadata.memberCount
         : members.length;
-      const clustered = typeof node.metadata.clusterKind === "string"
-        ? node.metadata.clusterKind
-        : "node";
+      const legend = kindClusterDensityCaption(node);
       const pills = shown.map((member) =>
         '<button class="pill connection" data-id="' + member.id + '">' +
           escapeHtml(member.label) +
@@ -2620,8 +2666,7 @@ export function renderArchitectureHtml(
           ' — <button type="button" id="cluster-show-more">Show ' +
           Math.min(KIND_CLUSTER_PAGE, hidden) + " more</button></p>"
         : "";
-      return "<h3>Clustered members</h3><p>This hub is a view of " +
-        count + " " + escapeHtml(clustered) + (count === 1 ? "" : "s") +
+      return "<h3>Clustered members</h3><p>This hub is " + escapeHtml(legend) +
         " — evidence still lives on the real nodes.</p>" + pills + extra;
     }
 

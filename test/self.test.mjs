@@ -122,4 +122,6 @@ test("Underdelta compiles its own structural compiler story", async () => {
   assert.match(html, /kindClusterPage/);
   assert.match(html, /revealMoreClusterMembers/);
   assert.match(html, /KIND_CLUSTER_PAGE/);
+  assert.match(html, /densityLegendHtml/);
+  assert.match(html, /kindClusterDensityCaption/);
 });

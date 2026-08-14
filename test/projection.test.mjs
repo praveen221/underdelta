@@ -34,6 +34,8 @@ import {
 } from "../dist/projection/http.js";
 import {
   KIND_CLUSTER_THRESHOLD,
+  kindClusterDensityFillPercent,
+  kindClusterDensityLegend,
   kindClusterLabel,
   projectKindClusters,
 } from "../dist/projection/kindClusters.js";
@@ -565,6 +567,16 @@ test("kind cluster label names HTTP endpoints with the member count", () => {
   assert.equal(KIND_CLUSTER_THRESHOLD, 10);
 });
 
+test("kind cluster density legend names the collapsed pile", () => {
+  assert.equal(kindClusterDensityLegend("route", 47), "47 endpoints clustered");
+  assert.equal(kindClusterDensityLegend("service", 135), "135 services clustered");
+  assert.equal(kindClusterDensityLegend("table", 1), "1 table clustered");
+  assert.equal(kindClusterDensityFillPercent(11), 23);
+  assert.equal(kindClusterDensityFillPercent(12), 24);
+  assert.equal(kindClusterDensityFillPercent(100), 100);
+  assert.equal(kindClusterDensityFillPercent(135), 100);
+});
+
 test("more than 10 deploy services collapse to a Services hub", () => {
   const deploy = node("deploy", "system", "Deploy", {
     metadata: { projection: "semantic", systemKey: "deploy" },
@@ -582,6 +594,7 @@ test("more than 10 deploy services collapse to a Services hub", () => {
   assert.ok(hub, "expected a Services kind-cluster hub");
   assert.equal(hub.label, "Services (11)");
   assert.equal(hub.metadata.clusterKind, "service");
+  assert.equal(hub.metadata.densityLegend, "11 services clustered");
   assert.equal(hub.parentId, deploy.id);
   for (const item of services) {
     assert.equal(nodes.get(item.id).parentId, hub.id);
@@ -608,6 +621,8 @@ test("more than 10 same-kind siblings collapse to a projection hub", () => {
   assert.equal(hub.metadata.projection, "semantic");
   assert.equal(hub.metadata.clusterKind, "route");
   assert.equal(hub.metadata.memberCount, 11);
+  assert.equal(hub.metadata.densityLegend, "11 endpoints clustered");
+  assert.equal(hub.metadata.densityFill, kindClusterDensityFillPercent(11));
   assert.equal(hub.parentId, api.id);
   for (const route of routes) {
     assert.equal(nodes.get(route.id).parentId, hub.id);
