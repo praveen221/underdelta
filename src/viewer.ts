@@ -393,9 +393,48 @@ export function renderArchitectureHtml(
         node.metadata.routeGroupNested === true
       );
     }
+    function routeHasStoryKindTo(route, resourceId, kind) {
+      const edges = [...(outgoing.get(route.id) || []), ...(incoming.get(route.id) || [])];
+      for (const edge of edges) {
+        if (edge.kind !== kind) continue;
+        if (edge.source === resourceId || edge.target === resourceId) return true;
+      }
+      return false;
+    }
+    function tableHasWriterRoutes(tableId) {
+      for (const node of graph.nodes) {
+        if (node.kind !== "route") continue;
+        if (routeHasStoryKindTo(node, tableId, "writes")) return true;
+      }
+      return false;
+    }
+    const TABLE_FOCUS_ROUTE_CAP = 10;
+    // Table Intermediate: mutation routes (POST /articles → writes), not every GET.
+    // Cap so an 11-verb domain cannot dump the table room.
+    function isTableFocusOperationRoute(node, focusId) {
+      if (!focusId || node.kind !== "route") return false;
+      const focused = byId.get(focusId);
+      if (!focused || (focused.kind !== "table" && focused.kind !== "collection")) {
+        return false;
+      }
+      const wantWrites = tableHasWriterRoutes(focused.id);
+      const matches = [];
+      for (const route of graph.nodes) {
+        if (route.kind !== "route") continue;
+        const ok = wantWrites
+          ? routeHasStoryKindTo(route, focused.id, "writes")
+          : routeHasStoryKindTo(route, focused.id, "reads") ||
+            routeHasStoryKindTo(route, focused.id, "queries");
+        if (ok) matches.push(route);
+      }
+      matches.sort((a, b) => String(a.label).localeCompare(String(b.label)));
+      const allowed = new Set(matches.slice(0, TABLE_FOCUS_ROUTE_CAP).map((route) => route.id));
+      return allowed.has(node.id);
+    }
     // Kind-cluster hubs, nested route groups (Comments under Articles), and
     // their members stay off Beginner / ancestor Intermediate until focused.
     function clusterMemberVisible(node, focusId) {
+      if (isTableFocusOperationRoute(node, focusId)) return true;
       if (
         isKindClusterHub(node) ||
         isKindClusterMember(node) ||

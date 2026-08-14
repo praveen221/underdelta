@@ -161,7 +161,8 @@ opening bet. After each dogfood, rewrite the list.
 | H4 | **Don’t fit-to-dump.** If visible node count > N, fit the **hubs**, not every leaf. | Zoom-out postage stamp | RealWorld Data access was 12 readable nodes, not dust — peel furniture first. Kill if a “47 more” affordance is missing after we stop shrinking |
 | H6 | **Hallway tables stay in the room they explain.** API Intermediate hides tables unless a *visible* leftover route stories to them (`GET /tags → Tag`). Grouped Article/User/Comment stay in their domain rooms. | H3 dogfood: API hallway still 4 labeled tables | Hiding them also hides GET /tags → Tag on the ungrouped leftover |
 | H7 | **Data Intermediate is tables, not API leftovers.** Focusing Data access hides HTTP API + leftover routes (`GET /tags`). Table focus still shows who writes. | H4 peel: Data room still had GET /tags + HTTP API | Table Intermediate loses writers — then keep API on table focus only |
-| H8 | **Table Intermediate shows the writing routes.** Double-click Article from Data should read `POST /articles → writes`, not only an HTTP API box. Cap so 11 Articles verbs do not dump. | H7 dogfood: Article room is HTTP API + Article | Phonebook of every GET — then mutations-only or page |
+| H8 | **Table Intermediate shows the writing routes.** Double-click Article from Data should read `POST /articles → writes`, not only an HTTP API box. Prefer writes; fall back to reads; cap 10. | H7 dogfood: Article room is HTTP API + Article | Phonebook of every GET — then mutations-only or page |
+| H9 | **Hide the HTTP API box on table Intermediate when writer routes are already visible.** POST /articles is the story; the molecule hub restates it. | H8 dogfood: Article room is 5 mutations + leftover HTTP API | Table with no writer routes loses “who writes this?” |
 
 **Standing rules (from tick 1 dogfood):**
 
@@ -177,6 +178,7 @@ opening bet. After each dogfood, rewrite the list.
 - API Intermediate hides tables/collections when the focus has `routeGroup` children and no visible leftover route stories to that table. Do **not** hide `GET /tags → Tag`. Do not apply this in the Data access room or on Advanced.
 - SQL migration `schema` nodes (`role: migration`) omit from Intermediate when tables already tell the data story (`intermediateOmitReason: migration-lineage`). Keep them on Advanced; table `migrates` evidence stays. Do not hide the Prisma/database hub.
 - Data access Intermediate hides HTTP API and leftover routes. Do **not** apply that hide when the focus is a table/collection — that room still answers “who writes this?”.
+- Table Intermediate shows routes that `writes` the focused table (cap 10). If there are no writers, show `reads`/`queries`. Grouped/nested membership does not hide those operation routes. GETs stay in the domain room.
 
 ---
 
@@ -248,10 +250,11 @@ ACTIVE
 - [x] **H6:** API Intermediate hides grouped hallway tables; `GET /tags → Tag` stays; Articles/Users rooms still own their tables
 - [x] **Data access migrations:** SQL migration schemas omit from Intermediate; 4 RealWorld `migration.sql` files left the Data room
 - [x] **H7:** Data Intermediate hides HTTP API + leftover routes; room is 4 tables + Prisma database
+- [x] **H8:** Table Intermediate shows writer routes (`POST /articles`, favorite, comment mutations); GETs stay in the domain room
 
 ### In progress / next (keep ≥ 3 unchecked until LOOP COMPLETE)
 
-- [ ] **H8:** Table Intermediate should show writing routes (`POST /articles → writes`), not only the HTTP API box
+- [ ] **H9:** hide leftover HTTP API box on table Intermediate when writer routes are already visible
 - [ ] **H4:** fit hubs (not every leaf) when a room is actually a dump — deferred; RealWorld Data access was furniture, not postage stamps
 - [ ] Playwright: cluster + Back path on a fixture with 12 dummy routes (verify floors cover ancestors; browser still open)
 
@@ -265,7 +268,7 @@ ACTIVE
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (H7: Data Intermediate is Prisma + Article/Comment/Tag/User — GET /tags and HTTP API left). Now try H8 because dogfood felt: the Data room is a map, but double-clicking Article only shows HTTP API, not `POST /articles → writes`. Cap mutations if 11 verbs dump. Then Playwright to lock Back.
+> **Next focus:** This work is done (H8: Article Intermediate is POST/PUT/DELETE /articles + favorite mutations → writes; no GET phonebook). Now try H9 because dogfood felt: the writing routes are the map, but HTTP API still sits in the table room restating the same molecule. Then Playwright to lock Back.
 
 ---
 
@@ -283,6 +286,7 @@ ACTIVE
 - 2026-08-14 04:05 UTC | Hypothesis: H6 hallway tables stay in the room they explain | Done: `isHallwayTable` — hide table/collection on Intermediate when focus has routeGroup children and no visible leftover route stories to it; verify 74 pass | Felt (node-express-realworld): Beginner still 10s. API Intermediate is now a **map** (Articles/Profiles/User/Users + GET / + GET /tags → Tag + Data access) — Article/Comment/User left the hallway. Kill-if did **not** fire: Tag stays with GET /tags. Articles still `POST /articles → writes` Article; Comments/Users rooms unchanged. Self-map: CLI → Compile → … → Viewer intact; no fake tables/clusters. node-cron-betterstack: 1 cron + 1 job. Would show the API hallway to a stranger now. Data access Intermediate still 4 tables + 4 migration schemas. | Plan change: H6 standing rule (hide grouped hallway tables; keep leftover route→table); next is H4 on the Data access dump | Next: H4 fit-to-view / peel Data access migrations
 - 2026-08-14 04:37 UTC | Hypothesis: H4 fit-to-view / peel Data access migrations | Done: H4 falsified on RealWorld Data access (12 nodes, not dust). `isSqlMigrationSchema` + `intermediateOmitReason: migration-lineage`; viewer hides migration schemas on Intermediate; verify 75 pass | Felt (node-express-realworld): Beginner still 10s; API hallway still groups + GET /tags → Tag. Data access Intermediate is now 8 nodes (4 tables + Prisma database + HTTP API + GET /tags) — migrations gone, tables readable, not a postage stamp. Self-map: no migration schemas; CLI → … → Viewer intact. node-cron-betterstack: unchanged. Would show Data tables to a stranger; GET /tags still feels like API leftover in the Data room. | Plan change: standing rule — omit SQL migrations on Intermediate when tables exist; demote H4 to true dumps; add H7 leftover API neighbors in Data | Next: H7 hide GET /tags + HTTP API from Data access Intermediate
 - 2026-08-14 05:04 UTC | Hypothesis: H7 Data Intermediate is tables not API leftovers | Done: `isDataRoomApiLeftover` hides HTTP API + routes when focus is Data access; table focus still keeps HTTP API; verify 75 pass | Felt (node-express-realworld): Beginner still 10s. API hallway unchanged (groups + GET /tags → Tag). Data Intermediate is now a **map**: Prisma database + Article/Comment/Tag/User (6 nodes). GET /tags and HTTP API left. Double-click Article still shows HTTP API (kill-if did not fire) but not the writing routes — those stay in the Articles room. Self-map: no Data access; CLI → … → Viewer intact. node-cron-betterstack: unchanged. Would show the Data room to a stranger. | Plan change: H7 standing rule (hide API leftovers only on Data hub focus); next is H8 table→writing-routes | Next: H8 table Intermediate shows POST /articles → writes
+- 2026-08-14 05:34 UTC | Hypothesis: H8 table Intermediate shows writing routes | Done: `isTableFocusOperationRoute` — prefer `writes` (cap 10), else reads/queries; grouped/nested routes become visible on table focus; verify 75 pass | Felt (node-express-realworld): Beginner still 10s; API/Data rooms unchanged. Article Intermediate is **POST /articles, PUT, DELETE, favorite mutations → writes** (7 nodes with HTTP API). No GET /articles phonebook — kill-if did not fire. Comment is POST/DELETE comments. Tag (no writers) falls back to GET /tags. Self-map: CLI → … → Viewer intact. node-cron-betterstack: unchanged. Would show the Article table room to a stranger; HTTP API box is now the leftover. | Plan change: H8 standing rule (table focus shows writer routes, cap 10); next is H9 hide API box when writers are visible | Next: H9 hide HTTP API on table Intermediate when mutations are on canvas
 
 ---
 
