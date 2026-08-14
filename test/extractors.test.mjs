@@ -44,6 +44,43 @@ test("typescript binds inline Express handlers and attributes imported calls", a
   edgeBy(graph, "calls", handler.id, service.id);
 });
 
+test("named inline route callbacks stay out of file-wide call resolution", async () => {
+  const graph = await extract(typescriptExtractor, {
+    "src/routes.ts": [
+      'router.get("/x", function handler() { return handler(); });',
+      "export function other() { return handler(); }",
+      "",
+    ].join("\n"),
+  });
+  const other = nodeBy(graph, "function", "other");
+  const inline = graph.nodes.find(
+    (node) =>
+      node.kind === "function" && node.metadata?.declaration === "inline-handler",
+  );
+  assert.ok(inline);
+  assert.equal(inline.metadata?.handlerName, "handler");
+  assert.equal(
+    graph.edges.some(
+      (edge) =>
+        edge.kind === "calls" &&
+        edge.source === other.id &&
+        edge.target === inline.id,
+    ),
+    false,
+    "unrelated handler() must not resolve to the route callback",
+  );
+  assert.equal(
+    graph.edges.some(
+      (edge) =>
+        edge.kind === "calls" &&
+        edge.source === inline.id &&
+        edge.target === inline.id,
+    ),
+    false,
+    "self-call inside the named callback must not invent a calls edge",
+  );
+});
+
 test("typescript extracts declarations, imports, calls, and HTTP routes", async () => {
   const graph = await extract(typescriptExtractor, {
     "src/helper.ts": "export function loadNotes() { return []; }\n",

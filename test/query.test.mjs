@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { compileRepository } from "../dist/compile.js";
+import { compileRepository, PIPELINE_CACHE_VERSION } from "../dist/compile.js";
 import {
+  fingerprintsMatch,
   persistArchitectureGraph,
   readCacheFingerprint,
 } from "../dist/graphCache.js";
@@ -213,6 +214,43 @@ test("query unknown reports totals and truncation instead of claiming completene
   assert.equal(full.unresolvedCalls.length, 45);
 });
 
+test("legacy fingerprints without pipelineVersion are not reusable", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-query-legacy-fp-"));
+  try {
+    const output = path.join(root, ".underdelta");
+    await mkdir(output, { recursive: true });
+    await writeFile(
+      path.join(output, "cache-fingerprint.json"),
+      `${JSON.stringify({
+        filesSignature: "x",
+        fileCount: 0,
+        extractors: {},
+        adapters: {},
+        toolVersion: "0.1.0",
+      })}\n`,
+      "utf8",
+    );
+    assert.equal(await readCacheFingerprint(output), undefined);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("pipeline cache version mismatch invalidates a fingerprint", () => {
+  const current = {
+    filesSignature: "abc",
+    fileCount: 1,
+    extractors: { typescript: "0.2.1" },
+    adapters: { "http-endpoints": "0.2.0" },
+    pipelineVersion: PIPELINE_CACHE_VERSION,
+  };
+  assert.equal(fingerprintsMatch(current, current), true);
+  assert.equal(
+    fingerprintsMatch({ ...current, pipelineVersion: "not-this" }, current),
+    false,
+  );
+});
+
 test("loadArchitectureGraph treats a cache without a fingerprint as stale", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "underdelta-query-nofp-"));
   try {
@@ -250,7 +288,12 @@ test("loadArchitectureGraph rejects a cache that no longer matches the tree", as
     const first = await compileRepository(root);
     const output = path.join(root, ".underdelta");
     await persistArchitectureGraph(output, first, root);
-    assert.ok(await readCacheFingerprint(output));
+    const fingerprint = await readCacheFingerprint(output);
+    assert.ok(fingerprint);
+    assert.equal(fingerprint.pipelineVersion, PIPELINE_CACHE_VERSION);
+    const viewer = await readFile(path.join(output, "index.html"), "utf8");
+    assert.match(viewer, /generatedAt/);
+    assert.ok(viewer.includes(first.generatedAt));
 
     const cached = await loadArchitectureGraph(root, { output: ".underdelta" });
     assert.equal(cached.source, "cache");

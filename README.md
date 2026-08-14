@@ -53,7 +53,12 @@ curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/script
 ```
 
 That caches Underdelta under `~/.cache/underdelta`, scans the current directory,
-writes `.underdelta/`, serves the map, and opens your browser.
+writes `.underdelta/`, serves the map, and opens your browser. The same
+launcher runs query commands (there is no npm package):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/scripts/scan.sh | bash -s -- query writes Article
+```
 
 ### Working inside this repo
 
@@ -83,7 +88,9 @@ node dist/cli.js query writes Article          # who writes this resource (JSON)
 node dist/cli.js query impact --files src/foo.ts
 node dist/cli.js query unknown                 # unsupported / unresolved, not guesses
 # query reuses .underdelta only when the cache fingerprint still matches
-# the working tree and extractor/adapter versions; --rescan forces compile
+# the working tree, extractor/adapter versions, and pipeline version;
+# --rescan forces compile
+# Agent skill: .agents/skills/underdelta (Codex discovers .agents/skills)
 ```
 
 `inspect` requires a path and scans only that path. Use it to assess a real

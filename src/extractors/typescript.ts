@@ -483,7 +483,7 @@ function symbolFacet(
 
 export const typescriptExtractor: ArchitectureExtractor = {
   id: "typescript",
-  version: "0.2.0",
+  version: "0.2.1",
   extensions,
 
   async extract(context: ExtractionContext) {
@@ -817,6 +817,8 @@ export const typescriptExtractor: ArchitectureExtractor = {
         importBindingsByFile.get(file.relative) ?? new Map<string, ImportBinding>();
       const queueBindings = new Map<string, string>();
       const inlineHandlerOwners = new Map<ts.Node, string>();
+      /** Named function-expression callbacks: owner id → local name. Not file-scoped. */
+      const namedInlineHandlers = new Map<string, string>();
 
       const resolveName = (
         name: string,
@@ -1041,12 +1043,7 @@ export const typescriptExtractor: ArchitectureExtractor = {
                     evidenceFor(file, argument),
                   ),
                 );
-                if (named) {
-                  localDeclarations.set(named, handlerId);
-                  const byName = declarationsByName.get(named) ?? [];
-                  byName.push(handlerId);
-                  declarationsByName.set(named, byName);
-                }
+                if (named) namedInlineHandlers.set(handlerId, named);
                 edges.push(
                   edgeFrom(
                     "routes-to",
@@ -1123,7 +1120,10 @@ export const typescriptExtractor: ArchitectureExtractor = {
           // Direct call: foo()
           if (ts.isIdentifier(node.expression)) {
             const name = node.expression.text;
-            if (!BUILTIN_CALLEES.has(name)) {
+            if (
+              !BUILTIN_CALLEES.has(name) &&
+              namedInlineHandlers.get(ownerId) !== name
+            ) {
               const resolved = resolveName(name);
               if (resolved.status === "resolved" && resolved.id !== ownerId) {
                 edges.push(

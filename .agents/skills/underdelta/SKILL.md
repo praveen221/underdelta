@@ -13,6 +13,9 @@ Deterministic product facts from `.underdelta/architecture.json`. Same object
 humans see in the viewer. Do not invent endpoints, jobs, or writes that the
 commands do not return.
 
+Codex loads this from `.agents/skills`. There is **no npm package**. Do not
+run `npx underdelta`.
+
 ## When to use
 
 Use these commands for:
@@ -27,32 +30,40 @@ ban search to look more efficient.
 
 ## Setup
 
-From the repository root:
+From the repository being analyzed:
 
 ```bash
-# If .underdelta/architecture.json is missing or stale:
-npx --yes underdelta scan . -o .underdelta
-# or from this source tree:
-node dist/cli.js scan . -o .underdelta
+# Cached launcher: first run clones/builds Underdelta; later runs reuse it.
+curl -fsSL https://raw.githubusercontent.com/praveen221/underdelta/master/scripts/scan.sh | bash -s -- query unknown
 ```
 
-Prefer a local build when working inside the Underdelta repo.
+Inside an Underdelta source checkout only:
+
+```bash
+node dist/cli.js query unknown -C /path/to/repo
+```
+
+To use this skill on another repo, copy or symlink `.agents/skills/underdelta`
+to that repo’s `.agents/skills/underdelta` or to `$HOME/.agents/skills/underdelta`.
 
 ## Commands (JSON by default)
 
+Pass these through the launcher above (`bash -s -- …`), or `node dist/cli.js`
+inside an Underdelta checkout:
+
 ```bash
-node dist/cli.js query writes Article -C /path/to/repo
-node dist/cli.js query impact -C /path/to/repo --files src/article.service.ts
-node dist/cli.js query unknown -C /path/to/repo
+query writes Article
+query impact --files src/article.service.ts
+query unknown
 ```
 
 `--text` prints a short human summary. `--graph path/to/architecture.json`
 trusts that file (not checked against the working tree). Cached
 `.underdelta/architecture.json` is reused only when a fingerprint still
-matches the current files plus extractor/adapter versions. `--rescan`
-forces a new compile. Every result includes `graph.source` and
-`graph.generatedAt` — repeat those when the user might think the answer
-is live.
+matches the current files, extractor/adapter versions, and pipeline
+version. `--rescan` forces a new compile. Every result includes
+`graph.source` and `graph.generatedAt` — repeat those when the user might
+think the answer is live.
 
 `query unknown --limit 0` returns the full lists. A default run may
 truncate; read `totals` and `truncated` before saying the list is
@@ -77,3 +88,4 @@ complete.
 - Dump the whole `architecture.json` into context.
 - Claim Fastify (or any `unsupported-*`) endpoints exist.
 - Treat fewer file reads as success if the answer is wrong.
+- Use `npx underdelta` or assume a published package exists.

@@ -45,7 +45,13 @@ import type { ArchitectureGraph, ArchitectureNode } from "./schema.js";
 
 const execFileAsync = promisify(execFile);
 
-export const COMPILER_TOOL_VERSION = "0.1.0";
+/**
+ * Version of the full compile pipeline, including projection, schema,
+ * reachability, and compiler assembly. Extractor/adapter versions do not
+ * cover those layers. Bump this whenever a change can alter compiled graph
+ * shape or query-cache semantics without an extractor/adapter version bump.
+ */
+export const PIPELINE_CACHE_VERSION = "2";
 
 export interface CompileOptions {
   extractors?: ArchitectureExtractor[];
@@ -86,7 +92,7 @@ export function defaultAdapters(): SemanticAdapter[] {
 export function currentPipelineVersions(): {
   extractors: Array<{ id: string; version: string }>;
   adapters: Array<{ id: string; version: string; capability: string }>;
-  toolVersion: string;
+  pipelineVersion: string;
 } {
   return {
     extractors: defaultExtractors().map((extractor) => ({
@@ -98,7 +104,7 @@ export function currentPipelineVersions(): {
       version: adapter.version,
       capability: adapter.capability,
     })),
-    toolVersion: COMPILER_TOOL_VERSION,
+    pipelineVersion: PIPELINE_CACHE_VERSION,
   };
 }
 

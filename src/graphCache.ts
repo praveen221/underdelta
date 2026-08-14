@@ -8,16 +8,18 @@ import {
   architectureGraphSchema,
   type ArchitectureGraph,
 } from "./schema.js";
+import { renderArchitectureHtml } from "./viewer.js";
 
 export const CACHE_FINGERPRINT_FILE = "cache-fingerprint.json";
 export const ARCHITECTURE_FILE = "architecture.json";
+export const VIEWER_FILE = "index.html";
 
 export interface CacheFingerprint {
   filesSignature: string;
   fileCount: number;
   extractors: Record<string, string>;
   adapters: Record<string, string>;
-  toolVersion: string;
+  pipelineVersion: string;
 }
 
 function versionMap(
@@ -58,7 +60,7 @@ export async function computeCacheFingerprint(
     fileCount: files.length,
     extractors: versionMap(pipeline.extractors),
     adapters: versionMap(pipeline.adapters),
-    toolVersion: pipeline.toolVersion,
+    pipelineVersion: pipeline.pipelineVersion,
   };
 }
 
@@ -69,7 +71,7 @@ export function fingerprintsMatch(
   return (
     stored.filesSignature === current.filesSignature &&
     stored.fileCount === current.fileCount &&
-    stored.toolVersion === current.toolVersion &&
+    stored.pipelineVersion === current.pipelineVersion &&
     sameVersionMap(stored.extractors, current.extractors) &&
     sameVersionMap(stored.adapters, current.adapters)
   );
@@ -93,7 +95,7 @@ export async function readCacheFingerprint(
     if (
       typeof raw.filesSignature !== "string" ||
       typeof raw.fileCount !== "number" ||
-      typeof raw.toolVersion !== "string" ||
+      typeof raw.pipelineVersion !== "string" ||
       !raw.extractors ||
       !raw.adapters
     ) {
@@ -126,6 +128,11 @@ export async function persistArchitectureGraph(
     writeFile(
       architecturePath(outputDir),
       `${JSON.stringify(graph, null, 2)}\n`,
+      "utf8",
+    ),
+    writeFile(
+      path.join(outputDir, VIEWER_FILE),
+      renderArchitectureHtml(graph),
       "utf8",
     ),
     writeFile(
