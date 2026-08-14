@@ -166,6 +166,10 @@ opening bet. After each dogfood, rewrite the list.
 | H10 | **Page large kind-cluster drills.** First 10 members + a `N more` node that reveals the next 10. Services (135) must not dump on double-click. | k8s dogfood: hallway calm, drill is a starfield | 12-route Playwright floor must still reach all 12 via one more-click |
 | H11 | **Density legend on kind-cluster hubs.** Hub subtitle is `N endpoints clustered` plus a hatch bar (not `system · semantic`). | H10 dogfood: hallway hub looked like any other system | Caption collides with the title — then bar-only |
 | H12 | **Peel huge service clusters by native deploy kind.** Services (135) drill is still a mixed phonebook (42 Service / 37 Deployment / 17 Ingress / …). Nested groups when a native kind has ≥2 members. | H11 dogfood: hub is honest; drill is still 10 random + 125 more | One-kind repos grow a fake wrapper; 12-route Playwright must stay flat |
+| R1 | **[P1] Gate route→resource lifts on typed `endpoint` facets.** Fastify (unsupported-http-framework, 0 endpoint facets) must not get `POST /articles → writes article`. | Human review 2026-08-14: `src/projection/data.ts` ~575 loops raw `route` nodes | Express RealWorld loses operation badges — then keep facet gate and fix adapter coverage, do not reopen raw routes |
+| R2 | **[P2] Skip `intermediateOmitted` nodes when building kind clusters.** 11 SQL migrations must not become empty `Schemas (11)` under Data. | Human review: `kindClusters.ts` ~122 includes omitted members | RealWorld Data room grows a fake empty hub — then omit clustering for that parent |
+| R3 | **[P2] Generic clusters keep their walkable parent on Back.** `Services (135)` under Introduction to Kubernetes must crumb/Back to that room, not jump to Beginner. HTTP API is not the only non-cluster frame. | Human review: `clusterWalk.ts` ~17 only special-cases HTTP API | Extractors / CLI crumbs regress — then add Deploy→Services Playwright, keep existing 12-route HTTP floor |
+| R4 | **[P2] Compute table-focus allowed route IDs once per focus/render.** `isTableFocusOperationRoute` is quadratic in endpoint count (full route scan per node). | Human review: `viewer.ts` ~430 | Writer-route rooms go empty — then keep the set, fix the filter |
 
 **Standing rules (from tick 1 dogfood):**
 
@@ -216,6 +220,7 @@ opening bet. After each dogfood, rewrite the list.
    returns one frame at a time to Beginner. Verify floors + dogfood note.
 4. **Operation-edge gate.** Intermediate story edges show a human operation
    hint (method/path or reads/writes/publishes), not only kind=`calls`.
+   **Unsupported HTTP frameworks (Fastify) must not receive those lifts.**
 5. **Verify green.** `npm run build` + `npm run verify`.
 6. **Self-map standing.** Beginner compiler story intact (no FE/API dump).
 7. **Plan is current.** This file’s hypotheses and Next focus match the last
@@ -270,7 +275,11 @@ ACTIVE
 
 ### In progress / next (keep ≥ 3 unchecked until LOOP COMPLETE)
 
-- [ ] H12 peel Services (135) by native deploy kind (Deployment / Service / Ingress)
+- [ ] **R1 [P1]:** gate route→resource lifting on `endpoint` facet; negative Fastify compile test
+- [ ] **R2 [P2]:** skip `intermediateOmitted` nodes in kind-cluster builders; projection test with >10 migration schemas
+- [ ] **R3 [P2]:** `clusterWalkAncestors` includes walkable parent of generic clusters; Deploy → Services browser test
+- [ ] **R4 [P2]:** precompute table-focus operation-route ids once per focus/render
+- [ ] H12 peel Services (135) by native deploy kind (Deployment / Service / Ingress) — **after R1–R4**
 - [ ] Hover/select-only labels if always-on badges collide on a later repo
 - [ ] Keyboard: ` [` / `]` sibling clusters
 
@@ -278,14 +287,50 @@ ACTIVE
 
 - Hover/select-only labels if always-on labels collide
 - Keyboard: ` [` / `]` sibling clusters
-- Peel huge service clusters by native k8s kind (H12)
+- Peel huge service clusters by native k8s kind (H12) — blocked until R1–R4
 - Playwright: cluster + Back path on a fixture with 12 dummy routes (shipped)
 - Density legend on kind-cluster hubs (shipped H11)
 - Page large clusters (first 10 + “show more”) (shipped H10)
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (H11: Services hub reads `135 services clustered` with a full hatch; 12-route fixture caption locked). Now try peeling the Services drill by native deploy kind because dogfood felt: the hallway hub is honest, but double-click is still 10 mixed workloads + 125 more. Then hover-only only if badges collide.
+> **Next focus:** Human review interrupt (2026-08-14) — **do not start H12 this tick.** First R1 [P1]: `src/projection/data.ts` (~575) must lift route→resource only when the route has a typed `endpoint` facet. Fastify already emits `unsupported-http-framework` and has zero endpoint facets but still gets `POST /articles → writes article`. Add a negative Fastify compile test. Then R2 empty `Schemas (11)` clusters, R3 k8s Services Back parent, R4 quadratic table-focus scan. Dogfood Express RealWorld + kubernetes-training + a Fastify fixture. Then rewrite this Next focus.
+
+---
+
+## Human review interrupt (2026-08-14)
+
+Another agent reviewed the branch **between ticks**. These compose-policy bugs beat H12.
+
+Do **not** mark LOOP COMPLETE while any of R1–R4 are open. Do **not** “just quickly” peel k8s kinds first.
+
+### R1 [P1] Unsupported HTTP frameworks gain product operation claims
+
+`src/projection/data.ts` (~575) loops every raw `route` node instead of requiring a normalized `endpoint` facet. Fastify correctly warns `unsupported-http-framework` and has **zero** endpoint facets, but still receives `POST /articles → writes article`. That is a confident product story from unsupported syntax.
+
+**Fix:** gate route-to-resource lifting on the typed `endpoint` facet. Add a negative Fastify compile test (no operation lift, diagnostic still present).
+
+### R2 [P2] Omitted migration schemas become a visible empty cluster
+
+`src/projection/kindClusters.ts` (~122–128) includes nodes already marked `intermediateOmitted`. A repo with 11 SQL migrations produces `Schemas (11)` under Data access; the viewer hides all 11 members, so the hub opens an **empty room**.
+
+**Fix:** skip Intermediate-omitted nodes when building clusters. Add a full projection test with more than 10 migration schemas.
+
+### R3 [P2] Generic clusters lose their parent on Back
+
+`src/projection/clusterWalk.ts` (~17–23) only treats HTTP API as a non-cluster frame. On kubernetes-training, `Services (135)` sits under `Introduction to Kubernetes`, but `clusterWalkAncestors()` returns `[]`; Back jumps to Beginner.
+
+**Fix:** include the walkable parent of generic clusters. Add a Deploy → Services browser test. Keep the existing 12-route HTTP API Back floor.
+
+### R4 [P2] Table focus recomputes every route for every route
+
+`src/viewer.ts` (~430–448) scans all routes (twice) inside a per-node predicate. Table focus is quadratic in endpoint count.
+
+**Fix:** compute allowed operation-route IDs **once** per focused resource/render and reuse the set. Do not change which routes are allowed unless a test proves the old set was wrong.
+
+### Review assessment (do not argue it away)
+
+Direction is useful (bounded drills, semantic labels, calmer rooms). The loop validated hypotheses on **narrow fixtures** without composing policies. Do not merge until R1–R3 are fixed; R4 before calling the viewer large-repo-ready. `git diff --check` also noted a non-blocking trailing blank line at the end of `test/projection.test.mjs` — tidy if you touch that file.
 
 ---
 
@@ -294,6 +339,8 @@ ACTIVE
 ```text
 - YYYY-MM-DD HH:MM UTC | Hypothesis: … | Done: … | Felt (repo): … | Plan change: … | Next: …
 ```
+
+- 2026-08-14 (human interrupt, between ticks) | Hypothesis: n/a — external review | Done: parked H12; wrote R1–R4 into this plan | Felt: n/a (human + second agent, not this loop) | Plan change: **correctness compose bugs first** (Fastify operation lifts, empty Schemas cluster, k8s Back parent, quadratic table focus). H12 only after R1–R4. Do not LOOP COMPLETE until those are closed. | Next: R1 P1 endpoint-facet gate + Fastify negative test
 
 - 2026-08-14 | Plan created on `navigable-graph-14082026` | Done: living plan + dogfood protocol | Felt: n/a (no code yet) | Plan change: opening bet is H1 cardinality collapse, then Back frames, then operation labels | Next: H1 on Express RealWorld
 - 2026-08-13 19:30 UTC | Hypothesis: H1 kind-cluster >10 same-kind siblings | Done: `src/projection/kindClusters.ts` + viewer hide-until-focus; skip nest inside `routeGroup`; verify 66 pass | Felt (node-express-realworld): Beginner is HTTP API → Data access (readable in 10s). API Intermediate is **clusters** (Articles/Profiles/User/Users + GET / + GET /tags + 4 story tables) — not a 20-route starfield. Wrapping Articles’ 11 routes in `HTTP endpoints (11)` felt like a trap (extra click to see the routes you drilled for); skipped. Articles still a 11-verb phonebook. Self-map: no fake clusters; Beginner still CLI → Compile pipeline → … → Viewer. node-cron-betterstack: 1 cron + 1 job, no 1-endpoint hub. Edges still unlabeled `reads`/`writes` (H3). Would show Beginner + API Intermediate to a stranger; not Articles yet. | Plan change: H1 is fallback for ungrouped dumps; promote H5 (sub-prefix inside Articles) over nesting kind clusters; standing rule: never wrap a domain group | Next: H5 Articles feed/comments/favorite
