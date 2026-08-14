@@ -416,36 +416,52 @@ export function renderArchitectureHtml(
       }
       return false;
     }
-    function tableHasWriterRoutes(tableId) {
-      for (const node of graph.nodes) {
-        if (node.kind !== "route") continue;
-        if (routeHasStoryKindTo(node, tableId, "writes")) return true;
-      }
-      return false;
-    }
     const TABLE_FOCUS_ROUTE_CAP = 10;
     const KIND_CLUSTER_PAGE = 10;
+    // Allowed writer/reader route IDs for a table/collection focus.
+    // Computed once per focus id — the old per-node scan was O(routes²).
+    const tableFocusOperationCache = new Map();
+    function tableFocusOperationRouteIds(focusId) {
+      if (!focusId) return { allowed: new Set(), hasWriters: false };
+      const hit = tableFocusOperationCache.get(focusId);
+      if (hit) return hit;
+      const focused = byId.get(focusId);
+      if (!focused || (focused.kind !== "table" && focused.kind !== "collection")) {
+        const miss = { allowed: new Set(), hasWriters: false };
+        tableFocusOperationCache.set(focusId, miss);
+        return miss;
+      }
+      const writeMatches = [];
+      const readMatches = [];
+      for (const route of graph.nodes) {
+        if (route.kind !== "route") continue;
+        if (routeHasStoryKindTo(route, focused.id, "writes")) {
+          writeMatches.push(route);
+        } else if (
+          routeHasStoryKindTo(route, focused.id, "reads") ||
+          routeHasStoryKindTo(route, focused.id, "queries")
+        ) {
+          readMatches.push(route);
+        }
+      }
+      const hasWriters = writeMatches.length > 0;
+      const matches = hasWriters ? writeMatches : readMatches;
+      matches.sort((a, b) => String(a.label).localeCompare(String(b.label)));
+      const computed = {
+        allowed: new Set(matches.slice(0, TABLE_FOCUS_ROUTE_CAP).map((route) => route.id)),
+        hasWriters,
+      };
+      tableFocusOperationCache.set(focusId, computed);
+      return computed;
+    }
+    function tableHasWriterRoutes(tableId) {
+      return tableFocusOperationRouteIds(tableId).hasWriters;
+    }
     // Table Intermediate: mutation routes (POST /articles → writes), not every GET.
     // Cap so an 11-verb domain cannot dump the table room.
     function isTableFocusOperationRoute(node, focusId) {
       if (!focusId || node.kind !== "route") return false;
-      const focused = byId.get(focusId);
-      if (!focused || (focused.kind !== "table" && focused.kind !== "collection")) {
-        return false;
-      }
-      const wantWrites = tableHasWriterRoutes(focused.id);
-      const matches = [];
-      for (const route of graph.nodes) {
-        if (route.kind !== "route") continue;
-        const ok = wantWrites
-          ? routeHasStoryKindTo(route, focused.id, "writes")
-          : routeHasStoryKindTo(route, focused.id, "reads") ||
-            routeHasStoryKindTo(route, focused.id, "queries");
-        if (ok) matches.push(route);
-      }
-      matches.sort((a, b) => String(a.label).localeCompare(String(b.label)));
-      const allowed = new Set(matches.slice(0, TABLE_FOCUS_ROUTE_CAP).map((route) => route.id));
-      return allowed.has(node.id);
+      return tableFocusOperationRouteIds(focusId).allowed.has(node.id);
     }
     function kindClusterMembersSorted(hubId) {
       return graph.nodes

@@ -117,6 +117,7 @@ test("Underdelta compiles its own structural compiler story", async () => {
   assert.match(html, /isDataRoomApiLeftover/);
   assert.match(html, /isTableFocusOperationRoute/);
   assert.match(html, /TABLE_FOCUS_ROUTE_CAP/);
+  assert.match(html, /tableFocusOperationRouteIds/);
   assert.match(html, /isTableFocusApiLeftover/);
   assert.match(html, /searchMatchScore/);
   assert.match(html, /kindClusterPage/);
