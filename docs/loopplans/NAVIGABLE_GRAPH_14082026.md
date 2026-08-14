@@ -181,6 +181,7 @@ opening bet. After each dogfood, rewrite the list.
 - Table Intermediate shows routes that `writes` the focused table (cap 10). If there are no writers, show `reads`/`queries`. Grouped/nested membership does not hide those operation routes. GETs stay in the domain room.
 - Hide the HTTP API box on table Intermediate when writer routes are already visible. Keep it when the table has no writers (Tag + GET /tags still needs a “who touches this?” neighbor).
 - Playwright locks the H1+H2 walk: 12 dummy ungrouped routes collapse to `HTTP endpoints (12)`; Back/Esc is Overview ‹ HTTP API ‹ hub. Keep that fixture if clustering or history changes.
+- Find ranks an exact-match table/collection above a same-label `routeGroup`. Enter focuses the table room (writer routes), not Data access and not the User route group. The group stays in the list as “route group”.
 
 ---
 
@@ -255,12 +256,13 @@ ACTIVE
 - [x] **H8:** Table Intermediate shows writer routes (`POST /articles`, favorite, comment mutations); GETs stay in the domain room
 - [x] **H9:** hide HTTP API on table Intermediate when writer routes are visible; Tag (no writers) still keeps HTTP API
 - [x] **Playwright:** 12 dummy routes → `HTTP endpoints (12)`; Back/Esc HTTP API → Beginner (`kind cluster of 12 dummy routes walks Back through HTTP API`)
+- [x] **Find User:** exact table beats same-label route group; Enter opens the User table room
 
 ### In progress / next (keep ≥ 3 unchecked until LOOP COMPLETE)
 
-- [ ] Find “User” can land on the Users/User route group instead of the User table
-- [ ] **H4:** fit hubs (not every leaf) when a room is actually a dump — deferred; RealWorld Data access was furniture, not postage stamps
+- [ ] **H4:** fit hubs (not every leaf) when a room is actually a dump — deferred; RealWorld still has no postage-stamp room
 - [ ] Page large clusters (first 10 + “show more”) if a hub still overflows after H8’s cap of 10
+- [ ] Hover/select-only labels if always-on badges collide on a later repo
 
 ### Seed backlog
 
@@ -272,7 +274,7 @@ ACTIVE
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (Playwright: 12 dummy routes cluster; crumb Overview › HTTP API › HTTP endpoints (12); Back then Esc return one frame at a time). Now try Find “User” because dogfood felt: the map is walkable, but Find can land on the User route group instead of the User table. Then H4 only if a later room shrinks to dust.
+> **Next focus:** This work is done (Find “User” ranks the User table first; Enter opens writer routes). Now try cancelling H4 because dogfood still has no dump that shrinks to dust — reopen only if a later repo postage-stamps. Keep page-large-clusters as the overflow valve.
 
 ---
 
@@ -293,6 +295,7 @@ ACTIVE
 - 2026-08-14 05:34 UTC | Hypothesis: H8 table Intermediate shows writing routes | Done: `isTableFocusOperationRoute` — prefer `writes` (cap 10), else reads/queries; grouped/nested routes become visible on table focus; verify 75 pass | Felt (node-express-realworld): Beginner still 10s; API/Data rooms unchanged. Article Intermediate is **POST /articles, PUT, DELETE, favorite mutations → writes** (7 nodes with HTTP API). No GET /articles phonebook — kill-if did not fire. Comment is POST/DELETE comments. Tag (no writers) falls back to GET /tags. Self-map: CLI → … → Viewer intact. node-cron-betterstack: unchanged. Would show the Article table room to a stranger; HTTP API box is now the leftover. | Plan change: H8 standing rule (table focus shows writer routes, cap 10); next is H9 hide API box when writers are visible | Next: H9 hide HTTP API on table Intermediate when mutations are on canvas
 - 2026-08-14 06:04 UTC | Hypothesis: H9 hide HTTP API on table Intermediate when writers are visible | Done: `isTableFocusApiLeftover` — hide API hub only when the focused table has writer routes; verify 75 pass | Felt (node-express-realworld): Beginner still 10s. API hallway / Data / Articles rooms unchanged. Article Intermediate is now **five mutations + Article** (6 nodes) — POST /articles → writes, no molecule box. Comment is POST/DELETE comments. User table is four writers. Tag (no writers) still shows HTTP API + GET /tags — kill-if did not fire. Self-map: no tables; CLI → … → Viewer intact. node-cron-betterstack: unchanged. Would show Article/Comment/User table rooms to a stranger. | Plan change: H9 standing rule (hide API box only when writers exist); next is Playwright Back floor | Next: Playwright cluster + Back fixture
 - 2026-08-14 06:35 UTC | Hypothesis: Playwright cluster + Back fixture | Done: 12 Express `/r0`…`/r11` compile to `HTTP endpoints (12)`; browser walk API → hub → 12 routes; crumb Overview › HTTP API › hub; Back then Esc; verify 75 + playwright 10 pass | Felt (fixture + node-express-realworld): cluster Back is obvious in the browser — no trap. RealWorld walk still a map (API hallway / Data tables / Article mutations). Self-map compiler story intact. Would show the cluster Back walk to a stranger. | Plan change: standing rule — keep the 12-route Playwright floor; next is Find User collision | Next: Find User prefers the table over the route group
+- 2026-08-14 07:05 UTC | Hypothesis: Find User prefers the table over the route group | Done: `searchMatchScore` exact table +8 vs routeGroup +1; clusterRootFor tables enter the table room; list meta says “route group”; verify 76 pass | Felt (node-express-realworld): Find “user” ranks User table (108) above User route group (101) and Users (81). Enter would open the table’s writer routes, not the GET /user hallway. Self-map Find “extractors” / “cli” still hits the product systems first. Would show Find User to a stranger. | Plan change: standing rule — exact table beats same-label route group; next cancel H4 if still no dump | Next: cancel H4 unless a room postage-stamps
 
 ---
 

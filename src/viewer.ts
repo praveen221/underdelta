@@ -946,6 +946,10 @@ export function renderArchitectureHtml(
       ) {
         return node.id;
       }
+      // Tables/collections are their own Intermediate rooms (writer routes).
+      if (node.kind === "table" || node.kind === "collection") {
+        return node.id;
+      }
       // Code leaves: open the code container so Advanced can show them.
       if (advancedKinds.has(node.kind)) {
         let cur = node;
@@ -992,6 +996,21 @@ export function renderArchitectureHtml(
       }
       return node.id;
     }
+    function searchMatchScore(node, query) {
+      const label = String(node.label).toLowerCase();
+      let score = 40;
+      if (label === query) score = 100;
+      else if (label.startsWith(query)) score = 80;
+      else if (label.includes(query)) score = 60;
+      if (node.kind === "table" || node.kind === "collection") {
+        score += label === query ? 8 : 4;
+      } else if (node.metadata && node.metadata.routeGroup === true) {
+        score += 1;
+      } else if (node.kind === "system" || node.kind === "pipeline") score += 3;
+      else if (node.kind === "api" || node.kind === "service" || node.kind === "ui") score += 2;
+      else if (advancedKinds.has(node.kind)) score -= 1;
+      return score;
+    }
     function searchMatchNodes() {
       const query = search.value.trim().toLowerCase();
       if (!query) return [];
@@ -1000,15 +1019,7 @@ export function renderArchitectureHtml(
         if (node.kind === "product") continue;
         const hay = (node.label + " " + node.kind + " " + (node.qualifiedName || "")).toLowerCase();
         if (!hay.includes(query)) continue;
-        const label = String(node.label).toLowerCase();
-        let score = 40;
-        if (label === query) score = 100;
-        else if (label.startsWith(query)) score = 80;
-        else if (label.includes(query)) score = 60;
-        if (node.kind === "system" || node.kind === "pipeline") score += 3;
-        else if (node.kind === "api" || node.kind === "service" || node.kind === "ui") score += 2;
-        else if (advancedKinds.has(node.kind)) score -= 1;
-        scored.push({ node, score });
+        scored.push({ node, score: searchMatchScore(node, query) });
       }
       scored.sort((a, b) => b.score - a.score || String(a.node.label).localeCompare(String(b.node.label)));
       return scored.map((item) => item.node).slice(0, 12);
@@ -1052,7 +1063,9 @@ export function renderArchitectureHtml(
         const root = rootId ? byId.get(rootId) : null;
         button.querySelector(".match-label").textContent = node.label;
         button.querySelector(".match-meta").textContent =
-          node.kind + (node.technology ? " · " + node.technology : "");
+          node.metadata && node.metadata.routeGroup === true
+            ? "route group"
+            : node.kind + (node.technology ? " · " + node.technology : "");
         button.querySelector(".match-hint").textContent = root && root.id !== node.id
           ? "Enter → " + root.label + " cluster"
           : "Enter focuses this cluster";

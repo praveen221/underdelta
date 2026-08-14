@@ -22,6 +22,7 @@ import {
   projectDataArchitecture,
 } from "../dist/projection/data.js";
 import { operationStoryLabel } from "../dist/projection/labels.js";
+import { searchMatchScore } from "../dist/projection/searchRank.js";
 import {
   humanizeDeployNodeLabel,
   projectDeployArchitecture,
@@ -247,6 +248,28 @@ test("SQL migration schemas omit from Intermediate when tables exist", () => {
   );
   assert.equal(nodes.get(database.id).metadata.collapsedInOverview, true);
   assert.equal(nodes.get(database.id).metadata.intermediateOmitted, undefined);
+});
+
+test("Find User ranks the table above the same-label route group", () => {
+  const table = searchMatchScore({
+    query: "user",
+    label: "User",
+    kind: "table",
+  });
+  const group = searchMatchScore({
+    query: "user",
+    label: "User",
+    kind: "system",
+    routeGroup: true,
+  });
+  const users = searchMatchScore({
+    query: "user",
+    label: "Users",
+    kind: "system",
+    routeGroup: true,
+  });
+  assert.ok(table > group, "exact table must beat exact route group");
+  assert.ok(group > users, "exact User group still ranks above Users prefix");
 });
 
 test("operation story labels say writes Article not createArticle", () => {
