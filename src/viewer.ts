@@ -503,6 +503,18 @@ export function renderArchitectureHtml(
       if (node.kind === "route") return true;
       return !!(node.metadata && node.metadata.routeGroup === true);
     }
+    // Table Intermediate: hide the HTTP API molecule when writer routes
+    // already tell POST /articles → writes. Keep API when no writers exist.
+    function isTableFocusApiLeftover(node, focusId) {
+      if (!focusId) return false;
+      if (!isHttpApiStoryHub(node)) return false;
+      const focused = byId.get(focusId);
+      if (!focused || (focused.kind !== "table" && focused.kind !== "collection")) {
+        return false;
+      }
+      if (node.id === focusId) return false;
+      return tableHasWriterRoutes(focused.id);
+    }
     function laneNameFor(node) {
       if (isDetectionSurface(node)) return "Detects";
       if (isMongoAggregateHub(node)) return "Data & automation";
@@ -1197,6 +1209,7 @@ export function renderArchitectureHtml(
         if (isHallwayTable(node, rootId)) return false;
         if (isMigrationSchemaLeaf(node) && node.id !== rootId) return false;
         if (isDataRoomApiLeftover(node, rootId)) return false;
+        if (isTableFocusApiLeftover(node, rootId)) return false;
         const isOverviewHub = node.metadata && node.metadata.overviewHub;
         if (advancedKinds.has(node.kind) && !isOverviewHub) return false;
         return true;
@@ -1432,6 +1445,9 @@ export function renderArchitectureHtml(
           return false;
         }
         if (state.focus && !isAdvancedTier() && isDataRoomApiLeftover(node, state.focus)) {
+          return false;
+        }
+        if (state.focus && !isAdvancedTier() && isTableFocusApiLeftover(node, state.focus)) {
           return false;
         }
         // overviewHub (auth/billing actions, Helm Chart/resources, mongo
