@@ -109,6 +109,7 @@ export function renderArchitectureHtml(
     .edge-badge-bg { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
     .edge-badge { fill: var(--text); font: 650 10px/1 Inter, ui-sans-serif, system-ui, sans-serif; }
     .edge-badge-group.relation .edge-badge-bg { stroke: color-mix(in srgb, #52a976 55%, var(--line)); }
+    .edge-badge-group.operation .edge-badge-bg { stroke: color-mix(in srgb, #6e8fe0 55%, var(--line)); }
     #nodes { position: absolute; inset: 0; }
     .lane-label { position: absolute; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
     .node { --kind-color: #77808d; position: absolute; width: 190px; min-height: 58px; background: var(--panel); border: 1px solid var(--kind-color); border-radius: 9px; padding: 9px 10px; cursor: grab; touch-action: none; user-select: none; transition: opacity .12s, border-color .12s, background .12s; }
@@ -259,7 +260,7 @@ export function renderArchitectureHtml(
         </div>
         <div id="canvas-chrome">
           <div id="walk-hint">Beginner · Product Flow — select to inspect, double-click to walk in</div>
-          <div id="legend"><span>observed</span><span class="derived">derived</span><span class="inferred">inferred</span><span class="collab">collaboration</span><span class="narrative">publishes / migrates</span><span class="relation">table relations</span></div>
+          <div id="legend"><span>observed</span><span class="derived">derived</span><span class="inferred">inferred</span><span class="collab">operations</span><span class="narrative">publishes / migrates</span><span class="relation">table relations</span></div>
         </div>
       </main>
       <aside id="inspector-panel">
@@ -1052,6 +1053,9 @@ export function renderArchitectureHtml(
         if (!node) continue;
         const isOverviewHub = node.metadata && node.metadata.overviewHub;
         if (advancedKinds.has(node.kind) && !isOverviewHub) continue;
+        // Hidden nested routes (Comments under Articles) must not pull their
+        // tables into the parent room — drill the hub to see those operations.
+        if (!clusterMemberVisible(node, rootId)) continue;
         seeds.push(id);
       }
       for (const id of seeds) {
@@ -1763,16 +1767,71 @@ export function renderArchitectureHtml(
         edgesLayer.appendChild(group);
       }
 
-      // On selection: label collab edges. Skip flows-to (Product flow band).
-      // Table relations get always-on badges below (data story must read cold).
+      // On selection: leftover collab (unlabeled uses…). Skip flows-to and
+      // operation-story edges (those get always-on badges in Intermediate).
       function selectionEdgeBadgeLabel(edge) {
         if (edge.kind === "flows-to") return null;
         if (isTableRelationEdge(edge)) return null;
+        if (isOperationStoryEdge(edge)) return null;
         if (collaborationKinds.has(edge.kind)) {
           if (edge.label && edge.label !== edge.kind) return edge.label;
           return edge.kind;
         }
         return null;
+      }
+
+      function isOperationStoryEdge(edge) {
+        if (edge.kind === "flows-to") return false;
+        if (isTableRelationEdge(edge)) return false;
+        if (narrativeKinds.has(edge.kind)) return false;
+        if (edge.kind === "reads" || edge.kind === "writes" || edge.kind === "queries") {
+          return true;
+        }
+        if (
+          collaborationKinds.has(edge.kind) &&
+          edge.label &&
+          edge.label !== edge.kind
+        ) {
+          return true;
+        }
+        return !!(edge.metadata && edge.metadata.operationStory);
+      }
+
+      function operationBadgeLabel(edges, sourceId, targetId) {
+        const source = byId.get(sourceId);
+        const target = byId.get(targetId);
+        const order = [
+          "writes", "reads", "queries", "uses", "renders",
+          "triggers", "exposes", "configures",
+        ];
+        const kinds = [...new Set(edges.map((edge) => edge.kind))].sort(
+          (a, b) => order.indexOf(a) - order.indexOf(b),
+        );
+        const sourceIsRoute = !!(
+          source &&
+          (source.kind === "route" ||
+            (source.semantics || []).some((facet) => facet.kind === "endpoint"))
+        );
+        const targetIsResource = !!(
+          target &&
+          (target.kind === "table" ||
+            target.kind === "collection" ||
+            isDataAccessSystem(target))
+        );
+        if (sourceIsRoute && targetIsResource) {
+          if (kinds.includes("writes")) return "writes";
+          if (kinds.includes("reads")) return "reads";
+          return kinds.join(" · ");
+        }
+        if (target && (target.kind === "table" || target.kind === "collection")) {
+          return kinds.join(" · ") + " " + target.label;
+        }
+        if (targetIsResource) return kinds.join(" · ");
+        const labels = [...new Set(edges.map((edge) => {
+          if (edge.label && edge.label !== edge.kind) return edge.label;
+          return edge.kind;
+        }))];
+        return labels.join(" · ");
       }
 
       // Group table↔table relations by directed pair → one labeled green path.
@@ -1862,12 +1921,67 @@ export function renderArchitectureHtml(
         );
       }
 
+      // Group operation story edges (reads/writes/queries, labeled uses…)
+      // by directed pair into one labeled path. Intermediate should read
+      // POST /articles writes Article, not anonymous blue lines.
+      const operationGroups = new Map();
+      const operationEdgeIds = new Set();
+      for (const edge of graph.edges) {
+        if (!isOperationStoryEdge(edge)) continue;
+        if (!visibleIds.has(edge.source) || !visibleIds.has(edge.target)) continue;
+        if (!positions.get(edge.source) || !positions.get(edge.target)) continue;
+        const key = edge.source + "|" + edge.target;
+        if (!operationGroups.has(key)) operationGroups.set(key, []);
+        operationGroups.get(key).push(edge);
+        operationEdgeIds.add(edge.id);
+      }
+
+      for (const [key, edges] of operationGroups) {
+        const sourceId = key.slice(0, key.indexOf("|"));
+        const targetId = key.slice(key.indexOf("|") + 1);
+        const source = positions.get(sourceId);
+        const target = positions.get(targetId);
+        if (!source || !target) continue;
+        const geom = edgeGeometry(source, target);
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", geom.d);
+        const kinds = [...new Set(edges.map((edge) => edge.kind))];
+        const classes = ["edge", "collab", "operation", ...kinds];
+        if (edges.some((edge) => certaintyOf(edge) === "inferred")) classes.push("inferred");
+        else if (edges.some((edge) => certaintyOf(edge) === "derived")) classes.push("derived");
+        const active = state.selected === sourceId || state.selected === targetId;
+        if (active) classes.push("active");
+        path.setAttribute("class", classes.join(" "));
+        path.setAttribute("data-kind", kinds.join(" "));
+        path.setAttribute("data-source", sourceId);
+        path.setAttribute("data-target", targetId);
+        path.setAttribute("data-operation", "true");
+        path.setAttribute(
+          "marker-end",
+          "url(#" + (active ? "arrow-active" : "arrow-collab") + ")",
+        );
+        edgesLayer.appendChild(path);
+        const alwaysOn = state.tier !== "beginner" || !!state.focus;
+        if (alwaysOn) {
+          appendEdgeBadge(
+            geom.mx,
+            geom.my,
+            operationBadgeLabel(edges, sourceId, targetId),
+            false,
+            "operation",
+            sourceId,
+            targetId,
+          );
+        }
+      }
+
       // Collapse structural hairlines by directed pair (one quiet path, not a fan).
       const structuralDrawn = new Set();
       for (const edge of graph.edges) {
         if (!visibleIds.has(edge.source) || !visibleIds.has(edge.target)) continue;
         if (narrativeEdgeIds.has(edge.id)) continue;
         if (relationEdgeIds.has(edge.id)) continue;
+        if (operationEdgeIds.has(edge.id)) continue;
         // Ownership fans (contains) + unselected derived depends-on/calls stay off
         // Intermediate canvas — neighborhood layout already shows children.
         if (!showsStructuralEdge(edge)) continue;
@@ -2322,8 +2436,21 @@ export function renderArchitectureHtml(
 
     function collaborationItem(edge, id) {
       const other = byId.get(edge.source === id ? edge.target : edge.source);
+      const otherLabel = other?.label || "unknown";
       const detail = edgeDetailText(edge);
-      const button = '<button class="pill connection" data-id="' + (other?.id || "") + '">' + edge.kind + " · " + (other?.label || "unknown") + "</button>";
+      let caption = edge.kind + " · " + otherLabel;
+      if (edge.label && edge.label !== edge.kind) {
+        caption = edge.label.endsWith(" " + otherLabel)
+          ? edge.label
+          : edge.label + " · " + otherLabel;
+      } else if (
+        edge.kind === "reads" ||
+        edge.kind === "writes" ||
+        edge.kind === "queries"
+      ) {
+        caption = edge.kind + " · " + otherLabel;
+      }
+      const button = '<button class="pill connection" data-id="' + (other?.id || "") + '">' + caption + "</button>";
       const detailHtml = detail
         ? '<p class="collab-detail">' + detail + "</p>"
         : "";

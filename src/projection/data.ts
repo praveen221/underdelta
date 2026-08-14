@@ -9,6 +9,7 @@ import {
   formatProductWord,
   humanizeIdentifierLabel,
   isProductAcronym,
+  operationStoryLabel,
 } from "./labels.js";
 import { scheduledWorkSourcesForHandler } from "./scheduledWork.js";
 
@@ -408,14 +409,48 @@ function semanticOwnerOf(
   return undefined;
 }
 
+type LineSpan = { file: string; start: number; end: number };
+
+function evidenceSpans(node: ArchitectureNode): LineSpan[] {
+  const spans: LineSpan[] = [];
+  for (const item of node.evidence) {
+    const range = item.range;
+    if (!range) continue;
+    spans.push({
+      file: item.file,
+      start: range.startLine,
+      end: range.endLine,
+    });
+  }
+  return spans;
+}
+
+function evidenceHitsSpan(
+  edge: ArchitectureEdge,
+  spans: readonly LineSpan[],
+): boolean {
+  for (const item of edge.evidence) {
+    const line = item.range?.startLine;
+    if (line === undefined) continue;
+    for (const span of spans) {
+      if (item.file === span.file && line >= span.start && line <= span.end) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 /**
- * BE story edges API/Jobs → Data + resources (deterministic, evidence-backed):
+ * BE story edges API/Jobs/routes → Data + resources (deterministic, evidence-backed):
  * - When an API-owned function queries/reads/writes a resource under Data, lift the
  *   molecule edge (API→Data) and the table insight edge (API→table).
  * - When a Data-owned function does the Prisma I/O but an API function `calls`
  *   it (Checkout → fulfillOrder → Order), lift through that call bridge.
  * - When Jobs schedules a function that accesses Data, lift Jobs→Data
  *   and Jobs→table so Intermediate table focus answers “who writes this?”.
+ * - When an HTTP route binds a handler (`routes-to` or a same-file `calls`
+ *   inside the route's evidence span), lift `POST /articles → writes Article`.
  */
 export function liftDataAccessStoryEdges(
   nodes: Map<string, ArchitectureNode>,
@@ -442,6 +477,7 @@ export function liftDataAccessStoryEdges(
     const detail = viaCaller
       ? `${from.label} ${kind} ${to.label} via ${viaCaller.label} → ${viaFn.label}`
       : `${from.label} ${kind} ${to.label} via ${viaFn.label}`;
+    const label = operationStoryLabel(kind, to.label, to.kind);
     const lifted = edgeFrom(
       kind,
       from.id,
@@ -452,8 +488,9 @@ export function liftDataAccessStoryEdges(
         certainty: "derived",
         detail,
       },
-      viaFn.label,
+      label,
     );
+    lifted.metadata = { ...lifted.metadata, operationStory: true };
     if (!edges.has(lifted.id)) edges.set(lifted.id, lifted);
     liftedKinds.add(dedupeKey);
   };
@@ -525,6 +562,62 @@ export function liftDataAccessStoryEdges(
         }
         liftOwnerStory(edge.kind, jobs, target, scheduler, source, seed);
         break;
+      }
+    }
+  }
+
+  // HTTP operations: route → table so Intermediate can read
+  // `POST /articles → writes Article` instead of a nameless API→table line.
+  for (const route of nodes.values()) {
+    if (route.kind !== "route") continue;
+    const bound = new Map<string, ArchitectureNode>();
+    for (const edge of edges.values()) {
+      if (edge.kind === "routes-to" && edge.source === route.id) {
+        const target = nodes.get(edge.target);
+        if (target) bound.set(target.id, target);
+      }
+    }
+    const spans = evidenceSpans(route);
+    if (spans.length > 0) {
+      for (const edge of edges.values()) {
+        if (edge.kind !== "calls") continue;
+        if (!evidenceHitsSpan(edge, spans)) continue;
+        const target = nodes.get(edge.target);
+        if (target) bound.set(target.id, target);
+      }
+    }
+    if (bound.size === 0) continue;
+
+    const viaFns = new Map(bound);
+    for (const handler of bound.values()) {
+      if (handler.kind !== "function") continue;
+      for (const edge of edges.values()) {
+        if (edge.kind !== "calls" || edge.source !== handler.id) continue;
+        const callee = nodes.get(edge.target);
+        if (callee?.kind === "function") viaFns.set(callee.id, callee);
+      }
+    }
+
+    for (const fn of viaFns.values()) {
+      for (const edge of edges.values()) {
+        if (edge.source !== fn.id) continue;
+        if (
+          edge.kind !== "queries" &&
+          edge.kind !== "reads" &&
+          edge.kind !== "writes"
+        ) {
+          continue;
+        }
+        const table = nodes.get(edge.target);
+        if (
+          !table ||
+          (table.kind !== "table" && table.kind !== "collection")
+        ) {
+          continue;
+        }
+        const tableOwner = semanticOwnerOf(table.id, nodes);
+        if (!tableOwner || tableOwner.id !== data.id) continue;
+        addLifted(edge.kind, route, table, undefined, fn, edge.evidence[0]!);
       }
     }
   }

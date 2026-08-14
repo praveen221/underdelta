@@ -20,6 +20,7 @@ import {
   liftDataAccessStoryEdges,
   projectDataArchitecture,
 } from "../dist/projection/data.js";
+import { operationStoryLabel } from "../dist/projection/labels.js";
 import {
   humanizeDeployNodeLabel,
   projectDeployArchitecture,
@@ -192,6 +193,164 @@ test("data projection unifies resources and lifts explicit query bindings", () =
     [...edges.values()].some(
       (edge) => edge.kind === "queries" && edge.source === api.id && edge.target === tables[0].id,
     ),
+  );
+  const apiToNote = [...edges.values()].find(
+    (edge) =>
+      edge.kind === "queries" &&
+      edge.source === api.id &&
+      edge.target === tables[0].id,
+  );
+  assert.equal(apiToNote.label, "queries Note");
+  assert.equal(apiToNote.metadata.operationStory, true);
+});
+
+test("operation story labels say writes Article not createArticle", () => {
+  assert.equal(operationStoryLabel("writes", "Article", "table"), "writes Article");
+  assert.equal(operationStoryLabel("reads", "User", "table"), "reads User");
+  assert.equal(operationStoryLabel("writes", "Data access", "system"), "writes");
+});
+
+function rangedEvidence(file, startLine, endLine = startLine) {
+  return {
+    file,
+    extractor: "typescript",
+    certainty: "observed",
+    range: {
+      startLine,
+      startColumn: 0,
+      endLine,
+      endColumn: 1,
+    },
+  };
+}
+
+test("HTTP route in-range controller call lifts POST /articles writes Article", () => {
+  const api = node("api", "api", "HTTP API", {
+    metadata: { projection: "semantic", systemKey: "api" },
+  });
+  const data = node("data", "system", "Data access", {
+    metadata: { projection: "semantic", systemKey: "data" },
+  });
+  const route = node("route", "route", "POST /articles", {
+    parentId: api.id,
+    semantics: [{
+      kind: "endpoint",
+      protocol: "http",
+      method: "POST",
+      path: "/articles",
+      provider: "express",
+      declaration: "code",
+    }],
+    evidence: [rangedEvidence("article.controller.ts", 71, 78)],
+  });
+  const create = node("create", "function", "createArticle", {
+    parentId: api.id,
+  });
+  const article = node("article", "table", "Article", { parentId: data.id });
+  const nodes = new Map(
+    [api, data, route, create, article].map((item) => [item.id, item]),
+  );
+  const write = edgeFrom(
+    "writes",
+    create.id,
+    article.id,
+    rangedEvidence("article.service.ts", 40),
+  );
+  const call = edgeFrom(
+    "calls",
+    api.id,
+    create.id,
+    rangedEvidence("article.controller.ts", 73),
+  );
+  const edges = new Map([[write.id, write], [call.id, call]]);
+  const systems = new Map([["api", api], ["data", data]]);
+
+  liftDataAccessStoryEdges(nodes, edges, systems);
+
+  const routeWrite = [...edges.values()].find(
+    (edge) =>
+      edge.kind === "writes" &&
+      edge.source === route.id &&
+      edge.target === article.id,
+  );
+  assert.ok(routeWrite, "expected POST /articles → writes Article");
+  assert.equal(routeWrite.label, "writes Article");
+  assert.equal(routeWrite.metadata.operationStory, true);
+  const apiWrite = [...edges.values()].find(
+    (edge) =>
+      edge.kind === "writes" &&
+      edge.source === api.id &&
+      edge.target === article.id,
+  );
+  assert.ok(apiWrite);
+  assert.equal(apiWrite.label, "writes Article");
+});
+
+test("HTTP route routes-to handler lifts writes table", () => {
+  const api = node("api", "api", "HTTP API", {
+    metadata: { projection: "semantic", systemKey: "api" },
+  });
+  const data = node("data", "system", "Data access", {
+    metadata: { projection: "semantic", systemKey: "data" },
+  });
+  const route = node("route", "route", "POST /notes", { parentId: api.id });
+  const handler = node("handler", "function", "createNote", { parentId: api.id });
+  const note = node("note", "table", "Note", { parentId: data.id });
+  const nodes = new Map(
+    [api, data, route, handler, note].map((item) => [item.id, item]),
+  );
+  const write = edgeFrom("writes", handler.id, note.id, evidence);
+  const bind = edgeFrom("routes-to", route.id, handler.id, evidence);
+  const edges = new Map([[write.id, write], [bind.id, bind]]);
+  const systems = new Map([["api", api], ["data", data]]);
+
+  liftDataAccessStoryEdges(nodes, edges, systems);
+
+  assert.ok(
+    [...edges.values()].some(
+      (edge) =>
+        edge.kind === "writes" &&
+        edge.source === route.id &&
+        edge.target === note.id &&
+        edge.label === "writes Note",
+    ),
+  );
+});
+
+test("controller call outside the route span does not bind the operation", () => {
+  const api = node("api", "api", "HTTP API", {
+    metadata: { projection: "semantic", systemKey: "api" },
+  });
+  const data = node("data", "system", "Data access", {
+    metadata: { projection: "semantic", systemKey: "data" },
+  });
+  const route = node("route", "route", "POST /articles", {
+    parentId: api.id,
+    evidence: [rangedEvidence("article.controller.ts", 71, 78)],
+  });
+  const other = node("other", "function", "addComment", { parentId: api.id });
+  const comment = node("comment", "table", "Comment", { parentId: data.id });
+  const nodes = new Map(
+    [api, data, route, other, comment].map((item) => [item.id, item]),
+  );
+  const write = edgeFrom("writes", other.id, comment.id, evidence);
+  const call = edgeFrom(
+    "calls",
+    api.id,
+    other.id,
+    rangedEvidence("article.controller.ts", 175),
+  );
+  const edges = new Map([[write.id, write], [call.id, call]]);
+  const systems = new Map([["api", api], ["data", data]]);
+
+  liftDataAccessStoryEdges(nodes, edges, systems);
+
+  assert.equal(
+    [...edges.values()].some(
+      (edge) => edge.source === route.id && edge.target === comment.id,
+    ),
+    false,
+    "out-of-range controller call must not invent POST /articles → Comment",
   );
 });
 

@@ -157,8 +157,9 @@ opening bet. After each dogfood, rewrite the list.
 | H1 | **Kind clusters at >10 (fallback).** Ungrouped same-kind siblings under a product parent collapse to `HTTP endpoints (N)` when count > 10. **Do not nest** inside an existing domain route group. | Human request; ungrouped phonebooks | Tiny graphs grow fake hubs; wrapping Articles hides the 11 routes you drilled for |
 | H5 | **Sub-prefix groups inside a domain cluster.** Oversized domain hubs (>10 routes) peel 2+ member subresources (`comments`, `favorite`) into nested groups. Singleton `feed` stays a route. | RealWorld dogfood: API is calm; Articles was a 11-verb phonebook | Prefixes are noise on non-REST apps — fall back to H1; 1-member hubs |
 | H2 | **Back stack = focus stack + cluster stack.** Entering a `routeGroup` / `kindCluster` hub seeds ancestors (API → Articles) so Find/double-click cannot land in Comments with only Overview as the exit. | Nested Comments room from H5 | Extra frames on Extractors/self-map — only seed for cluster hubs |
-| H3 | **Operation labels on story edges.** Show `POST /articles`, `writes Article`, `publishes X` on Intermediate edges; hide raw `calls`/`imports`. | “What’s happening in the operation” | Labels collide / unreadable at scale — then label only on select/hover |
+| H3 | **Operation labels on story edges.** Lift route→table (`routes-to` or in-range controller `calls`) as `writes Article`; Intermediate always-on badges; hide raw `calls`/`imports`. | “What’s happening in the operation” | Labels collide / unreadable at scale — then label only on select/hover |
 | H4 | **Don’t fit-to-dump.** If visible node count > N, fit the **hubs**, not every leaf. | Zoom-out postage stamp | People miss that more nodes exist — need a “47 more” affordance |
+| H6 | **Hallway tables stay in the room they explain.** API Intermediate should not park Article/User/Comment/Tag beside domain groups; those tables belong in the Articles/Users rooms now that route→table edges exist. | H3 dogfood: API hallway still 4 labeled tables | Hiding them also hides GET /tags → Tag on the ungrouped leftover |
 
 **Standing rules (from tick 1 dogfood):**
 
@@ -168,6 +169,9 @@ opening bet. After each dogfood, rewrite the list.
 - Domain groups (already on master) are what made RealWorld API Intermediate readable.
 - Nested subresource groups (`routeGroupNested`) only form when the domain hub has **>10** routes and the bucket has **≥2** members. Hide them on ancestor Intermediate (same as kind-cluster hubs).
 - Entering a cluster hub sets `history` to `clusterWalkAncestors` (API → Articles under Comments). Do **not** rewrite history for Extractors / CLI / modules.
+- Lifted data-story labels are operations (`writes Article`), never handler names (`createArticle`). Route→table lifts only via `routes-to` or a same-file `calls` inside the route evidence span. Do **not** lift route→Data (that would drag Data access into every Articles room).
+- Intermediate always-on badges for reads/writes/queries and labeled uses/renders/triggers. Route→table badge prefers `writes` over `writes · reads`. Beginner stays unlabeled except narrative/relation. `calls`/`imports` stay off Intermediate.
+- Neighborhood seeds skip hidden cluster members so Comments routes cannot park a stray Comment table in the Articles room.
 
 ---
 
@@ -235,13 +239,13 @@ ACTIVE
 - [x] **Dogfood note:** RealWorld + self-map + node-cron after H1 (see Learning log)
 - [x] **H5:** oversized domain hubs peel Comments / Favorite nested groups; feed stays a route; viewer hides nested hubs on API Intermediate
 - [x] **H2:** cluster enter seeds `clusterWalkAncestors`; crumb Overview › HTTP API › Articles › Comments; Back/Esc hint names the parent; Extractors walk unchanged
+- [x] **H3:** route→table operation lifts + Intermediate always-on badges (`POST /articles → writes Article`); API→table labels are `writes Article` not `createArticle`
 
 ### In progress / next (keep ≥ 3 unchecked until LOOP COMPLETE)
 
-- [ ] **H3:** operation labels on Intermediate story edges
+- [ ] **H6:** API Intermediate hallway tables — hide molecule tables when domain groups already explain them
 - [ ] **H4:** stop fit-to-view from shrinking a dump into dust
 - [ ] Playwright: cluster + Back path on a fixture with 12 dummy routes (verify floors cover ancestors; browser still open)
-- [ ] API Intermediate still paints 4 story-edge tables beside the route groups — hallway clutter
 
 ### Seed backlog
 
@@ -253,7 +257,7 @@ ACTIVE
 
 ### Next focus (edit every tick)
 
-> **Next focus:** This work is done (H2: Find/double-click Comments seeds Overview › HTTP API › Articles › Comments; Back returns to Articles, then API, then Beginner). Now try H3 because dogfood felt: the walk is a map, but Intermediate edges are still anonymous `reads`/`writes` lines — they do not say `POST /articles → writes Article`. Then H4 if fit-to-view still shrinks the API room.
+> **Next focus:** This work is done (H3: Express RealWorld Articles room reads `POST /articles → writes Article`; 19/20 routes bound; GET / correctly unbound). Now try H6 because dogfood felt: the operation story lives in the domain rooms, but API Intermediate still parks 4 labeled tables (Article/Comment/Tag/User) beside the route groups. Then H4 if fit-to-view still shrinks a room.
 
 ---
 
@@ -267,6 +271,7 @@ ACTIVE
 - 2026-08-13 19:30 UTC | Hypothesis: H1 kind-cluster >10 same-kind siblings | Done: `src/projection/kindClusters.ts` + viewer hide-until-focus; skip nest inside `routeGroup`; verify 66 pass | Felt (node-express-realworld): Beginner is HTTP API → Data access (readable in 10s). API Intermediate is **clusters** (Articles/Profiles/User/Users + GET / + GET /tags + 4 story tables) — not a 20-route starfield. Wrapping Articles’ 11 routes in `HTTP endpoints (11)` felt like a trap (extra click to see the routes you drilled for); skipped. Articles still a 11-verb phonebook. Self-map: no fake clusters; Beginner still CLI → Compile pipeline → … → Viewer. node-cron-betterstack: 1 cron + 1 job, no 1-endpoint hub. Edges still unlabeled `reads`/`writes` (H3). Would show Beginner + API Intermediate to a stranger; not Articles yet. | Plan change: H1 is fallback for ungrouped dumps; promote H5 (sub-prefix inside Articles) over nesting kind clusters; standing rule: never wrap a domain group | Next: H5 Articles feed/comments/favorite
 - 2026-08-13 19:55 UTC | Hypothesis: H5 sub-prefix groups inside Articles | Done: `httpRouteSubresourceKey` + nested `routeGroupNested` hubs for ≥2 member buckets when domain has >10 routes; viewer hides nested hubs on API Intermediate; verify 69 pass | Felt (node-express-realworld): Beginner still 10s (HTTP API → Data). API Intermediate unchanged (4 domain groups + GET / + GET /tags + 4 tables) — Comments/Favorite do **not** leak. Articles Intermediate is a **map**: 5 CRUD + GET /articles/feed + Comments + Favorite (9 nodes, 6 peer routes). Comments drill = 3 comment routes. Singleton feed correctly stayed a route. fastapi-realworld matches (same Articles room). Self-map: no nested/kind hubs; CLI → … → Viewer intact. Edges still unlabeled (H3). Would show Articles to a stranger now. | Plan change: H5 standing rule (only peel >10 domain hubs, ≥2 members, hide nested on ancestors); next is H2 because the extra Comments room makes Back the trap risk | Next: H2 Back through Articles → Comments
 - 2026-08-13 20:24 UTC | Hypothesis: H2 cluster enter is a Back frame | Done: `clusterWalkAncestors` + viewer seeds history for routeGroup/kindCluster hubs; walk-hint and Back title name the parent frame; verify 70 pass | Felt (node-express-realworld): Comments crumb is Overview › HTTP API › Articles › Comments; Back → Articles (not a trap). Articles → HTTP API → Beginner. Find into Comments from cold open would have skipped the path before; now it cannot. Self-map Extractors is not a cluster hub — ancestors empty, existing Esc Advanced→Intermediate→Beginner walk unchanged. Beginner still 10s; API still clusters; edges still unlabeled (H3). Would show the Comments crumb to a stranger. | Plan change: standing rule — only rewrite history for cluster hubs; next is H3 operation labels (the remaining “just lines” feel) | Next: H3 operation labels on Intermediate story edges
+- 2026-08-14 03:42 UTC | Hypothesis: H3 operation labels on Intermediate story edges | Done: `operationStoryLabel` + route→table lift (`routes-to` or in-range controller `calls`); viewer always-on operation badges; neighborhood seeds skip hidden cluster members; verify 74 pass | Felt (node-express-realworld): Beginner still 10s (HTTP API → Data). Articles Intermediate is the payoff — `POST /articles → writes`, GETs `reads` Article; Comments is POST `writes` Comment; Favorite is two `writes` Article. 19/20 routes bound; GET / (no table) correctly unbound. API Intermediate clusters remain, now with `writes · reads Article` on the 4 hallway tables — labeled but still clutter beside Articles/Users. Self-map: no fake reads/writes; CLI → Compile → … → Viewer intact; Intermediate uses stay `extract`/`normalize`. node-cron-betterstack: 1 cron + 1 job, no operation spam. fastapi-realworld has routes-to but no table IO, so no new badges. Would show Articles/Comments/Users rooms to a stranger; not the API hallway yet. | Plan change: H3 standing rules (operation labels, span-bound route lifts, no route→Data, skip hidden seeds); promote H6 hallway tables over H4 | Next: H6 hide API hallway tables when domain groups exist
 
 ---
 
