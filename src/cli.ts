@@ -12,6 +12,13 @@ import {
   listChangedFiles,
 } from "./impact.js";
 import {
+  formatQueryText,
+  loadArchitectureGraph,
+  queryImpactFromGraph,
+  queryUnknown,
+  queryWrites,
+} from "./query.js";
+import {
   architectureGraphSchema,
   impactReportSchema,
   type ImpactReport,
@@ -301,6 +308,119 @@ program
       }
     },
   );
+
+const query = program
+  .command("query")
+  .description("Ask a bounded semantic question of a scanned graph")
+  .option("-C, --cwd <directory>", "repository root", ".")
+  .option("-o, --output <directory>", "scan cache directory", ".underdelta")
+  .option("--graph <file>", "use an existing architecture.json")
+  .option("--rescan", "ignore cached architecture.json and compile again")
+  .option("--text", "print a short human summary instead of JSON");
+
+query
+  .command("writes")
+  .description("Who writes this table, collection, or resource")
+  .argument("<resource>", "resource label (e.g. Article)")
+  .action(async (resource: string, _opts, command) => {
+    const options = command.optsWithGlobals() as {
+      cwd: string;
+      output: string;
+      graph?: string;
+      rescan?: boolean;
+      text?: boolean;
+    };
+    const root = await resolveRepository(options.cwd);
+    const graph = await loadArchitectureGraph(root, {
+      output: options.output,
+      ...(options.graph ? { graph: options.graph } : {}),
+      ...(options.rescan ? { rescan: true } : {}),
+    });
+    const result = queryWrites(graph, resource);
+    process.stdout.write(
+      (options.text
+        ? formatQueryText(result)
+        : JSON.stringify(result, null, 2)) + "\n",
+    );
+  });
+
+query
+  .command("impact")
+  .description("What product surfaces a change may touch")
+  .option("--files <list>", "comma-separated repo-relative files")
+  .option("--base <revision>", "git base (merge-base range with --head)")
+  .option("--head <revision>", "git head (must match clean HEAD if named)")
+  .action(async (_opts, command) => {
+    const options = command.optsWithGlobals() as {
+      cwd: string;
+      output: string;
+      graph?: string;
+      rescan?: boolean;
+      text?: boolean;
+      files?: string;
+      base?: string;
+      head?: string;
+    };
+    const root = await resolveRepository(options.cwd);
+    const filesOnly = Boolean(options.files);
+    await assertImpactCompileSource(root, {
+      ...(options.head ? { headRevision: options.head } : {}),
+      ...(options.base ? { baseRevision: options.base } : {}),
+      filesOnly,
+      ignoreOutput: path.resolve(root, options.output),
+    });
+    const graph = await loadArchitectureGraph(root, {
+      output: options.output,
+      ...(options.graph ? { graph: options.graph } : {}),
+      ...(options.rescan ? { rescan: true } : {}),
+    });
+    const changed = await listChangedFiles(root, {
+      ...(options.base && !filesOnly ? { baseRevision: options.base } : {}),
+      ...(options.head && !filesOnly ? { headRevision: options.head } : {}),
+      ...(options.files
+        ? {
+            files: options.files
+              .split(",")
+              .map((file) => file.trim())
+              .filter(Boolean),
+          }
+        : {}),
+    });
+    const result = queryImpactFromGraph(graph, changed.files, {
+      ...(changed.baseRevision ? { baseRevision: changed.baseRevision } : {}),
+      ...(changed.headRevision ? { headRevision: changed.headRevision } : {}),
+    });
+    process.stdout.write(
+      (options.text
+        ? formatQueryText(result)
+        : JSON.stringify(result, null, 2)) + "\n",
+    );
+  });
+
+query
+  .command("unknown")
+  .description("What Underdelta detected but refused to invent")
+  .action(async (_opts, command) => {
+    const options = command.optsWithGlobals() as {
+      cwd: string;
+      output: string;
+      graph?: string;
+      rescan?: boolean;
+      text?: boolean;
+    };
+    const root = await resolveRepository(options.cwd);
+    const graph = await loadArchitectureGraph(root, {
+      output: options.output,
+      ...(options.graph ? { graph: options.graph } : {}),
+      ...(options.rescan ? { rescan: true } : {}),
+    });
+    const result = queryUnknown(graph);
+    process.stdout.write(
+      (options.text
+        ? formatQueryText(result)
+        : JSON.stringify(result, null, 2)) + "\n",
+    );
+  });
 
 try {
   await program.parseAsync();

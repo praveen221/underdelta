@@ -19,7 +19,8 @@
     "test:self": "npm run build && node --test test/self.test.mjs",
     "test:viewer": "npm run build && playwright install chromium && playwright test",
     "test:viewer:ci": "npm run build && playwright test",
-    "verify": "npm run build && node --test test/extractors.test.mjs test/adapters.test.mjs test/projection.test.mjs test/policy.test.mjs test/reachability.test.mjs test/self.test.mjs",
+    "test:query": "npm run build && node --test test/query.test.mjs",
+    "verify": "npm run build && node --test test/extractors.test.mjs test/adapters.test.mjs test/projection.test.mjs test/policy.test.mjs test/reachability.test.mjs test/query.test.mjs test/self.test.mjs",
     "start": "npm run build && node dist/cli.js scan . --serve",
     "scan": "node dist/cli.js scan",
     "inspect": "npm run build && node scripts/inspect.mjs"

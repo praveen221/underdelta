@@ -79,6 +79,9 @@ npm run test:viewer        # provision Chromium + test the self-map in a real br
 npm run inspect -- /path/to/repo
 node dist/cli.js impact . --files src/foo.ts   # change impact report + highlighted map
 node dist/cli.js impact . --base main --head HEAD
+node dist/cli.js query writes Article          # who writes this resource (JSON)
+node dist/cli.js query impact --files src/foo.ts
+node dist/cli.js query unknown                 # unsupported / unresolved, not guesses
 ```
 
 `inspect` requires a path and scans only that path. Use it to assess a real

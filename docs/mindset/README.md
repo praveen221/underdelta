@@ -8,7 +8,7 @@ plans, not architecture specs, not marketing.
 | This README | How to add a day. Pointer to the latest. |
 | `YYYY-MM-DD.md` | That day's locked mindset |
 
-**Latest:** [2026-08-15.md](2026-08-15.md)
+**Latest:** [2026-08-15.md](2026-08-15.md) (same-day wording fix: Phase 1 measures trials, not habit; skill may still grep)
 
 ## How to use
 
