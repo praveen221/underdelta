@@ -1313,6 +1313,31 @@ test("cluster walk ancestors seed API → Articles under Comments", () => {
   assert.deepEqual(clusterWalkAncestors(api.id, byId), []);
 });
 
+test("kind-cluster under a pipeline or component walks Back to that parent", () => {
+  const product = node("product", "product", "App");
+  const pipeline = node("pipe", "pipeline", "Release pipeline", {
+    parentId: product.id,
+  });
+  const jobs = node("jobs-hub", "system", "Jobs (11)", {
+    parentId: pipeline.id,
+    metadata: { projection: "semantic", kindCluster: true, clusterKind: "job" },
+  });
+  const shell = node("shell", "component", "Dashboard Shell", {
+    parentId: product.id,
+  });
+  const hooks = node("hooks-hub", "system", "Hooks (11)", {
+    parentId: shell.id,
+    metadata: { projection: "semantic", kindCluster: true, clusterKind: "hook" },
+  });
+  const byId = new Map(
+    [product, pipeline, jobs, shell, hooks].map((item) => [item.id, item]),
+  );
+  assert.equal(isClusterWalkFrame(pipeline), true);
+  assert.equal(isClusterWalkFrame(shell), true);
+  assert.deepEqual(clusterWalkAncestors(jobs.id, byId), [pipeline.id]);
+  assert.deepEqual(clusterWalkAncestors(hooks.id, byId), [shell.id]);
+});
+
 test("kind-cluster under a page walks Back to that page", () => {
   const product = node("product", "product", "App");
   const dashboard = node("dash", "page", "Dashboard", { parentId: product.id });

@@ -3225,17 +3225,9 @@ export function renderArchitectureHtml(
     }
     function isClusterWalkFrame(node) {
       if (!node || node.kind === "product") return false;
-      if (isClusterWalkHub(node)) return true;
       if (node.metadata && node.metadata.kindClusterMember === true) return false;
       if (node.metadata && node.metadata.routeGroupMember === true) return false;
-      return (
-        node.kind === "system" ||
-        node.kind === "api" ||
-        node.kind === "ui" ||
-        node.kind === "page" ||
-        node.kind === "service" ||
-        node.kind === "capability"
-      );
+      return true;
     }
     function clusterWalkAncestors(focusId) {
       const frames = [];

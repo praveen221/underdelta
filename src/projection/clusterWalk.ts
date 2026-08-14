@@ -15,24 +15,16 @@ export function isClusterWalkHub(
 }
 
 /**
- * Any walkable parent of a cluster hub — not only HTTP API / semantic
- * systems. Components (11) under a page must Back to that page.
+ * Any non-product parent is a Back frame. Kind clusters can sit under
+ * pipelines, components, pages, or systems — do not enumerate kinds.
  */
 export function isClusterWalkFrame(
   node: ArchitectureNode | undefined,
 ): boolean {
   if (!node || node.kind === "product") return false;
-  if (isClusterWalkHub(node)) return true;
   if (node.metadata?.kindClusterMember === true) return false;
   if (node.metadata?.routeGroupMember === true) return false;
-  return (
-    node.kind === "system" ||
-    node.kind === "api" ||
-    node.kind === "ui" ||
-    node.kind === "page" ||
-    node.kind === "service" ||
-    node.kind === "capability"
-  );
+  return true;
 }
 
 /**
