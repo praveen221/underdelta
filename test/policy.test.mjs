@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   analyzeArchitecture,
@@ -211,4 +212,31 @@ test("repository discovery excludes test, verification, and cache inputs", async
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("coverage catalog names the HTTP and scheduler stacks we refuse to invent", async () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const catalog = await readFile(path.join(root, "coverage-data.js"), "utf8");
+  const http = await readFile(
+    path.join(root, "src/adapters/http/unsupported.ts"),
+    "utf8",
+  );
+  const scheduled = await readFile(
+    path.join(root, "src/adapters/scheduled/unsupported.ts"),
+    "utf8",
+  );
+  for (const name of [
+    "fastify",
+    "hono",
+    "elysia",
+    "sanic",
+    "agenda",
+    "apscheduler",
+  ]) {
+    assert.match(catalog, new RegExp(name, "i"), `coverage missing ${name}`);
+    const source = name === "apscheduler" || name === "agenda" ? scheduled : http;
+    assert.match(source, new RegExp(name.replace("-", "[-_]")), `adapter missing ${name}`);
+  }
+  assert.match(catalog, /LangChain/);
+  assert.match(catalog, /depth: "none"/);
 });

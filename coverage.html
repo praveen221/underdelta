@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Coverage — Underdelta</title>
+    <meta
+      name="description"
+      content="What Underdelta types, what it extracts, and what it refuses to invent."
+    />
+    <script>
+      try {
+        var savedTheme = localStorage.getItem("underdelta-theme");
+        if (savedTheme === "light" || savedTheme === "dark") {
+          document.documentElement.setAttribute("data-theme", savedTheme);
+        }
+      } catch (error) {}
+    </script>
+    <link rel="stylesheet" href="./site.css?v=20260824-coverage" />
+  </head>
+  <body class="coverage-page">
+    <nav class="topbar" aria-label="Primary navigation">
+      <div class="wrap topbar-inner">
+        <a class="topbar-brand" href="./index.html" aria-label="Underdelta home">
+          <span class="brand-mark" aria-hidden="true">Δ</span>
+          <span>Under<strong>delta</strong></span>
+        </a>
+        <div class="topbar-actions">
+          <a class="nav-link is-active" href="./coverage.html">Coverage</a>
+          <a class="nav-link" href="./index.html#why">Why</a>
+          <a class="nav-link" href="./index.html#principles">Principles</a>
+          <a class="nav-link" href="./index.html#contact">Contact</a>
+          <button
+            type="button"
+            class="theme-toggle"
+            id="theme-toggle"
+            aria-label="Switch to light theme"
+            aria-pressed="false"
+          >
+            <span class="theme-icon theme-icon-sun" aria-hidden="true">☼</span>
+            <span class="theme-icon theme-icon-moon" aria-hidden="true">◐</span>
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <div class="coverage-shell">
+      <aside class="coverage-nav" aria-label="Coverage categories">
+        <p class="coverage-nav-kicker">Catalog</p>
+        <h1>Semantic coverage</h1>
+        <p class="coverage-nav-lead">
+          Closed vocabulary. Depth is what an agent can trust, not a marketing
+          list of frameworks.
+        </p>
+        <p class="coverage-updated" id="coverage-updated"></p>
+        <nav class="coverage-cats" id="coverage-cats"></nav>
+      </aside>
+      <main class="coverage-main" id="coverage-main" tabindex="-1"></main>
+    </div>
+
+    <script src="./coverage-data.js"></script>
+    <script>
+      (function () {
+        var data = window.UNDERDELTA_COVERAGE;
+        var catsEl = document.getElementById("coverage-cats");
+        var mainEl = document.getElementById("coverage-main");
+        var updatedEl = document.getElementById("coverage-updated");
+        var themeToggle = document.getElementById("theme-toggle");
+
+        if (updatedEl && data && data.updated) {
+          updatedEl.textContent = "Updated " + data.updated;
+        }
+
+        function depthLabel(id) {
+          var item = (data.legend || []).find(function (entry) {
+            return entry.id === id;
+          });
+          return item ? item.label : id;
+        }
+
+        function parseHash() {
+          var raw = (location.hash || "").replace(/^#/, "");
+          var parts = raw.split("/").filter(Boolean);
+          return { category: parts[0] || "", stack: decodeURIComponent(parts[1] || "") };
+        }
+
+        function setHash(categoryId, stackName) {
+          var next = "#" + categoryId;
+          if (stackName) next += "/" + encodeURIComponent(stackName);
+          if (location.hash !== next) history.replaceState(null, "", next);
+        }
+
+        function renderNav(activeId) {
+          catsEl.innerHTML = "";
+          data.categories.forEach(function (category) {
+            var button = document.createElement("button");
+            button.type = "button";
+            button.className = "coverage-cat";
+            button.setAttribute("aria-current", category.id === activeId ? "true" : "false");
+            button.dataset.id = category.id;
+            button.innerHTML =
+              "<span>" +
+              category.label +
+              "</span><small>" +
+              category.stacks.length +
+              "</small>";
+            button.addEventListener("click", function () {
+              setHash(category.id);
+              render(category.id);
+            });
+            catsEl.appendChild(button);
+          });
+        }
+
+        function renderLegend() {
+          return (
+            '<ul class="coverage-legend">' +
+            data.legend
+              .map(function (item) {
+                return (
+                  "<li><b class=\"depth-pill depth-" +
+                  item.id +
+                  "\">" +
+                  item.label +
+                  "</b><span>" +
+                  item.meaning +
+                  "</span></li>"
+                );
+              })
+              .join("") +
+            "</ul>"
+          );
+        }
+
+        function render(categoryId) {
+          var category =
+            data.categories.find(function (item) {
+              return item.id === categoryId;
+            }) || data.categories[0];
+          renderNav(category.id);
+          setHash(category.id);
+
+          mainEl.innerHTML =
+            "<div class=\"coverage-panel\">" +
+            "<p class=\"section-index\">Coverage / " +
+            category.label +
+            "</p>" +
+            "<h2>" +
+            category.label +
+            "</h2>" +
+            "<p class=\"coverage-summary\">" +
+            category.summary +
+            "</p>" +
+            renderLegend() +
+            "<ul class=\"coverage-stacks\">" +
+            category.stacks
+              .map(function (stack) {
+                return (
+                  "<li class=\"coverage-stack\">" +
+                  "<div class=\"coverage-stack-head\">" +
+                  "<strong>" +
+                  stack.name +
+                  "</strong>" +
+                  "<b class=\"depth-pill depth-" +
+                  stack.depth +
+                  "\">" +
+                  depthLabel(stack.depth) +
+                  "</b>" +
+                  "</div>" +
+                  "<p>" +
+                  stack.detail +
+                  "</p>" +
+                  "</li>"
+                );
+              })
+              .join("") +
+            "</ul>" +
+            "<p class=\"coverage-foot\">Source of truth: <code>coverage-data.js</code>. " +
+            "Align detect-only names with the unsupported HTTP and scheduler adapters.</p>" +
+            "</div>";
+
+          mainEl.focus({ preventScroll: true });
+        }
+
+        function syncThemeToggle() {
+          if (!themeToggle) return;
+          var light = document.documentElement.getAttribute("data-theme") === "light";
+          themeToggle.setAttribute("aria-pressed", String(light));
+          themeToggle.setAttribute(
+            "aria-label",
+            light ? "Switch to dark theme" : "Switch to light theme",
+          );
+        }
+
+        syncThemeToggle();
+        if (themeToggle) {
+          themeToggle.addEventListener("click", function () {
+            var current =
+              document.documentElement.getAttribute("data-theme") === "light"
+                ? "light"
+                : "dark";
+            var next = current === "light" ? "dark" : "light";
+            document.documentElement.setAttribute("data-theme", next);
+            try {
+              localStorage.setItem("underdelta-theme", next);
+            } catch (error) {}
+            syncThemeToggle();
+          });
+        }
+
+        var initial = parseHash().category;
+        render(initial);
+        window.addEventListener("hashchange", function () {
+          render(parseHash().category);
+        });
+      })();
+    </script>
+  </body>
+</html>
