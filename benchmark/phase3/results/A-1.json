@@ -1,0 +1,228 @@
+{
+ "arm": "A",
+ "run": 1,
+ "tool_calls_total": 60,
+ "files_read_total": 21,
+ "commands_used": [
+  "graphify affected",
+  "graphify explain",
+  "graphify query",
+  "rg",
+  "cat",
+  "sed -n"
+ ],
+ "tasks": [
+  {
+   "id": "T1",
+   "endpoints": [
+    "DELETE /api/links/[linkId]",
+    "DELETE /api/partner-profile/programs/[programId]/links/[linkId]",
+    "DELETE /api/projects/[slug]/links/[linkId]",
+    "POST /api/cron/links/delete"
+   ],
+   "models": [
+    "Link",
+    "Project"
+   ],
+   "files": [],
+   "unknown_note": "Listed only handlers that import/call deleteLink. apps/web/lib/api/links/index.ts re-exports it; other barrel importers were excluded because they do not call deleteLink. Old /api/projects/[slug]/links/[linkId] re-exports the modern [linkId] route."
+  },
+  {
+   "id": "T2",
+   "endpoints": [
+    "GET /api/cron/domains/verify",
+    "GET /api/domains/[domain]/verify",
+    "GET /api/projects/[slug]/domains/[domain]/verify"
+   ],
+   "models": [],
+   "files": [],
+   "unknown_note": "verify-domain.ts only calls the Vercel Domains API; no Prisma writes in the file. Old /api/projects/[slug]/domains/[domain]/verify re-exports the modern verify route."
+  },
+  {
+   "id": "T3",
+   "endpoints": [
+    "GET /api/links",
+    "GET /api/links/count",
+    "GET /api/links/export",
+    "GET /api/projects/[slug]/links",
+    "GET /api/projects/[slug]/links/count",
+    "PATCH /api/embed/referrals/links/[linkId]",
+    "PATCH /api/links/[linkId]",
+    "PATCH /api/links/bulk",
+    "PATCH /api/partner-profile/programs/[programId]/links/[linkId]",
+    "PATCH /api/projects/[slug]/links/[linkId]",
+    "PATCH /api/projects/[slug]/links/bulk",
+    "POST /api/callback/stripe",
+    "POST /api/cron/export/links",
+    "POST /api/cron/groups/create-default-links",
+    "POST /api/cron/groups/remap-default-links",
+    "POST /api/cron/import/bitly",
+    "POST /api/cron/import/csv",
+    "POST /api/cron/import/firstpromoter",
+    "POST /api/cron/import/lemonsqueezy",
+    "POST /api/cron/import/partnerstack",
+    "POST /api/cron/import/rebrandly",
+    "POST /api/cron/import/rewardful",
+    "POST /api/cron/import/short",
+    "POST /api/cron/import/tapfiliate",
+    "POST /api/cron/import/tolt",
+    "POST /api/cron/sitemaps/import",
+    "POST /api/domains",
+    "POST /api/domains/client/register",
+    "POST /api/domains/register",
+    "POST /api/embed/referrals/links",
+    "POST /api/links",
+    "POST /api/links/bulk",
+    "POST /api/partner-profile/programs/[programId]/links",
+    "POST /api/partners",
+    "POST /api/partners/links",
+    "POST /api/projects/[slug]/domains",
+    "POST /api/projects/[slug]/links",
+    "POST /api/projects/[slug]/links/bulk",
+    "POST /api/slack/slash-commands",
+    "POST /api/stripe/webhook",
+    "POST /api/tokens/embed/referrals",
+    "POST /api/workflows/partner-approved",
+    "POST /api/workspaces/[idOrSlug]/import/bitly",
+    "POST /api/workspaces/[idOrSlug]/import/rebrandly",
+    "POST /api/workspaces/[idOrSlug]/import/short",
+    "POST /api/workspaces/[idOrSlug]/sitemaps/import",
+    "PUT /api/links/[linkId]",
+    "PUT /api/links/upsert",
+    "PUT /api/partners/links/upsert",
+    "PUT /api/projects/[slug]/links/[linkId]"
+   ],
+   "models": [],
+   "files": [],
+   "unknown_note": "combine-tag-ids.ts has no Prisma writes. Endpoints are those whose handlers call combineTagIds or call createLink/processLink/updateLink/bulkCreateLinks/bulkUpdateLinks/getLinksForWorkspace/getLinksCount (which call combineTagIds). Server actions (invite-partner, create-program, bulk-invite-partners"
+  },
+  {
+   "id": "T4",
+   "endpoints": [
+    "DELETE /api/domains/[domain]",
+    "DELETE /api/groups/[groupIdOrSlug]/default-links/[defaultLinkId]",
+    "DELETE /api/links/bulk",
+    "DELETE /api/projects/[slug]/domains/[domain]",
+    "DELETE /api/projects/[slug]/links/bulk",
+    "GET /api/cron/domains/verify",
+    "POST /api/admin/partners/delete-account",
+    "POST /api/callback/stripe",
+    "POST /api/cron/cleanup/demo-embed-partners",
+    "POST /api/cron/cleanup/e2e-tests",
+    "POST /api/cron/cleanup/link-retention",
+    "POST /api/cron/cleanup/unenrolled-partners",
+    "POST /api/cron/import/tapfiliate",
+    "POST /api/cron/import/tolt",
+    "POST /api/cron/partners/delete",
+    "POST /api/cron/workspaces/delete",
+    "POST /api/domains/client/register",
+    "POST /api/domains/register",
+    "POST /api/jobs/process/[jobName]",
+    "POST /api/stripe/webhook"
+   ],
+   "models": [
+    "Link",
+    "Project"
+   ],
+   "files": [],
+   "unknown_note": "Direct callers of bulkDeleteLinks plus in-process wrappers (bulkDeletePartners, cleanupPartners, deleteWorkspaceLinks). Also routes that dispatch domainDeletedJob/defaultLinkDeletedJob (those handlers call bulkDeleteLinks) and POST /api/jobs/process/[jobName] which executes them. delete-program-invi"
+  },
+  {
+   "id": "T5",
+   "endpoints": [
+    "DELETE /api/domains/[domain]",
+    "DELETE /api/projects/[slug]/domains/[domain]",
+    "GET /api/cron/domains/verify",
+    "POST /api/callback/stripe",
+    "POST /api/cron/cleanup/e2e-tests",
+    "POST /api/domains/client/register",
+    "POST /api/domains/register",
+    "POST /api/stripe/webhook"
+   ],
+   "models": [
+    "Domain"
+   ],
+   "files": [],
+   "unknown_note": "GET /api/cron/domains/verify reaches markDomainAsDeleted via handleDomainUpdates. Register/stripe paths go through claimDotLinkDomain or finalizePremiumDomainRegistration. POST /api/callback/stripe re-exports the Stripe webhook route. Old /api/projects/[slug]/domains/[domain] re-exports the modern d"
+  },
+  {
+   "id": "T6",
+   "endpoints": [],
+   "models": [
+    "Link"
+   ],
+   "files": [],
+   "unknown_note": "archiveLink is defined and re-exported from apps/web/lib/api/links/index.ts, but no file imports or calls the archiveLink symbol, so no HTTP handler reaches it."
+  },
+  {
+   "id": "T7",
+   "endpoints": [
+    "DELETE /api/projects/[slug]/tags/[id]",
+    "DELETE /api/tags/[id]",
+    "PATCH /api/projects/[slug]/tags/[id]",
+    "PATCH /api/tags/[id]",
+    "POST /api/cron/cleanup/e2e-tests",
+    "POST /api/cron/import/bitly",
+    "POST /api/cron/import/csv",
+    "POST /api/cron/import/rebrandly",
+    "POST /api/cron/import/short",
+    "POST /api/jobs/process/[jobName]",
+    "POST /api/projects/[slug]/tags",
+    "POST /api/tags",
+    "PUT /api/projects/[slug]/tags/[id]",
+    "PUT /api/tags/[id]"
+   ],
+   "models": [],
+   "files": [],
+   "unknown_note": "Writes are prisma.tag.create/createMany/update/updateMany/delete/deleteMany only. DELETE /api/tags/[id] updateMany-marks the tag and dispatches linkTagDeletedJob, which prisma.tag.delete-s via POST /api/jobs/process/[jobName]. Cron import bitly/rebrandly/short/csv write tags in the route or its util"
+  },
+  {
+   "id": "T8",
+   "endpoints": [
+    "DELETE /api/webhooks/[webhookId]",
+    "GET /api/slack/callback",
+    "PATCH /api/webhooks/[webhookId]",
+    "POST /api/callback/stripe",
+    "POST /api/stripe/webhook",
+    "POST /api/webhooks",
+    "POST /api/webhooks/callback"
+   ],
+   "models": [],
+   "files": [],
+   "unknown_note": "createWebhook is used by POST /api/webhooks and GET /api/slack/callback. PATCH/DELETE /api/webhooks/[webhookId] write directly. POST /api/webhooks/callback deletes on receiver disable and calls handleWebhookFailure/resetWebhookFailureCount. POST /api/stripe/webhook writes via customerSubscriptionDel"
+  },
+  {
+   "id": "T9",
+   "endpoints": [],
+   "models": [],
+   "files": [
+    "apps/web/app/(ee)/api/events/export/route.ts",
+    "apps/web/app/(ee)/api/events/route.ts",
+    "apps/web/app/api/analytics/export/route.ts",
+    "apps/web/app/api/analytics/route.ts",
+    "apps/web/app/api/dashboards/route.ts",
+    "apps/web/app/api/links/[linkId]/dashboard/route.ts",
+    "apps/web/app/api/links/[linkId]/route.ts",
+    "apps/web/app/api/links/[linkId]/transfer/route.ts",
+    "apps/web/app/api/links/info/route.ts"
+   ],
+   "unknown_note": ""
+  },
+  {
+   "id": "T10",
+   "endpoints": [],
+   "models": [],
+   "files": [
+    "apps/web/app/api/links/bulk/route.ts",
+    "apps/web/lib/api/links/bulk-create-links.ts",
+    "apps/web/lib/api/links/bulk-update-links.ts",
+    "apps/web/lib/api/links/create-link.ts",
+    "apps/web/lib/api/links/get-links-count.ts",
+    "apps/web/lib/api/links/get-links-for-workspace.ts",
+    "apps/web/lib/api/links/process-link.ts",
+    "apps/web/lib/api/links/update-link.ts"
+   ],
+   "unknown_note": ""
+  }
+ ]
+}

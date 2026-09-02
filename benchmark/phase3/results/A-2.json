@@ -1,0 +1,222 @@
+{
+ "arm": "A",
+ "run": 2,
+ "tool_calls_total": 88,
+ "files_read_total": 34,
+ "commands_used": [
+  "graphify affected",
+  "graphify explain",
+  "graphify query",
+  "rg",
+  "python3",
+  "sed",
+  "ls",
+  "which"
+ ],
+ "tasks": [
+  {
+   "id": "T1",
+   "endpoints": [
+    "DELETE /api/links/[linkId]",
+    "DELETE /api/partner-profile/programs/[programId]/links/[linkId]",
+    "DELETE /api/projects/[slug]/links/[linkId]",
+    "POST /api/cron/links/delete"
+   ],
+   "models": [
+    "Link",
+    "Project"
+   ],
+   "files": [],
+   "unknown_note": "Prisma writes evidenced in delete-link.ts: prisma.link.delete and prisma.project.update. Callers of deleteLink(): links/[linkId] DELETE, partner-profile links/[linkId] DELETE, cron/links/delete POST. Old projects/[slug]/links/[linkId] re-exports the current links/[linkId] route."
+  },
+  {
+   "id": "T2",
+   "endpoints": [
+    "GET /api/cron/domains/verify",
+    "GET /api/domains/[domain]/verify",
+    "GET /api/projects/[slug]/domains/[domain]/verify"
+   ],
+   "models": [],
+   "files": [],
+   "unknown_note": "verify-domain.ts has no Prisma writes (Vercel HTTP verify only). Cron calls verifyDomain; /api/domains/[domain]/verify calls verifyDomainWithRetry. Old projects/[slug]/domains/[domain]/verify re-exports the current verify route."
+  },
+  {
+   "id": "T3",
+   "endpoints": [
+    "GET /api/links",
+    "GET /api/links/count",
+    "GET /api/links/export",
+    "GET /api/projects/[slug]/links",
+    "GET /api/projects/[slug]/links/count",
+    "PATCH /api/embed/referrals/links/[linkId]",
+    "PATCH /api/links/[linkId]",
+    "PATCH /api/links/bulk",
+    "PATCH /api/partner-profile/programs/[programId]/links/[linkId]",
+    "PATCH /api/projects/[slug]/links/[linkId]",
+    "PATCH /api/projects/[slug]/links/bulk",
+    "POST /api/cron/export/links",
+    "POST /api/cron/groups/create-default-links",
+    "POST /api/cron/groups/remap-default-links",
+    "POST /api/cron/import/bitly",
+    "POST /api/cron/import/csv",
+    "POST /api/cron/import/firstpromoter",
+    "POST /api/cron/import/lemonsqueezy",
+    "POST /api/cron/import/partnerstack",
+    "POST /api/cron/import/rebrandly",
+    "POST /api/cron/import/rewardful",
+    "POST /api/cron/import/short",
+    "POST /api/cron/import/tapfiliate",
+    "POST /api/cron/import/tolt",
+    "POST /api/cron/sitemaps/import",
+    "POST /api/domains",
+    "POST /api/domains/client/register",
+    "POST /api/domains/register",
+    "POST /api/embed/referrals/links",
+    "POST /api/links",
+    "POST /api/links/bulk",
+    "POST /api/partner-profile/programs/[programId]/links",
+    "POST /api/partners",
+    "POST /api/partners/links",
+    "POST /api/projects/[slug]/domains",
+    "POST /api/projects/[slug]/links",
+    "POST /api/projects/[slug]/links/bulk",
+    "POST /api/slack/slash-commands",
+    "POST /api/stripe/webhook",
+    "POST /api/callback/stripe",
+    "POST /api/tokens/embed/referrals",
+    "POST /api/workflows/partner-approved",
+    "POST /api/workspaces/[idOrSlug]/import/bitly",
+    "POST /api/workspaces/[idOrSlug]/import/rebrandly",
+    "POST /api/workspaces/[idOrSlug]/import/short",
+    "POST /api/workspaces/[idOrSlug]/sitemaps/import",
+    "PUT /api/links/[linkId]",
+    "PUT /api/links/upsert",
+    "PUT /api/partners/links/upsert",
+    "PUT /api/projects/[slug]/links/[linkId]"
+   ],
+   "models": [],
+   "files": [],
+   "unknown_note": "combine-tag-ids.ts has no Prisma writes. Endpoints listed actually call combineTagIds or call processLink/createLink/updateLink/bulkCreateLinks/bulkUpdateLinks/getLinksForWorkspace/getLinksCount (each of which calls combineTagIds). Server actions invite-partner/bulk-invite-partners/create-program al"
+  },
+  {
+   "id": "T4",
+   "endpoints": [
+    "DELETE /api/links/bulk",
+    "DELETE /api/projects/[slug]/links/bulk",
+    "POST /api/admin/partners/delete-account",
+    "POST /api/cron/cleanup/demo-embed-partners",
+    "POST /api/cron/cleanup/e2e-tests",
+    "POST /api/cron/cleanup/link-retention",
+    "POST /api/cron/cleanup/unenrolled-partners",
+    "POST /api/cron/import/tapfiliate",
+    "POST /api/cron/import/tolt",
+    "POST /api/cron/partners/delete",
+    "POST /api/cron/workspaces/delete",
+    "POST /api/jobs/process/[jobName]"
+   ],
+   "models": [
+    "Link",
+    "Project"
+   ],
+   "files": [],
+   "unknown_note": "Prisma writes in bulk-delete-links.ts: tx.link.deleteMany and tx.project.update. Additional callers reach bulkDeleteLinks via bulkDeletePartners, cleanupPartners, or deleteWorkspaceLinks. domain-deleted-job and default-link-deleted-job also call bulkDeleteLinks; they run on POST /api/jobs/process/[j"
+  },
+  {
+   "id": "T5",
+   "endpoints": [
+    "DELETE /api/domains/[domain]",
+    "DELETE /api/projects/[slug]/domains/[domain]",
+    "GET /api/cron/domains/verify",
+    "POST /api/callback/stripe",
+    "POST /api/cron/cleanup/e2e-tests",
+    "POST /api/domains/client/register",
+    "POST /api/domains/register",
+    "POST /api/stripe/webhook"
+   ],
+   "models": [
+    "Domain"
+   ],
+   "files": [],
+   "unknown_note": "Prisma write in mark-domain-deleted.ts is prisma.domain.update only. Call chain: DELETE domains/[domain]; cron cleanup e2e; cron domains/verify via handleDomainUpdates; claimDotLinkDomain from POST /api/domains/register and /api/domains/client/register and stripe checkout.session.completed; finalize"
+  },
+  {
+   "id": "T6",
+   "endpoints": [],
+   "models": [
+    "Link"
+   ],
+   "files": [],
+   "unknown_note": "archiveLink is exported from archive-link.ts and re-exported by lib/api/links/index.ts, but no HTTP handler (or other file) calls archiveLink(. Prisma write in the file is prisma.link.update. Graphify affected only showed barrel imports_from, not calls."
+  },
+  {
+   "id": "T7",
+   "endpoints": [
+    "DELETE /api/projects/[slug]/tags/[id]",
+    "DELETE /api/tags/[id]",
+    "PATCH /api/projects/[slug]/tags/[id]",
+    "PATCH /api/tags/[id]",
+    "POST /api/cron/cleanup/e2e-tests",
+    "POST /api/cron/import/bitly",
+    "POST /api/cron/import/csv",
+    "POST /api/cron/import/rebrandly",
+    "POST /api/cron/import/short",
+    "POST /api/jobs/process/[jobName]",
+    "POST /api/projects/[slug]/tags",
+    "POST /api/tags",
+    "PUT /api/projects/[slug]/tags/[id]",
+    "PUT /api/tags/[id]"
+   ],
+   "models": [],
+   "files": [],
+   "unknown_note": "Direct prisma.tag create/update/updateMany/delete/deleteMany sites: tags/route POST create; tags/[id] PATCH/PUT update and DELETE updateMany; cron cleanup e2e deleteMany; cron import csv/bitly/rebrandly/short createMany and bitly/rebrandly utils deleteMany. link-tag-deleted-job prisma.tag.delete run"
+  },
+  {
+   "id": "T8",
+   "endpoints": [
+    "DELETE /api/webhooks/[webhookId]",
+    "GET /api/slack/callback",
+    "PATCH /api/webhooks/[webhookId]",
+    "POST /api/callback/stripe",
+    "POST /api/stripe/webhook",
+    "POST /api/webhooks",
+    "POST /api/webhooks/callback"
+   ],
+   "models": [],
+   "files": [],
+   "unknown_note": "Direct prisma.webhook writes: createWebhook (POST /api/webhooks, GET /api/slack/callback); tx.webhook.update PATCH /api/webhooks/[webhookId]; prisma.webhook.delete DELETE /api/webhooks/[webhookId] and POST /api/webhooks/callback; handleWebhookFailure/resetWebhookFailureCount update from callback; st"
+  },
+  {
+   "id": "T9",
+   "endpoints": [],
+   "models": [],
+   "files": [
+    "apps/web/app/(ee)/api/events/export/route.ts",
+    "apps/web/app/(ee)/api/events/route.ts",
+    "apps/web/app/api/analytics/export/route.ts",
+    "apps/web/app/api/analytics/route.ts",
+    "apps/web/app/api/dashboards/route.ts",
+    "apps/web/app/api/links/[linkId]/dashboard/route.ts",
+    "apps/web/app/api/links/[linkId]/route.ts",
+    "apps/web/app/api/links/[linkId]/transfer/route.ts",
+    "apps/web/app/api/links/info/route.ts"
+   ],
+   "unknown_note": "rg for getLinkOrThrow / get-link-or-throw imports; definition file omitted."
+  },
+  {
+   "id": "T10",
+   "endpoints": [],
+   "models": [],
+   "files": [
+    "apps/web/app/api/links/bulk/route.ts",
+    "apps/web/lib/api/links/bulk-create-links.ts",
+    "apps/web/lib/api/links/bulk-update-links.ts",
+    "apps/web/lib/api/links/create-link.ts",
+    "apps/web/lib/api/links/get-links-count.ts",
+    "apps/web/lib/api/links/get-links-for-workspace.ts",
+    "apps/web/lib/api/links/process-link.ts",
+    "apps/web/lib/api/links/update-link.ts"
+   ],
+   "unknown_note": "rg for combineTagIds / combine-tag-ids imports; definition file omitted."
+  }
+ ]
+}
