@@ -1,0 +1,509 @@
+{
+  "generatedAt": "2026-09-02T13:00:42.779Z",
+  "semantic": {
+    "n": 25,
+    "baselineCorrect": 6,
+    "underdeltaCorrect": 20,
+    "graphifyCorrect": 4,
+    "baselineInvented": 37,
+    "underdeltaInvented": 0,
+    "graphifyInvented": 0,
+    "baselineRecall": 0.32,
+    "underdeltaRecall": 0.7,
+    "graphifyRecall": 0.184
+  },
+  "questions": [
+    {
+      "id": "EX1",
+      "repo": "node-express-realworld",
+      "question": "Which HTTP endpoints write the Article table?",
+      "bucket": "semantic",
+      "B": true,
+      "U": true,
+      "G": false,
+      "Urecall": 1,
+      "Grecall": 0,
+      "Umissed": [],
+      "Gmissed": [
+        "POST /articles",
+        "PUT /articles/:slug",
+        "DELETE /articles/:slug",
+        "POST /articles/:slug/favorite",
+        "DELETE /articles/:slug/favorite"
+      ],
+      "Binvented": 0
+    },
+    {
+      "id": "EX2",
+      "repo": "node-express-realworld",
+      "question": "Which HTTP endpoints write the Comment table?",
+      "bucket": "semantic",
+      "B": true,
+      "U": true,
+      "G": false,
+      "Urecall": 1,
+      "Grecall": 0,
+      "Umissed": [],
+      "Gmissed": [
+        "POST /articles/:slug/comments",
+        "DELETE /articles/:slug/comments/:id"
+      ],
+      "Binvented": 0
+    },
+    {
+      "id": "EX3",
+      "repo": "node-express-realworld",
+      "question": "If article.service.ts changes, which HTTP endpoints are affected?",
+      "bucket": "semantic",
+      "B": true,
+      "U": true,
+      "G": false,
+      "Urecall": 1,
+      "Grecall": 0,
+      "Umissed": [],
+      "Gmissed": [
+        "GET /articles",
+        "GET /articles/feed",
+        "GET /articles/:slug",
+        "GET /articles/:slug/comments",
+        "POST /articles",
+        "POST /articles/:slug/comments",
+        "POST /articles/:slug/favorite",
+        "PUT /articles/:slug",
+        "DELETE /articles/:slug",
+        "DELETE /articles/:slug/comments/:id",
+        "DELETE /articles/:slug/favorite"
+      ],
+      "Binvented": 0
+    },
+    {
+      "id": "EX4",
+      "repo": "node-express-realworld",
+      "question": "What did the tool refuse to invent on this Express/Prisma app?",
+      "bucket": "semantic",
+      "B": false,
+      "U": true,
+      "G": false,
+      "Umissed": [],
+      "Gmissed": [
+        "structured unknown"
+      ],
+      "Binvented": 0
+    },
+    {
+      "id": "EX5",
+      "repo": "node-express-realworld",
+      "question": "Who calls getArticle()?",
+      "bucket": "generic-nav",
+      "B": false,
+      "U": true,
+      "G": false,
+      "Urecall": 1,
+      "Grecall": 0,
+      "Umissed": [],
+      "Gmissed": [
+        "src/app/routes/article/article.controller.ts"
+      ],
+      "Binvented": 0
+    },
+    {
+      "id": "NX1",
+      "repo": "nextjs-saas-starter",
+      "question": "What App Router HTTP API endpoints exist?",
+      "bucket": "semantic",
+      "B": true,
+      "U": true,
+      "G": false,
+      "Urecall": 1,
+      "Grecall": 0,
+      "Umissed": [],
+      "Gmissed": [
+        "GET /api/user",
+        "GET /api/team",
+        "GET /api/stripe/checkout",
+        "POST /api/stripe/webhook"
+      ],
+      "Binvented": 0
+    },
+    {
+      "id": "NX2",
+      "repo": "nextjs-saas-starter",
+      "question": "Which product surfaces write the users table?",
+      "bucket": "semantic",
+      "B": false,
+      "U": false,
+      "G": false,
+      "Urecall": 0,
+      "Grecall": 0,
+      "Umissed": [
+        "app/(login)/actions.ts"
+      ],
+      "Gmissed": [
+        "app/(login)/actions.ts"
+      ],
+      "Binvented": 0
+    },
+    {
+      "id": "NX3",
+      "repo": "nextjs-saas-starter",
+      "question": "Does the tool admit Drizzle db.insert/select are unresolved?",
+      "bucket": "semantic",
+      "B": false,
+      "U": true,
+      "G": false,
+      "Umissed": [],
+      "Gmissed": [
+        "structured unknown"
+      ],
+      "Binvented": 0
+    },
+    {
+      "id": "NX4",
+      "repo": "nextjs-saas-starter",
+      "question": "If lib/payments/stripe.ts changes, which endpoints are affected?",
+      "bucket": "semantic",
+      "B": false,
+      "U": false,
+      "G": false,
+      "Urecall": 0.5,
+      "Grecall": 0,
+      "Umissed": [
+        "GET /api/stripe/checkout"
+      ],
+      "Gmissed": [
+        "POST /api/stripe/webhook",
+        "GET /api/stripe/checkout"
+      ],
+      "Binvented": 0
+    },
+    {
+      "id": "FA1",
+      "repo": "fastapi-realworld",
+      "question": "What HTTP endpoints exist for articles?",
+      "bucket": "semantic",
+      "B": false,
+      "U": true,
+      "G": false,
+      "Urecall": 1,
+      "Grecall": 0,
+      "Umissed": [],
+      "Gmissed": [
+        "GET /api/articles",
+        "GET /api/articles/feed",
+        "GET /api/articles/{slug}",
+        "POST /api/articles",
+        "PUT /api/articles/{slug}",
+        "DELETE /api/articles/{slug}",
+        "POST /api/articles/{slug}/favorite",
+        "DELETE /api/articles/{slug}/favorite"
+      ],
+      "Binvented": 0
+    },
+    {
+      "id": "FA2",
+      "repo": "fastapi-realworld",
+      "question": "Where is the users table inserted?",
+      "bucket": "semantic",
+      "B": false,
+      "U": false,
+      "G": false,
+      "Urecall": 0,
+      "Grecall": 0,
+      "Umissed": [
+        "app/db/queries/sql/users.sql"
+      ],
+      "Gmissed": [
+        "app/db/queries/sql/users.sql"
+      ],
+      "Binvented": 0
+    },
+    {
+      "id": "FA3",
+      "repo": "fastapi-realworld",
+      "question": "If app/api/routes/articles/articles_resource.py changes, which endpoints are affected?",
+      "bucket": "semantic",
+      "B": false,
+      "U": true,
+      "G": false,
+      "Urecall": 1,
+      "Grecall": 0,
+      "Umissed": [],
+      "Gmissed": [
+        "GET /api/articles",
+        "POST /api/articles",
+        "GET /api/articles/{slug}",
+        "PUT /api/articles/{slug}",
+        "DELETE /api/articles/{slug}"
+      ],
+      "Binvented": 3
+    },
+    {
+      "id": "HS1",
+      "repo": "hackathon-starter",
+      "question": "What Mongo collections exist?",
+      "bucket": "semantic",
+      "B": false,
+      "U": true,
+      "G": false,
+      "Urecall": 1,
+      "Grecall": 0,
+      "Umissed": [],
+      "Gmissed": [
+        "User",
+        "Session"
+      ],
+      "Binvented": 0
+    },
+    {
+      "id": "HS2",
+      "repo": "hackathon-starter",
+      "question": "Which HTTP endpoints create or persist a User?",
+      "bucket": "semantic",
+      "B": false,
+      "U": false,
+      "G": false,
+      "Urecall": 0,
+      "Grecall": 0,
+      "Umissed": [
+        "POST /signup",
+        "POST /login",
+        "POST /account/profile"
+      ],
+      "Gmissed": [
+        "POST /signup",
+        "POST /login",
+        "POST /account/profile"
+      ],
+      "Binvented": 11
+    },
+    {
+      "id": "HS3",
+      "repo": "hackathon-starter",
+      "question": "If controllers/user.js changes, which user-account endpoints are affected?",
+      "bucket": "semantic",
+      "B": false,
+      "U": false,
+      "G": false,
+      "Urecall": 0,
+      "Grecall": 0,
+      "Umissed": [
+        "POST /signup",
+        "GET /login",
+        "POST /login",
+        "GET /account",
+        "POST /account/profile"
+      ],
+      "Gmissed": [
+        "POST /signup",
+        "GET /login",
+        "POST /login",
+        "GET /account",
+        "POST /account/profile"
+      ],
+      "Binvented": 23
+    },
+    {
+      "id": "PS1",
+      "repo": "swagger-petstore",
+      "question": "What pet HTTP operations does the OpenAPI contract declare?",
+      "bucket": "semantic",
+      "B": false,
+      "U": true,
+      "G": false,
+      "Urecall": 1,
+      "Grecall": 0,
+      "Umissed": [],
+      "Gmissed": [
+        "POST /pet",
+        "PUT /pet",
+        "GET /pet/{petId}",
+        "DELETE /pet/{petId}",
+        "GET /pet/findByStatus"
+      ],
+      "Binvented": 0
+    },
+    {
+      "id": "PS2",
+      "repo": "swagger-petstore",
+      "question": "What store operations exist?",
+      "bucket": "semantic",
+      "B": false,
+      "U": true,
+      "G": false,
+      "Urecall": 1,
+      "Grecall": 0,
+      "Umissed": [],
+      "Gmissed": [
+        "GET /store/inventory",
+        "POST /store/order",
+        "GET /store/order/{orderId}",
+        "DELETE /store/order/{orderId}"
+      ],
+      "Binvented": 0
+    },
+    {
+      "id": "GQ1",
+      "repo": "graphql-client-example-server",
+      "question": "What GraphQL mutations exist for todos?",
+      "bucket": "semantic",
+      "B": false,
+      "U": true,
+      "G": false,
+      "Urecall": 1,
+      "Grecall": 0,
+      "Umissed": [],
+      "Gmissed": [
+        "MUTATION addTodoItem",
+        "MUTATION addTodoSimple",
+        "MUTATION deleteTodoItem",
+        "MUTATION deleteTodoSimple",
+        "MUTATION updateTodoItem",
+        "MUTATION updateTodoSimple"
+      ],
+      "Binvented": 0
+    },
+    {
+      "id": "GQ2",
+      "repo": "graphql-client-example-server",
+      "question": "Is there a Query.todos field?",
+      "bucket": "generic-nav",
+      "B": false,
+      "U": true,
+      "G": false,
+      "Urecall": 1,
+      "Grecall": 0,
+      "Umissed": [],
+      "Gmissed": [
+        "todos"
+      ],
+      "Binvented": 0
+    },
+    {
+      "id": "VO1",
+      "repo": "example-voting-app",
+      "question": "What deploy units / services make up the voting app?",
+      "bucket": "semantic",
+      "B": false,
+      "U": true,
+      "G": false,
+      "Urecall": 1,
+      "Grecall": 0.2,
+      "Umissed": [],
+      "Gmissed": [
+        "vote",
+        "worker",
+        "redis",
+        "db"
+      ],
+      "Binvented": 0
+    },
+    {
+      "id": "VO2",
+      "repo": "example-voting-app",
+      "question": "Is Redis a runtime dependency of the stack?",
+      "bucket": "semantic",
+      "B": true,
+      "U": true,
+      "G": true,
+      "Urecall": 1,
+      "Grecall": 1,
+      "Umissed": [],
+      "Gmissed": [],
+      "Binvented": 0
+    },
+    {
+      "id": "TF1",
+      "repo": "terraform-aws-vpc",
+      "question": "Does the module model AWS VPC as a deploy unit?",
+      "bucket": "semantic",
+      "B": false,
+      "U": true,
+      "G": true,
+      "Urecall": 1,
+      "Grecall": 1,
+      "Umissed": [],
+      "Gmissed": [],
+      "Binvented": 0
+    },
+    {
+      "id": "BQ1",
+      "repo": "microservices-demo",
+      "question": "Which microservices does the k8s demo deploy?",
+      "bucket": "semantic",
+      "B": false,
+      "U": true,
+      "G": false,
+      "Urecall": 1,
+      "Grecall": 0.4,
+      "Umissed": [],
+      "Gmissed": [
+        "cartservice",
+        "currencyservice",
+        "paymentservice",
+        "emailservice",
+        "recommendationservice",
+        "adservice"
+      ],
+      "Binvented": 0
+    },
+    {
+      "id": "BQ2",
+      "repo": "microservices-demo",
+      "question": "Does the tool refuse to invent Go/Java HTTP endpoints?",
+      "bucket": "semantic",
+      "B": false,
+      "U": true,
+      "G": false,
+      "Umissed": [],
+      "Gmissed": [
+        "structured unknown"
+      ],
+      "Binvented": 0
+    },
+    {
+      "id": "HE1",
+      "repo": "helm-examples",
+      "question": "What Helm chart is in this repo?",
+      "bucket": "semantic",
+      "B": true,
+      "U": true,
+      "G": true,
+      "Urecall": 1,
+      "Grecall": 1,
+      "Umissed": [],
+      "Gmissed": [],
+      "Binvented": 0
+    },
+    {
+      "id": "PO1",
+      "repo": "podinfo",
+      "question": "Does the Go app expose /healthz and /readyz?",
+      "bucket": "semantic",
+      "B": false,
+      "U": true,
+      "G": false,
+      "Urecall": 1,
+      "Grecall": 0,
+      "Umissed": [],
+      "Gmissed": [
+        "GET /healthz",
+        "GET /readyz"
+      ],
+      "Binvented": 0
+    },
+    {
+      "id": "PO2",
+      "repo": "podinfo",
+      "question": "Is podinfo packaged as a Helm chart and kustomize overlay?",
+      "bucket": "semantic",
+      "B": false,
+      "U": true,
+      "G": true,
+      "Urecall": 1,
+      "Grecall": 1,
+      "Umissed": [],
+      "Gmissed": [],
+      "Binvented": 0
+    }
+  ]
+}

@@ -21,6 +21,7 @@
     "test:viewer:ci": "npm run build && playwright test",
     "test:query": "npm run build && node --test test/query.test.mjs",
     "verify": "npm run build && node --test test/extractors.test.mjs test/adapters.test.mjs test/projection.test.mjs test/policy.test.mjs test/reachability.test.mjs test/query.test.mjs test/self.test.mjs",
+    "bench:phase2": "node benchmark/phase2-run.mjs",
     "start": "npm run build && node dist/cli.js scan . --serve",
     "scan": "node dist/cli.js scan",
     "inspect": "npm run build && node scripts/inspect.mjs"
