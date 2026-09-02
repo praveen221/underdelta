@@ -7,4 +7,5 @@ test-results/
 .underdelta-real/
 .dogfood-scans/
 .dogfood-repos/
+benchmark/results/phase2.json
 *.log

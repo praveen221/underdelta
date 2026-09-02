@@ -1,0 +1,207 @@
+{
+ "arm": "B",
+ "run": 1,
+ "tool_calls_total": 52,
+ "files_read_total": 10,
+ "commands_used": [
+  "node /workspace/dist/cli.js query unknown --cwd /tmp/p3/dub --limit 0",
+  "node /workspace/dist/cli.js query impact --files apps/web/lib/api/links/delete-link.ts --cwd /tmp/p3/dub",
+  "node /workspace/dist/cli.js query impact --files apps/web/lib/api/domains/verify-domain.ts --cwd /tmp/p3/dub",
+  "node /workspace/dist/cli.js query impact --files apps/web/lib/api/tags/combine-tag-ids.ts --cwd /tmp/p3/dub",
+  "node /workspace/dist/cli.js query impact --files apps/web/lib/api/links/bulk-delete-links.ts --cwd /tmp/p3/dub",
+  "node /workspace/dist/cli.js query impact --files apps/web/lib/api/domains/mark-domain-deleted.ts --cwd /tmp/p3/dub",
+  "node /workspace/dist/cli.js query impact --files apps/web/lib/api/links/archive-link.ts --cwd /tmp/p3/dub",
+  "node /workspace/dist/cli.js query writes Tag --cwd /tmp/p3/dub",
+  "node /workspace/dist/cli.js query writes Webhook --cwd /tmp/p3/dub",
+  "graphify affected/explain/query --graph graphify-out/graph.json",
+  "rg prisma.<model>.(create|update|upsert|delete) and import/call sites",
+  "rg export const GET|POST|PUT|PATCH|DELETE on route.ts files"
+ ],
+ "tasks": [
+  {
+   "id": "T1",
+   "endpoints": [
+    "DELETE /api/links/[linkId]",
+    "DELETE /api/partner-profile/programs/[programId]/links/[linkId]",
+    "POST /api/cron/links/delete"
+   ],
+   "models": [
+    "Link",
+    "Project"
+   ],
+   "files": [],
+   "unknown_note": "Underdelta impact listed only POST /api/cron/links/delete (unresolved linkCache.delete; limitations: freshly compiled graph; unsupported frameworks never appear as typed endpoints; 1 unresolved/ambiguous call in neighborhood). Graphify affected deleteLink() plus rg evidenced the two DELETE handlers "
+  },
+  {
+   "id": "T2",
+   "endpoints": [
+    "GET /api/cron/domains/verify",
+    "GET /api/domains/[domain]/verify"
+   ],
+   "models": [],
+   "files": [],
+   "unknown_note": "Underdelta impact returned zero endpoints and zero resources (limitations: freshly compiled graph; unsupported frameworks never appear as typed endpoints). Filled from Graphify affected verifyDomain()/verifyDomainWithRetry() and rg: GET cron handler calls verifyDomain at apps/web/app/(ee)/api/cron/d"
+  },
+  {
+   "id": "T3",
+   "endpoints": [
+    "GET /api/links",
+    "GET /api/links/count",
+    "GET /api/links/export",
+    "PATCH /api/embed/referrals/links/[linkId]",
+    "PATCH /api/links/[linkId]",
+    "PATCH /api/links/bulk",
+    "PATCH /api/partner-profile/programs/[programId]/links/[linkId]",
+    "POST /api/cron/export/links",
+    "POST /api/cron/groups/create-default-links",
+    "POST /api/cron/groups/remap-default-links",
+    "POST /api/cron/import/bitly",
+    "POST /api/cron/import/csv",
+    "POST /api/cron/import/firstpromoter",
+    "POST /api/cron/import/lemonsqueezy",
+    "POST /api/cron/import/partnerstack",
+    "POST /api/cron/import/rebrandly",
+    "POST /api/cron/import/rewardful",
+    "POST /api/cron/import/short",
+    "POST /api/cron/import/tapfiliate",
+    "POST /api/cron/import/tolt",
+    "POST /api/cron/sitemaps/import",
+    "POST /api/domains",
+    "POST /api/domains/client/register",
+    "POST /api/domains/register",
+    "POST /api/embed/referrals/links",
+    "POST /api/links",
+    "POST /api/links/bulk",
+    "POST /api/partner-profile/programs/[programId]/links",
+    "POST /api/partners",
+    "POST /api/partners/links",
+    "POST /api/slack/slash-commands",
+    "POST /api/stripe/webhook",
+    "POST /api/tokens/embed/referrals",
+    "POST /api/workflows/partner-approved",
+    "POST /api/workspaces/[idOrSlug]/import/bitly",
+    "POST /api/workspaces/[idOrSlug]/import/rebrandly",
+    "POST /api/workspaces/[idOrSlug]/import/short",
+    "POST /api/workspaces/[idOrSlug]/sitemaps/import",
+    "PUT /api/links/[linkId]",
+    "PUT /api/links/upsert",
+    "PUT /api/partners/links/upsert"
+   ],
+   "models": [],
+   "files": [],
+   "unknown_note": "Underdelta impact returned 9 endpoints (cron groups/import/export + POST /api/slack/slash-commands); limitations: freshly compiled graph; unsupported frameworks never appear as typed endpoints. Remainder are Graphify affected combineTagIds() depth-4 [calls] edges (createLink/processLink/updateLink/b"
+  },
+  {
+   "id": "T4",
+   "endpoints": [
+    "DELETE /api/links/bulk",
+    "POST /api/admin/partners/delete-account",
+    "POST /api/cron/cleanup/demo-embed-partners",
+    "POST /api/cron/cleanup/e2e-tests",
+    "POST /api/cron/cleanup/link-retention",
+    "POST /api/cron/cleanup/unenrolled-partners",
+    "POST /api/cron/import/tapfiliate",
+    "POST /api/cron/import/tolt",
+    "POST /api/cron/partners/delete",
+    "POST /api/cron/workspaces/delete",
+    "POST /api/jobs/process/[jobName]"
+   ],
+   "models": [
+    "Link",
+    "Project"
+   ],
+   "files": [],
+   "unknown_note": "Underdelta impact listed 4 cleanup crons only (unresolved linkCache.deleteMany; limitations: freshly compiled graph; unsupported frameworks never appear as typed endpoints; 1 unresolved/ambiguous call). Graphify affected bulkDeleteLinks() [calls] plus rg added DELETE /api/links/bulk, admin delete-ac"
+  },
+  {
+   "id": "T5",
+   "endpoints": [
+    "DELETE /api/domains/[domain]",
+    "GET /api/cron/domains/verify",
+    "POST /api/cron/cleanup/e2e-tests",
+    "POST /api/domains/client/register",
+    "POST /api/domains/register",
+    "POST /api/stripe/webhook"
+   ],
+   "models": [
+    "Domain"
+   ],
+   "files": [],
+   "unknown_note": "Underdelta impact listed POST /api/cron/cleanup/e2e-tests and POST /api/stripe/webhook (limitations: freshly compiled graph; unsupported frameworks never appear as typed endpoints). Graphify affected markDomainAsDeleted() added DELETE /api/domains/[domain] (call :318), GET /api/cron/domains/verify v"
+  },
+  {
+   "id": "T6",
+   "endpoints": [],
+   "models": [
+    "Link"
+   ],
+   "files": [],
+   "unknown_note": "Underdelta impact listed no endpoints (only resource Link). Graphify affected archiveLink() returned no affected nodes. rg found no callers of archiveLink besides its definition; links/index.ts re-exports it but no route imports archiveLink. Direct write: prisma.link.update:10. Function appears unus"
+  },
+  {
+   "id": "T7",
+   "endpoints": [
+    "DELETE /api/tags/[id]",
+    "PATCH /api/tags/[id]",
+    "POST /api/cron/cleanup/e2e-tests",
+    "POST /api/cron/import/bitly",
+    "POST /api/cron/import/csv",
+    "POST /api/cron/import/rebrandly",
+    "POST /api/cron/import/short",
+    "POST /api/jobs/process/[jobName]",
+    "POST /api/tags",
+    "PUT /api/tags/[id]"
+   ],
+   "models": [],
+   "files": [],
+   "unknown_note": "Underdelta query writes Tag (limitations: only observed/derived writes edges; missing writers may mean no adapter, not nobody writes). Quoted endpoint-kind writers plus HTTP methods verified on module writers tags/route.ts (POST create :120) and tags/[id]/route.ts (PATCH update :30, DELETE updateMan"
+  },
+  {
+   "id": "T8",
+   "endpoints": [
+    "DELETE /api/webhooks/[webhookId]",
+    "GET /api/slack/callback",
+    "PATCH /api/webhooks/[webhookId]",
+    "POST /api/stripe/webhook",
+    "POST /api/webhooks",
+    "POST /api/webhooks/callback"
+   ],
+   "models": [],
+   "files": [],
+   "unknown_note": "Underdelta query writes Webhook (limitations: only observed/derived writes edges; missing writers may mean no adapter). Quoted endpoint-kind writers GET /api/slack/callback, POST /api/stripe/webhook, POST /api/webhooks/callback. Module writer webhooks/[webhookId]/route.ts verified as PATCH (tx.webho"
+  },
+  {
+   "id": "T9",
+   "endpoints": [],
+   "models": [],
+   "files": [
+    "apps/web/app/(ee)/api/events/export/route.ts",
+    "apps/web/app/(ee)/api/events/route.ts",
+    "apps/web/app/api/analytics/export/route.ts",
+    "apps/web/app/api/analytics/route.ts",
+    "apps/web/app/api/dashboards/route.ts",
+    "apps/web/app/api/links/[linkId]/dashboard/route.ts",
+    "apps/web/app/api/links/[linkId]/route.ts",
+    "apps/web/app/api/links/[linkId]/transfer/route.ts",
+    "apps/web/app/api/links/info/route.ts"
+   ],
+   "unknown_note": "Direct importers of getLinkOrThrow from get-link-or-throw.ts via rg and Graphify affected getLinkOrThrow() [imports]. Not re-exported from apps/web/lib/api/links/index.ts. Graphify imports_from on analytics/[eventType] and (old) project routes are re-exports of those importers, not additional import"
+  },
+  {
+   "id": "T10",
+   "endpoints": [],
+   "models": [],
+   "files": [
+    "apps/web/app/api/links/bulk/route.ts",
+    "apps/web/lib/api/links/bulk-create-links.ts",
+    "apps/web/lib/api/links/bulk-update-links.ts",
+    "apps/web/lib/api/links/create-link.ts",
+    "apps/web/lib/api/links/get-links-count.ts",
+    "apps/web/lib/api/links/get-links-for-workspace.ts",
+    "apps/web/lib/api/links/process-link.ts",
+    "apps/web/lib/api/links/update-link.ts"
+   ],
+   "unknown_note": "Direct importers of combineTagIds from combine-tag-ids.ts via rg and Graphify explain combineTagIds() [imports] (8 files). Transitive callers are T3 endpoints, not additional importers of this symbol."
+  }
+ ]
+}
