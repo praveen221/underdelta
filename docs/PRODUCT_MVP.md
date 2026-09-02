@@ -117,6 +117,9 @@ Express endpoints.
 
 **Not a validated customer product.** Merge readiness ≠ product-market fit.
 
+Impact HTTP claims require typed `endpoint` facets; unsupported frameworks
+(e.g. Fastify) stay diagnostics, not product endpoints.
+
 ---
 
 ## Validation gates

@@ -1010,20 +1010,24 @@ export const typescriptExtractor: ArchitectureExtractor = {
                   ts.isFunctionExpression(argument) && argument.name
                     ? argument.name.text
                     : undefined;
+                const range = rangeFor(file.source, argument);
+                // Occurrence-local identity: never reuse a file-level symbol
+                // that shares the callback's local name.
                 const handlerId = stableId(
                   "function",
                   file.relative,
+                  "inline-handler",
                   httpMethod,
                   routePath,
-                  "inline-handler",
-                  String(index),
+                  String(range.startLine),
+                  String(range.startColumn),
                 );
                 nodes.push({
                   id: handlerId,
                   kind: "function",
                   label: named ?? `${httpMethod} ${routePath} handler`,
                   qualifiedName: named
-                    ? `${file.relative}#${named}`
+                    ? `${file.relative}#${named}@${range.startLine}`
                     : `${file.relative}#<${httpMethod} ${routePath}>`,
                   parentId: file.moduleId,
                   metadata: {

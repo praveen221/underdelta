@@ -104,6 +104,63 @@ test("typescript extracts declarations, imports, calls, and HTTP routes", async 
   assert.equal(graph.nodes.some((node) => node.kind === "route" && node.label.includes("not-a-route")), false);
 });
 
+test("named inline route handlers do not reuse a file-level symbol of the same name", async () => {
+  const graph = await extract(typescriptExtractor, {
+    "src/routes.ts": [
+      "export function handler() { sharedTop(); }",
+      "function sharedTop() {}",
+      "function sharedA() {}",
+      "function sharedB() {}",
+      'app.get("/a", function handler(req, res) { return sharedA(); });',
+      'app.get("/b", function handler(req, res) { return sharedB(); });',
+      "",
+    ].join("\n"),
+  });
+  const top = graph.nodes.find(
+    (node) =>
+      node.kind === "function" &&
+      node.label === "handler" &&
+      node.metadata?.declaration !== "inline-handler",
+  );
+  const inline = graph.nodes.filter(
+    (node) =>
+      node.kind === "function" && node.metadata?.declaration === "inline-handler",
+  );
+  assert.ok(top);
+  assert.equal(inline.length, 2);
+  assert.equal(new Set(inline.map((node) => node.id)).size, 2);
+  assert.ok(inline.every((node) => node.id !== top.id));
+
+  const routeA = nodeBy(graph, "route", "GET /a");
+  const routeB = nodeBy(graph, "route", "GET /b");
+  const handlerA = inline.find((node) => node.metadata?.path === "/a");
+  const handlerB = inline.find((node) => node.metadata?.path === "/b");
+  assert.ok(handlerA && handlerB);
+  edgeBy(graph, "routes-to", routeA.id, handlerA.id);
+  edgeBy(graph, "routes-to", routeB.id, handlerB.id);
+  assert.equal(
+    graph.edges.some(
+      (edge) =>
+        edge.kind === "routes-to" && edge.target === top.id,
+    ),
+    false,
+    "routes must not bind to the top-level handler()",
+  );
+  const sharedA = nodeBy(graph, "function", "sharedA");
+  const sharedB = nodeBy(graph, "function", "sharedB");
+  edgeBy(graph, "calls", handlerA.id, sharedA.id);
+  edgeBy(graph, "calls", handlerB.id, sharedB.id);
+  assert.equal(
+    graph.edges.some(
+      (edge) =>
+        edge.kind === "calls" &&
+        edge.source === top.id &&
+        (edge.target === sharedA.id || edge.target === sharedB.id),
+    ),
+    false,
+  );
+});
+
 test("typescript emits explicit Prisma read, write, and query bindings", async () => {
   const graph = await extract(typescriptExtractor, {
     "src/notes.ts": [

@@ -514,7 +514,7 @@ export function computeChangeImpact(
     if (!node) continue;
     if (seen.has(id)) continue;
 
-    if (node.kind === "route" || hasFacet(node, "endpoint")) {
+    if (hasFacet(node, "endpoint")) {
       seen.add(id);
       endpoints.push(endpointInfo(node));
       continue;
